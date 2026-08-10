@@ -1,0 +1,32 @@
+# env — .env.example ŞABLONDUR ve commit edilir, gerçek .env asla edilmez
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+
+# db / vector store data
+pgdata/
+chroma_data/
+*.db
+*.sqlite3
+
+# ide
+.vscode/
+.idea/
+.DS_Store
