@@ -39,7 +39,7 @@ ollama serve
 ```
 
 ```bash
-ollama pull llama3.1
+ollama pull llama3.2:3b
 ```
 
 ```bash
@@ -152,7 +152,7 @@ kılmaz. `.env.example`'daki varsayılan (`http://localhost:5173`) docker-compos
 kurulumuyla uyumludur; frontend'i başka bir host/port'tan açarsanız güncelleyin.
 
 **LLM çağrıları başarısız oluyor / `event: error` SSE'de geliyor:** Ollama'nın
-host makinenizde çalıştığından ve `ollama pull llama3.1` ile modelin indirilmiş
+host makinenizde çalıştığından ve `ollama pull llama3.2:3b` ile modelin indirilmiş
 olduğundan emin olun. Konteynerden host'a `host.docker.internal` üzerinden
 ulaşılıyor; bu Linux'ta Docker Desktop dışında ekstra ayar gerektirebilir
 (`docker-compose.yml`'da `extra_hosts: host.docker.internal:host-gateway` zaten var).
