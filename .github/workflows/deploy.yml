@@ -1,9 +1,9 @@
 name: deploy
 
-# test branch'i  -> test ortamı  (test.<alanadi>)
-# main branch'i  -> canlı ortam  (app.<alanadi>)
+# test branch'i  -> test ortamı  (test.<host>.nip.io)
+# main branch'i  -> canlı ortam  (app.<host>.nip.io)
 #
-# CI yeşil olmadan deploy çalışmaz (needs: ci).
+# CI yeşil olmadan deploy çalışmaz.
 
 on:
   workflow_run:
@@ -13,7 +13,6 @@ on:
 
 jobs:
   deploy:
-    # CI kırmızıysa hiçbir şey yapma.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
@@ -22,13 +21,13 @@ jobs:
         id: env
         run: |
           if [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
-            echo "dir=prod"    >> $GITHUB_OUTPUT
-            echo "project=finans-prod" >> $GITHUB_OUTPUT
-            echo "port=8080"   >> $GITHUB_OUTPUT
+            echo "dir=prod"             >> $GITHUB_OUTPUT
+            echo "project=finans-prod"  >> $GITHUB_OUTPUT
+            echo "port=8080"            >> $GITHUB_OUTPUT
           else
-            echo "dir=test"    >> $GITHUB_OUTPUT
-            echo "project=finans-test" >> $GITHUB_OUTPUT
-            echo "port=8000"   >> $GITHUB_OUTPUT
+            echo "dir=test"             >> $GITHUB_OUTPUT
+            echo "project=finans-test"  >> $GITHUB_OUTPUT
+            echo "port=8000"            >> $GITHUB_OUTPUT
           fi
 
       - name: SSH anahtarını hazırla
@@ -38,12 +37,18 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Sunucuda güncelle
+      - name: Sunucuda güncelle ve doğrula
+        # Sağlık kontrolü SSH oturumunun İÇİNDE yapılıyor. Uygulama portları
+        # (8000/8080) GCP güvenlik duvarında dışarıya kapalı — dışarıdan
+        # kontrol etmeye çalışmak her zaman başarısız olur. Dışarıdan erişim
+        # yalnızca Caddy üzerinden, 443 portundan mümkün.
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -s <<'REMOTE'
             set -euo pipefail
+
             cd /opt/finans/${{ steps.env.outputs.dir }}
 
+            echo "--> Kod cekiliyor"
             git fetch --all
             git reset --hard origin/${{ github.event.workflow_run.head_branch }}
 
@@ -53,24 +58,25 @@ jobs:
             fi
             COMPOSE="$COMPOSE -p ${{ steps.env.outputs.project }}"
 
+            echo "--> Konteynerler guncelleniyor"
             $COMPOSE up -d --build
 
-            # Şema göçü, konteynerler ayağa kalktıktan sonra çalışmalı.
+            echo "--> Sema gocu"
             $COMPOSE exec -T api alembic upgrade head
-          REMOTE
 
-      - name: Sağlık kontrolü
-        # Deploy "başarılı" sayılabilmesi için uygulamanın gerçekten cevap vermesi gerekir.
-        run: |
-          for i in $(seq 1 12); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" \
-              http://${{ secrets.SSH_HOST }}:${{ steps.env.outputs.port }}/health || true)
-            if [ "$code" = "200" ]; then
-              echo "Sağlıklı."
-              exit 0
-            fi
-            echo "Bekleniyor... ($i/12, son kod: $code)"
-            sleep 10
-          done
-          echo "Uygulama 2 dakika içinde ayağa kalkmadı."
-          exit 1
+            echo "--> Saglik kontrolu"
+            for i in $(seq 1 18); do
+              KOD=$(curl -s -o /dev/null -w "%{http_code}" \
+                    http://localhost:${{ steps.env.outputs.port }}/health || true)
+              if [ "$KOD" = "200" ]; then
+                echo "Saglikli. ($i. denemede)"
+                exit 0
+              fi
+              echo "Bekleniyor... ($i/18, son kod: $KOD)"
+              sleep 5
+            done
+
+            echo "Uygulama 90 saniye icinde ayaga kalkmadi."
+            $COMPOSE logs --tail 50 api
+            exit 1
+          REMOTE
