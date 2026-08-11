@@ -1,0 +1,76 @@
+name: deploy
+
+# test branch'i  -> test ortamı  (test.<alanadi>)
+# main branch'i  -> canlı ortam  (app.<alanadi>)
+#
+# CI yeşil olmadan deploy çalışmaz (needs: ci).
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [test, main]
+
+jobs:
+  deploy:
+    # CI kırmızıysa hiçbir şey yapma.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ortamı belirle
+        id: env
+        run: |
+          if [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
+            echo "dir=prod"    >> $GITHUB_OUTPUT
+            echo "project=finans-prod" >> $GITHUB_OUTPUT
+            echo "port=8080"   >> $GITHUB_OUTPUT
+          else
+            echo "dir=test"    >> $GITHUB_OUTPUT
+            echo "project=finans-test" >> $GITHUB_OUTPUT
+            echo "port=8000"   >> $GITHUB_OUTPUT
+          fi
+
+      - name: SSH anahtarını hazırla
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sunucuda güncelle
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -s <<'REMOTE'
+            set -euo pipefail
+            cd /opt/finans/${{ steps.env.outputs.dir }}
+
+            git fetch --all
+            git reset --hard origin/${{ github.event.workflow_run.head_branch }}
+
+            COMPOSE="docker compose -f docker-compose.yml"
+            if [ "${{ steps.env.outputs.dir }}" = "prod" ]; then
+              COMPOSE="$COMPOSE -f docker-compose.prod.yml"
+            fi
+            COMPOSE="$COMPOSE -p ${{ steps.env.outputs.project }}"
+
+            $COMPOSE up -d --build
+
+            # Şema göçü, konteynerler ayağa kalktıktan sonra çalışmalı.
+            $COMPOSE exec -T api alembic upgrade head
+          REMOTE
+
+      - name: Sağlık kontrolü
+        # Deploy "başarılı" sayılabilmesi için uygulamanın gerçekten cevap vermesi gerekir.
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://${{ secrets.SSH_HOST }}:${{ steps.env.outputs.port }}/health || true)
+            if [ "$code" = "200" ]; then
+              echo "Sağlıklı."
+              exit 0
+            fi
+            echo "Bekleniyor... ($i/12, son kod: $code)"
+            sleep 10
+          done
+          echo "Uygulama 2 dakika içinde ayağa kalkmadı."
+          exit 1

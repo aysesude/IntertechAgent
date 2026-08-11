@@ -1,0 +1,41 @@
+# Canlı ortam farkları. Ana dosyanın ÜZERİNE uygulanır:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -p finans-prod up -d --build
+#
+# Portlar .env üzerinden gelir (API_PORT, FRONTEND_PORT) — böylece test ve prod
+# aynı makinede çakışmadan çalışır.
+
+services:
+  api:
+    # --reload geliştirme içindir: dosya değişikliklerini izler, bellek harcar
+    # ve canlı ortamda beklenmedik yeniden başlatmalara yol açar.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    volumes:
+      # Canlı ortamda kaynak kodu bind mount edilmez; imajın içindeki kod çalışır.
+      # Böylece sunucudaki dosyaları elle değiştirmek mümkün olmaz.
+      - ./data/documents:/data/documents:ro
+    restart: always
+
+  mcp_server:
+    volumes:
+      - ./data/documents:/data/documents:ro
+    restart: always
+
+  postgres:
+    restart: always
+    # Canlı veritabanı dışarıya açılmaz; sadece docker ağı içinden erişilir.
+    ports: []
+
+  chroma:
+    restart: always
+    ports: []
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    command: ["nginx", "-g", "daemon off;"]
+    volumes: []
+    restart: always
