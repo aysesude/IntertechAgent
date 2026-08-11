@@ -14,11 +14,11 @@ from pathlib import Path
 _TEST_DB_PATH = Path(tempfile.gettempdir()) / f"finans_danismani_test_{uuid.uuid4().hex}.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH}"
 
-import pytest  # noqa: E402
-from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.models import Base  # noqa: E402
+from app.models import Base
 
 
 @pytest.fixture(scope="session")

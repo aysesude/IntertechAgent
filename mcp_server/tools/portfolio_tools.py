@@ -9,7 +9,9 @@ from fastmcp import FastMCP
 
 from app.core.db import SessionLocal
 from app.core.exceptions import NotFoundError
-from app.services.portfolio_service import get_portfolio_summary as fetch_portfolio_summary
+from app.services.portfolio_service import (
+    get_portfolio_summary as fetch_portfolio_summary,
+)
 
 
 def register(mcp: FastMCP) -> None:

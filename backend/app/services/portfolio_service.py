@@ -49,7 +49,9 @@ def _latest_prices(db: Session, asset_ids: list[UUID]) -> dict[UUID, tuple[Decim
 
 
 def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
-    portfolio = db.execute(select(Portfolio).where(Portfolio.user_id == user_id)).scalar_one_or_none()
+    portfolio = db.execute(
+        select(Portfolio).where(Portfolio.user_id == user_id)
+    ).scalar_one_or_none()
     if portfolio is None:
         raise NotFoundError(f"Portfolio not found for user_id {user_id}")
 
@@ -65,8 +67,8 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
 
     latest_prices = _latest_prices(db, [h.asset_id for h in holdings])
 
-    total_value = Decimal("0")
-    total_cost_basis = Decimal("0")
+    total_value = Decimal(0)
+    total_cost_basis = Decimal(0)
     class_values: dict[AssetClass, Decimal] = {}
     as_of_dates: list[date] = []
 
@@ -78,20 +80,20 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         total_value += market_value
         total_cost_basis += cost_basis
         class_values[holding.asset.asset_class] = (
-            class_values.get(holding.asset.asset_class, Decimal("0")) + market_value
+            class_values.get(holding.asset.asset_class, Decimal(0)) + market_value
         )
         if price_date is not None:
             as_of_dates.append(price_date)
 
     gain_amount = total_value - total_cost_basis
-    gain_percent = (gain_amount / total_cost_basis * 100) if total_cost_basis > 0 else Decimal("0")
+    gain_percent = (gain_amount / total_cost_basis * 100) if total_cost_basis > 0 else Decimal(0)
 
     class_order = {asset_class: i for i, asset_class in enumerate(settings.supported_asset_classes)}
     allocation = [
         AllocationItem(
             asset_class=asset_class,
             value=_round2(value),
-            percent=_round2(value / total_value * 100) if total_value > 0 else Decimal("0"),
+            percent=_round2(value / total_value * 100) if total_value > 0 else Decimal(0),
         )
         for asset_class, value in sorted(class_values.items(), key=lambda kv: class_order[kv[0]])
     ]

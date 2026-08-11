@@ -20,7 +20,9 @@ def mcp_server():
 @pytest.fixture()
 def seeded_user(db_session):
     user = User(email="mcp-test@example.com", full_name="MCP Test User")
-    asset = Asset(symbol="MCPT", name="MCP Test Hisse", asset_class=AssetClass.STOCK, currency="TRY")
+    asset = Asset(
+        symbol="MCPT", name="MCP Test Hisse", asset_class=AssetClass.STOCK, currency="TRY"
+    )
     db_session.add_all([user, asset])
     db_session.flush()
 
@@ -30,8 +32,15 @@ def seeded_user(db_session):
 
     db_session.add_all(
         [
-            PriceHistory(asset_id=asset.id, price_date=date(2026, 1, 1), close_price=Decimal("42.00")),
-            Holding(portfolio_id=portfolio.id, asset_id=asset.id, quantity=Decimal("3"), avg_cost_price=Decimal("40.00")),
+            PriceHistory(
+                asset_id=asset.id, price_date=date(2026, 1, 1), close_price=Decimal("42.00")
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=asset.id,
+                quantity=Decimal(3),
+                avg_cost_price=Decimal("40.00"),
+            ),
         ]
     )
     db_session.commit()
@@ -60,6 +69,8 @@ async def test_get_portfolio_summary_tool_not_found(mcp_server, db_session):
 
 
 async def test_get_portfolio_summary_tool_rejects_invalid_uuid(mcp_server):
-    with pytest.raises(Exception):  # noqa: B017 - fastmcp ValidationError'i disariya farkli tiplerde sizdirabiliyor
+    with pytest.raises(
+        Exception
+    ):  # noqa: B017 - fastmcp ValidationError'i disariya farkli tiplerde sizdirabiliyor
         async with Client(mcp_server) as client:
             await client.call_tool("get_portfolio_summary", {"user_id": "not-a-uuid"})

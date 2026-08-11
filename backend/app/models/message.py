@@ -1,12 +1,15 @@
 import enum
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from app.models.chat_session import ChatSession
 
 
 class MessageRole(str, enum.Enum):
@@ -24,7 +27,11 @@ class Message(UUIDMixin, CreatedAtMixin, Base):
 
     session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chat_sessions.id"), nullable=False)
     role: Mapped[MessageRole] = mapped_column(
-        Enum(MessageRole, name="message_role_enum", values_callable=lambda obj: [e.value for e in obj]),
+        Enum(
+            MessageRole,
+            name="message_role_enum",
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
         nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -38,7 +45,11 @@ class Message(UUIDMixin, CreatedAtMixin, Base):
     # İstemci stream'i tamamlanmadan bağlantıyı keserse INCOMPLETE olarak
     # o ana kadar biriken metinle kaydedilir.
     status: Mapped[MessageStatus] = mapped_column(
-        Enum(MessageStatus, name="message_status_enum", values_callable=lambda obj: [e.value for e in obj]),
+        Enum(
+            MessageStatus,
+            name="message_status_enum",
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
         nullable=False,
         default=MessageStatus.COMPLETE,
         server_default=MessageStatus.COMPLETE.value,

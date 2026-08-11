@@ -82,7 +82,9 @@ def get_session_messages(db: Session, session_id: UUID) -> list[Message]:
         raise NotFoundError(f"Chat session not found for session_id {session_id}")
 
     return (
-        db.execute(select(Message).where(Message.session_id == session_id).order_by(Message.created_at))
+        db.execute(
+            select(Message).where(Message.session_id == session_id).order_by(Message.created_at)
+        )
         .scalars()
         .all()
     )
