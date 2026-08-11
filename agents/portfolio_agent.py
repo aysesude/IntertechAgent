@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.core.llm_client import get_llm_client
+
 from agents.base import AgentRequest, AgentResponse, BaseAgent
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "portfolio_agent.md").read_text(encoding="utf-8")

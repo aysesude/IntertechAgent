@@ -16,22 +16,21 @@ import random
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from faker import Faker
-from sqlalchemy import create_engine, delete
-from sqlalchemy.orm import Session
-
 from app.core.config import AssetClass, settings
 from app.models import (
     Asset,
     ChatSession,
     Holding,
     Message,
-    PriceHistory,
     Portfolio,
+    PriceHistory,
     Transaction,
     TransactionType,
     User,
 )
+from faker import Faker
+from sqlalchemy import create_engine, delete
+from sqlalchemy.orm import Session
 
 SEED = 42
 NUM_USERS = 50
@@ -49,10 +48,10 @@ ASSET_CLASS_DAILY_DRIFT_VOLATILITY: dict[AssetClass, tuple[float, float]] = {
 }
 
 QUANTITY_PRECISION: dict[AssetClass, Decimal] = {
-    AssetClass.STOCK: Decimal("1"),
+    AssetClass.STOCK: Decimal(1),
     AssetClass.GOLD: Decimal("0.01"),
-    AssetClass.CURRENCY: Decimal("1"),
-    AssetClass.BOND: Decimal("1"),
+    AssetClass.CURRENCY: Decimal(1),
+    AssetClass.BOND: Decimal(1),
 }
 
 ASSET_UNIVERSE: list[dict[str, object]] = [
@@ -98,7 +97,7 @@ def generate_price_series(base_price: Decimal, asset_class: AssetClass, days: in
     price = base_price
     for _ in range(days - 1):
         daily_return = round(random.gauss(drift, volatility), 6)
-        price = price * (Decimal("1") + Decimal(str(daily_return)))
+        price = price * (Decimal(1) + Decimal(str(daily_return)))
         price = max(price, Decimal("0.01"))
         price = price.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
         prices.append(price)
@@ -130,8 +129,8 @@ def build_holding_and_transactions(
     buy_days_ago = random.sample(range(30, HISTORY_DAYS), num_buys)
 
     transactions: list[Transaction] = []
-    total_bought = Decimal("0")
-    total_cost = Decimal("0")
+    total_bought = Decimal(0)
+    total_cost = Decimal(0)
     for days_ago in buy_days_ago:
         qty = random_lot_quantity(asset_class)
         tx_date = end_date - timedelta(days=days_ago)
@@ -149,7 +148,7 @@ def build_holding_and_transactions(
         total_bought += qty
         total_cost += qty * price
 
-    total_sold = Decimal("0")
+    total_sold = Decimal(0)
     if random.random() < 0.3:
         sell_days_ago = random.randint(1, 29)
         sell_fraction = round(random.uniform(0.1, 0.4), 4)

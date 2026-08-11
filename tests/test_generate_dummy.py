@@ -1,11 +1,13 @@
+from app.models import Holding, PriceHistory, User
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Holding, PriceHistory, User
 from data.generate_dummy import (
     MAX_HOLDINGS_PER_USER,
     MIN_HOLDINGS_PER_USER,
     NUM_USERS,
+)
+from data.generate_dummy import (
     main as generate_dummy_main,
 )
 

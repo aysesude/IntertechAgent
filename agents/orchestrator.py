@@ -14,10 +14,10 @@ import operator
 from collections.abc import AsyncIterator
 from typing import Annotated, Any, TypedDict
 
+from app.core.config import settings
 from langgraph.graph import END, StateGraph
 from langgraph.types import StreamWriter
 
-from app.core.config import settings
 from agents.base import AgentRequest, AgentResponse
 from agents.portfolio_agent import PortfolioAgent
 

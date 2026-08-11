@@ -1,7 +1,6 @@
 """Piyasa Araştırma Ajanı'nın kullanacağı retrieval arayüzü.
 TODO: gerçek sorgu genişletme / yeniden sıralama mantığı henüz uygulanmadı."""
 
-from app.core.config import settings
 from rag.vector_store import VectorStore, get_vector_store
 
 

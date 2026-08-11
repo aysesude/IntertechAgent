@@ -3,10 +3,10 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from fastmcp import Client, FastMCP
-
 from app.core.config import AssetClass
 from app.models import Asset, Holding, Portfolio, PriceHistory, User
+from fastmcp import Client, FastMCP
+
 from mcp_server.tools import portfolio_tools
 
 
@@ -31,7 +31,7 @@ def seeded_user(db_session):
     db_session.add_all(
         [
             PriceHistory(asset_id=asset.id, price_date=date(2026, 1, 1), close_price=Decimal("42.00")),
-            Holding(portfolio_id=portfolio.id, asset_id=asset.id, quantity=Decimal("3"), avg_cost_price=Decimal("40.00")),
+            Holding(portfolio_id=portfolio.id, asset_id=asset.id, quantity=Decimal(3), avg_cost_price=Decimal("40.00")),
         ]
     )
     db_session.commit()

@@ -6,9 +6,9 @@ Ajanlar veriye asla doğrudan erişmez; tüm veri erişimi buradaki tool'lar
 Kullanım: python -m mcp_server.server
 """
 
+from app.core.config import settings
 from fastmcp import FastMCP
 
-from app.core.config import settings
 from mcp_server.tools import portfolio_tools
 
 mcp = FastMCP("Akıllı Kişisel Finans Danışmanı MCP Server")

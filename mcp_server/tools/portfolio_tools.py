@@ -5,11 +5,12 @@ hesaplanmaz, servis katmanından geldiği gibi döner."""
 from typing import Any
 from uuid import UUID
 
-from fastmcp import FastMCP
-
 from app.core.db import SessionLocal
 from app.core.exceptions import NotFoundError
-from app.services.portfolio_service import get_portfolio_summary as fetch_portfolio_summary
+from app.services.portfolio_service import (
+    get_portfolio_summary as fetch_portfolio_summary,
+)
+from fastmcp import FastMCP
 
 
 def register(mcp: FastMCP) -> None:

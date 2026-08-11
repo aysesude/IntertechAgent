@@ -3,7 +3,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from app.core.config import AssetClass
 from app.core.exceptions import NotFoundError
 from app.models import Asset, Holding, Portfolio, PriceHistory, User
@@ -26,8 +25,8 @@ def test_get_portfolio_summary_computes_value_allocation_and_gain(db_session):
             PriceHistory(asset_id=stock.id, price_date=date(2026, 1, 1), close_price=Decimal("90.00")),
             PriceHistory(asset_id=stock.id, price_date=date(2026, 1, 2), close_price=Decimal("100.00")),
             PriceHistory(asset_id=gold.id, price_date=date(2026, 1, 1), close_price=Decimal("50.00")),
-            Holding(portfolio_id=portfolio.id, asset_id=stock.id, quantity=Decimal("10"), avg_cost_price=Decimal("90.00")),
-            Holding(portfolio_id=portfolio.id, asset_id=gold.id, quantity=Decimal("5"), avg_cost_price=Decimal("60.00")),
+            Holding(portfolio_id=portfolio.id, asset_id=stock.id, quantity=Decimal(10), avg_cost_price=Decimal("90.00")),
+            Holding(portfolio_id=portfolio.id, asset_id=gold.id, quantity=Decimal(5), avg_cost_price=Decimal("60.00")),
         ]
     )
     db_session.commit()
