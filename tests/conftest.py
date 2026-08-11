@@ -15,9 +15,10 @@ _TEST_DB_PATH = Path(tempfile.gettempdir()) / f"finans_danismani_test_{uuid.uuid
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH}"
 
 import pytest
-from app.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+from app.models import Base
 
 
 @pytest.fixture(scope="session")

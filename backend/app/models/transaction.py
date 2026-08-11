@@ -2,12 +2,16 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.asset import Asset
+    from app.models.portfolio import Portfolio
 
 class TransactionType(str, enum.Enum):
     BUY = "buy"

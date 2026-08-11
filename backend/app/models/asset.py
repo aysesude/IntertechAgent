@@ -1,9 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import AssetClass
 from app.models.base import Base, CreatedAtMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.holding import Holding
+    from app.models.price_history import PriceHistory
+    from app.models.transaction import Transaction
 
 class Asset(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "assets"

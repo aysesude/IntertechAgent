@@ -1,6 +1,6 @@
 import enum
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.chat_session import ChatSession
 
 class MessageRole(str, enum.Enum):
     USER = "user"

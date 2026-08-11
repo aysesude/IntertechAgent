@@ -1,10 +1,14 @@
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.message import Message
+    from app.models.user import User
 
 class ChatSession(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "chat_sessions"

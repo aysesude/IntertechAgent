@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+
 from app.core.config import AssetClass
 from app.core.exceptions import NotFoundError
 from app.models import Asset, Holding, Portfolio, PriceHistory, User

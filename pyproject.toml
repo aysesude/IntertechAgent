@@ -1,0 +1,33 @@
+# Ruff ve black yapılandırması.
+#
+# Konfigürasyon olmadan ruff, kurulu sürümün varsayılan kural setiyle koşar ve
+# sürüm değiştikçe CI'da farklı sonuç verir. Kuralları burada açıkça sabitliyoruz
+# ki herkeste ve CI'da aynı davransın.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    ".venv",
+    "venv",
+    "frontend",
+    "backend/alembic/versions",  # Alembic'in ürettiği dosyalara karışmıyoruz
+]
+
+[tool.ruff.lint]
+# Ruff'un klasik varsayılanı: pycodestyle hataları + pyflakes.
+# Ekip alıştıkça B (bugbear), SIM (simplify), UP (pyupgrade) eklenebilir.
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = [
+    # FastAPI'nin bağımlılık enjeksiyonu `Depends()` çağrısını varsayılan
+    # argümanda kullanmayı gerektirir; framework'ün tasarımı bu.
+    "B008",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "agents", "mcp_server", "rag", "data", "tests"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+extend-exclude = "backend/alembic/versions"

@@ -16,6 +16,10 @@ import random
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from faker import Faker
+from sqlalchemy import create_engine, delete
+from sqlalchemy.orm import Session
+
 from app.core.config import AssetClass, settings
 from app.models import (
     Asset,
@@ -28,9 +32,6 @@ from app.models import (
     TransactionType,
     User,
 )
-from faker import Faker
-from sqlalchemy import create_engine, delete
-from sqlalchemy.orm import Session
 
 SEED = 42
 NUM_USERS = 50

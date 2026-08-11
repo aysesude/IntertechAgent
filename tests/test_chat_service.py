@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+
 from app.core.exceptions import NotFoundError
 from app.models import MessageRole, MessageStatus, User
 from app.services import chat_service

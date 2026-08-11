@@ -3,10 +3,10 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from app.core.config import AssetClass
-from app.models import Asset, Holding, Portfolio, PriceHistory, User
 from fastmcp import Client, FastMCP
 
+from app.core.config import AssetClass
+from app.models import Asset, Holding, Portfolio, PriceHistory, User
 from mcp_server.tools import portfolio_tools
 
 

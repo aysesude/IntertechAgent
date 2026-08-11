@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.chat_session import ChatSession
+    from app.models.portfolio import Portfolio
 
 class User(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "users"
