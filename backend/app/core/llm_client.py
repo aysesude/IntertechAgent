@@ -43,7 +43,9 @@ class OllamaClient(LLMClient):
         if system:
             payload["system"] = system
         async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:
+            async with client.stream(
+                "POST", f"{self._base_url}/api/generate", json=payload
+            ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if not line:

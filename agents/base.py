@@ -42,7 +42,9 @@ class BaseAgent(ABC):
             return result.structured_content or {}
 
     def error_response(self, message: str) -> AgentResponse:
-        return AgentResponse(agent_name=self.agent_name, success=False, summary_text="", error=message)
+        return AgentResponse(
+            agent_name=self.agent_name, success=False, summary_text="", error=message
+        )
 
     @abstractmethod
     async def execute(
