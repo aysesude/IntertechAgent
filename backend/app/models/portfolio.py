@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.transaction import Transaction
     from app.models.user import User
 
+
 class Portfolio(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "portfolios"
 

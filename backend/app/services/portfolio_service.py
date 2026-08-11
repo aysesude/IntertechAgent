@@ -49,7 +49,9 @@ def _latest_prices(db: Session, asset_ids: list[UUID]) -> dict[UUID, tuple[Decim
 
 
 def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
-    portfolio = db.execute(select(Portfolio).where(Portfolio.user_id == user_id)).scalar_one_or_none()
+    portfolio = db.execute(
+        select(Portfolio).where(Portfolio.user_id == user_id)
+    ).scalar_one_or_none()
     if portfolio is None:
         raise NotFoundError(f"Portfolio not found for user_id {user_id}")
 

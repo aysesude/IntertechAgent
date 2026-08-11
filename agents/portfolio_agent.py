@@ -9,7 +9,9 @@ from pathlib import Path
 from agents.base import AgentRequest, AgentResponse, BaseAgent
 from app.core.llm_client import get_llm_client
 
-_PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "portfolio_agent.md").read_text(encoding="utf-8")
+_PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "portfolio_agent.md").read_text(
+    encoding="utf-8"
+)
 
 
 class PortfolioAgent(BaseAgent):
@@ -28,7 +30,9 @@ class PortfolioAgent(BaseAgent):
 
         data = tool_result["data"]
         summary_text = await self._summarize(request.query, data, on_token=on_token)
-        return AgentResponse(agent_name=self.agent_name, success=True, summary_text=summary_text, data=data)
+        return AgentResponse(
+            agent_name=self.agent_name, success=True, summary_text=summary_text, data=data
+        )
 
     async def _summarize(
         self, query: str, portfolio_data: dict, *, on_token: Callable[[str], None] | None = None

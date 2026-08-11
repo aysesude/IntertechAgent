@@ -12,9 +12,12 @@ if TYPE_CHECKING:
     from app.models.asset import Asset
     from app.models.portfolio import Portfolio
 
+
 class Holding(UUIDMixin, Base):
     __tablename__ = "holdings"
-    __table_args__ = (UniqueConstraint("portfolio_id", "asset_id", name="uq_holding_portfolio_asset"),)
+    __table_args__ = (
+        UniqueConstraint("portfolio_id", "asset_id", name="uq_holding_portfolio_asset"),
+    )
 
     portfolio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("portfolios.id"), nullable=False)
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)

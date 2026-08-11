@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.message import Message
     from app.models.user import User
 
+
 class ChatSession(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "chat_sessions"
 

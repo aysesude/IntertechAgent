@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from app.models.chat_session import ChatSession
     from app.models.portfolio import Portfolio
 
+
 class User(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "users"
 

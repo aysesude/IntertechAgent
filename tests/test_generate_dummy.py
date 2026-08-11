@@ -19,16 +19,23 @@ def test_generate_dummy_creates_expected_data(engine):
         assert session.scalar(select(func.count()).select_from(User)) == NUM_USERS
 
         holding_counts = (
-            session.execute(select(func.count()).select_from(Holding).group_by(Holding.portfolio_id))
+            session.execute(
+                select(func.count()).select_from(Holding).group_by(Holding.portfolio_id)
+            )
             .scalars()
             .all()
         )
         assert len(holding_counts) == NUM_USERS
         assert all(MIN_HOLDINGS_PER_USER <= c <= MAX_HOLDINGS_PER_USER for c in holding_counts)
 
-        assert session.scalar(select(func.count()).select_from(Holding).where(Holding.quantity <= 0)) == 0
         assert (
-            session.scalar(select(func.count()).select_from(PriceHistory).where(PriceHistory.close_price <= 0))
+            session.scalar(select(func.count()).select_from(Holding).where(Holding.quantity <= 0))
+            == 0
+        )
+        assert (
+            session.scalar(
+                select(func.count()).select_from(PriceHistory).where(PriceHistory.close_price <= 0)
+            )
             == 0
         )
 
@@ -41,7 +48,8 @@ def test_generate_dummy_is_deterministic(engine):
     with Session(engine) as session:
         first_user = session.execute(select(User).order_by(User.email).limit(1)).scalar_one()
         first_run_holdings = sorted(
-            (h.asset.symbol, str(h.quantity), str(h.avg_cost_price)) for h in first_user.portfolio.holdings
+            (h.asset.symbol, str(h.quantity), str(h.avg_cost_price))
+            for h in first_user.portfolio.holdings
         )
 
     generate_dummy_main()
@@ -49,7 +57,8 @@ def test_generate_dummy_is_deterministic(engine):
         same_user = session.execute(select(User).order_by(User.email).limit(1)).scalar_one()
         assert same_user.email == first_user.email
         second_run_holdings = sorted(
-            (h.asset.symbol, str(h.quantity), str(h.avg_cost_price)) for h in same_user.portfolio.holdings
+            (h.asset.symbol, str(h.quantity), str(h.avg_cost_price))
+            for h in same_user.portfolio.holdings
         )
 
     assert first_run_holdings == second_run_holdings

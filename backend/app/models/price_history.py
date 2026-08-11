@@ -11,9 +11,12 @@ from app.models.base import Base, CreatedAtMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.asset import Asset
 
+
 class PriceHistory(UUIDMixin, CreatedAtMixin, Base):
     __tablename__ = "price_history"
-    __table_args__ = (UniqueConstraint("asset_id", "price_date", name="uq_price_history_asset_date"),)
+    __table_args__ = (
+        UniqueConstraint("asset_id", "price_date", name="uq_price_history_asset_date"),
+    )
 
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)
     price_date: Mapped[date_type] = mapped_column(Date, nullable=False)

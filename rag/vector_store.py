@@ -21,8 +21,12 @@ class ChromaVectorStore(VectorStore):
     """TODO: gerçek chunking/embedding pipeline'ı (rag/ingest.py, rag/retriever.py)
     tamamlanana kadar bu implementasyon boş kalacak."""
 
-    def __init__(self, host: str = settings.chroma_host, port: int = settings.chroma_port,
-                 collection_name: str = settings.chroma_collection) -> None:
+    def __init__(
+        self,
+        host: str = settings.chroma_host,
+        port: int = settings.chroma_port,
+        collection_name: str = settings.chroma_collection,
+    ) -> None:
         self._host = host
         self._port = port
         self._collection_name = collection_name

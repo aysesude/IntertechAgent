@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.asset import Asset
     from app.models.portfolio import Portfolio
 
+
 class TransactionType(str, enum.Enum):
     BUY = "buy"
     SELL = "sell"

@@ -96,7 +96,9 @@ async def run_orchestrator(
     user_id: str, session_id: str, message: str, history: list[dict[str, str]] | None = None
 ) -> OrchestratorState:
     """Stream gerektirmeyen çağırıcılar için (ör. testler): tek seferde tam sonucu döner."""
-    return await _compiled_graph.ainvoke(_initial_state(user_id, session_id, message, history or []))
+    return await _compiled_graph.ainvoke(
+        _initial_state(user_id, session_id, message, history or [])
+    )
 
 
 async def stream_orchestrator(
@@ -105,6 +107,7 @@ async def stream_orchestrator(
     """SSE endpoint'i için: ("custom", {"delta": ...}) token parçalarını ve en
     sonda ("values", OrchestratorState) tam durumu sırayla yield eder."""
     async for mode, chunk in _compiled_graph.astream(
-        _initial_state(user_id, session_id, message, history or []), stream_mode=["custom", "values"]
+        _initial_state(user_id, session_id, message, history or []),
+        stream_mode=["custom", "values"],
     ):
         yield mode, chunk
