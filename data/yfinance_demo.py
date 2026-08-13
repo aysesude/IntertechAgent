@@ -1,20 +1,23 @@
 # ==============================================================================
-# HÜCRE 1 / DUMMY DATA & CANLI PİYASA MOTORU (STRICT RUFF CHECK COMPLIANT)
+# HÜCRE 1 / DUMMY DATA & CANLI PİYASA MOTORU (STRICT BLACK & RUFF COMPLIANT)
 # ==============================================================================
 
 import random
 import xml.etree.ElementTree as ET
 
+from faker import Faker
 import pandas as pd
 import requests
-import yfinance as yf
-from faker import Faker
 from sqlalchemy import Column, Date, Float, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+import yfinance as yf
 
 fake = Faker("tr_TR")
 
-RENDER_EXTERNAL_URL = "postgresql://finans_db_57rk_user:EPkJ3IXyvgHIqUHTmpL11u5ppPZenAvW@dpg-d9td763m8hqs73crb70g-a.frankfurt-postgres.render.com/finans_db_57rk"
+RENDER_EXTERNAL_URL = (
+    "postgresql://finans_db_57rk_user:EPkJ3IXyvgHIqUHTmpL11u5ppPZenAvW@"
+    "dpg-d9td763m8hqs73crb70g-a.frankfurt-postgres.render.com/finans_db_57rk"
+)
 
 engine = create_engine(RENDER_EXTERNAL_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -61,7 +64,10 @@ def get_live_base_rates():
             root = ET.fromstring(res.content)
             for currency in root.findall("Currency"):
                 if currency.attrib.get("CurrencyCode") == "USD":
-                    usd_val = currency.find("BanknoteSelling").text or currency.find("ForexSelling").text
+                    usd_val = (
+                        currency.find("BanknoteSelling").text
+                        or currency.find("ForexSelling").text
+                    )
                     rates["USDTRY"] = float(usd_val)
                     break
         gold_ticker = yf.Ticker("GC=F")
@@ -132,7 +138,9 @@ def generate_multi_asset_user():
         )
     )
 
-    gold_cost = round(live_rates["GRAM_ALTIN"] * random.uniform(0.85, 0.98), 2)
+    gold_cost = round(
+        live_rates["GRAM_ALTIN"] * random.uniform(0.85, 0.98), 2
+    )
     session.add(
         Portfolio(
             user_id=user_id,
@@ -146,7 +154,11 @@ def generate_multi_asset_user():
     for code in selected_fund_codes:
         base_price = 3.0 if code != "PPF" else 115.0
         cost = round(base_price * random.uniform(0.85, 1.10), 4)
-        qty = round(random.uniform(1000, 8000), 2) if code != "PPF" else round(random.uniform(100, 500), 2)
+        qty = (
+            round(random.uniform(1000, 8000), 2)
+            if code != "PPF"
+            else round(random.uniform(100, 500), 2)
+        )
         session.add(
             Portfolio(
                 user_id=user_id,
@@ -174,10 +186,16 @@ def get_evds_live_rates():
             for currency in root.findall("Currency"):
                 code = currency.attrib.get("CurrencyCode")
                 if code == "USD":
-                    usd_val = currency.find("BanknoteSelling").text or currency.find("ForexSelling").text
+                    usd_val = (
+                        currency.find("BanknoteSelling").text
+                        or currency.find("ForexSelling").text
+                    )
                     rates["USDTRY"] = round(float(usd_val), 4)
                 elif code == "EUR":
-                    eur_val = currency.find("BanknoteSelling").text or currency.find("ForexSelling").text
+                    eur_val = (
+                        currency.find("BanknoteSelling").text
+                        or currency.find("ForexSelling").text
+                    )
                     rates["EURTRY"] = round(float(eur_val), 4)
     except Exception as e:
         print(f"TCMB Uyarısı: {e}")
@@ -215,7 +233,6 @@ def get_fund_prices_isbank(fund_codes: list):
             pass
 
         if not fetched:
-            # HATA DÜZELTİLDİ: Dış parantez eklenerek zincirleme metod çağrıları güvenli hale getirildi
             latest_record = (
                 session.query(PriceHistory)
                 .filter(PriceHistory.symbol == code)
@@ -226,7 +243,13 @@ def get_fund_prices_isbank(fund_codes: list):
             if latest_record:
                 fund_prices[code] = round(float(latest_record.close_price), 4)
             else:
-                defaults = {"TI2": 2.1450, "TCD": 5.4200, "AFT": 0.3250, "PPF": 118.5000, "GTA": 2.5800}
+                defaults = {
+                    "TI2": 2.1450,
+                    "TCD": 5.4200,
+                    "AFT": 0.3250,
+                    "PPF": 118.5000,
+                    "GTA": 2.5800,
+                }
                 fund_prices[code] = defaults.get(code, 3.0)
 
     session.close()
@@ -248,10 +271,16 @@ def run_full_multi_asset_demo(user_id: str):
     session = SessionLocal()
     evds_rates = get_evds_live_rates()
     user = session.query(User).filter(User.user_id == user_id).first()
-    portfolio_items = pd.read_sql(f"SELECT * FROM portfolio WHERE user_id = '{user_id}'", con=engine)
+    portfolio_items = pd.read_sql(
+        f"SELECT * FROM portfolio WHERE user_id = '{user_id}'", con=engine
+    )
 
-    fund_symbols = portfolio_items[portfolio_items["asset_type"] == "Fund"]["symbol"].tolist()
-    tefas_prices = get_fund_prices_isbank(fund_symbols) if fund_symbols else {}
+    fund_symbols = portfolio_items[portfolio_items["asset_type"] == "Fund"][
+        "symbol"
+    ].tolist()
+    tefas_prices = (
+        get_fund_prices_isbank(fund_symbols) if fund_symbols else {}
+    )
 
     results = []
     total_cost = 0
@@ -294,9 +323,15 @@ def run_full_multi_asset_demo(user_id: str):
             {
                 "Varlık Türü": type_labels.get(asset_type, asset_type),
                 "Sembol": symbol.replace(".IS", ""),
-                "Adet / Miktar": f"{qty:,.2f}" if asset_type != "Stock" else f"{int(qty)}",
-                "Ort. Maliyet (TL)": f"{cost:,.4f}" if asset_type == "Fund" else f"{cost:,.2f}",
-                "Canlı Fiyat (TL)": f"{live_price:,.4f}" if asset_type == "Fund" else f"{live_price:,.2f}",
+                "Adet / Miktar": f"{qty:,.2f}"
+                if asset_type != "Stock"
+                else f"{int(qty)}",
+                "Ort. Maliyet (TL)": f"{cost:,.4f}"
+                if asset_type == "Fund"
+                else f"{cost:,.2f}",
+                "Canlı Fiyat (TL)": f"{live_price:,.4f}"
+                if asset_type == "Fund"
+                else f"{live_price:,.2f}",
                 "Toplam Maliyet (TL)": f"{item_cost:,.2f}",
                 "Güncel Değer (TL)": f"{item_value:,.2f}",
                 "Kâr / Zarar (TL)": f"{pnl_try:+,.2f}",
