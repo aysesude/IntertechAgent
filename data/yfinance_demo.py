@@ -1,5 +1,5 @@
 # ==============================================================================
-# HÜCRE 1 / DUMMY DATA & CANLI PİYASA MOTORU (STRICT CI/CD TEST COMPLIANT)
+# HÜCRE 1 / DUMMY DATA & CANLI PİYASA MOTORU
 # ==============================================================================
 
 import random
