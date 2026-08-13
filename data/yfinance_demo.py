@@ -1,3 +1,5 @@
+
+
 # ==============================================================================
 # HÜCRE 1 / DUMMY DATA & CANLI PİYASA MOTORU (STRICT BLACK & RUFF COMPLIANT)
 # ==============================================================================
@@ -5,12 +7,12 @@
 import random
 import xml.etree.ElementTree as ET
 
-from faker import Faker
 import pandas as pd
 import requests
+import yfinance as yf
+from faker import Faker
 from sqlalchemy import Column, Date, Float, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-import yfinance as yf
 
 fake = Faker("tr_TR")
 
