@@ -21,6 +21,7 @@ parametresi alır: LangGraph tarafından otomatik enjekte edilir,
 (tek seferlik) ve `stream_orchestrator()` (SSE) aynı graf üzerinden çalışır.
 """
 
+import logging
 import operator
 import re
 from collections.abc import AsyncIterator
@@ -33,6 +34,8 @@ from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Niyet tespiti şimdilik anahtar kelime tabanlı. LLM ile yapmak her soruya
 # 2-5 saniye ek gecikme bindirirdi ve bu aşamada ayırt edilmesi gereken yalnızca
@@ -126,6 +129,13 @@ def detect_intent(state: OrchestratorState) -> dict:
     else:
         intent = "portfolio"
 
+    logger.info(
+        "[ORCHESTRATOR] niyet=%s | portfoy_eslesme=%s market_eslesme=%s | sorgu=%r",
+        intent,
+        has_portfolio,
+        has_market,
+        state["message"][:80],
+    )
     return {"intent": intent}
 
 

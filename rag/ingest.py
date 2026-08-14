@@ -50,12 +50,13 @@ def _parse_document(path: Path) -> Document | None:
         logger.warning("%s: içerik boş, atlanıyor", path.name)
         return None
 
-    # Chroma metadata değerleri yalnızca basit tip kabul eder.
-    temiz_metadata = {
-        k: ("" if v is None else str(v))
-        for k, v in metadata.items()
-        if isinstance(v, (str, int, float, bool)) or v is None
-    }
+    # Chroma metadata değerleri yalnızca basit tip kabul eder, bu yüzden hepsini
+    # metne çeviriyoruz.
+    #
+    # `tarih: 2026-07-28` gibi bir satırı YAML otomatik olarak `datetime.date`
+    # nesnesine çeviriyor. Önceki sürüm yalnızca str/int/float/bool kabul ettiği
+    # için tarih alanı sessizce düşüyor ve "zorunlu alan eksik" uyarısı çıkıyordu.
+    temiz_metadata = {k: ("" if v is None else str(v)) for k, v in metadata.items()}
     temiz_metadata["dosya"] = path.name
 
     eksik = [alan for alan in ("baslik", "tarih", "tur") if not temiz_metadata.get(alan)]
