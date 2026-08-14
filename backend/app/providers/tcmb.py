@@ -66,9 +66,13 @@ def _first_text(element: ElementTree.Element, *tags: str) -> str | None:
 
 class TcmbEvdsProvider:
     """EVDS tarihsel seriler — sembol, EVDS seri kodudur
-    (ör. 'TP.DK.USD.S.YTL' = USD satış kuru)."""
+    (ör. 'TP.DK.USD.S.YTL' = USD satış kuru).
 
-    BASE_URL = "https://evds2.tcmb.gov.tr/service/evds"
+    Uç nokta EVDS 3'tür (Ocak 2026'da yenilendi): eski
+    `evds2.tcmb.gov.tr/service/evds/...` yolu artık API yerine web arayüzünün
+    HTML'ini döndürüyor. Anahtar `key` HTTP başlığıyla gönderilir."""
+
+    BASE_URL = "https://evds3.tcmb.gov.tr/igmevdsms-dis"
 
     def __init__(self, api_key: str | None):
         self.api_key = api_key
@@ -86,6 +90,8 @@ class TcmbEvdsProvider:
             f"&startDate={start.strftime('%d-%m-%Y')}&endDate={end.strftime('%d-%m-%Y')}"
             "&type=json"
         )
+        # Not: parametreler '?' ile değil doğrudan yol üzerinde taşınır —
+        # EVDS'in kendine özgü URL biçimi budur, standart query string değildir.
         try:
             response = requests.get(url, headers={"key": self.api_key}, timeout=30)
             response.raise_for_status()
