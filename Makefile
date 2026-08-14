@@ -1,4 +1,4 @@
-.PHONY: up down seed test lint
+.PHONY: up down seed backfill daily-update test lint
 
 up:
 	docker compose up --build
@@ -8,6 +8,12 @@ down:
 
 seed:
 	docker compose exec -w / api python -m data.generate_dummy
+
+backfill:
+	docker compose exec -w / api python -m data.backfill --days 365
+
+daily-update:
+	docker compose exec -w / api python -m data.daily_update
 
 test:
 	docker compose exec -w / api pytest
