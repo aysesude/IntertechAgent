@@ -3,8 +3,8 @@ Finansal Asistan - Stage 5 (Qwen 2.5 7B & Nezaket/Teşekkür Eşleşme Düzeltme
 
 Geliştirmeler:
 1. Nezaket / Teşekkür Eşleşme Düzeltmesi ('sağol' -> 'sahol' Sabancı Yanılsaması Çözüldü):
-   'sağol', 'saol', 'teşekkürler', 'eyvallah' gibi nezaket kelimeleri EXCLUDED_WORDS listesine 
-   eklendi. Artık 'sağol' kelimesi Sabancı Holding (SAHOL) ticker'ı ile çakışmaz ve sıcak 
+   'sağol', 'saol', 'teşekkürler', 'eyvallah' gibi nezaket kelimeleri EXCLUDED_WORDS listesine
+   eklendi. Artık 'sağol' kelimesi Sabancı Holding (SAHOL) ticker'ı ile çakışmaz ve sıcak
    bir "Rica ederim! Başka bir finansal konuda yardımcı olabilir miyim?" yanıtı döner.
 2. Çince / Asya Karakter Sızıntı Engelleyicisi (CJK Sanitizer & Strict Prompting):
    'olur' gibi tekil onaylarda Çince karaktere düşülmesi engellendi.
@@ -33,94 +33,102 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 try:
     from symspellpy import SymSpell, Verbosity
+
     HAS_SYMSPELL = True
 except ImportError:
     HAS_SYMSPELL = False
 
 
-MARKET_ASSET_NAMES = {"Dolar", "Euro", "İngiliz Sterlini", "Gram Altın", "Devlet Tahvili", "Yatırım Fonları"}
+MARKET_ASSET_NAMES = {
+    "Dolar",
+    "Euro",
+    "İngiliz Sterlini",
+    "Gram Altın",
+    "Devlet Tahvili",
+    "Yatırım Fonları",
+}
 
 
 class ResponseSanitizer:
     """LLM çıktılarındaki etiket, konuşma artığı, başlık ve tüm yabancı kelime sızıntılarını temizleyen evrensel filtre."""
-    
+
     ENGLISH_LEAK_MAP = {
-        r'\bfazi\b': 'faizi',
-        r'\bdatos[ıa-z]*\b': 'verileri',
-        r'\bsuccessful\b': 'başarılı',
-        r'\binformaci[óo]n\b': 'bilgi',
-        r'\bwill be added to the fleet\b': 'filoya katılacaktır',
-        r'\badded to the fleet\b': 'filoya katılacaktır',
-        r'\bnew aircraft\b': 'yeni uçak',
-        r'\baircraft\b': 'uçak',
-        r'\bfleet\b': 'filo',
-        r'\bunavailable[\'a-z]*\b': 'mevcut değildir',
-        r'\bcentral bank[ıa-z]*\b': 'merkez bankası',
-        r'\binflation rates[ıa-z]*\b': 'enflasyon oranları',
-        r'\binflation rates?\b': 'enflasyon oranları',
-        r'\binterest rates?\b': 'faiz oranları',
-        r'\bverschiedene\b': 'çeşitli',
-        r'\bgovernment bondlar\b': 'devlet tahvilleri',
-        r'\bgovernment bonds?\b': 'devlet tahvili',
-        r'\binvestors\b': 'yatırımcılar',
-        r'\binvestor\b': 'yatırımcı',
-        r'\benstrüman\'tir\.?\b': 'enstrümandır.',
-        r'\benstrüman\'tir\b': 'enstrümandır',
-        r'\binstruments?\b': 'enstrüman',
-        r'\bmeaningi\b': 'anlamı',
-        r'\bmeaning\b': 'anlamı',
-        r'\busedilmektedir\b': 'kullanılmaktadır',
-        r'\bused\b': 'kullanılan',
-        r'\bwidespread\b': 'yaygın',
-        r'\bintroduction\b': 'kullanıma',
-        r'\busageya\b': 'kullanıma',
-        r'\bsignificant\b': 'önemli',
-        r'\bOptimist\b': 'İyimser',
-        r'\boptimist\b': 'iyimser',
-        r'\bportfolio\b': 'portföy',
-        r'\bportfolyo\b': 'portföy',
-        r'\bincrease[\'a-z]*\b': 'artışı',
-        r'\bzusammen\b': 'birlikte',
-        r'\bposition[\'a-z]*\b': 'konumunu',
-        r'\bpositionu\b': 'konumunu',
-        r'\bposition\b': 'konum',
-        r'\brecord\b': 'rekor',
-        r'\busagea\b': 'kullanıma',
-        r'\bbeingeldir\b': 'bilgisidir',
-        r'\bbeing\b': 'olması',
-        r'\binformation[a-z]*\b': 'bilgi',
-        r'\bfiyat\'in[i]?\b': 'fiyatını',
-        r'\bfiyat\'i[n]?\b': 'fiyatını',
-        r'\bcustomers[\'a-z]*\b': 'müşteriler',
-        r'\bcustomer\b': 'müşteri',
-        r'\bperformance[\'a-z]*\b': 'performans',
-        r'\brecently\b': 'son zamanlarda',
-        r'\bincome[\'a-z]*\b': 'gelir',
-        r'\bsalesi\b': 'satışı',
-        r'\bsales\b': 'satışlar',
-        r'\bsale\b': 'satış',
-        r'\brange\b': 'aralık',
-        r'\bmarketinde\b': 'piyasasında',
-        r'\bmarketin\b': 'piyasanın',
-        r'\bmarket\b': 'piyasa',
-        r'\b profit\b': ' kâr',
-        r'\b growth\b': ' büyüme',
-        r'\brevenue\b': 'hasılat',
-        r'\bof bir\b': 'bir',
-        r'\bcurrent price\b': 'güncel fiyat',
-        r'\bglobal events\b': 'küresel gelişmeler',
-        r'\bbritish pound[\'a-z]*\b': 'İngiliz Sterlini',
-        r'\bgiá\b': 'fiyat',
-        r'\bmovements[a-z]*\b': 'hareketleri',
-        r'\brates\b': 'oranlar',
-        r'\bdetails?\b': 'detaylar',
-        r'\bdata\b': 'veri',
-        r'\bdeep learning\b': 'derin öğrenme',
-        r'\bother\b': 'diğer',
-        r'\bcontinue olarak\b': 'sürekli olarak',
-        r'\bcontinue\b': 'sürekli',
-        r'\bçip çiplerine\b': 'çiplerine',
-        r'\bçip çipleri\b': 'çipleri'
+        r"\bfazi\b": "faizi",
+        r"\bdatos[ıa-z]*\b": "verileri",
+        r"\bsuccessful\b": "başarılı",
+        r"\binformaci[óo]n\b": "bilgi",
+        r"\bwill be added to the fleet\b": "filoya katılacaktır",
+        r"\badded to the fleet\b": "filoya katılacaktır",
+        r"\bnew aircraft\b": "yeni uçak",
+        r"\baircraft\b": "uçak",
+        r"\bfleet\b": "filo",
+        r"\bunavailable[\'a-z]*\b": "mevcut değildir",
+        r"\bcentral bank[ıa-z]*\b": "merkez bankası",
+        r"\binflation rates[ıa-z]*\b": "enflasyon oranları",
+        r"\binflation rates?\b": "enflasyon oranları",
+        r"\binterest rates?\b": "faiz oranları",
+        r"\bverschiedene\b": "çeşitli",
+        r"\bgovernment bondlar\b": "devlet tahvilleri",
+        r"\bgovernment bonds?\b": "devlet tahvili",
+        r"\binvestors\b": "yatırımcılar",
+        r"\binvestor\b": "yatırımcı",
+        r"\benstrüman\'tir\.?\b": "enstrümandır.",
+        r"\benstrüman\'tir\b": "enstrümandır",
+        r"\binstruments?\b": "enstrüman",
+        r"\bmeaningi\b": "anlamı",
+        r"\bmeaning\b": "anlamı",
+        r"\busedilmektedir\b": "kullanılmaktadır",
+        r"\bused\b": "kullanılan",
+        r"\bwidespread\b": "yaygın",
+        r"\bintroduction\b": "kullanıma",
+        r"\busageya\b": "kullanıma",
+        r"\bsignificant\b": "önemli",
+        r"\bOptimist\b": "İyimser",
+        r"\boptimist\b": "iyimser",
+        r"\bportfolio\b": "portföy",
+        r"\bportfolyo\b": "portföy",
+        r"\bincrease[\'a-z]*\b": "artışı",
+        r"\bzusammen\b": "birlikte",
+        r"\bposition[\'a-z]*\b": "konumunu",
+        r"\bpositionu\b": "konumunu",
+        r"\bposition\b": "konum",
+        r"\brecord\b": "rekor",
+        r"\busagea\b": "kullanıma",
+        r"\bbeingeldir\b": "bilgisidir",
+        r"\bbeing\b": "olması",
+        r"\binformation[a-z]*\b": "bilgi",
+        r"\bfiyat\'in[i]?\b": "fiyatını",
+        r"\bfiyat\'i[n]?\b": "fiyatını",
+        r"\bcustomers[\'a-z]*\b": "müşteriler",
+        r"\bcustomer\b": "müşteri",
+        r"\bperformance[\'a-z]*\b": "performans",
+        r"\brecently\b": "son zamanlarda",
+        r"\bincome[\'a-z]*\b": "gelir",
+        r"\bsalesi\b": "satışı",
+        r"\bsales\b": "satışlar",
+        r"\bsale\b": "satış",
+        r"\brange\b": "aralık",
+        r"\bmarketinde\b": "piyasasında",
+        r"\bmarketin\b": "piyasanın",
+        r"\bmarket\b": "piyasa",
+        r"\b profit\b": " kâr",
+        r"\b growth\b": " büyüme",
+        r"\brevenue\b": "hasılat",
+        r"\bof bir\b": "bir",
+        r"\bcurrent price\b": "güncel fiyat",
+        r"\bglobal events\b": "küresel gelişmeler",
+        r"\bbritish pound[\'a-z]*\b": "İngiliz Sterlini",
+        r"\bgiá\b": "fiyat",
+        r"\bmovements[a-z]*\b": "hareketleri",
+        r"\brates\b": "oranlar",
+        r"\bdetails?\b": "detaylar",
+        r"\bdata\b": "veri",
+        r"\bdeep learning\b": "derin öğrenme",
+        r"\bother\b": "diğer",
+        r"\bcontinue olarak\b": "sürekli olarak",
+        r"\bcontinue\b": "sürekli",
+        r"\bçip çiplerine\b": "çiplerine",
+        r"\bçip çipleri\b": "çipleri",
     }
 
     @classmethod
@@ -129,7 +137,9 @@ class ResponseSanitizer:
             return text
         cleaned = text
         # Çince / Asya karakterlerini tamamen temizle
-        cleaned = re.sub(r'[\u4e00-\u9fff\u3040-\u30ff\uff00-\uffef\u2e80-\u2eff\u1100-\u11ff]+', '', cleaned)
+        cleaned = re.sub(
+            r"[\u4e00-\u9fff\u3040-\u30ff\uff00-\uffef\u2e80-\u2eff\u1100-\u11ff]+", "", cleaned
+        )
         for pattern, repl in cls.ENGLISH_LEAK_MAP.items():
             cleaned = re.sub(pattern, repl, cleaned, flags=re.IGNORECASE)
         return cleaned
@@ -139,49 +149,51 @@ class ResponseSanitizer:
         """Şirket bilançolarına sızan uydurma döviz kuru, faiz, alakasız TÜİK verileri ve prompt artıklarını temizler."""
         if not text or not is_equity_company:
             return text
-            
-        lines = text.split('\n')
+
+        lines = text.split("\n")
         clean_lines = []
         for line in lines:
-            if re.search(r'^\s*[-*]?\s*(Döviz Kuru|Kur|Faiz)\s*:\s*(1\s*USD|ASLA|değişken|%|\$)', line, re.I):
+            if re.search(
+                r"^\s*[-*]?\s*(Döviz Kuru|Kur|Faiz)\s*:\s*(1\s*USD|ASLA|değişken|%|\$)", line, re.I
+            ):
                 continue
             if "ASLA PAYLAŞTIRILMADI" in line or "yani %" in line:
                 continue
             if "TÜİK" in line or "dış ticaret endeksi" in line or "İhracat birim değer" in line:
                 continue
             clean_lines.append(line)
-            
+
         return "\n".join(clean_lines).strip()
 
     @classmethod
     def sanitize(cls, text: str, is_equity_company: bool = False) -> str:
         if not text:
             return text
-            
+
         cleaned = text.strip()
-        cleaned = re.sub(r'^\s*Soru\s*:.*?\n', '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
-        
+        cleaned = re.sub(r"^\s*Soru\s*:.*?\n", "", cleaned, flags=re.IGNORECASE | re.MULTILINE)
+
         prefixes = [
-            r'^\s*Cevap\s*:\s*',
-            r'^\s*Yanıt\s*:\s*',
-            r'^\s*Çıktı\s*:\s*',
-            r'^\s*Metne göre\s*,\s*',
-            r'^\s*Veriye göre\s*,\s*',
-            r'^\s*BAĞLAM içinde\s*:\s*',
-            r'^\s*BAĞLAM metnine göre\s*,\s*',
-            r'^\s*Senin bu veriye dayalı olarak.*?:?\s*',
-            r'^\s*Bu bilgiye göre\s*,?\s*',
-            r'^\s*Verilen bilgilere göre\s*,?\s*',
-            r'^\s*Metne dayalı olarak\s*,?\s*',
-            r'^\s*Şifreli bilgi\s*:\s*',
-            r'^\s*Açıklama\s*:\s*',
-            r'^\s*Sonuç\s*:\s*'
+            r"^\s*Cevap\s*:\s*",
+            r"^\s*Yanıt\s*:\s*",
+            r"^\s*Çıktı\s*:\s*",
+            r"^\s*Metne göre\s*,\s*",
+            r"^\s*Veriye göre\s*,\s*",
+            r"^\s*BAĞLAM içinde\s*:\s*",
+            r"^\s*BAĞLAM metnine göre\s*,\s*",
+            r"^\s*Senin bu veriye dayalı olarak.*?:?\s*",
+            r"^\s*Bu bilgiye göre\s*,?\s*",
+            r"^\s*Verilen bilgilere göre\s*,?\s*",
+            r"^\s*Metne dayalı olarak\s*,?\s*",
+            r"^\s*Şifreli bilgi\s*:\s*",
+            r"^\s*Açıklama\s*:\s*",
+            r"^\s*Sonuç\s*:\s*",
         ]
-        
+
         for pattern in prefixes:
-            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
-            
-        cleaned = re.sub(r'^[\s,\.:]+', '', cleaned)
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.MULTILINE)
+
+        cleaned = re.sub(r"^[\s,\.:]+", "", cleaned)
         cleaned = cls.sanitize_english_leakage(cleaned)
         cleaned = cls.sanitize_company_hallucinations(cleaned, is_equity_company=is_equity_company)
         return cleaned.strip()
@@ -189,21 +201,63 @@ class ResponseSanitizer:
 
 class AutoSpellCorrector:
     """Aşama 2+: SymSpell tabanlı otomatik imla düzeltici motoru."""
-    
+
     def __init__(self):
         self.is_ready = False
         if HAS_SYMSPELL:
             try:
                 self.sym_spell = SymSpell(max_dictionary_edit_distance=2, prefix_length=7)
                 terms = [
-                    "merhaba", "selam", "günaydın", "akşamlar", "günler", "nasılsın",
-                    "garanti", "bankası", "çeyrek", "kâr", "zarar", "bilanço",
-                    "üçüncü", "dördüncü", "birinci", "ikinci", "hava", "yolları",
-                    "aselsan", "ereğli", "demir", "çelik", "hisse", "borsa",
-                    "dolar", "euro", "sterlin", "altın", "tahvil", "bono", "fon",
-                    "net", "operasyonel", "marj", "fiyat", "haberleri",
-                    "paylaş", "anlat", "göster", "ver", "söyle", "getir", "yaz",
-                    "tamam", "olur", "tabi", "tabii", "lütfen", "detay", "yolla"
+                    "merhaba",
+                    "selam",
+                    "günaydın",
+                    "akşamlar",
+                    "günler",
+                    "nasılsın",
+                    "garanti",
+                    "bankası",
+                    "çeyrek",
+                    "kâr",
+                    "zarar",
+                    "bilanço",
+                    "üçüncü",
+                    "dördüncü",
+                    "birinci",
+                    "ikinci",
+                    "hava",
+                    "yolları",
+                    "aselsan",
+                    "ereğli",
+                    "demir",
+                    "çelik",
+                    "hisse",
+                    "borsa",
+                    "dolar",
+                    "euro",
+                    "sterlin",
+                    "altın",
+                    "tahvil",
+                    "bono",
+                    "fon",
+                    "net",
+                    "operasyonel",
+                    "marj",
+                    "fiyat",
+                    "haberleri",
+                    "paylaş",
+                    "anlat",
+                    "göster",
+                    "ver",
+                    "söyle",
+                    "getir",
+                    "yaz",
+                    "tamam",
+                    "olur",
+                    "tabi",
+                    "tabii",
+                    "lütfen",
+                    "detay",
+                    "yolla",
                 ]
                 for t in terms:
                     self.sym_spell.create_dictionary_entry(t, 1000)
@@ -217,7 +271,7 @@ class AutoSpellCorrector:
         words = text.split()
         corrected = []
         for word in words:
-            clean_w = re.sub(r'[^\w\s]', '', word)
+            clean_w = re.sub(r"[^\w\s]", "", word)
             if len(clean_w) <= 2 or clean_w.isdigit():
                 corrected.append(word)
                 continue
@@ -232,17 +286,90 @@ class AutoSpellCorrector:
 class QueryOptimizer:
     """Esnek İmla Düzeltme ve Dinamik Selamlaşma Motoru."""
 
-    CANONICAL_GREETINGS = ["merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar", "naber", "nasılsın", "slm", "mrb"]
+    CANONICAL_GREETINGS = [
+        "merhaba",
+        "selam",
+        "günaydın",
+        "iyi günler",
+        "iyi akşamlar",
+        "naber",
+        "nasılsın",
+        "slm",
+        "mrb",
+    ]
     REJECTION_WORDS = ["hayır", "istemem", "kalsın", "yok", "istemiyorum", "gerek yok"]
-    PRONOUN_PATTERNS = ["o haberi", "haberi ver", "haberi getir", "detayı ver", "detayı anlat", "haberi göster", "detayları ver", "ver", "verin", "göster", "anlat", "getir", "söyle", "yaz", "oku", "paylaş", "tabi"]
-    AVAILABILITY_PATTERNS = ["haber var mı", "bilgi var mı", "gelişme var mı", "duyuru var mı", "haberi var mı"]
-    AVAILABILITY_REGEX = re.compile(r'\b(bilgi|haber|gelişme|duyuru)\b.*?\b(v\s*a\s*r|v[a-z]*)\s*(m[ıiuü]|armı|armi)\b', re.IGNORECASE)
-    ACTION_VERBS = ["paylaş", "ver", "göster", "anlat", "yolla", "getir", "söyle", "oku", "yaz", "detaylandır", "aktar"]
+    PRONOUN_PATTERNS = [
+        "o haberi",
+        "haberi ver",
+        "haberi getir",
+        "detayı ver",
+        "detayı anlat",
+        "haberi göster",
+        "detayları ver",
+        "ver",
+        "verin",
+        "göster",
+        "anlat",
+        "getir",
+        "söyle",
+        "yaz",
+        "oku",
+        "paylaş",
+        "tabi",
+    ]
+    AVAILABILITY_PATTERNS = [
+        "haber var mı",
+        "bilgi var mı",
+        "gelişme var mı",
+        "duyuru var mı",
+        "haberi var mı",
+    ]
+    AVAILABILITY_REGEX = re.compile(
+        r"\b(bilgi|haber|gelişme|duyuru)\b.*?\b(v\s*a\s*r|v[a-z]*)\s*(m[ıiuü]|armı|armi)\b",
+        re.IGNORECASE,
+    )
+    ACTION_VERBS = [
+        "paylaş",
+        "ver",
+        "göster",
+        "anlat",
+        "yolla",
+        "getir",
+        "söyle",
+        "oku",
+        "yaz",
+        "detaylandır",
+        "aktar",
+    ]
     CONFIRMATION_WORDS = {
-        "evet", "tamam", "olur", "tabi", "tabii", "lütfen", "yolla", "göster",
-        "anlat", "ver", "verin", "paylaş", "detay", "detaylandır", "getir", "söyle", "oku"
+        "evet",
+        "tamam",
+        "olur",
+        "tabi",
+        "tabii",
+        "lütfen",
+        "yolla",
+        "göster",
+        "anlat",
+        "ver",
+        "verin",
+        "paylaş",
+        "detay",
+        "detaylandır",
+        "getir",
+        "söyle",
+        "oku",
     }
-    THANK_WORDS = ["sağol", "sağolun", "saol", "teşekkürler", "teşekkür", "teşekkür ederim", "eyvallah", "rica ederim"]
+    THANK_WORDS = [
+        "sağol",
+        "sağolun",
+        "saol",
+        "teşekkürler",
+        "teşekkür",
+        "teşekkür ederim",
+        "eyvallah",
+        "rica ederim",
+    ]
 
     def __init__(self):
         self.spell_corrector = AutoSpellCorrector()
@@ -250,7 +377,7 @@ class QueryOptimizer:
     @classmethod
     def is_thanks(cls, query: str) -> bool:
         q = query.lower().strip()
-        words = set(re.findall(r'\b\w+\b', q))
+        words = set(re.findall(r"\b\w+\b", q))
         return bool(words.intersection(set(cls.THANK_WORDS)))
 
     @classmethod
@@ -266,18 +393,20 @@ class QueryOptimizer:
     @classmethod
     def is_direct_action_request(cls, query: str) -> bool:
         q = query.lower().strip()
-        return any(re.search(r'\b' + verb + r'[a-zçğıöşü]*\b', q) for verb in cls.ACTION_VERBS)
+        return any(re.search(r"\b" + verb + r"[a-zçğıöşü]*\b", q) for verb in cls.ACTION_VERBS)
 
     @classmethod
     def is_confirmation(cls, query: str) -> bool:
-        words = set(re.findall(r'\b\w+\b', query.lower()))
-        return bool(words.intersection(cls.CONFIRMATION_WORDS)) or cls.is_direct_action_request(query)
+        words = set(re.findall(r"\b\w+\b", query.lower()))
+        return bool(words.intersection(cls.CONFIRMATION_WORDS)) or cls.is_direct_action_request(
+            query
+        )
 
     def is_gibberish(self, query: str) -> bool:
         q = query.strip().lower()
         if len(q) < 3:
             return True
-        if re.search(r'(.{2,4})\1{2,}', q):
+        if re.search(r"(.{2,4})\1{2,}", q):
             return True
         vowels = set("aeıioöuü")
         words = q.split()
@@ -321,65 +450,87 @@ class QueryOptimizer:
         if cls.is_direct_action_request(query):
             return False
         words = query.lower().split()
-        action_kws = ["kar", "kâr", "bilanço", "çeyrek", "cyrk", "fiyat", "temettü", "hisse", "kaç", "ne kadar", "neka", "sonuç", "açıkladı", "kuru", "faizi"]
+        action_kws = [
+            "kar",
+            "kâr",
+            "bilanço",
+            "çeyrek",
+            "cyrk",
+            "fiyat",
+            "temettü",
+            "hisse",
+            "kaç",
+            "ne kadar",
+            "neka",
+            "sonuç",
+            "açıkladı",
+            "kuru",
+            "faizi",
+        ]
         return len(words) <= 3 and not any(kw in query.lower() for kw in action_kws)
 
     def clean_query(self, query: str) -> str:
         rewritten = query.strip()
 
         term_replacements = {
-            r'\btümşirket[a-zçğıöşü]*\b': 'büyük şirketler',
-            r'\bbüyükşirket[a-zçğıöşü]*\b': 'büyük şirketler',
-            r'\bbbono\b': 'bono',
-            r'\bbilano[çc]olar[ıa]*\b': 'bilançolar',
-            r'\bbilancolar[ıa]*\b': 'bilançolar',
-            r'\bthavil\b': 'tahvil',
-            r'\bfoviz\b': 'döviz',
-            r'\bdoviz\b': 'döviz',
-            r'\beruo\b': 'euro',
-            r'\beuroo\b': 'euro',
-            r'\bdlr\b': 'dolar',
-            r'\bgrnat\b': 'garanti',
-            r'\bgranti\b': 'garanti',
-            r'\bbnksı\b': 'bankası',
-            r'\bbnksi\b': 'bankası',
-            r'\bneka\s*dar\b': 'ne kadar',
-            r'\bucnc\b': 'üçüncü',
-            r'\bcyrk\b': 'çeyrek',
-            r'\bcyrktei\b': 'çeyrekteki',
-            r'\bcyrkte\b': 'çeyrekte',
-            r'\bceyrek\b': 'çeyrek',
-            r'\bv\s*armı\b': 'var mı',
-            r'\bv\s*armi\b': 'var mı',
-            r'\bvarmı\b': 'var mı',
-            r'\bvarmi\b': 'var mı',
-            r'\bvrmı\b': 'var mı',
-            r'\bvrmi\b': 'var mı'
+            r"\btümşirket[a-zçğıöşü]*\b": "büyük şirketler",
+            r"\bbüyükşirket[a-zçğıöşü]*\b": "büyük şirketler",
+            r"\bbbono\b": "bono",
+            r"\bbilano[çc]olar[ıa]*\b": "bilançolar",
+            r"\bbilancolar[ıa]*\b": "bilançolar",
+            r"\bthavil\b": "tahvil",
+            r"\bfoviz\b": "döviz",
+            r"\bdoviz\b": "döviz",
+            r"\beruo\b": "euro",
+            r"\beuroo\b": "euro",
+            r"\bdlr\b": "dolar",
+            r"\bgrnat\b": "garanti",
+            r"\bgranti\b": "garanti",
+            r"\bbnksı\b": "bankası",
+            r"\bbnksi\b": "bankası",
+            r"\bneka\s*dar\b": "ne kadar",
+            r"\bucnc\b": "üçüncü",
+            r"\bcyrk\b": "çeyrek",
+            r"\bcyrktei\b": "çeyrekteki",
+            r"\bcyrkte\b": "çeyrekte",
+            r"\bceyrek\b": "çeyrek",
+            r"\bv\s*armı\b": "var mı",
+            r"\bv\s*armi\b": "var mı",
+            r"\bvarmı\b": "var mı",
+            r"\bvarmi\b": "var mı",
+            r"\bvrmı\b": "var mı",
+            r"\bvrmi\b": "var mı",
         }
         for pattern, repl in term_replacements.items():
             rewritten = re.sub(pattern, repl, rewritten, flags=re.IGNORECASE)
 
-        quarter_regex_4 = r'\b(son|dördüncü|dorduncu|dordunc|drnc|4)\s*\.?\s*(e\.)?\s*[cç][eyrk]*[a-zçğıöşü]*\b'
-        quarter_regex_3 = r'\b(üçüncü|ucuncu|ucunc|ucnc|3)\s*\.?\s*[cç][eyrk]*[a-zçğıöşü]*\b'
-        quarter_regex_2 = r'\b(ikinci|ikinc|iknc|2)\s*\.?\s*(e\.)?\s*[cç][eyrk]*[a-zçğıöşü]*\b'
-        quarter_regex_1 = r'\b(ilk|birinci|birinc|birnc|brnc|1)\s*\.?\s*(e\.)?\s*[cç][eyrk]*[a-zçğıöşü]*\b'
+        quarter_regex_4 = (
+            r"\b(son|dördüncü|dorduncu|dordunc|drnc|4)\s*\.?\s*(e\.)?\s*[cç][eyrk]*[a-zçğıöşü]*\b"
+        )
+        quarter_regex_3 = r"\b(üçüncü|ucuncu|ucunc|ucnc|3)\s*\.?\s*[cç][eyrk]*[a-zçğıöşü]*\b"
+        quarter_regex_2 = r"\b(ikinci|ikinc|iknc|2)\s*\.?\s*(e\.)?\s*[cç][eyrk]*[a-zçğıöşü]*\b"
+        quarter_regex_1 = (
+            r"\b(ilk|birinci|birinc|birnc|brnc|1)\s*\.?\s*(e\.)?\s*[cç][eyrk]*[a-zçğıöşü]*\b"
+        )
 
-        rewritten = re.sub(quarter_regex_4, '4. çeyrek (son çeyrek)', rewritten, flags=re.IGNORECASE)
-        rewritten = re.sub(quarter_regex_3, '3. çeyrek', rewritten, flags=re.IGNORECASE)
-        rewritten = re.sub(quarter_regex_2, '2. çeyrek', rewritten, flags=re.IGNORECASE)
-        rewritten = re.sub(quarter_regex_1, '1. çeyrek', rewritten, flags=re.IGNORECASE)
+        rewritten = re.sub(
+            quarter_regex_4, "4. çeyrek (son çeyrek)", rewritten, flags=re.IGNORECASE
+        )
+        rewritten = re.sub(quarter_regex_3, "3. çeyrek", rewritten, flags=re.IGNORECASE)
+        rewritten = re.sub(quarter_regex_2, "2. çeyrek", rewritten, flags=re.IGNORECASE)
+        rewritten = re.sub(quarter_regex_1, "1. çeyrek", rewritten, flags=re.IGNORECASE)
 
         return rewritten
 
     @classmethod
     def extract_quarter(cls, text: str) -> Optional[str]:
-        if re.search(r'\b(4\.?\s*çeyrek|son\s+çeyrek|dördüncü\s+çeyrek)\b', text, re.I):
+        if re.search(r"\b(4\.?\s*çeyrek|son\s+çeyrek|dördüncü\s+çeyrek)\b", text, re.I):
             return "4"
-        if re.search(r'\b(3\.?\s*çeyrek|üçüncü\s+çeyrek)\b', text, re.I):
+        if re.search(r"\b(3\.?\s*çeyrek|üçüncü\s+çeyrek)\b", text, re.I):
             return "3"
-        if re.search(r'\b(2\.?\s*çeyrek|ikinci\s+çeyrek)\b', text, re.I):
+        if re.search(r"\b(2\.?\s*çeyrek|ikinci\s+çeyrek)\b", text, re.I):
             return "2"
-        if re.search(r'\b(1\.?\s*çeyrek|ilk\s+çeyrek|birinci\s+çeyrek)\b', text, re.I):
+        if re.search(r"\b(1\.?\s*çeyrek|ilk\s+çeyrek|birinci\s+çeyrek)\b", text, re.I):
             return "1"
         return None
 
@@ -388,14 +539,75 @@ class FinancialMappingManager:
     """
     Aşama 5: Qwen 2.5 7B Destekli Çoklu Varlık ve İmla Dayanıklı Algılama Motoru.
     """
+
     EXCLUDED_WORDS = {
-        "selam", "merhaba", "günaydın", "iyi", "günler", "akşamlar", "naber", "nasılsın", "slm", "mrb",
-        "evet", "hayır", "olur", "ver", "tamam", "paylaş", "tabi", "tabii", "lütfen", "detay", "yolla",
-        "anlat", "göster", "getir", "söyle", "yaz", "oku", "hakkında", "bilgi", "haber",
-        "çeyrek", "çeyrekte", "çeyrekteki", "çyrektei", "çeyreği", "kar", "kâr", "zarar", "bilanço",
-        "bilançosu", "bilanoçoları", "durumu", "nedir", "sonuç", "sonucu", "fiyatı", "kuru", "faizi", "son",
-        "tarih", "tarihi", "tarihçe", "geçmiş", "güncel", "hepsi", "tümü", "oranı", "oranları", "ve", "veya",
-        "sağol", "sağolun", "saol", "teşekkürler", "teşekkür", "eyvallah", "rica"
+        "selam",
+        "merhaba",
+        "günaydın",
+        "iyi",
+        "günler",
+        "akşamlar",
+        "naber",
+        "nasılsın",
+        "slm",
+        "mrb",
+        "evet",
+        "hayır",
+        "olur",
+        "ver",
+        "tamam",
+        "paylaş",
+        "tabi",
+        "tabii",
+        "lütfen",
+        "detay",
+        "yolla",
+        "anlat",
+        "göster",
+        "getir",
+        "söyle",
+        "yaz",
+        "oku",
+        "hakkında",
+        "bilgi",
+        "haber",
+        "çeyrek",
+        "çeyrekte",
+        "çeyrekteki",
+        "çyrektei",
+        "çeyreği",
+        "kar",
+        "kâr",
+        "zarar",
+        "bilanço",
+        "bilançosu",
+        "bilanoçoları",
+        "durumu",
+        "nedir",
+        "sonuç",
+        "sonucu",
+        "fiyatı",
+        "kuru",
+        "faizi",
+        "son",
+        "tarih",
+        "tarihi",
+        "tarihçe",
+        "geçmiş",
+        "güncel",
+        "hepsi",
+        "tümü",
+        "oranı",
+        "oranları",
+        "ve",
+        "veya",
+        "sağol",
+        "sağolun",
+        "saol",
+        "teşekkürler",
+        "teşekkür",
+        "eyvallah",
+        "rica",
     }
 
     def __init__(self, config_path: str = "./data/company_mappings.json"):
@@ -406,14 +618,14 @@ class FinancialMappingManager:
 
     def load_mappings(self):
         if os.path.exists(self.config_path):
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 self.mapping = json.load(f)
         else:
             self.mapping = {}
-        
+
         self.all_keys = list(self.mapping.keys())
         sorted_keys = sorted([k for k in self.mapping.keys() if len(k) >= 2], key=len, reverse=True)
-        pattern_str = r'\b(' + '|'.join(re.escape(k) for k in sorted_keys) + r')[a-zçğıöşü]*\b'
+        pattern_str = r"\b(" + "|".join(re.escape(k) for k in sorted_keys) + r")[a-zçğıöşü]*\b"
         self.company_regex = re.compile(pattern_str, re.IGNORECASE)
 
     def detect_companies(self, query: str) -> List[str]:
@@ -421,7 +633,17 @@ class FinancialMappingManager:
         q_lower = q_cleaned.lower()
 
         # 0. KÜÇÜK ŞİRKETLER (SMALL-CAP) UYARI KONTROLÜ
-        if any(w in q_lower for w in ["küçük şirket", "küçük şirketler", "küçük ölçekli", "yan tahta", "small cap", "small-cap"]):
+        if any(
+            w in q_lower
+            for w in [
+                "küçük şirket",
+                "küçük şirketler",
+                "küçük ölçekli",
+                "yan tahta",
+                "small cap",
+                "small-cap",
+            ]
+        ):
             return ["KUCUK_SIRKET_UYARI"]
 
         all_detected = []
@@ -440,24 +662,26 @@ class FinancialMappingManager:
 
         # 2. Esnek Kategori Bazlı Eşleşmeler (Döviz, Tahvil/Bono, Şirket Bilançoları)
         doviz_specific = [c for c in ["Dolar", "Euro", "İngiliz Sterlini"] if c in all_detected]
-        has_general_doviz_keyword = bool(re.search(r'\b(d[öo]viz|foviz)\b', q_lower))
+        has_general_doviz_keyword = bool(re.search(r"\b(d[öo]viz|foviz)\b", q_lower))
 
         if has_general_doviz_keyword or not doviz_specific:
-            if has_general_doviz_keyword or re.search(r'\b(kurlar|kurları)\b', q_lower):
+            if has_general_doviz_keyword or re.search(r"\b(kurlar|kurları)\b", q_lower):
                 for d in ["Dolar", "Euro", "İngiliz Sterlini"]:
                     if d not in all_detected:
                         all_detected.append(d)
 
-        if re.search(r'\b(altın|altınlar|gram altın)\b', q_lower):
+        if re.search(r"\b(altın|altınlar|gram altın)\b", q_lower):
             if "Gram Altın" not in all_detected:
                 all_detected.append("Gram Altın")
-        if re.search(r'\b(tahvil|thavil|bono|bonolar|bbono)\b', q_lower):
+        if re.search(r"\b(tahvil|thavil|bono|bonolar|bbono)\b", q_lower):
             if "Devlet Tahvili" not in all_detected:
                 all_detected.append("Devlet Tahvili")
-        if re.search(r'\b(fon|fonlar|yatırım fonları)\b', q_lower):
+        if re.search(r"\b(fon|fonlar|yatırım fonları)\b", q_lower):
             if "Yatırım Fonları" not in all_detected:
                 all_detected.append("Yatırım Fonları")
-        if re.search(r'\b(büyük şirket|tüm şirket|şirket|şriket|bilan[çc]o|bilano[çc]o)\b', q_lower):
+        if re.search(
+            r"\b(büyük şirket|tüm şirket|şirket|şriket|bilan[çc]o|bilano[çc]o)\b", q_lower
+        ):
             for s in ["Garanti BBVA", "Türk Hava Yolları", "Apple", "Nvidia"]:
                 if s not in all_detected:
                     all_detected.append(s)
@@ -465,7 +689,7 @@ class FinancialMappingManager:
         # 3. Kelime Bazlı Yüksek Hassasiyetli Fuzzy Match (Sadece muaf tutulmayan kelimeler için)
         words = q_lower.split()
         for word in words:
-            w_clean = re.sub(r'[^\w\s]', '', word)
+            w_clean = re.sub(r"[^\w\s]", "", word)
             if w_clean in self.EXCLUDED_WORDS or QueryOptimizer.is_greeting_word(w_clean):
                 continue
             if len(w_clean) >= 4:
@@ -493,6 +717,7 @@ class FinancialRAGAssistant:
     """
     Production-ready Qwen 2.5 7B Destekli Smart Hibrit RAG Finansal Asistan.
     """
+
     def __init__(
         self,
         persist_directory: str | None = None,
@@ -517,15 +742,14 @@ class FinancialRAGAssistant:
 
         # 1. Embedding Modeli
         self.embeddings = HuggingFaceEmbeddings(
-            model_name=embedding_model_name,
-            model_kwargs={'device': 'cpu'}
+            model_name=embedding_model_name, model_kwargs={"device": "cpu"}
         )
 
         # 2. Kalıcı Chroma Vector Database
         self.vectorstore = Chroma(
             collection_name="live_financial_docs",
             embedding_function=self.embeddings,
-            persist_directory=self.persist_directory
+            persist_directory=self.persist_directory,
         )
 
         # 3. BM25 İndeksi
@@ -580,19 +804,43 @@ class FinancialRAGAssistant:
                 "pending_offer": False,
                 "pending_company": "",
                 "pending_content": "",
-                "last_company": ""
+                "last_company": "",
             }
         return self.sessions[session_id]
 
-    async def classify_intent_async(self, query: str, detected_company: Optional[str] = None) -> str:
+    async def classify_intent_async(
+        self, query: str, detected_company: Optional[str] = None
+    ) -> str:
         if detected_company:
             return "FINANS"
 
-        financial_keywords = ["hisse", "kar", "kâr", "bilanço", "borsa", "çeyrek", "fiyat", "temettü", "thyao", "garan", "haber", "altın", "dolar", "euro", "sterlin", "tahvil", "bono", "fon", "detay"]
+        financial_keywords = [
+            "hisse",
+            "kar",
+            "kâr",
+            "bilanço",
+            "borsa",
+            "çeyrek",
+            "fiyat",
+            "temettü",
+            "thyao",
+            "garan",
+            "haber",
+            "altın",
+            "dolar",
+            "euro",
+            "sterlin",
+            "tahvil",
+            "bono",
+            "fon",
+            "detay",
+        ]
         if any(kw in query.lower() for kw in financial_keywords):
             return "FINANS"
 
-        system_prompt = "Sen bir finansal niyet sınıflandırıcısısın. SADECE 'FINANS' veya 'KAPSAM_DISI' döndür."
+        system_prompt = (
+            "Sen bir finansal niyet sınıflandırıcısısın. SADECE 'FINANS' veya 'KAPSAM_DISI' döndür."
+        )
         messages = [SystemMessage(content=system_prompt), HumanMessage(content=query)]
         try:
             res = await self.llm.ainvoke(messages)
@@ -603,10 +851,12 @@ class FinancialRAGAssistant:
     def _retrieve_docs_for_company(self, company: str, query: str) -> List[Document]:
         filter_dict = {"company": company}
         search_q = f"{company} finansal sonuçları kurları ve haberleri"
-        
+
         v_results = self.vectorstore.similarity_search(search_q, k=3, filter=filter_dict)
-        matched_chunks = [d for d in self.all_chunks if d.metadata.get("company", "").lower() == company.lower()]
-        
+        matched_chunks = [
+            d for d in self.all_chunks if d.metadata.get("company", "").lower() == company.lower()
+        ]
+
         combined = list({d.page_content: d for d in (v_results + matched_chunks)}.values())
         return combined[:3]
 
@@ -630,20 +880,24 @@ class FinancialRAGAssistant:
         if len(detected_companies) > 1:
             # MANTIKSAL KATEGORİ SIRALAMASI: Önce tüm Piyasa Varlıkları, ardından tüm Şirket Bilançoları
             market_assets_detected = [c for c in detected_companies if c in MARKET_ASSET_NAMES]
-            equity_companies_detected = [c for c in detected_companies if c not in MARKET_ASSET_NAMES]
+            equity_companies_detected = [
+                c for c in detected_companies if c not in MARKET_ASSET_NAMES
+            ]
             ordered_companies = market_assets_detected + equity_companies_detected
-            
+
             sections = []
             for comp in ordered_companies:
                 comp_docs = self._retrieve_docs_for_company(comp, query)
-                
+
                 if not comp_docs:
-                    sections.append(f"### {comp}:\nVeritabanımızda {comp} ile ilgili doğrulanmış bir bilgi bulunmamaktadır.")
+                    sections.append(
+                        f"### {comp}:\nVeritabanımızda {comp} ile ilgili doğrulanmış bir bilgi bulunmamaktadır."
+                    )
                     continue
-                
+
                 comp_context = "\n".join([d.page_content for d in comp_docs])
                 is_market_asset = comp in MARKET_ASSET_NAMES
-                
+
                 if is_market_asset:
                     sys_msg = f"""Sen Türkçe konuşan resmi bir finans analizörüsün.
 GÖREV:
@@ -661,13 +915,17 @@ SADECE {comp} şirketinin son çeyrek bilanço verilerini (net kâr, gelir, akti
 - SADECE SAF TÜRKÇE KELİMELER VE TÜRKÇE ALFABE KULLAN. Yabancı kelimeler veya Çince karakterler ASLA KULLANMA."""
 
                 user_msg = f"VERİ:\n{comp_context}\n\nSORU:\n{comp} için finansal verileri ver."
-                
-                res_obj = await self.llm.ainvoke([SystemMessage(content=sys_msg), HumanMessage(content=user_msg)])
-                clean_ans = ResponseSanitizer.sanitize(res_obj.content, is_equity_company=not is_market_asset)
+
+                res_obj = await self.llm.ainvoke(
+                    [SystemMessage(content=sys_msg), HumanMessage(content=user_msg)]
+                )
+                clean_ans = ResponseSanitizer.sanitize(
+                    res_obj.content, is_equity_company=not is_market_asset
+                )
                 if not clean_ans:
                     clean_ans = comp_context
                 sections.append(f"### {comp}:\n{clean_ans}")
-                
+
             return "\n\n".join(sections)
 
         # 2. DİYALOG TAKİBİ (Tekil Onay / 'olur' Akışı)
@@ -683,7 +941,7 @@ SADECE {comp} şirketinin son çeyrek bilanço verilerini (net kâr, gelir, akti
                 state["pending_offer"] = False
                 state["pending_company"] = ""
                 state["last_company"] = company
-                
+
                 is_market_asset = company in MARKET_ASSET_NAMES
                 sys_msg = f"""Sen Türkçe konuşan resmi bir finans analizörüsün.
 GÖREV:
@@ -692,13 +950,17 @@ SADECE {company} varlığına ait bilgileri net 1-2 madde veya cümle ile açık
 - Çince, İngilizce, İspanyolca veya Almanca kelimeler/karakterler ASLA KULLANMA.
 - Sakın Çince yanıt verme veya Çince karakter üretme.
 - Giriş etiketleri (Soru:, Cevap:, Evet haber var) KULLANMA."""
-                
+
                 messages = [
                     SystemMessage(content=sys_msg),
-                    HumanMessage(content=f"VERİ:\n{content}\n\nSORU:\n{company} finansal detaylarını Türkçe açıkla.")
+                    HumanMessage(
+                        content=f"VERİ:\n{content}\n\nSORU:\n{company} finansal detaylarını Türkçe açıkla."
+                    ),
                 ]
                 res = await self.llm.ainvoke(messages)
-                return ResponseSanitizer.sanitize(res.content, is_equity_company=not is_market_asset)
+                return ResponseSanitizer.sanitize(
+                    res.content, is_equity_company=not is_market_asset
+                )
             else:
                 state["pending_offer"] = False
                 state["pending_company"] = ""
@@ -711,8 +973,11 @@ SADECE {company} varlığına ait bilgileri net 1-2 madde veya cümle ile açık
             if self.optimizer.is_pronoun_followup(query):
                 state["last_company"] = ""
                 return "Hangi şirketin, döviz kurunun veya finansal varlığın haberini öğrenmek istiyorsunuz? (Örn: 'Dolar kuru', 'THY haberlerini ver', 'Euro ne kadar')"
-            
-            if any(w in user_input_lower for w in ["çeyrek", "cyrk", "kar", "kâr", "bilanço", "temettü", "hisse"]):
+
+            if any(
+                w in user_input_lower
+                for w in ["çeyrek", "cyrk", "kar", "kâr", "bilanço", "temettü", "hisse"]
+            ):
                 state["last_company"] = ""
                 return "Hangi şirketin finansal verisini öğrenmek istiyorsunuz? Lütfen şirket adını belirtin. (Örn: 'Garanti son çeyrek kârı ne kadar?' veya 'THY 3. çeyrek')"
 
@@ -733,7 +998,11 @@ SADECE {company} varlığına ait bilgileri net 1-2 madde veya cümle ile açık
             return "Ben bir finansal analiz asistanıyım. Sadece borsa, döviz kurları, altın, tahvil/bono ve ekonomi konularında yardımcı olabilirim."
 
         clean_query = self.optimizer.clean_query(query)
-        final_docs = self._retrieve_docs_for_company(detected_company, clean_query) if detected_company else []
+        final_docs = (
+            self._retrieve_docs_for_company(detected_company, clean_query)
+            if detected_company
+            else []
+        )
 
         if not final_docs:
             return f"Sorunuza karşılık veritabanımızda {detected_company or ''} ile ilgili doğrulanmış bir bilgi bulunmamaktadır."
@@ -778,11 +1047,13 @@ Sorulan soruyu VERİ metnindeki bilgilere göre SADECE {detected_company or 'var
 
         messages = [
             SystemMessage(content=system_instruction),
-            HumanMessage(content=f"VERİ:\n{context}\n\nSORU:\n{clean_query}")
+            HumanMessage(content=f"VERİ:\n{context}\n\nSORU:\n{clean_query}"),
         ]
 
         response_obj = await self.llm.ainvoke(messages)
-        clean_response = ResponseSanitizer.sanitize(response_obj.content, is_equity_company=not is_market_asset)
+        clean_response = ResponseSanitizer.sanitize(
+            response_obj.content, is_equity_company=not is_market_asset
+        )
 
         if not clean_response:
             clean_response = context
@@ -801,16 +1072,19 @@ Sorulan soruyu VERİ metnindeki bilgilere göre SADECE {detected_company or 'var
 async def main():
     assistant = FinancialRAGAssistant(persist_directory="./chroma_db")
 
-    print("--- Finansal Asistan Stage 5 (Sağol / Sahol Excluded Words Active) Başlatıldı (Çıkış için 'q') ---")
+    print(
+        "--- Finansal Asistan Stage 5 (Sağol / Sahol Excluded Words Active) Başlatıldı (Çıkış için 'q') ---"
+    )
     session_id = "test_user_saagol"
 
     while True:
         user_query = input("\nSoru: ")
-        if user_query.lower() in ['q', 'exit', 'cikis']:
+        if user_query.lower() in ["q", "exit", "cikis"]:
             break
 
         bot_response = await assistant.chat_async(user_query, session_id=session_id)
         print(f"Bot: {bot_response}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

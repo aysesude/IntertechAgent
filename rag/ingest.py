@@ -70,9 +70,7 @@ def main() -> int:
         logger.error("Doküman klasörü bulunamadı: %s", DOCUMENTS_DIR)
         return 1
 
-    dosyalar = sorted(
-        p for p in DOCUMENTS_DIR.glob("*.md") if p.name.lower() not in {"readme.md"}
-    )
+    dosyalar = sorted(p for p in DOCUMENTS_DIR.glob("*.md") if p.name.lower() not in {"readme.md"})
 
     if not dosyalar:
         logger.error(

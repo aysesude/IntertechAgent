@@ -23,9 +23,7 @@ class MarketAgent(BaseAgent):
 
         if not tool_result.get("success"):
             error = tool_result.get("error", {})
-            return self.error_response(
-                error.get("message", "Piyasa verisi alınamadı")
-            )
+            return self.error_response(error.get("message", "Piyasa verisi alınamadı"))
 
         answer = tool_result["data"]["answer"]
 
