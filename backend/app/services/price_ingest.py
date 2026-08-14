@@ -84,10 +84,12 @@ def upsert_prices(db: Session, asset_id, points: list[PricePoint]) -> int:
             "source": statement.excluded.source,
             "fetched_at": statement.excluded.fetched_at,
         },
-        where=_priority_case(statement.excluded.source)
-        > _priority_case(PriceHistory.__table__.c.source),
-    # rowcount PG'de bu deyim için güvenilir değil (-1 dönebiliyor); RETURNING
-    # yalnızca gerçekten yazılan (öncelik kuralına takılmayan) satırları döndürür.
+        where=(
+            _priority_case(statement.excluded.source)
+            > _priority_case(PriceHistory.__table__.c.source)
+        ),
+        # rowcount PG'de bu deyim için güvenilir değil (-1 dönebiliyor); RETURNING
+        # yalnızca gerçekten yazılan (öncelik kuralına takılmayan) satırları döndürür.
     ).returning(PriceHistory.__table__.c.id)
     written = len(db.execute(statement).fetchall())
     db.flush()
