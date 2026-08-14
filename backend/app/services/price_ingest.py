@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import case, select
+from sqlalchemy import Text, case, cast, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -45,10 +45,14 @@ class IngestResult:
 
 
 def _priority_case(column):
-    """source kolonunu sayısal önceliğe çeviren SQL CASE ifadesi."""
+    """source kolonunu sayısal önceliğe çeviren SQL CASE ifadesi.
+
+    Kolon metne cast edilir: PG'de enum kolonu, parametre olarak bağlanan
+    varchar literallerle doğrudan karşılaştırılamaz (operator does not exist);
+    SQLite'ta cast zararsızdır."""
     return case(
         {source.value: priority for source, priority in PRICE_SOURCE_PRIORITY.items()},
-        value=column,
+        value=cast(column, Text),
         else_=0,
     )
 
@@ -82,10 +86,12 @@ def upsert_prices(db: Session, asset_id, points: list[PricePoint]) -> int:
         },
         where=_priority_case(statement.excluded.source)
         > _priority_case(PriceHistory.__table__.c.source),
-    )
-    result = db.execute(statement)
+    # rowcount PG'de bu deyim için güvenilir değil (-1 dönebiliyor); RETURNING
+    # yalnızca gerçekten yazılan (öncelik kuralına takılmayan) satırları döndürür.
+    ).returning(PriceHistory.__table__.c.id)
+    written = len(db.execute(statement).fetchall())
     db.flush()
-    return result.rowcount or 0
+    return written
 
 
 def _log(db: Session, result: IngestResult, asset_id) -> None:
