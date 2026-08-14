@@ -22,6 +22,13 @@ chromadb>=0.5.5
 
 Faker>=26.0.0
 
+# Piyasa verisi sağlayıcıları (backend/app/providers/)
+requests>=2.32.3
+yfinance>=0.2.43
+pandas>=2.2.2
+tefas-crawler>=0.3.4
+lxml>=5.3.0
+
 pytest>=8.3.3
 pytest-asyncio>=0.24.0
 
