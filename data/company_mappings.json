@@ -1,0 +1,902 @@
+{
+    "thy": {
+        "name": "Türk Hava Yolları",
+        "ticker": "THYAO"
+    },
+    "türk hava yolları": {
+        "name": "Türk Hava Yolları",
+        "ticker": "THYAO"
+    },
+    "turk hava yollari": {
+        "name": "Türk Hava Yolları",
+        "ticker": "THYAO"
+    },
+    "thyao": {
+        "name": "Türk Hava Yolları",
+        "ticker": "THYAO"
+    },
+    "türkhavayolları": {
+        "name": "Türk Hava Yolları",
+        "ticker": "THYAO"
+    },
+    "garanti": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "garanti bankası": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "garanti bbva": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "garan": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "grnat": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "granti": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "garantibbva": {
+        "name": "Garanti BBVA",
+        "ticker": "GARAN"
+    },
+    "aselsan": {
+        "name": "Aselsan",
+        "ticker": "ASELS"
+    },
+    "asels": {
+        "name": "Aselsan",
+        "ticker": "ASELS"
+    },
+    "aslesan": {
+        "name": "Aselsan",
+        "ticker": "ASELS"
+    },
+    "alsean": {
+        "name": "Aselsan",
+        "ticker": "ASELS"
+    },
+    "ereğli": {
+        "name": "Ereğli Demir Çelik",
+        "ticker": "EREGL"
+    },
+    "eregli": {
+        "name": "Ereğli Demir Çelik",
+        "ticker": "EREGL"
+    },
+    "erdemir": {
+        "name": "Ereğli Demir Çelik",
+        "ticker": "EREGL"
+    },
+    "ereğli demir çelik": {
+        "name": "Ereğli Demir Çelik",
+        "ticker": "EREGL"
+    },
+    "eregl": {
+        "name": "Ereğli Demir Çelik",
+        "ticker": "EREGL"
+    },
+    "ereğlidemirçelik": {
+        "name": "Ereğli Demir Çelik",
+        "ticker": "EREGL"
+    },
+    "tüpraş": {
+        "name": "Tüpraş",
+        "ticker": "TUPRS"
+    },
+    "tupras": {
+        "name": "Tüpraş",
+        "ticker": "TUPRS"
+    },
+    "tupras turkiye petrol": {
+        "name": "Tüpraş",
+        "ticker": "TUPRS"
+    },
+    "tuprs": {
+        "name": "Tüpraş",
+        "ticker": "TUPRS"
+    },
+    "akbank": {
+        "name": "Akbank",
+        "ticker": "AKBNK"
+    },
+    "akbank t.a.ş.": {
+        "name": "Akbank",
+        "ticker": "AKBNK"
+    },
+    "akbnk": {
+        "name": "Akbank",
+        "ticker": "AKBNK"
+    },
+    "yapı kredi": {
+        "name": "Yapı Kredi Bankası",
+        "ticker": "YKBNK"
+    },
+    "yapi kredi": {
+        "name": "Yapı Kredi Bankası",
+        "ticker": "YKBNK"
+    },
+    "yapı kredi bankası": {
+        "name": "Yapı Kredi Bankası",
+        "ticker": "YKBNK"
+    },
+    "ykbnk": {
+        "name": "Yapı Kredi Bankası",
+        "ticker": "YKBNK"
+    },
+    "yapıkredibankası": {
+        "name": "Yapı Kredi Bankası",
+        "ticker": "YKBNK"
+    },
+    "iş bankası": {
+        "name": "İş Bankası",
+        "ticker": "ISCTR"
+    },
+    "is bankasi": {
+        "name": "İş Bankası",
+        "ticker": "ISCTR"
+    },
+    "türkiye iş bankası": {
+        "name": "İş Bankası",
+        "ticker": "ISCTR"
+    },
+    "isctr": {
+        "name": "İş Bankası",
+        "ticker": "ISCTR"
+    },
+    "i̇şbankası": {
+        "name": "İş Bankası",
+        "ticker": "ISCTR"
+    },
+    "i̇ş bankası": {
+        "name": "İş Bankası",
+        "ticker": "ISCTR"
+    },
+    "koç holding": {
+        "name": "Koç Holding",
+        "ticker": "KCHOL"
+    },
+    "koc holding": {
+        "name": "Koç Holding",
+        "ticker": "KCHOL"
+    },
+    "koc": {
+        "name": "Koç Holding",
+        "ticker": "KCHOL"
+    },
+    "kchol": {
+        "name": "Koç Holding",
+        "ticker": "KCHOL"
+    },
+    "koçholding": {
+        "name": "Koç Holding",
+        "ticker": "KCHOL"
+    },
+    "sabancı holding": {
+        "name": "Sabancı Holding",
+        "ticker": "SAHOL"
+    },
+    "sabanci holding": {
+        "name": "Sabancı Holding",
+        "ticker": "SAHOL"
+    },
+    "sabanci": {
+        "name": "Sabancı Holding",
+        "ticker": "SAHOL"
+    },
+    "sahol": {
+        "name": "Sabancı Holding",
+        "ticker": "SAHOL"
+    },
+    "sabancıholding": {
+        "name": "Sabancı Holding",
+        "ticker": "SAHOL"
+    },
+    "şişecam": {
+        "name": "Şişecam",
+        "ticker": "SISE"
+    },
+    "sisecam": {
+        "name": "Şişecam",
+        "ticker": "SISE"
+    },
+    "türkiye şişe ve cam": {
+        "name": "Şişecam",
+        "ticker": "SISE"
+    },
+    "sise": {
+        "name": "Şişecam",
+        "ticker": "SISE"
+    },
+    "bım": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "bim": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "bim mağazaları": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "bimas": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "bi̇m birleşik mağazalar": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "bi̇mbirleşikmağazalar": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "bim birleşik mağazalar": {
+        "name": "BİM Birleşik Mağazalar",
+        "ticker": "BIMAS"
+    },
+    "pegasus": {
+        "name": "Pegasus Hava Yolları",
+        "ticker": "PGSUS"
+    },
+    "pgsus": {
+        "name": "Pegasus Hava Yolları",
+        "ticker": "PGSUS"
+    },
+    "pegasus hava yolları": {
+        "name": "Pegasus Hava Yolları",
+        "ticker": "PGSUS"
+    },
+    "pegasushavayolları": {
+        "name": "Pegasus Hava Yolları",
+        "ticker": "PGSUS"
+    },
+    "turkcell": {
+        "name": "Turkcell",
+        "ticker": "TCELL"
+    },
+    "tcell": {
+        "name": "Turkcell",
+        "ticker": "TCELL"
+    },
+    "turkcell iletişim": {
+        "name": "Turkcell",
+        "ticker": "TCELL"
+    },
+    "türk telekom": {
+        "name": "Türk Telekom",
+        "ticker": "TTKOM"
+    },
+    "turk telekom": {
+        "name": "Türk Telekom",
+        "ticker": "TTKOM"
+    },
+    "ttkom": {
+        "name": "Türk Telekom",
+        "ticker": "TTKOM"
+    },
+    "türktelekom": {
+        "name": "Türk Telekom",
+        "ticker": "TTKOM"
+    },
+    "ford otosan": {
+        "name": "Ford Otosan",
+        "ticker": "FROTO"
+    },
+    "ford": {
+        "name": "Ford Otosan",
+        "ticker": "FROTO"
+    },
+    "froto": {
+        "name": "Ford Otosan",
+        "ticker": "FROTO"
+    },
+    "fordotosan": {
+        "name": "Ford Otosan",
+        "ticker": "FROTO"
+    },
+    "tofaş": {
+        "name": "Tofaş Oto",
+        "ticker": "TOASO"
+    },
+    "tofas": {
+        "name": "Tofaş Oto",
+        "ticker": "TOASO"
+    },
+    "tofaş oto": {
+        "name": "Tofaş Oto",
+        "ticker": "TOASO"
+    },
+    "toaso": {
+        "name": "Tofaş Oto",
+        "ticker": "TOASO"
+    },
+    "tofaşoto": {
+        "name": "Tofaş Oto",
+        "ticker": "TOASO"
+    },
+    "sasa": {
+        "name": "SASA Polyester",
+        "ticker": "SASA"
+    },
+    "sasa polyester": {
+        "name": "SASA Polyester",
+        "ticker": "SASA"
+    },
+    "sasapolyester": {
+        "name": "SASA Polyester",
+        "ticker": "SASA"
+    },
+    "hektaş": {
+        "name": "Hektaş",
+        "ticker": "HEKTAS"
+    },
+    "hektas": {
+        "name": "Hektaş",
+        "ticker": "HEKTAS"
+    },
+    "koza altın": {
+        "name": "Koza Altın",
+        "ticker": "KOZAL"
+    },
+    "koza altin": {
+        "name": "Koza Altın",
+        "ticker": "KOZAL"
+    },
+    "kozal": {
+        "name": "Koza Altın",
+        "ticker": "KOZAL"
+    },
+    "kozaaltın": {
+        "name": "Koza Altın",
+        "ticker": "KOZAL"
+    },
+    "petkim": {
+        "name": "Petkim",
+        "ticker": "PETKM"
+    },
+    "petkm": {
+        "name": "Petkim",
+        "ticker": "PETKM"
+    },
+    "migros": {
+        "name": "Migros Ticaret",
+        "ticker": "MGROS"
+    },
+    "mgros": {
+        "name": "Migros Ticaret",
+        "ticker": "MGROS"
+    },
+    "migros ticaret": {
+        "name": "Migros Ticaret",
+        "ticker": "MGROS"
+    },
+    "migrosticaret": {
+        "name": "Migros Ticaret",
+        "ticker": "MGROS"
+    },
+    "astor": {
+        "name": "Astor Enerji",
+        "ticker": "ASTOR"
+    },
+    "astor enerji": {
+        "name": "Astor Enerji",
+        "ticker": "ASTOR"
+    },
+    "astorenerji": {
+        "name": "Astor Enerji",
+        "ticker": "ASTOR"
+    },
+    "emlak konut": {
+        "name": "Emlak Konut GYO",
+        "ticker": "EKGYO"
+    },
+    "ekgyo": {
+        "name": "Emlak Konut GYO",
+        "ticker": "EKGYO"
+    },
+    "emlakkonutgyo": {
+        "name": "Emlak Konut GYO",
+        "ticker": "EKGYO"
+    },
+    "emlak konut gyo": {
+        "name": "Emlak Konut GYO",
+        "ticker": "EKGYO"
+    },
+    "tav": {
+        "name": "TAV Havalimanları",
+        "ticker": "TAVHL"
+    },
+    "tav havalimanları": {
+        "name": "TAV Havalimanları",
+        "ticker": "TAVHL"
+    },
+    "tavhl": {
+        "name": "TAV Havalimanları",
+        "ticker": "TAVHL"
+    },
+    "tavhavalimanları": {
+        "name": "TAV Havalimanları",
+        "ticker": "TAVHL"
+    },
+    "arçelik": {
+        "name": "Arçelik",
+        "ticker": "ARCLK"
+    },
+    "arcelik": {
+        "name": "Arçelik",
+        "ticker": "ARCLK"
+    },
+    "arclk": {
+        "name": "Arçelik",
+        "ticker": "ARCLK"
+    },
+    "vestel": {
+        "name": "Vestel",
+        "ticker": "VESTL"
+    },
+    "vestl": {
+        "name": "Vestel",
+        "ticker": "VESTL"
+    },
+    "şok": {
+        "name": "Şok Marketler",
+        "ticker": "SOKM"
+    },
+    "sok market": {
+        "name": "Şok Marketler",
+        "ticker": "SOKM"
+    },
+    "sokm": {
+        "name": "Şok Marketler",
+        "ticker": "SOKM"
+    },
+    "şok marketler": {
+        "name": "Şok Marketler",
+        "ticker": "SOKM"
+    },
+    "şokmarketler": {
+        "name": "Şok Marketler",
+        "ticker": "SOKM"
+    },
+    "enka": {
+        "name": "Enka İnşaat",
+        "ticker": "ENKAI"
+    },
+    "enka inşaat": {
+        "name": "Enka İnşaat",
+        "ticker": "ENKAI"
+    },
+    "enkai": {
+        "name": "Enka İnşaat",
+        "ticker": "ENKAI"
+    },
+    "enka i̇nşaat": {
+        "name": "Enka İnşaat",
+        "ticker": "ENKAI"
+    },
+    "enkai̇nşaat": {
+        "name": "Enka İnşaat",
+        "ticker": "ENKAI"
+    },
+    "apple": {
+        "name": "Apple",
+        "ticker": "AAPL"
+    },
+    "apple inc": {
+        "name": "Apple",
+        "ticker": "AAPL"
+    },
+    "aapl": {
+        "name": "Apple",
+        "ticker": "AAPL"
+    },
+    "microsoft": {
+        "name": "Microsoft",
+        "ticker": "MSFT"
+    },
+    "msft": {
+        "name": "Microsoft",
+        "ticker": "MSFT"
+    },
+    "nvidia": {
+        "name": "NVIDIA",
+        "ticker": "NVDA"
+    },
+    "nvda": {
+        "name": "NVIDIA",
+        "ticker": "NVDA"
+    },
+    "google": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "alphabet": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "googl": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "goog": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "google (alphabet)": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "google alphabet": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "google(alphabet)": {
+        "name": "Google (Alphabet)",
+        "ticker": "GOOGL"
+    },
+    "amazon": {
+        "name": "Amazon",
+        "ticker": "AMZN"
+    },
+    "amzn": {
+        "name": "Amazon",
+        "ticker": "AMZN"
+    },
+    "tesla": {
+        "name": "Tesla",
+        "ticker": "TSLA"
+    },
+    "tsla": {
+        "name": "Tesla",
+        "ticker": "TSLA"
+    },
+    "meta": {
+        "name": "Meta (Facebook)",
+        "ticker": "META"
+    },
+    "facebook": {
+        "name": "Meta (Facebook)",
+        "ticker": "META"
+    },
+    "instagram": {
+        "name": "Meta (Facebook)",
+        "ticker": "META"
+    },
+    "meta(facebook)": {
+        "name": "Meta (Facebook)",
+        "ticker": "META"
+    },
+    "meta (facebook)": {
+        "name": "Meta (Facebook)",
+        "ticker": "META"
+    },
+    "meta facebook": {
+        "name": "Meta (Facebook)",
+        "ticker": "META"
+    },
+    "netflix": {
+        "name": "Netflix",
+        "ticker": "NFLX"
+    },
+    "nflx": {
+        "name": "Netflix",
+        "ticker": "NFLX"
+    },
+    "samsung": {
+        "name": "Samsung Electronics",
+        "ticker": "SMSN"
+    },
+    "samsung electronics": {
+        "name": "Samsung Electronics",
+        "ticker": "SMSN"
+    },
+    "smsn": {
+        "name": "Samsung Electronics",
+        "ticker": "SMSN"
+    },
+    "samsungelectronics": {
+        "name": "Samsung Electronics",
+        "ticker": "SMSN"
+    },
+    "amd": {
+        "name": "Advanced Micro Devices (AMD)",
+        "ticker": "AMD"
+    },
+    "advanced micro devices": {
+        "name": "Advanced Micro Devices (AMD)",
+        "ticker": "AMD"
+    },
+    "advanced micro devices amd": {
+        "name": "Advanced Micro Devices (AMD)",
+        "ticker": "AMD"
+    },
+    "advancedmicrodevices(amd)": {
+        "name": "Advanced Micro Devices (AMD)",
+        "ticker": "AMD"
+    },
+    "advanced micro devices (amd)": {
+        "name": "Advanced Micro Devices (AMD)",
+        "ticker": "AMD"
+    },
+    "intel": {
+        "name": "Intel",
+        "ticker": "INTC"
+    },
+    "intc": {
+        "name": "Intel",
+        "ticker": "INTC"
+    },
+    "berkshire": {
+        "name": "Berkshire Hathaway",
+        "ticker": "BRK.B"
+    },
+    "berkshire hathaway": {
+        "name": "Berkshire Hathaway",
+        "ticker": "BRK.B"
+    },
+    "warren buffett": {
+        "name": "Berkshire Hathaway",
+        "ticker": "BRK.B"
+    },
+    "berkshirehathaway": {
+        "name": "Berkshire Hathaway",
+        "ticker": "BRK.B"
+    },
+    "brk.b": {
+        "name": "Berkshire Hathaway",
+        "ticker": "BRK.B"
+    },
+    "jpmorgan": {
+        "name": "JPMorgan Chase",
+        "ticker": "JPM"
+    },
+    "jp morgan": {
+        "name": "JPMorgan Chase",
+        "ticker": "JPM"
+    },
+    "jpm": {
+        "name": "JPMorgan Chase",
+        "ticker": "JPM"
+    },
+    "jpmorgan chase": {
+        "name": "JPMorgan Chase",
+        "ticker": "JPM"
+    },
+    "jpmorganchase": {
+        "name": "JPMorgan Chase",
+        "ticker": "JPM"
+    },
+    "visa": {
+        "name": "Visa",
+        "ticker": "V"
+    },
+    "visa inc": {
+        "name": "Visa",
+        "ticker": "V"
+    },
+    "mastercard": {
+        "name": "Mastercard",
+        "ticker": "MA"
+    },
+    "master card": {
+        "name": "Mastercard",
+        "ticker": "MA"
+    },
+    "ma": {
+        "name": "Mastercard",
+        "ticker": "MA"
+    },
+    "novo nordisk": {
+        "name": "Novo Nordisk",
+        "ticker": "NVO"
+    },
+    "nvo": {
+        "name": "Novo Nordisk",
+        "ticker": "NVO"
+    },
+    "novonordisk": {
+        "name": "Novo Nordisk",
+        "ticker": "NVO"
+    },
+    "alibaba": {
+        "name": "Alibaba Group",
+        "ticker": "BABA"
+    },
+    "baba": {
+        "name": "Alibaba Group",
+        "ticker": "BABA"
+    },
+    "alibabagroup": {
+        "name": "Alibaba Group",
+        "ticker": "BABA"
+    },
+    "alibaba group": {
+        "name": "Alibaba Group",
+        "ticker": "BABA"
+    },
+    "tsmc": {
+        "name": "TSMC (Taiwan Semiconductor)",
+        "ticker": "TSM"
+    },
+    "taiwan semiconductor": {
+        "name": "TSMC (Taiwan Semiconductor)",
+        "ticker": "TSM"
+    },
+    "tsmc taiwan semiconductor": {
+        "name": "TSMC (Taiwan Semiconductor)",
+        "ticker": "TSM"
+    },
+    "tsmc(taiwansemiconductor)": {
+        "name": "TSMC (Taiwan Semiconductor)",
+        "ticker": "TSM"
+    },
+    "tsmc (taiwan semiconductor)": {
+        "name": "TSMC (Taiwan Semiconductor)",
+        "ticker": "TSM"
+    },
+    "tsm": {
+        "name": "TSMC (Taiwan Semiconductor)",
+        "ticker": "TSM"
+    },
+    "dolar": {
+        "name": "Dolar",
+        "ticker": "USDTRY"
+    },
+    "usd": {
+        "name": "Dolar",
+        "ticker": "USDTRY"
+    },
+    "usdtry": {
+        "name": "Dolar",
+        "ticker": "USDTRY"
+    },
+    "amerikan doları": {
+        "name": "Dolar",
+        "ticker": "USDTRY"
+    },
+    "dolar kuru": {
+        "name": "Dolar",
+        "ticker": "USDTRY"
+    },
+    "euro": {
+        "name": "Euro",
+        "ticker": "EURTRY"
+    },
+    "eur": {
+        "name": "Euro",
+        "ticker": "EURTRY"
+    },
+    "eurtry": {
+        "name": "Euro",
+        "ticker": "EURTRY"
+    },
+    "avro": {
+        "name": "Euro",
+        "ticker": "EURTRY"
+    },
+    "euro kuru": {
+        "name": "Euro",
+        "ticker": "EURTRY"
+    },
+    "sterlin": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "gbp": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "gbptry": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "ingiliz sterlini": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "sterlin kuru": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "i̇ngilizsterlini": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "i̇ngiliz sterlini": {
+        "name": "İngiliz Sterlini",
+        "ticker": "GBPTRY"
+    },
+    "altın": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "altin": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "gram altın": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "çeyrek altın": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "ons altın": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "altın fiyatları": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "gramaltın": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "gau": {
+        "name": "Gram Altın",
+        "ticker": "GAU"
+    },
+    "tahvil": {
+        "name": "Devlet Tahvili",
+        "ticker": "TAHVIL"
+    },
+    "bono": {
+        "name": "Devlet Tahvili",
+        "ticker": "TAHVIL"
+    },
+    "devlet tahvili": {
+        "name": "Devlet Tahvili",
+        "ticker": "TAHVIL"
+    },
+    "tahvil faizi": {
+        "name": "Devlet Tahvili",
+        "ticker": "TAHVIL"
+    },
+    "hazine bonosu": {
+        "name": "Devlet Tahvili",
+        "ticker": "TAHVIL"
+    },
+    "devlettahvili": {
+        "name": "Devlet Tahvili",
+        "ticker": "TAHVIL"
+    },
+    "fon": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    },
+    "fonlar": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    },
+    "yatırım fonu": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    },
+    "tefas": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    },
+    "tefas fonları": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    },
+    "yatırım fonları": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    },
+    "yatırımfonları": {
+        "name": "Yatırım Fonları",
+        "ticker": "TEFAS"
+    }
+}
