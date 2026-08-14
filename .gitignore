@@ -21,10 +21,19 @@ frontend/.vite/
 frontend/*.tsbuildinfo
 
 # db / vector store data
+# Bunlar üretilen çıktılar, kaynak kod değil. Commit edilirlerse her ingest
+# sonrası değişip merge çakışması üretirler ve repoyu şişirirler. Vektör
+# veritabanı `python -m rag.ingest` ile dokümanlardan yeniden üretilir.
 pgdata/
 chroma_data/
+chroma_db/
+data/chroma_db/
 *.db
 *.sqlite3
+
+# huggingface embedding modeli önbelleği
+.cache/
+models--*/
 
 # ide
 .vscode/
