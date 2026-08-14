@@ -121,34 +121,30 @@ def record_transaction(
     return transaction
 
 
-def rebuild_holdings(db: Session, portfolio_id: uuid.UUID) -> list[Holding]:
-    """holdings önbelleğini defterden yeniden üretir (I1'in üretici tarafı).
+class PositionState:
+    """Bir varlığın defter tekrarı (replay) sonrası durumu."""
 
-    quantity=0 satırlar silinmez: kapatılmış pozisyonun satırı
-    realized_pnl_try'yi taşır ("THYAO'dan 6.000 TL kazandım" bilgisi varlık
-    satıldı diye buharlaşmaz)."""
-    transactions = (
-        db.execute(
-            select(Transaction)
-            .where(Transaction.portfolio_id == portfolio_id, Transaction.asset_id.isnot(None))
-            .order_by(Transaction.transaction_date, Transaction.created_at)
-        )
-        .scalars()
-        .all()
-    )
+    __slots__ = ("quantity", "total_cost_try", "realized_pnl_try", "avg_cost_try")
 
-    class _State:
-        __slots__ = ("quantity", "total_cost_try", "realized_pnl_try", "avg_cost_try")
+    def __init__(self):
+        self.quantity = _ZERO
+        self.total_cost_try = _ZERO
+        self.realized_pnl_try = _ZERO
+        self.avg_cost_try = _ZERO
 
-        def __init__(self):
-            self.quantity = _ZERO
-            self.total_cost_try = _ZERO
-            self.realized_pnl_try = _ZERO
-            self.avg_cost_try = _ZERO
 
-    states: dict[uuid.UUID, _State] = {}
+def replay_transactions(transactions) -> dict[uuid.UUID, PositionState]:
+    """Varlığa bağlı işlemleri kronolojik tekrar edip varlık başına
+    miktar / ortalama maliyet (TRY) / gerçekleşmiş K-Z hesaplar.
+
+    Hem holdings önbelleğinin üretimi (rebuild_holdings) hem de tarihsel
+    değerleme (valuation_service) aynı tekrarı kullanır — iki ayrı maliyet
+    muhasebesi olması tutarsızlık daveti olurdu."""
+    states: dict[uuid.UUID, PositionState] = {}
     for tx in transactions:
-        state = states.setdefault(tx.asset_id, _State())
+        if tx.asset_id is None:
+            continue
+        state = states.setdefault(tx.asset_id, PositionState())
         if tx.transaction_type == TransactionType.BUY:
             # Maliyete komisyon dahil: nakit ayağının mutlak değeri.
             state.total_cost_try += -tx.cash_amount_try
@@ -167,6 +163,25 @@ def rebuild_holdings(db: Session, portfolio_id: uuid.UUID) -> list[Holding]:
             # avg_cost satışta değişmez; pozisyon sıfırlanırsa bilgi olarak kalır.
         elif tx.transaction_type == TransactionType.DIVIDEND:
             state.realized_pnl_try += tx.cash_amount_try
+    return states
+
+
+def rebuild_holdings(db: Session, portfolio_id: uuid.UUID) -> list[Holding]:
+    """holdings önbelleğini defterden yeniden üretir (I1'in üretici tarafı).
+
+    quantity=0 satırlar silinmez: kapatılmış pozisyonun satırı
+    realized_pnl_try'yi taşır ("THYAO'dan 6.000 TL kazandım" bilgisi varlık
+    satıldı diye buharlaşmaz)."""
+    transactions = (
+        db.execute(
+            select(Transaction)
+            .where(Transaction.portfolio_id == portfolio_id, Transaction.asset_id.isnot(None))
+            .order_by(Transaction.transaction_date, Transaction.created_at)
+        )
+        .scalars()
+        .all()
+    )
+    states = replay_transactions(transactions)
 
     existing = {
         h.asset_id: h
