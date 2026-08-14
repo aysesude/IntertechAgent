@@ -1,4 +1,4 @@
-"""Deterministik sentetik veri üreticisi.
+﻿"""Deterministik sentetik veri üreticisi.
 
 50 kullanıcı, her birine 5-15 varlık (hisse/altın/döviz/tahvil), bu varlıklara ait
 12 aylık işlem geçmişi (alım, bazen satım) ve tüm varlık evreni için 12 aylık günlük
@@ -43,14 +43,14 @@ HISTORY_DAYS = 365
 # parametreleridir (varlık sınıfı başına günlük ortalama getiri, günlük volatilite).
 ASSET_CLASS_DAILY_DRIFT_VOLATILITY: dict[AssetClass, tuple[float, float]] = {
     AssetClass.STOCK: (0.0004, 0.020),
-    AssetClass.GOLD: (0.0002, 0.008),
+    AssetClass.PRECIOUS_METAL: (0.0002, 0.008),
     AssetClass.CURRENCY: (0.0001, 0.006),
     AssetClass.BOND: (0.00015, 0.003),
 }
 
 QUANTITY_PRECISION: dict[AssetClass, Decimal] = {
     AssetClass.STOCK: Decimal(1),
-    AssetClass.GOLD: Decimal("0.01"),
+    AssetClass.PRECIOUS_METAL: Decimal("0.01"),
     AssetClass.CURRENCY: Decimal(1),
     AssetClass.BOND: Decimal(1),
 }
@@ -162,39 +162,39 @@ ASSET_UNIVERSE: list[dict[str, object]] = [
         "currency": "TRY",
         "base_price": "44.30",
     },
-    # --- GOLD ---
+    # --- PRECIOUS_METAL ---
     {
         "symbol": "XAUTRY",
         "name": "Gram Altın",
-        "asset_class": AssetClass.GOLD,
+        "asset_class": AssetClass.PRECIOUS_METAL,
         "currency": "TRY",
         "base_price": "2450.00",
     },
     {
         "symbol": "CEYREK",
         "name": "Çeyrek Altın",
-        "asset_class": AssetClass.GOLD,
+        "asset_class": AssetClass.PRECIOUS_METAL,
         "currency": "TRY",
         "base_price": "4020.00",
     },
     {
         "symbol": "YARIM",
         "name": "Yarım Altın",
-        "asset_class": AssetClass.GOLD,
+        "asset_class": AssetClass.PRECIOUS_METAL,
         "currency": "TRY",
         "base_price": "8040.00",
     },
     {
         "symbol": "TAMALTIN",
         "name": "Tam Altın",
-        "asset_class": AssetClass.GOLD,
+        "asset_class": AssetClass.PRECIOUS_METAL,
         "currency": "TRY",
         "base_price": "16080.00",
     },
     {
         "symbol": "CUMHUR",
         "name": "Cumhuriyet Altını",
-        "asset_class": AssetClass.GOLD,
+        "asset_class": AssetClass.PRECIOUS_METAL,
         "currency": "TRY",
         "base_price": "16500.00",
     },
@@ -276,7 +276,7 @@ def generate_price_series(base_price: Decimal, asset_class: AssetClass, days: in
 def random_lot_quantity(asset_class: AssetClass) -> Decimal:
     if asset_class == AssetClass.STOCK:
         return Decimal(random.randint(5, 150))
-    if asset_class == AssetClass.GOLD:
+    if asset_class == AssetClass.PRECIOUS_METAL:
         return Decimal(str(round(random.uniform(0.5, 15), 2)))
     if asset_class == AssetClass.CURRENCY:
         return Decimal(random.randint(50, 3000))

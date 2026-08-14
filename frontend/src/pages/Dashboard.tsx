@@ -7,16 +7,18 @@ import type { AssetClass } from "../types/portfolio";
 
 const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
   stock: "Hisse",
-  gold: "Altın",
+  precious_metal: "Kıymetli Maden",
   currency: "Döviz",
   bond: "Tahvil",
+  cash: "Nakit",
 };
 
 const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
   stock: "#2563eb",
-  gold: "#eab308",
+  precious_metal: "#eab308",
   currency: "#16a34a",
   bond: "#7c3aed",
+  cash: "#64748b",
 };
 
 const USER_ID_STORAGE_KEY = "finans_user_id";

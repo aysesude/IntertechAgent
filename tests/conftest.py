@@ -27,7 +27,12 @@ def engine():
     Base.metadata.create_all(eng)
     yield eng
     eng.dispose()
-    _TEST_DB_PATH.unlink(missing_ok=True)
+    try:
+        _TEST_DB_PATH.unlink(missing_ok=True)
+    except PermissionError:
+        # Windows: bağlantı havuzu dosyayı geç bırakabiliyor; geçici dizindeki
+        # artık dosya zararsızdır, test sonucunu etkilememeli.
+        pass
 
 
 @pytest.fixture()

@@ -1,4 +1,4 @@
-export type AssetClass = "stock" | "gold" | "currency" | "bond";
+export type AssetClass = "stock" | "precious_metal" | "currency" | "bond" | "cash";
 
 export interface GainLoss {
   amount: number;
