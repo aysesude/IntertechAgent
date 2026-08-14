@@ -494,11 +494,21 @@ class FinancialRAGAssistant:
     """
     def __init__(
         self,
-        persist_directory: str = "./chroma_db",
-        ollama_model: str = "qwen2.5:7b",
-        embedding_model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        mapping_config_path: str = "./data/company_mappings.json"
+        persist_directory: str | None = None,
+        ollama_model: str | None = None,
+        embedding_model_name: str | None = None,
+        mapping_config_path: str | None = None,
     ):
+        # Varsayılanlar .env'den okunur. Sabit değer kullanmak iki soruna yol
+        # açıyordu: (1) "qwen2.5:7b" sunucuda kurulu değil, (2) göreli yollar
+        # API ve MCP sunucusu farklı dizinlerden başladığı için tutarsızdı.
+        from app.core.config import settings
+
+        persist_directory = persist_directory or settings.rag_persist_directory
+        ollama_model = ollama_model or settings.ollama_model
+        embedding_model_name = embedding_model_name or settings.rag_embedding_model
+        mapping_config_path = mapping_config_path or settings.rag_company_mappings_path
+
         self.persist_directory = persist_directory
         self.mapping_manager = FinancialMappingManager(config_path=mapping_config_path)
         self.optimizer = QueryOptimizer()
@@ -522,8 +532,13 @@ class FinancialRAGAssistant:
         self.bm25_retriever: Optional[BM25Retriever] = None
         self._load_existing_chunks_for_bm25()
 
-        # 4. LLM (Ollama - Qwen 2.5 7B)
-        self.llm = ChatOllama(model=ollama_model, temperature=0.0)
+        # 4. LLM (Ollama)
+        # base_url şart: ChatOllama varsayılan olarak localhost'a bağlanır, ama
+        # konteynerin içinde localhost konteynerin kendisidir — Ollama host
+        # makinede çalışıyor. Adres .env'den (OLLAMA_BASE_URL) gelir.
+        self.llm = ChatOllama(
+            model=ollama_model, temperature=0.0, base_url=settings.ollama_base_url
+        )
 
         # 5. Session State
         self.sessions: Dict[str, Dict] = {}

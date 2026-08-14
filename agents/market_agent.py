@@ -1,40 +1,43 @@
-"""Piyasa Araştırma Ajanı. RAG altyapısı kullanılarak yapılandırılmıştır."""
+"""Piyasa Araştırma Ajanı: MCP `search_market_news` tool'unu çağırır, dönen
+yanıtı kullanıcıya iletir.
+
+RAG pipeline'ına doğrudan erişmez — Portföy Ajanı'yla aynı kalıp. Tüm veri
+erişimi MCP Server üzerinden geçer.
+"""
 
 from collections.abc import Callable
-import traceback
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
-from rag.pipeline import FinancialRAGAssistant
 
 
 class MarketAgent(BaseAgent):
     agent_name = "market_agent"
-    
-    def __init__(self, mcp_server_url: str) -> None:
-        super().__init__(mcp_server_url)
-        # RAG Assistant başlatılıyor. Model ağırlıklarını ve chroma'yı yükler.
-        self.rag_assistant = FinancialRAGAssistant(
-            persist_directory="./chroma_db",
-            mapping_config_path="./data/company_mappings.json"
-        )
 
     async def execute(
         self, request: AgentRequest, *, on_token: Callable[[str], None] | None = None
     ) -> AgentResponse:
-        try:
-            # RAG asistanına soruyu iletiyoruz
-            response_text = await self.rag_assistant.chat_async(request.query, session_id=request.session_id)
-            
-            if on_token:
-                on_token(response_text)
-            
-            return AgentResponse(
-                agent_name=self.agent_name,
-                success=True,
-                summary_text=response_text,
-                data={"session_id": request.session_id, "query": request.query}
+        tool_result = await self.call_mcp_tool(
+            "search_market_news",
+            {"query": request.query, "session_id": request.session_id},
+        )
+
+        if not tool_result.get("success"):
+            error = tool_result.get("error", {})
+            return self.error_response(
+                error.get("message", "Piyasa verisi alınamadı")
             )
-            
-        except Exception as e:
-            error_msg = f"MarketAgent çalıştırılırken bir hata oluştu: {str(e)}\n{traceback.format_exc()}"
-            return self.error_response(error_msg)
+
+        answer = tool_result["data"]["answer"]
+
+        # TODO: RAG pipeline'ı yanıtı tek parça üretiyor, token akışı yok.
+        # Kullanıcı akan metin yerine cevabı bir anda görüyor. Pipeline'ın
+        # üretim kısmı stream'e çevrilirse burası da parça parça besleyebilir.
+        if on_token is not None:
+            on_token(answer)
+
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=answer,
+            data={"query": request.query},
+        )
