@@ -16,19 +16,20 @@ Geliştirmeler:
    Önce Piyasa Varlıkları, ardından Şirket Bilançoları.
 """
 
+import asyncio
+import difflib
 import json
 import os
 import re
-import difflib
-import asyncio
-from typing import List, Dict, Tuple, Optional
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from typing import Dict, List, Optional
+
 from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 try:
     from symspellpy import SymSpell, Verbosity
@@ -627,8 +628,6 @@ class FinancialRAGAssistant:
         # ÇOKLU VARLIK / BİRLEŞİK KATEGORİ SORGULAMA MOTORU
         # -------------------------------------------------------------
         if len(detected_companies) > 1:
-            clean_q = self.optimizer.clean_query(query)
-            
             # MANTIKSAL KATEGORİ SIRALAMASI: Önce tüm Piyasa Varlıkları, ardından tüm Şirket Bilançoları
             market_assets_detected = [c for c in detected_companies if c in MARKET_ASSET_NAMES]
             equity_companies_detected = [c for c in detected_companies if c not in MARKET_ASSET_NAMES]

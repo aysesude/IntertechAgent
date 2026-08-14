@@ -20,6 +20,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - name: PyTorch (CPU-only)
+        # Varsayılan PyPI paketi ~2 GB CUDA kütüphanesi çekiyor; CI'da GPU yok.
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch
+
       - name: Bağımlılıkları kur
         run: pip install -r backend/requirements.txt
 
