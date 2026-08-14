@@ -1,12 +1,6 @@
-# ==============================================================================
-# 1 YILLIK GEÇMİŞ VERİ ÇEKİCİ PIPELINE (VS CODE / STANDART PYTHON VERSION)
-# ==============================================================================
-
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 
 import pandas as pd
-import requests
 from sqlalchemy import Column, Date, Float, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from tefas import Crawler as TefasCrawler
