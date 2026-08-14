@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import AssetClass, settings
 from app.core.exceptions import NotFoundError
-from app.models import Holding, Portfolio, PriceHistory
+from app.models import Asset, Holding, Portfolio, PriceHistory
 from app.schemas.portfolio import AllocationItem, GainLoss, PortfolioSummary
+from app.services.ledger_service import cash_balance_as_of
+from app.services.valuation_service import FX_SYMBOL_BY_CURRENCY
 
 _TWO_DECIMALS = Decimal("0.01")
 
@@ -67,6 +69,29 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
 
     latest_prices = _latest_prices(db, [h.asset_id for h in holdings])
 
+    # AK 5.7: TRY dışı varlıklar güncel kurla dahil edilir. Kur varlıklarının
+    # (USDTRY vb.) son kapanışı price_history'den okunur.
+    foreign_currencies = {h.asset.currency for h in holdings if h.asset.currency != "TRY"}
+    fx_latest: dict[str, Decimal] = {}
+    if foreign_currencies:
+        fx_symbols = {
+            currency: FX_SYMBOL_BY_CURRENCY[currency]
+            for currency in foreign_currencies
+            if currency in FX_SYMBOL_BY_CURRENCY
+        }
+        fx_asset_rows = db.execute(
+            select(Asset.id, Asset.symbol).where(Asset.symbol.in_(fx_symbols.values()))
+        ).all()
+        fx_prices = _latest_prices(db, [row.id for row in fx_asset_rows])
+        symbol_to_price = {
+            row.symbol: fx_prices[row.id][0] for row in fx_asset_rows if row.id in fx_prices
+        }
+        fx_latest = {
+            currency: symbol_to_price[symbol]
+            for currency, symbol in fx_symbols.items()
+            if symbol in symbol_to_price
+        }
+
     total_value = Decimal(0)
     total_cost_basis = Decimal(0)
     class_values: dict[AssetClass, Decimal] = {}
@@ -74,7 +99,18 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
 
     for holding in holdings:
         price, price_date = latest_prices.get(holding.asset_id, (holding.avg_cost_price, None))
-        market_value = holding.quantity * price
+        if holding.asset.currency != "TRY":
+            fx = fx_latest.get(holding.asset.currency)
+            if fx is None:
+                # Kur bilinmiyorsa değer uydurulmaz (AK 5.5); varlık toplam
+                # değere maliyetiyle değil, hiç katılmaz — maliyet tarafı zaten
+                # TRY cinsindendir ve aynen kalır.
+                price = None
+            else:
+                price = price * fx
+        market_value = holding.quantity * price if price is not None else Decimal(0)
+        # avg_cost_price TRY cinsinden birim maliyettir (işlem anındaki kurla
+        # dondurulmuş) — bkz. ledger_service maliyet sözleşmesi.
         cost_basis = holding.quantity * holding.avg_cost_price
 
         total_value += market_value
@@ -84,6 +120,12 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         )
         if price_date is not None:
             as_of_dates.append(price_date)
+
+    # Serbest nakit (defterden): toplam değere ve 'cash' dilimine eklenir.
+    cash_balance = cash_balance_as_of(db, portfolio.id)
+    if cash_balance != 0:
+        total_value += cash_balance
+        class_values[AssetClass.CASH] = class_values.get(AssetClass.CASH, Decimal(0)) + cash_balance
 
     gain_amount = total_value - total_cost_basis
     gain_percent = (gain_amount / total_cost_basis * 100) if total_cost_basis > 0 else Decimal(0)
@@ -105,5 +147,7 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         total_cost_basis=_round2(total_cost_basis),
         total_gain_loss=GainLoss(amount=_round2(gain_amount), percent=_round2(gain_percent)),
         allocation=allocation,
-        holdings_count=len(holdings),
+        # Tamamen satılmış (quantity=0) satırlar gerçekleşmiş K-Z taşımak için
+        # tabloda durur; aktif pozisyon sayısına katılmaz.
+        holdings_count=sum(1 for h in holdings if h.quantity > 0),
     )

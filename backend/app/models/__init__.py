@@ -4,6 +4,7 @@ autogenerate) hepsini görsün."""
 from app.models.asset import Asset
 from app.models.base import Base
 from app.models.chat_session import ChatSession
+from app.models.data_ingest_log import DataIngestLog
 from app.models.holding import Holding
 from app.models.message import Message, MessageRole, MessageStatus
 from app.models.portfolio import Portfolio
@@ -15,6 +16,7 @@ __all__ = [
     "Asset",
     "Base",
     "ChatSession",
+    "DataIngestLog",
     "Holding",
     "Message",
     "MessageRole",

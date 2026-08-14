@@ -16,7 +16,7 @@
   "total_gain_loss": { "amount": -72656.84, "percent": -4.63 },
   "allocation": [
     { "asset_class": "stock", "value": 167808.53, "percent": 11.21 },
-    { "asset_class": "gold", "value": 555795.65, "percent": 37.11 },
+    { "asset_class": "precious_metal", "value": 555795.65, "percent": 37.11 },
     { "asset_class": "currency", "value": 471330.61, "percent": 31.47 },
     { "asset_class": "bond", "value": 302624.17, "percent": 20.21 }
   ],

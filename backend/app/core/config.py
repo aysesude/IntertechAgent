@@ -1,6 +1,7 @@
 """Uygulama genelindeki tüm yapılandırma buradan okunur. Kodun başka hiçbir
 yerinde sabit bağlantı adresi, anahtar veya model adı bulunmamalıdır."""
 
+from datetime import date
 from enum import Enum
 from functools import lru_cache
 
@@ -16,9 +17,68 @@ class LLMProvider(str, Enum):
 
 class AssetClass(str, Enum):
     STOCK = "stock"
-    GOLD = "gold"
+    PRECIOUS_METAL = "precious_metal"
     CURRENCY = "currency"
     BOND = "bond"
+    CASH = "cash"
+
+
+class RiskProfile(str, Enum):
+    CONSERVATIVE = "conservative"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
+
+
+class PriceSource(str, Enum):
+    """Bir fiyat satırının nereden geldiği (AK 5.1, 5.3).
+
+    Sıralama önemli değildir; öncelik PRICE_SOURCE_PRIORITY'de tanımlıdır.
+    """
+
+    SYNTHETIC = "synthetic"  # üretilmiş (dummy) seri
+    DERIVED = "derived"  # başka bir varlıktan katsayıyla hesaplandı
+    YFINANCE = "yfinance"
+    TEFAS = "tefas"
+    ISPORTFOY = "isportfoy"
+    TCMB = "tcmb"  # today.xml (spot)
+    TCMB_EVDS = "tcmb_evds"  # EVDS (tarihsel)
+
+
+# Upsert çakışmasında hangi kaynağın hangisini ezebileceği: yalnızca daha
+# yüksek öncelikli kaynak mevcut satırı günceller. Gerçek veri sentetiği
+# ezer; sentetik gerçeği asla ezemez (bkz. services/price_ingest.py).
+PRICE_SOURCE_PRIORITY: dict[PriceSource, int] = {
+    PriceSource.SYNTHETIC: 0,
+    PriceSource.DERIVED: 1,
+    PriceSource.YFINANCE: 2,
+    PriceSource.TEFAS: 3,
+    PriceSource.ISPORTFOY: 3,
+    PriceSource.TCMB: 4,
+    PriceSource.TCMB_EVDS: 4,
+}
+
+
+class AssetSubType(str, Enum):
+    """assets.sub_type için bilinen değerler. DB kolonu String'dir (yeni
+    enstrüman tipi migration istemesin); doğrulama seed anında Python
+    tarafında yapılır. Risk motoru buna göre dallanmaz — sunum/filtreleme
+    metadata'sıdır."""
+
+    EQUITY_FUND = "equity_fund"
+    MONEY_MARKET_FUND = "money_market_fund"
+    GOVERNMENT_BOND = "government_bond"
+    CORPORATE_BOND = "corporate_bond"
+    EUROBOND = "eurobond"
+    TIME_DEPOSIT = "time_deposit"
+    DEMAND_DEPOSIT = "demand_deposit"
+    GOLD_COIN = "gold_coin"
+
+
+class IngestStatus(str, Enum):
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class Settings(BaseSettings):
@@ -81,6 +141,14 @@ class Settings(BaseSettings):
     rag_company_mappings_path: str = "/data/company_mappings.json"
     # Kaç doküman parçası getirilecek.
     rag_top_k: int = 3
+
+    # --- Veri katmanı ---
+    # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
+    # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
+    anchor_date: date = date(2026, 8, 1)
+    # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
+    # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
+    evds_api_key: str | None = None
 
     # --- Sabitler (sihirli sayı yerine config) ---
     supported_asset_classes: list[AssetClass] = list(AssetClass)

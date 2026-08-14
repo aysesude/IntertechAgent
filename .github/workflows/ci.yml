@@ -9,6 +9,21 @@ on:
     branches: [test, main]
 
 jobs:
+  secrets:
+    # Sızmış kimlik bilgisi taraması. Dosya uzantısından bağımsız çalışır —
+    # ruff/black'in taramadığı uzantısız dosyalar da kapsanır.
+    # --no-git: yalnızca çalışma ağacı taranır. Git geçmişi bilerek kapsam
+    # dışı — geçmişte bilinen bir sızıntı var (rotasyonla ölecek) ve geçmiş
+    # taraması tüm PR'ları kalıcı olarak kırmızıya boyardı.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gizli anahtar taraması (gitleaks)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz gitleaks
+          ./gitleaks detect --no-git --source . --verbose
+
   backend:
     runs-on: ubuntu-latest
     steps:
