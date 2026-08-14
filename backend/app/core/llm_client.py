@@ -25,12 +25,22 @@ class LLMClient(ABC):
 
 
 class OllamaClient(LLMClient):
-    def __init__(self, base_url: str, model: str) -> None:
+    def __init__(self, base_url: str, model: str, temperature: float = 0.1) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
+        # Ollama'nın varsayılan sıcaklığı 0.8 — yaratıcı yazım için tasarlanmış.
+        # Küçük modellerde bu değer dil kaymasına yol açıyor: cümlenin ortasında
+        # İngilizce/Fransızca kelimelere geçiyor ("valueye", "which accounts for").
+        # Finansal özet deterministik bir görev, düşük sıcaklık doğru tercih.
+        self._options = {"temperature": temperature}
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
-        payload = {"model": self._model, "prompt": prompt, "stream": False}
+        payload = {
+            "model": self._model,
+            "prompt": prompt,
+            "stream": False,
+            "options": self._options,
+        }
         if system:
             payload["system"] = system
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -39,7 +49,7 @@ class OllamaClient(LLMClient):
             return response.json()["response"]
 
     async def stream(self, prompt: str, *, system: str | None = None) -> AsyncIterator[str]:
-        payload = {"model": self._model, "prompt": prompt, "stream": True}
+        payload = {"model": self._model, "prompt": prompt, "stream": True, "options": self._options}
         if system:
             payload["system"] = system
         async with httpx.AsyncClient(timeout=60.0) as client:
