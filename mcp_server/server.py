@@ -9,14 +9,13 @@ Kullanım: python -m mcp_server.server
 from fastmcp import FastMCP
 
 from app.core.config import settings
-from mcp_server.tools import market_tools, portfolio_tools
+from mcp_server.tools import market_tools, portfolio_tools, risk_tools
 
 mcp = FastMCP("Akıllı Kişisel Finans Danışmanı MCP Server")
 
 portfolio_tools.register(mcp)
 market_tools.register(mcp)
-
-# TODO: risk_tools.get_risk_assessment uygulandığında burada register edilecek.
+risk_tools.register(mcp)
 
 
 if __name__ == "__main__":
