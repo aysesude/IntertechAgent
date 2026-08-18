@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     # *erişilen* adrestir (compose'da servis adı: mcp_server).
     mcp_server_url: str = "http://mcp_server:8100/mcp"
 
+    # Tool zaman aşımları (saniye). Performans hedefi değil, asılı kalan çağrıya
+    # karşı emniyet supabıdır: süre dolunca ajan çökmek yerine TIMEOUT zarfı alır
+    # (bkz. mcp_server/tools/_base.py, docs/MCP-TOOLS.md). DB okuması milisaniye
+    # mertebesindedir; RAG ilk çağrıda embedding modelini ve indeksi yükler.
+    mcp_tool_timeout_default: float = 10.0
+    mcp_tool_timeout_rag: float = 60.0
+
     # --- API ---
     api_host: str = "0.0.0.0"
     api_port: int = 8000

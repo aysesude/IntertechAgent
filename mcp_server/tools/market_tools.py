@@ -1,63 +1,79 @@
 """search_market_news MCP tool'u. Piyasa Araştırma Ajanı'nın finansal haber ve
-raporlara eriştiği tek kapı.
+rapor dokümanlarına eriştiği tek kapı.
 
 Mimari kural: ajanlar veriye doğrudan erişmez. Bu yüzden `rag/retriever.py`
-doğrudan ajandan değil, buradan çağrılır — böylece yetkilendirme, loglama ve
-zaman aşımı politikası ileride tek noktada uygulanabilir.
+doğrudan ajandan değil, buradan çağrılır — yetkilendirme, loglama ve zaman
+aşımı politikası tek noktada uygulanabilsin diye.
 
-Saf DB tabanlı RAG: LLM yanıt üretmez, internetten canlı veri çekmez. Tool ham
-doküman parçalarını döndürür ("tool veri döner, ajan yorumlar" ilkesi);
-veritabanında yeterince alakalı bir sonuç yoksa `found: false` ile birlikte
-bulunamadı mesajı döner.
+Saf DB tabanlı RAG: LLM yanıt üretmez, internetten canlı veri çekmez —
+yalnızca `data/documents/`'dan `rag.ingest` ile Chroma'ya işlenmiş dokümanları
+arar ve ham parçaları döndürür. Bu, `docs/MCP-TOOLS.md`'nin §10'daki "RAG
+getirme/üretim ayrımı yok" notunu kapatır.
 """
 
 import logging
 from typing import Any
 
+import anyio.to_thread
 from fastmcp import FastMCP
+
+from app.core.config import settings
+from mcp_server.tools._base import ToolErrorCode, ToolFailure, tool_handler
+from rag.retriever import NOT_FOUND_MESSAGE, Retriever
 
 logger = logging.getLogger(__name__)
 
-# Chroma bağlantısı ve embedding modeli ilk kullanımda bir kez kurulur ve süreç
+# Embedding modeli ve Chroma bağlantısı ilk kullanımda bir kez kurulur ve süreç
 # boyunca bellekte kalır. Her istekte yeniden oluşturulursa her soru birkaç
 # saniye ek gecikme demek.
-_retriever = None
+_retriever: Retriever | None = None
 
 
-def _get_retriever():
+def _get_retriever() -> Retriever:
+    """Bloklayan yükleme (embedding modeli + Chroma bağlantısı). ASLA olay
+    döngüsünden doğrudan çağrılmaz; çağıran taraf thread'e alır — aksi hâlde
+    ilk piyasa sorusu boyunca tüm süreç (diğer kullanıcıların SSE akışları
+    dahil) donar."""
     global _retriever
     if _retriever is None:
-        from rag.retriever import Retriever
-
         logger.info("RAG retriever hazırlanıyor (embedding modeli + Chroma bağlantısı)...")
         _retriever = Retriever()
         logger.info("RAG retriever hazır.")
     return _retriever
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: FastMCP) -> list[str]:
     @mcp.tool(name="search_market_news")
+    @tool_handler(timeout=settings.mcp_tool_timeout_rag)
     async def search_market_news(query: str, top_k: int = 5) -> dict[str, Any]:
-        """Finansal haber, bilanço ve analiz dokümanlarında vektör tabanlı
-        arama yapar. Veritabanında sorguyla yeterince alakalı bir kayıt yoksa
-        `found: false` döner — sonuç uydurulmaz, dış kaynaktan da çekilmez.
+        """Finansal haber, bilanço ve analiz dokümanlarında vektör + anahtar
+        kelime tabanlı hibrit arama yapar. Yanıt LLM tarafından üretilmez,
+        internetten de çekilmez — yalnızca veritabanındaki dokümanlar aranır.
+
+        Ne zaman kullanılır: piyasa gelişmeleri, şirket bilançoları, faiz ve
+        enflasyon haberleri, "X şirketinin son çeyreği nasıldı" gibi dış dünyaya
+        ait sorular.
+
+        Ne zaman kullanılmaz: kullanıcının kendi portföyüne ait sorular
+        (get_portfolio_summary), kendi riskine ait sorular
+        (get_risk_assessment), güncel fiyat sorgusu (get_market_snapshot).
 
         Args:
-            query: Kullanıcının piyasa/haber sorusu.
+            query: Kullanıcının piyasa/haber sorusu (Türkçe, serbest metin).
             top_k: Getirilecek en fazla doküman parçası sayısı.
 
         Returns:
-            Başarılıysa {"success": true, "data": {"found": bool, "message": str | None,
-            "results": [{"content": ..., "metadata": ..., "distance": ...}, ...]}}.
-            Hata durumunda {"success": false, "error": {"code": ..., "message": ...}}.
+            Başarılı: {"success": true, "data": {"results": [{"content": "...",
+            "metadata": {...}, "distance": 0.0}, ...]}}.
+            Hata: {"success": false, "error": {"code": "NOT_FOUND", "message":
+            "..."}} — veritabanında sorguyla yeterince alakalı bir kayıt yoksa.
         """
-        try:
-            retriever = _get_retriever()
-            result = retriever.answer(query, top_k=top_k)
-            return {"success": True, "data": result}
-        except Exception as exc:  # noqa: BLE001 - tool sınırında hata sızdırılmaz
-            logger.exception("RAG sorgusu başarısız")
-            return {
-                "success": False,
-                "error": {"code": "RAG_ERROR", "message": str(exc)},
-            }
+        retriever = await anyio.to_thread.run_sync(_get_retriever)
+        results = await anyio.to_thread.run_sync(retriever.retrieve, query, top_k)
+
+        if not results:
+            raise ToolFailure(ToolErrorCode.NOT_FOUND, NOT_FOUND_MESSAGE)
+
+        return {"results": results}
+
+    return ["search_market_news"]

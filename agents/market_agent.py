@@ -4,7 +4,9 @@ doküman parçalarını kullanıcıya iletir.
 RAG vektör deposuna doğrudan erişmez — Portföy Ajanı'yla aynı kalıp. Tüm veri
 erişimi MCP Server üzerinden geçer. `search_market_news` LLM kullanmadan
 veritabanını kontrol eder; bu ajan da üstüne LLM'e gitmez — tool'dan gelen
-veriyi (bulunan doküman parçaları ya da "bulunamadı" mesajı) olduğu gibi iletir.
+doküman parçalarını olduğu gibi `summary_text`'e taşır. Sorguyla alakalı
+kayıt yoksa tool `NOT_FOUND` döner; bu, Portföy Ajanı'ndaki gibi standart
+`AgentResponse.error` yolundan taşınır (bkz. docs/MCP-TOOLS.md).
 """
 
 from collections.abc import Callable
@@ -28,11 +30,7 @@ class MarketAgent(BaseAgent):
             return self.error_response(error.get("message", "Piyasa verisi alınamadı"))
 
         data = tool_result["data"]
-
-        if data.get("found"):
-            summary_text = "\n\n".join(r["content"] for r in data["results"])
-        else:
-            summary_text = data.get("message") or "Veritabanında ilgili bilgi bulunamadı."
+        summary_text = "\n\n".join(r["content"] for r in data["results"])
 
         if on_token is not None:
             on_token(summary_text)

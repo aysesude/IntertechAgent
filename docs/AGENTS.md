@@ -1,5 +1,13 @@
 # Ajan Mimarisi
 
+> Ajanların veriye eriştiği tek yol MCP tool'larıdır. Tool'ların dönüş zarfı,
+> hata kodları, docstring biçimi ve test şablonu için: **[`docs/MCP-TOOLS.md`](MCP-TOOLS.md)**.
+> Ajan yazarken bilinmesi gereken özet: tool başarılıysa `data` **her zaman**
+> vardır; başarısızsa `error.code` sabit kümeden gelir (`NOT_FOUND`,
+> `INSUFFICIENT_DATA`, `INVALID_ARGUMENT`, `PROVIDER_UNAVAILABLE`, `TIMEOUT`,
+> `INTERNAL_ERROR`) ve `error.message` kullanıcıya doğrudan gösterilebilir.
+> Tool'lar istisna sızdırmaz — `call_mcp_tool` etrafına `try/except` gerekmez.
+
 ## Ortak sözleşme (`agents/base.py`)
 
 ```python
@@ -38,14 +46,16 @@ class AgentResponse(BaseModel):
 
 `search_market_news` MCP tool'unu çağırır. Tool saf DB tabanlı RAG'dır (LLM
 yok, internetten canlı veri çekmez); ajan da üstüne LLM'e gitmez, tool'dan
-gelen doküman parçalarını ya da "bulunamadı" mesajını olduğu gibi
-`summary_text`'e taşır.
+gelen doküman parçalarını olduğu gibi `summary_text`'e taşır. Sorguyla
+alakalı kayıt yoksa tool `NOT_FOUND` döner, ajan bunu diğer tool
+hatalarıyla aynı yoldan (`AgentResponse.error`) taşır.
 
 ## Risk Ajanı — iskelet
 
 `agents/risk_agent.py`: `BaseAgent`'i implement eder, `execute()` gövdesi
-`NotImplementedError`. Karşılık gelen MCP tool'u (`get_risk_assessment`) de
-aynı şekilde iskelet.
+`NotImplementedError`. Karşılık gelen `get_risk_assessment` tool'u da iskelet
+ve **kayıtlı değil** (`_TOOL_MODULES`'a eklenmedi): yarım bir tool'un kayıtlı
+olması, ajana "yok" yerine "bozuk" görünür.
 
 Risk eşikleri (volatilite, yoğunlaşma limitleri vb.) tanımları kullanıcıyla
 netleştirilmeden `app/core/config.py`'ye eklenmedi — bkz. oradaki TODO notu.

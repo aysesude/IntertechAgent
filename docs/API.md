@@ -93,12 +93,14 @@ Oturumdaki tüm mesajları kronolojik sırada döner:
 
 MCP Server `http://mcp_server:8100/mcp` üzerinde dinler (docker ağı içinde).
 
+Dönüş zarfı, hata kodları ve ortak sözleşme için: **[`docs/MCP-TOOLS.md`](MCP-TOOLS.md)**.
+
 ### `get_portfolio_summary` (çalışıyor)
 
 ```
 Girdi:  { "user_id": "<UUID>" }
 Çıktı (başarı): { "success": true, "data": { ...PortfolioSummary... } }
-Çıktı (hata):   { "success": false, "error": { "code": "PORTFOLIO_NOT_FOUND", "message": "..." } }
+Çıktı (hata):   { "success": false, "error": { "code": "NOT_FOUND", "message": "..." } }
 ```
 `user_id` geçersiz UUID ise tool çağrılmadan otomatik `ValidationError` fırlar
 (pydantic, tip anotasyonundan üretilen JSON şemasıyla).
@@ -107,14 +109,14 @@ Girdi:  { "user_id": "<UUID>" }
 
 ```
 Girdi:  { "query": "...", "top_k": 5 }
-Çıktı (başarı): { "success": true, "data": { "found": bool, "message": str | null,
-                  "results": [{ "content": "...", "metadata": {...}, "distance": 0.0 }, ...] } }
-Çıktı (hata):   { "success": false, "error": { "code": "RAG_ERROR", "message": "..." } }
+Çıktı (başarı): { "success": true, "data": { "results": [{ "content": "...", "metadata": {...}, "distance": 0.0 }, ...] } }
+Çıktı (hata):   { "success": false, "error": { "code": "NOT_FOUND", "message": "..." } }
 ```
 Saf DB tabanlı arama: LLM yanıt üretmez, internetten canlı veri çekmez.
 `data/documents/` altındaki dokümanlar `python -m rag.ingest` ile Chroma'ya
 yüklenir; sorguya `rag_distance_threshold` (bkz. `app/core/config.py`) altında
-kalan bir sonuç yoksa `found: false` ve bulunamadı mesajı döner.
+kalan ya da anahtar kelime örtüşmesi olmayan sonuçlar elenir — hiç sonuç
+kalmazsa `NOT_FOUND` döner.
 
 ### İskelet tool'lar (`NotImplementedError`)
 
