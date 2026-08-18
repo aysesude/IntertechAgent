@@ -14,12 +14,9 @@ kelime paylaşırsa "bulundu" sayılır."""
 import re
 
 from app.core.config import settings
-
 from rag.vector_store import VectorStore, get_vector_store
 
-NOT_FOUND_MESSAGE = (
-    "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı."
-)
+NOT_FOUND_MESSAGE = "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı."
 
 # Kelime örtüşmesi kontrolünde göz ardı edilecek, ayırt edici olmayan Türkçe
 # kelimeler (aksansız/ASCII-katlanmış halleriyle — bkz. _normalize). Bunlar
@@ -65,13 +62,13 @@ _STOPWORDS = {
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 _MIN_KEYWORD_LEN = 3
-_PREFIX_MATCH_LEN = 4  # Türkçe çekim ekleri için (şirket/şirketin gibi) tam eşleşme yerine önek karşılaştırması
+_PREFIX_MATCH_LEN = (
+    4  # Türkçe çekim ekleri için (şirket/şirketin gibi) tam eşleşme yerine önek karşılaştırması
+)
 
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
-_TURKISH_FOLD_MAP = str.maketrans(
-    {"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"}
-)
+_TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"})
 
 
 def _normalize(text: str) -> str:

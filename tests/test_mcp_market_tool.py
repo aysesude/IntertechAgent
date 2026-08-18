@@ -31,9 +31,7 @@ async def test_search_market_news_tool_success(mcp_server, monkeypatch):
             "distance": 0.2,
         }
     ]
-    monkeypatch.setattr(
-        market_tools, "_get_retriever", lambda: _FakeRetriever(fake_results)
-    )
+    monkeypatch.setattr(market_tools, "_get_retriever", lambda: _FakeRetriever(fake_results))
 
     async with Client(mcp_server) as client:
         result = await client.call_tool(
@@ -51,9 +49,7 @@ async def test_search_market_news_tool_not_found(mcp_server, monkeypatch):
     monkeypatch.setattr(market_tools, "_get_retriever", lambda: _FakeRetriever([]))
 
     async with Client(mcp_server) as client:
-        result = await client.call_tool(
-            "search_market_news", {"query": "Bitcoin fiyatı ne kadar"}
-        )
+        result = await client.call_tool("search_market_news", {"query": "Bitcoin fiyatı ne kadar"})
 
     envelope = result.structured_content
     assert envelope["success"] is False
@@ -63,9 +59,7 @@ async def test_search_market_news_tool_not_found(mcp_server, monkeypatch):
     )  # ozellesmis mesaj
 
 
-async def test_search_market_news_tool_beklenmeyen_hatada_cokmez(
-    mcp_server, monkeypatch
-):
+async def test_search_market_news_tool_beklenmeyen_hatada_cokmez(mcp_server, monkeypatch):
     """Chroma'ya baglanti kurulamazsa (server ayakta degil, embedding modeli
     yuklenemedi vb.) tool zarf doner, teknik detay kullaniciya sizmaz."""
 
@@ -75,9 +69,7 @@ async def test_search_market_news_tool_beklenmeyen_hatada_cokmez(
     monkeypatch.setattr(market_tools, "_get_retriever", patlat)
 
     async with Client(mcp_server) as client:
-        result = await client.call_tool(
-            "search_market_news", {"query": "herhangi bir soru"}
-        )
+        result = await client.call_tool("search_market_news", {"query": "herhangi bir soru"})
 
     envelope = result.structured_content
     assert envelope["success"] is False

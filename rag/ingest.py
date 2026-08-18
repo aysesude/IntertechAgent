@@ -60,9 +60,7 @@ def _parse_document(path: Path) -> Document | None:
     temiz_metadata = {k: ("" if v is None else str(v)) for k, v in metadata.items()}
     temiz_metadata["dosya"] = path.name
 
-    eksik = [
-        alan for alan in ("baslik", "tarih", "tur") if not temiz_metadata.get(alan)
-    ]
+    eksik = [alan for alan in ("baslik", "tarih", "tur") if not temiz_metadata.get(alan)]
     if eksik:
         logger.warning("%s: zorunlu alan(lar) eksik: %s", path.name, ", ".join(eksik))
 
@@ -74,9 +72,7 @@ def main() -> int:
         logger.error("Doküman klasörü bulunamadı: %s", DOCUMENTS_DIR)
         return 1
 
-    dosyalar = sorted(
-        p for p in DOCUMENTS_DIR.glob("*.md") if p.name.lower() not in {"readme.md"}
-    )
+    dosyalar = sorted(p for p in DOCUMENTS_DIR.glob("*.md") if p.name.lower() not in {"readme.md"})
 
     if not dosyalar:
         logger.error(
