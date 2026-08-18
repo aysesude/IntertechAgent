@@ -52,7 +52,6 @@ _STOPWORDS = {
     "nedir",
     "hakkinda",
     "bilgi",
-    "haber",
     "lutfen",
     "acaba",
     "son",
