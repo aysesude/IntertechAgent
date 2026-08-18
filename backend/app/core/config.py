@@ -144,16 +144,19 @@ class Settings(BaseSettings):
     # Kaç doküman parçası getirilecek.
     rag_top_k: int = 3
     # Chroma cosine mesafesi (0 = birebir, 2 = alakasız). Bu eşiğin üzerindeki
-    # sonuçlar "alakasız" sayılıp elenir — RAG'ın LLM'siz "veri var/yok" kararını
-    # bu eşik verir.
+    # sonuçlar elenir — ama asıl "alakasız" kararını (rag/retriever.py'deki)
+    # kelime örtüşmesi eşiği veriyor, bu değer yalnızca gevşek bir emniyet
+    # supabı.
     #
-    # paraphrase-multilingual-MiniLM-L12-v2 için tek örnek dokümanla ölçülen
-    # gerçek değerler: alakalı sorgu ~0.82-0.84, alakasız sorgu ~0.86-0.90
-    # (bkz. data/documents/ornek-dokuman.md). 0.85 bu ikisini ayırıyor ama tek
-    # dokümanlık bir örnekleme — hedef 30-50 dokümanlık gerçek külliyat
-    # yüklenince (docs/AGENTS.md) bu değeri gerçek sorgularla yeniden kalibre
-    # edin.
-    rag_distance_threshold: float = 0.85
+    # 6 gerçek dokümanlık (THYAO/ASELS/TCMB/BIST/analist raporu) külliyatla
+    # ölçüldü: paraphrase-multilingual-MiniLM-L12-v2 mesafesi alakalı ve
+    # alakasız sorguları GÜVENİLİR AYIRMIYOR — "Bitcoin fiyatı ne kadar"
+    # (0.58) gerçekten alakalı bir sorgudan ("ASELSAN FAVÖK marjı", 0.73-0.89)
+    # daha düşük (daha "yakın") mesafe alabiliyor. 0.85 gibi sıkı bir eşik
+    # gerçek eşleşmeleri eliyordu (ör. 0.886 mesafeli doğru FAVÖK verisi).
+    # Bu yüzden eşik gevşetildi; alakasızlığı asıl kelime örtüşmesi eşiği
+    # (_MIN_KEYWORD_OVERLAP_RATIO, rag/retriever.py) engelliyor.
+    rag_distance_threshold: float = 0.95
 
     # --- Veri katmanı ---
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi

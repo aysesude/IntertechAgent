@@ -80,7 +80,7 @@ def test_mutlu_yol_sonuclari_dogru_esler():
         def count(self):
             return 2
 
-        def query(self, query_texts, n_results):
+        def query(self, query_texts, n_results, where=None):
             assert n_results == 2  # top_k, koleksiyon boyutuyla sınırlanır
             return {
                 "documents": [["Örnek Şirket net kârı arttı.", "Alakasız metin."]],
@@ -98,3 +98,22 @@ def test_mutlu_yol_sonuclari_dogru_esler():
     ]
     assert [r["metadata"]["baslik"] for r in results] == ["bilanço", "başka"]
     assert [r["distance"] for r in results] == [0.20, 0.95]
+
+
+def test_where_filtresi_chroma_query_cagrisina_gecirilir():
+    """rag/retriever.py'nin deterministik ön filtresi buradan Chroma'ya gider."""
+
+    class _KaydedenKoleksiyon:
+        def count(self):
+            return 1
+
+        def query(self, query_texts, n_results, where=None):
+            self.son_where = where
+            return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+
+    koleksiyon = _KaydedenKoleksiyon()
+    store = _store_with_collection(koleksiyon)
+
+    store.similarity_search("enflasyon", where={"sirket": "ASELS"})
+
+    assert koleksiyon.son_where == {"sirket": "ASELS"}
