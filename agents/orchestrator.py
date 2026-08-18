@@ -35,67 +35,9 @@ from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
 from app.core.config import settings
 
+from app.core.llm_client import get_llm_client
+
 logger = logging.getLogger(__name__)
-
-# Niyet tespiti şimdilik anahtar kelime tabanlı. LLM ile yapmak her soruya
-# 2-5 saniye ek gecikme bindirirdi ve bu aşamada ayırt edilmesi gereken yalnızca
-# iki alan var. Ajan sayısı arttığında LLM tabanlı sınıflandırmaya geçilmeli.
-_PORTFOLIO_KEYWORDS = {
-    "portföy",
-    "portfoy",
-    "varlık",
-    "varlik",
-    "dağılım",
-    "dagilim",
-    "getiri",
-    "kazanç",
-    "kazanc",
-    "zarar",
-    "bakiye",
-    "hesabım",
-    "hesabim",
-    "yatırımım",
-    "yatirimim",
-    "toplam değer",
-    "kar zarar",
-    "kâr zarar",
-    "ne kadar param",
-    "birikim",
-}
-
-_MARKET_KEYWORDS = {
-    "haber",
-    "piyasa",
-    "bilanço",
-    "bilanco",
-    "çeyrek",
-    "ceyrek",
-    "borsa",
-    "analiz",
-    "rapor",
-    "faiz",
-    "enflasyon",
-    "tcmb",
-    "gelişme",
-    "gelisme",
-    "açıkla",
-    "acikla",
-    "sonuç",
-    "sonuc",
-    "beklenti",
-    "sektör",
-    "sektor",
-    "endeks",
-    "dolar kuru",
-    "kur",
-    "temettü",
-    "temettu",
-}
-
-
-def _normalize(text: str) -> str:
-    return re.sub(r"\s+", " ", text.lower().strip())
-
 
 class OrchestratorState(TypedDict):
     user_id: str
@@ -110,30 +52,37 @@ class OrchestratorState(TypedDict):
     final_answer: str
 
 
-def detect_intent(state: OrchestratorState) -> dict:
-    """Sorguyu 'portfolio', 'market' veya 'both' olarak sınıflandırır.
-
-    Hiçbir anahtar kelime eşleşmezse 'portfolio' varsayılır: kullanıcıların
-    çoğu sorusu kendi verisiyle ilgili ve Portföy Ajanı her zaman anlamlı bir
-    cevap üretebiliyor, Piyasa Ajanı ise doküman yoksa boş dönüyor.
-    """
-    query = _normalize(state["message"])
-
-    has_portfolio = any(k in query for k in _PORTFOLIO_KEYWORDS)
-    has_market = any(k in query for k in _MARKET_KEYWORDS)
-
-    if has_portfolio and has_market:
-        intent = "both"
-    elif has_market:
-        intent = "market"
-    else:
+async def detect_intent(state: OrchestratorState) -> dict:
+    """Kullanıcının niyetini LLM yardımıyla 'portfolio', 'market' veya 'both' olarak sınıflandırır."""
+    query = state["message"].strip()
+    
+    llm = get_llm_client()
+    system_prompt = (
+        "Sen bir niyet sınıflandırma motorusun. SADECE tek kelime çıktı vereceksin: PORTFOLIO, MARKET veya BOTH.\n"
+        "- Eğer kullanıcı kendi varlıklarını, portföyünü, yatırımlarını veya parasının durumunu soruyorsa: PORTFOLIO dön.\n"
+        "- Eğer kullanıcı piyasa haberlerini, şirket bilançolarını, kurları, faiz oranlarını veya hisse fiyatlarını soruyorsa: MARKET dön.\n"
+        "- Eğer kullanıcı her ikisini de aynı anda soruyorsa (örneğin 'Portföyüm ne durumda ve son haberler neler?'): BOTH dön.\n"
+        "Asla açıklama yapma, sadece kategori adını büyük harfle döndür."
+    )
+    
+    try:
+        response = await llm.generate(query, system=system_prompt)
+        response_text = response.strip().upper()
+        
+        if "BOTH" in response_text:
+            intent = "both"
+        elif "MARKET" in response_text or "RAG" in response_text:
+            intent = "market"
+        else:
+            intent = "portfolio" # Varsayılan (fallback) değer
+            
+    except Exception as e:
+        logger.error(f"[ORCHESTRATOR] Niyet tespiti LLM hatası: {e}")
         intent = "portfolio"
-
+        
     logger.info(
-        "[ORCHESTRATOR] niyet=%s | portfoy_eslesme=%s market_eslesme=%s | sorgu=%r",
+        "[ORCHESTRATOR] LLM niyet tespiti: %s | sorgu=%r",
         intent,
-        has_portfolio,
-        has_market,
         state["message"][:80],
     )
     return {"intent": intent}
@@ -148,33 +97,50 @@ def _build_request(state: OrchestratorState) -> AgentRequest:
     )
 
 
-async def run_portfolio_agent(state: OrchestratorState, writer: StreamWriter) -> dict:
+async def run_portfolio_agent(state: OrchestratorState) -> dict:
     agent = PortfolioAgent(mcp_server_url=settings.mcp_server_url)
     response = await agent.execute(
-        _build_request(state), on_token=lambda token: writer({"delta": token})
+        _build_request(state), on_token=None
     )
     return {"agent_responses": [response]}
 
 
-async def run_market_agent(state: OrchestratorState, writer: StreamWriter) -> dict:
-    # İki ajan da çalışıyorsa cevapları görsel olarak ayır.
-    if state["intent"] == "both":
-        writer({"delta": "\n\n"})
-
+async def run_market_agent(state: OrchestratorState) -> dict:
     agent = MarketAgent(mcp_server_url=settings.mcp_server_url)
     response = await agent.execute(
-        _build_request(state), on_token=lambda token: writer({"delta": token})
+        _build_request(state), on_token=None
     )
     return {"agent_responses": [response]}
 
 
-def merge_responses(state: OrchestratorState) -> dict:
+async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dict:
     successful = [r.summary_text for r in state["agent_responses"] if r.success]
+    
     if successful:
-        final_answer = "\n\n".join(successful)
+        llm = get_llm_client()
+        combined_text = "\n\n---\n\n".join(successful)
+        system_prompt = (
+            "Aşağıda bir veya daha fazla veri kaynağından/uzman ajandan gelen ham yanıtlar bulunmaktadır.\n"
+            "Görev: Bu verileri alıp, objektif, pürüzsüz, tekil ve anlaşılır bir Türkçe yanıt oluşturarak son kullanıcıya sun.\n"
+            "Verilerin hangi ajan veya RAG'den geldiğini söyleme, doğrudan bilgiyi harmanlayıp ver.\n"
+            "Hiçbir bilgiyi silme veya uydurma yapma, sadece metinleri iyi bir düzene sok.\n"
+            "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver."
+        )
+        
+        final_answer = ""
+        try:
+            async for chunk in llm.stream(combined_text, system=system_prompt):
+                final_answer += chunk
+                writer({"delta": chunk})
+        except Exception as e:
+            logger.error(f"[ORCHESTRATOR] Merge LLM hatası: {e}")
+            final_answer = "\n\n".join(successful)
+            writer({"delta": final_answer})
     else:
         errors = [r.error for r in state["agent_responses"] if r.error]
         final_answer = errors[0] if errors else "Üzgünüm, isteğinizi işlerken bir sorun oluştu."
+        writer({"delta": final_answer})
+        
     return {"final_answer": final_answer}
 
 
