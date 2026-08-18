@@ -18,6 +18,8 @@ import yaml
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from app.core.exceptions import ProviderUnavailableError
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
@@ -122,10 +124,21 @@ def main() -> int:
 
     logger.info("%d parça vektör veritabanına işleniyor...", len(chunks))
     store = get_vector_store()
-    store.add_documents(
-        documents=[c.page_content for c in chunks],
-        metadatas=[c.metadata for c in chunks],
-    )
+    try:
+        store.add_documents(
+            documents=[c.page_content for c in chunks],
+            metadatas=[c.metadata for c in chunks],
+        )
+    except ProviderUnavailableError as exc:
+        # Traceback yerine ne yapılacağını söyleyen tek satır: bu komutu
+        # çalıştıran kişi çoğu zaman chroma servisini başlatmayı unutmuş oluyor.
+        logger.error(
+            "Vektör veritabanına bağlanılamadı (%s). `docker compose up -d chroma` "
+            "ile servisi başlatın ve .env dosyanızda CHROMA_HOST/CHROMA_PORT "
+            "değerlerini kontrol edin.",
+            exc.message,
+        )
+        return 1
 
     logger.info("Bitti. Toplam parça sayısı: %d", len(chunks))
     return 0
