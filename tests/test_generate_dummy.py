@@ -28,8 +28,10 @@ def test_generate_dummy_creates_expected_data(engine):
         assert len(holding_counts) == NUM_USERS
         assert all(MIN_HOLDINGS_PER_USER <= c <= MAX_HOLDINGS_PER_USER for c in holding_counts)
 
+        # quantity=0 satırlar (tamamen satılmış pozisyon) tasarım gereği kalabilir;
+        # negatif miktar ise her koşulda defter hatasıdır.
         assert (
-            session.scalar(select(func.count()).select_from(Holding).where(Holding.quantity <= 0))
+            session.scalar(select(func.count()).select_from(Holding).where(Holding.quantity < 0))
             == 0
         )
         assert (

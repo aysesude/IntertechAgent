@@ -4,10 +4,12 @@ from decimal import Decimal
 
 import pytest
 from fastmcp import Client, FastMCP
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import AssetClass
 from app.models import Asset, Holding, Portfolio, PriceHistory, User
 from mcp_server.tools import portfolio_tools
+from mcp_server.tools._base import DEFAULT_MESSAGES, ToolErrorCode
 
 
 @pytest.fixture()
@@ -61,11 +63,37 @@ async def test_get_portfolio_summary_tool_success(mcp_server, seeded_user):
 
 
 async def test_get_portfolio_summary_tool_not_found(mcp_server, db_session):
+    missing_user_id = str(uuid.uuid4())
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("get_portfolio_summary", {"user_id": missing_user_id})
+
+    envelope = result.structured_content
+    assert envelope["success"] is False
+    # Ortak taksonomi: alan adina ozel kod (PORTFOLIO_NOT_FOUND) yok.
+    assert envelope["error"]["code"] == ToolErrorCode.NOT_FOUND.value
+    # Servisin ic metni ("Portfolio not found for user_id <uuid>") kullaniciya
+    # gitmez; zarftaki mesaj Turkce ve merkezidir.
+    assert missing_user_id not in envelope["error"]["message"]
+    assert envelope["error"]["message"] == DEFAULT_MESSAGES[ToolErrorCode.NOT_FOUND]
+
+
+async def test_get_portfolio_summary_tool_beklenmeyen_hatada_cokmez(mcp_server, monkeypatch):
+    """Servis katmani beklenmeyen bir istisna firlatirsa tool zarf doner.
+    Istisna tool sinirindan kacsaydi tum SSE akisi duser, asistan mesaji
+    INCOMPLETE yazilirdi (bkz. app/api/chat.py)."""
+
+    def patlat(db, user_id):
+        raise SQLAlchemyError("connection to server at 10.0.0.1 failed: password authentication")
+
+    monkeypatch.setattr(portfolio_tools, "fetch_portfolio_summary", patlat)
+
     async with Client(mcp_server) as client:
         result = await client.call_tool("get_portfolio_summary", {"user_id": str(uuid.uuid4())})
 
-    assert result.structured_content["success"] is False
-    assert result.structured_content["error"]["code"] == "PORTFOLIO_NOT_FOUND"
+    envelope = result.structured_content
+    assert envelope["success"] is False
+    assert envelope["error"]["code"] == ToolErrorCode.INTERNAL_ERROR.value
+    assert "password" not in envelope["error"]["message"]
 
 
 async def test_get_portfolio_summary_tool_rejects_invalid_uuid(mcp_server):

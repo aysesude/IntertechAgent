@@ -18,18 +18,25 @@ python-dotenv>=1.0.1
 
 langgraph>=0.2.28
 fastmcp>=3.4.6
-chromadb>=0.5.5
+# ==0.5.5 kasıtlı sabit: docker-compose.yml'deki chroma server image'ı da
+# chromadb/chroma:0.5.5. Client >=1.0 yeni bir HTTP API (v2 auth/identity)
+# konuşuyor ve bu sürümdeki server'da 404 alıyor — server'ı yükseltmeden
+# client'ı gevşetmeyin.
+chromadb==0.5.5
 
-# RAG pipeline (rag/pipeline.py)
+# RAG (rag/ingest.py, rag/vector_store.py) — saf getirme, LLM yok
 langchain-core>=0.3.0
-langchain-community>=0.3.0
 langchain-text-splitters>=0.3.0
-langchain-huggingface>=0.1.0
-langchain-ollama>=0.2.0
 sentence-transformers>=3.0.0
-rank-bm25>=0.2.2
 
 Faker>=26.0.0
+
+# Piyasa verisi sağlayıcıları (backend/app/providers/)
+requests>=2.32.3
+yfinance>=0.2.43
+pandas>=2.2.2
+tefas-crawler>=0.3.4
+lxml>=5.3.0
 
 pytest>=8.3.3
 pytest-asyncio>=0.24.0

@@ -16,7 +16,7 @@
   "total_gain_loss": { "amount": -72656.84, "percent": -4.63 },
   "allocation": [
     { "asset_class": "stock", "value": 167808.53, "percent": 11.21 },
-    { "asset_class": "gold", "value": 555795.65, "percent": 37.11 },
+    { "asset_class": "precious_metal", "value": 555795.65, "percent": 37.11 },
     { "asset_class": "currency", "value": 471330.61, "percent": 31.47 },
     { "asset_class": "bond", "value": 302624.17, "percent": 20.21 }
   ],
@@ -93,17 +93,31 @@ Oturumdaki tüm mesajları kronolojik sırada döner:
 
 MCP Server `http://mcp_server:8100/mcp` üzerinde dinler (docker ağı içinde).
 
+Dönüş zarfı, hata kodları ve ortak sözleşme için: **[`docs/MCP-TOOLS.md`](MCP-TOOLS.md)**.
+
 ### `get_portfolio_summary` (çalışıyor)
 
 ```
 Girdi:  { "user_id": "<UUID>" }
 Çıktı (başarı): { "success": true, "data": { ...PortfolioSummary... } }
-Çıktı (hata):   { "success": false, "error": { "code": "PORTFOLIO_NOT_FOUND", "message": "..." } }
+Çıktı (hata):   { "success": false, "error": { "code": "NOT_FOUND", "message": "..." } }
 ```
 `user_id` geçersiz UUID ise tool çağrılmadan otomatik `ValidationError` fırlar
 (pydantic, tip anotasyonundan üretilen JSON şemasıyla).
 
+### `search_market_news` (çalışıyor)
+
+```
+Girdi:  { "query": "...", "top_k": 5 }
+Çıktı (başarı): { "success": true, "data": { "results": [{ "content": "...", "metadata": {...}, "distance": 0.0 }, ...] } }
+Çıktı (hata):   { "success": false, "error": { "code": "NOT_FOUND" | "PROVIDER_UNAVAILABLE", "message": "..." } }
+```
+Saf DB tabanlı arama: LLM yanıt üretmez, internetten canlı veri çekmez.
+`data/documents/` altındaki dokümanlar `python -m rag.ingest` ile Chroma'ya
+yüklenir; sorguya `rag_distance_threshold` (bkz. `app/core/config.py`) altında
+kalan ya da anahtar kelime örtüşmesi olmayan sonuçlar elenir — hiç sonuç
+kalmazsa `NOT_FOUND` döner.
+
 ### İskelet tool'lar (`NotImplementedError`)
 
-- `search_market_news(query: str, top_k: int = 5)` — `mcp_server/tools/market_tools.py`
 - `get_risk_assessment(user_id: str)` — `mcp_server/tools/risk_tools.py`

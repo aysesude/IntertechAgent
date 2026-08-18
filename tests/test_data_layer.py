@@ -1,0 +1,343 @@
+"""Veri katmanı değişmezleri (invariant) — DB-PLANI §6 ve kabul kriterleri.
+
+Test adları kabul kriterlerine bağlanır (izlenebilirlik zinciri):
+    I1  test_ledger_reconciliation                    -> AK 5.12
+    I2  test_cash_never_negative                      -> defter dengesi
+    I3  test_synthetic_never_overwrites_real          -> AK 5.1, 5.5
+    I4  test_ak_5_3_price_source_and_timestamp        -> AK 5.3
+    I5  test_ak_5_7_fx_conversion                     -> AK 5.7
+    I6  test_external_flow_excluded_from_return       -> FR-3
+    I7  test_derived_price_matches_factor             -> türetilmiş tutarlılık
+        test_synthetic_correlation_nonzero            -> AK-2.2, AK-2.6
+"""
+
+import math
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
+
+import pytest
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.core.config import AssetClass, PriceSource, settings
+from app.models import Asset, Holding, Portfolio, PriceHistory, TransactionType, User
+from app.providers.base import PricePoint
+from app.providers.universe import SPEC_BY_SYMBOL
+from app.services.ledger_service import (
+    LedgerError,
+    cash_balance_as_of,
+    rebuild_holdings,
+    record_transaction,
+)
+from app.services.portfolio_service import get_portfolio_summary
+from app.services.price_ingest import upsert_prices
+from app.services.valuation_service import twr, unrealized_pnl
+from data.generate_dummy import main as generate_dummy_main
+
+
+@pytest.fixture(scope="module")
+def seeded(engine):
+    """Tam seed bir kez koşar; modüldeki testler aynı veri üstünde çalışır."""
+    generate_dummy_main()
+    return engine
+
+
+def _tx_dt(d: date) -> datetime:
+    return datetime.combine(d, time(hour=12), tzinfo=timezone.utc)
+
+
+def _price_on(session: Session, symbol: str, day: date) -> Decimal:
+    asset_id = session.execute(select(Asset.id).where(Asset.symbol == symbol)).scalar_one()
+    return session.execute(
+        select(PriceHistory.close_price).where(
+            PriceHistory.asset_id == asset_id, PriceHistory.price_date == day
+        )
+    ).scalar_one()
+
+
+def _last_trading_day(session: Session) -> date:
+    """Fiyatı olan son gün (ANCHOR_DATE hafta sonuna denk gelebilir)."""
+    return session.execute(select(func.max(PriceHistory.price_date))).scalar_one()
+
+
+def _latest_price(session: Session, symbol: str) -> Decimal:
+    asset_id = session.execute(select(Asset.id).where(Asset.symbol == symbol)).scalar_one()
+    return session.execute(
+        select(PriceHistory.close_price)
+        .where(PriceHistory.asset_id == asset_id)
+        .order_by(PriceHistory.price_date.desc())
+        .limit(1)
+    ).scalar_one()
+
+
+# --------------------------------------------------------------------------
+# I1 — holdings, defterden yeniden üretilebilir olmalı (AK 5.12)
+# --------------------------------------------------------------------------
+
+
+def test_ledger_reconciliation(seeded):
+    with Session(seeded) as session:
+        portfolios = session.execute(select(Portfolio)).scalars().all()
+        assert portfolios, "seed portföy üretmemiş"
+
+        for portfolio in portfolios:
+            before = {
+                h.asset_id: (h.quantity, h.avg_cost_price, h.realized_pnl_try)
+                for h in session.execute(
+                    select(Holding).where(Holding.portfolio_id == portfolio.id)
+                )
+                .scalars()
+                .all()
+            }
+            rebuild_holdings(session, portfolio.id)
+            after = {
+                h.asset_id: (h.quantity, h.avg_cost_price, h.realized_pnl_try)
+                for h in session.execute(
+                    select(Holding).where(Holding.portfolio_id == portfolio.id)
+                )
+                .scalars()
+                .all()
+            }
+            assert before == after, f"holdings defterle mutabık değil: {portfolio.id}"
+        session.rollback()
+
+
+# --------------------------------------------------------------------------
+# I2 — nakit hiçbir portföyde negatif olamaz
+# --------------------------------------------------------------------------
+
+
+def test_cash_never_negative(seeded):
+    with Session(seeded) as session:
+        for portfolio in session.execute(select(Portfolio)).scalars().all():
+            balance = cash_balance_as_of(session, portfolio.id)
+            assert balance >= 0, f"negatif nakit: {portfolio.id} -> {balance}"
+
+
+def test_record_transaction_rejects_overdraft(seeded):
+    with Session(seeded) as session:
+        user = User(email="overdraft@test.local", full_name="Test Overdraft")
+        session.add(user)
+        session.flush()
+        portfolio = Portfolio(user_id=user.id)
+        session.add(portfolio)
+        session.flush()
+        thyao = session.execute(select(Asset).where(Asset.symbol == "THYAO")).scalar_one()
+
+        with pytest.raises(LedgerError):
+            record_transaction(
+                session,
+                portfolio.id,
+                TransactionType.BUY,
+                transaction_date=_tx_dt(settings.anchor_date),
+                asset_id=thyao.id,
+                quantity=Decimal(10),
+                price=Decimal("100"),
+            )
+        session.rollback()
+
+
+# --------------------------------------------------------------------------
+# I3 — sentetik, gerçek satırı asla ezemez (AK 5.1, 5.5)
+# --------------------------------------------------------------------------
+
+
+def test_synthetic_never_overwrites_real(seeded):
+    with Session(seeded) as session:
+        asset = session.execute(select(Asset).where(Asset.symbol == "THYAO")).scalar_one()
+        day = settings.anchor_date
+
+        upsert_prices(session, asset.id, [PricePoint(day, Decimal("111.111111"), PriceSource.TCMB)])
+        upsert_prices(session, asset.id, [PricePoint(day, Decimal("1.0"), PriceSource.SYNTHETIC)])
+        row = session.execute(
+            select(PriceHistory).where(
+                PriceHistory.asset_id == asset.id, PriceHistory.price_date == day
+            )
+        ).scalar_one()
+        assert row.source == PriceSource.TCMB
+        assert row.close_price == Decimal("111.111111")
+        session.rollback()
+
+
+# --------------------------------------------------------------------------
+# I4 — her fiyat satırında kaynak + çekim zamanı (AK 5.3)
+# --------------------------------------------------------------------------
+
+
+def test_ak_5_3_price_source_and_timestamp(seeded):
+    with Session(seeded) as session:
+        missing = session.execute(
+            select(func.count())
+            .select_from(PriceHistory)
+            .where((PriceHistory.source.is_(None)) | (PriceHistory.fetched_at.is_(None)))
+        ).scalar_one()
+        assert missing == 0
+
+
+# --------------------------------------------------------------------------
+# I5 — TRY dışı varlık, güncel kurla toplam değere girer (AK 5.7)
+# --------------------------------------------------------------------------
+
+
+def test_ak_5_7_fx_conversion(seeded):
+    with Session(seeded) as session:
+        user = User(email="fx@test.local", full_name="Test FX")
+        session.add(user)
+        session.flush()
+        portfolio = Portfolio(user_id=user.id)
+        session.add(portfolio)
+        session.flush()
+
+        eurobond = session.execute(select(Asset).where(Asset.symbol == "EUROBOND1")).scalar_one()
+        assert eurobond.currency == "USD"
+
+        buy_day = _last_trading_day(session)
+        bond_price_usd = _price_on(session, "EUROBOND1", buy_day)
+        fx_at_buy = _price_on(session, "USDTRY", buy_day)
+
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.DEPOSIT,
+            transaction_date=_tx_dt(buy_day),
+            cash_amount_try=Decimal("1000000"),
+        )
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.BUY,
+            transaction_date=_tx_dt(buy_day),
+            asset_id=eurobond.id,
+            quantity=Decimal(10),
+            price=bond_price_usd,
+            currency="USD",
+            fx_rate_to_try=fx_at_buy,  # işlem anındaki kur dondurulur
+        )
+        rebuild_holdings(session, portfolio.id)
+
+        summary = get_portfolio_summary(session, user.id)
+        latest_bond_usd = _latest_price(session, "EUROBOND1")
+        latest_fx = _latest_price(session, "USDTRY")
+
+        bond_alloc = next(
+            item for item in summary.allocation if item.asset_class == AssetClass.BOND
+        )
+        expected = (Decimal(10) * latest_bond_usd * latest_fx).quantize(Decimal("0.01"))
+        assert bond_alloc.value == expected, "USD varlık güncel kurla TRY'ye çevrilmeli"
+
+        # unrealized_pnl de aynı kur mantığını kullanmalı (o günün kuru).
+        pnl = unrealized_pnl(session, portfolio.id, as_of=buy_day)
+        cost = Decimal(10) * bond_price_usd * fx_at_buy
+        value_at_buy = Decimal(10) * bond_price_usd * fx_at_buy
+        assert pnl == (value_at_buy - cost).quantize(Decimal("0.01"))
+        session.rollback()
+
+
+# --------------------------------------------------------------------------
+# I6 — DEPOSIT/WITHDRAW getiri sayılmaz (FR-3, TWR)
+# --------------------------------------------------------------------------
+
+
+def test_external_flow_excluded_from_return(seeded):
+    with Session(seeded) as session:
+        user = User(email="twr@test.local", full_name="Test TWR")
+        session.add(user)
+        session.flush()
+        portfolio = Portfolio(user_id=user.id)
+        session.add(portfolio)
+        session.flush()
+
+        d_mid = _last_trading_day(session)
+        d0 = d_mid - timedelta(days=14)
+
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.DEPOSIT,
+            transaction_date=_tx_dt(d0),
+            cash_amount_try=Decimal("100000"),
+        )
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.DEPOSIT,
+            transaction_date=_tx_dt(d_mid),
+            cash_amount_try=Decimal("100000"),
+        )
+
+        # Varlık yok, fiyat hareketi yok: değer 100k -> 200k'ya yalnızca dış
+        # akışla çıktı. Naif seri %100 getiri sanır; TWR %0 demeli.
+        result = twr(session, portfolio.id, d0, d_mid)
+        assert result == Decimal("0.00")
+        session.rollback()
+
+
+# --------------------------------------------------------------------------
+# I7 — türetilmiş fiyat = kaynak × katsayı
+# --------------------------------------------------------------------------
+
+
+def test_derived_price_matches_factor(seeded):
+    factor = SPEC_BY_SYMBOL["CEYREK"].derived_factor
+    with Session(seeded) as session:
+        xau_id = session.execute(select(Asset.id).where(Asset.symbol == "XAUTRY")).scalar_one()
+        ceyrek_id = session.execute(select(Asset.id).where(Asset.symbol == "CEYREK")).scalar_one()
+
+        xau = {
+            d: p
+            for d, p in session.execute(
+                select(PriceHistory.price_date, PriceHistory.close_price).where(
+                    PriceHistory.asset_id == xau_id
+                )
+            ).all()
+        }
+        ceyrek = session.execute(
+            select(PriceHistory.price_date, PriceHistory.close_price).where(
+                PriceHistory.asset_id == ceyrek_id
+            )
+        ).all()
+        assert ceyrek, "türetilmiş varlığın fiyat serisi yok"
+        for day, price in ceyrek:
+            expected = (xau[day] * factor).quantize(Decimal("0.000001"))
+            assert price == expected, f"{day}: {price} != {expected}"
+
+
+# --------------------------------------------------------------------------
+# Faktör modeli — sentetik varlıklar arası korelasyon sıfır olmamalı (AK-2.2/2.6)
+# --------------------------------------------------------------------------
+
+
+def _daily_returns(prices: list[Decimal]) -> list[float]:
+    return [float(prices[i] / prices[i - 1]) - 1.0 for i in range(1, len(prices))]
+
+
+def _correlation(a: list[float], b: list[float]) -> float:
+    n = min(len(a), len(b))
+    a, b = a[:n], b[:n]
+    mean_a, mean_b = sum(a) / n, sum(b) / n
+    cov = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b)) / n
+    var_a = sum((x - mean_a) ** 2 for x in a) / n
+    var_b = sum((y - mean_b) ** 2 for y in b) / n
+    return cov / math.sqrt(var_a * var_b) if var_a and var_b else 0.0
+
+
+def test_synthetic_correlation_nonzero(seeded):
+    with Session(seeded) as session:
+
+        def series(symbol: str) -> list[Decimal]:
+            asset_id = session.execute(select(Asset.id).where(Asset.symbol == symbol)).scalar_one()
+            return (
+                session.execute(
+                    select(PriceHistory.close_price)
+                    .where(PriceHistory.asset_id == asset_id)
+                    .order_by(PriceHistory.price_date)
+                )
+                .scalars()
+                .all()
+            )
+
+        stock_pair = _correlation(_daily_returns(series("THYAO")), _daily_returns(series("GARAN")))
+        fx_pair = _correlation(_daily_returns(series("USDTRY")), _daily_returns(series("EURTRY")))
+        # Bağımsız random walk'larda bu değerler ~0 çıkıyordu (ölçülen -0.001).
+        assert stock_pair > 0.35, f"hisse-hisse korelasyonu çok düşük: {stock_pair:.3f}"
+        assert fx_pair > 0.6, f"döviz-döviz korelasyonu çok düşük: {fx_pair:.3f}"

@@ -1,6 +1,7 @@
 """Uygulama genelindeki tüm yapılandırma buradan okunur. Kodun başka hiçbir
 yerinde sabit bağlantı adresi, anahtar veya model adı bulunmamalıdır."""
 
+from datetime import date
 from enum import Enum
 from functools import lru_cache
 
@@ -16,9 +17,68 @@ class LLMProvider(str, Enum):
 
 class AssetClass(str, Enum):
     STOCK = "stock"
-    GOLD = "gold"
+    PRECIOUS_METAL = "precious_metal"
     CURRENCY = "currency"
     BOND = "bond"
+    CASH = "cash"
+
+
+class RiskProfile(str, Enum):
+    CONSERVATIVE = "conservative"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
+
+
+class PriceSource(str, Enum):
+    """Bir fiyat satırının nereden geldiği (AK 5.1, 5.3).
+
+    Sıralama önemli değildir; öncelik PRICE_SOURCE_PRIORITY'de tanımlıdır.
+    """
+
+    SYNTHETIC = "synthetic"  # üretilmiş (dummy) seri
+    DERIVED = "derived"  # başka bir varlıktan katsayıyla hesaplandı
+    YFINANCE = "yfinance"
+    TEFAS = "tefas"
+    ISPORTFOY = "isportfoy"
+    TCMB = "tcmb"  # today.xml (spot)
+    TCMB_EVDS = "tcmb_evds"  # EVDS (tarihsel)
+
+
+# Upsert çakışmasında hangi kaynağın hangisini ezebileceği: yalnızca daha
+# yüksek öncelikli kaynak mevcut satırı günceller. Gerçek veri sentetiği
+# ezer; sentetik gerçeği asla ezemez (bkz. services/price_ingest.py).
+PRICE_SOURCE_PRIORITY: dict[PriceSource, int] = {
+    PriceSource.SYNTHETIC: 0,
+    PriceSource.DERIVED: 1,
+    PriceSource.YFINANCE: 2,
+    PriceSource.TEFAS: 3,
+    PriceSource.ISPORTFOY: 3,
+    PriceSource.TCMB: 4,
+    PriceSource.TCMB_EVDS: 4,
+}
+
+
+class AssetSubType(str, Enum):
+    """assets.sub_type için bilinen değerler. DB kolonu String'dir (yeni
+    enstrüman tipi migration istemesin); doğrulama seed anında Python
+    tarafında yapılır. Risk motoru buna göre dallanmaz — sunum/filtreleme
+    metadata'sıdır."""
+
+    EQUITY_FUND = "equity_fund"
+    MONEY_MARKET_FUND = "money_market_fund"
+    GOVERNMENT_BOND = "government_bond"
+    CORPORATE_BOND = "corporate_bond"
+    EUROBOND = "eurobond"
+    TIME_DEPOSIT = "time_deposit"
+    DEMAND_DEPOSIT = "demand_deposit"
+    GOLD_COIN = "gold_coin"
+
+
+class IngestStatus(str, Enum):
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class Settings(BaseSettings):
@@ -63,6 +123,13 @@ class Settings(BaseSettings):
     # *erişilen* adrestir (compose'da servis adı: mcp_server).
     mcp_server_url: str = "http://mcp_server:8100/mcp"
 
+    # Tool zaman aşımları (saniye). Performans hedefi değil, asılı kalan çağrıya
+    # karşı emniyet supabıdır: süre dolunca ajan çökmek yerine TIMEOUT zarfı alır
+    # (bkz. mcp_server/tools/_base.py, docs/MCP-TOOLS.md). DB okuması milisaniye
+    # mertebesindedir; RAG ilk çağrıda embedding modelini ve indeksi yükler.
+    mcp_tool_timeout_default: float = 10.0
+    mcp_tool_timeout_rag: float = 60.0
+
     # --- API ---
     api_host: str = "0.0.0.0"
     api_port: int = 8000
@@ -73,14 +140,28 @@ class Settings(BaseSettings):
     chat_context_message_limit: int = 10
 
     # --- RAG ---
-    # Chroma'nın kalıcı dosyalarını tuttuğu dizin. Konteyner içindeki mutlak yol
-    # verilmeli; göreli yol çalışma dizinine göre değişir ve MCP sunucusu ile API
-    # farklı dizinlerden başlatıldığı için tutarsızlık üretir.
-    rag_persist_directory: str = "/data/chroma_db"
     rag_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    rag_company_mappings_path: str = "/data/company_mappings.json"
     # Kaç doküman parçası getirilecek.
     rag_top_k: int = 3
+    # Chroma cosine mesafesi (0 = birebir, 2 = alakasız). Bu eşiğin üzerindeki
+    # sonuçlar "alakasız" sayılıp elenir — RAG'ın LLM'siz "veri var/yok" kararını
+    # bu eşik verir.
+    #
+    # paraphrase-multilingual-MiniLM-L12-v2 için tek örnek dokümanla ölçülen
+    # gerçek değerler: alakalı sorgu ~0.82-0.84, alakasız sorgu ~0.86-0.90
+    # (bkz. data/documents/ornek-dokuman.md). 0.85 bu ikisini ayırıyor ama tek
+    # dokümanlık bir örnekleme — hedef 30-50 dokümanlık gerçek külliyat
+    # yüklenince (docs/AGENTS.md) bu değeri gerçek sorgularla yeniden kalibre
+    # edin.
+    rag_distance_threshold: float = 0.85
+
+    # --- Veri katmanı ---
+    # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
+    # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
+    anchor_date: date = date(2026, 8, 1)
+    # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
+    # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
+    evds_api_key: str | None = None
 
     # --- Sabitler (sihirli sayı yerine config) ---
     supported_asset_classes: list[AssetClass] = list(AssetClass)

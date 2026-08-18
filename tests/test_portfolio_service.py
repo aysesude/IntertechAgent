@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -13,7 +13,9 @@ from app.services.portfolio_service import get_portfolio_summary
 def test_get_portfolio_summary_computes_value_allocation_and_gain(db_session):
     user = User(email="test@example.com", full_name="Test User")
     stock = Asset(symbol="TST", name="Test Hisse", asset_class=AssetClass.STOCK, currency="TRY")
-    gold = Asset(symbol="TAU", name="Test Altin", asset_class=AssetClass.GOLD, currency="TRY")
+    gold = Asset(
+        symbol="TAU", name="Test Altin", asset_class=AssetClass.PRECIOUS_METAL, currency="TRY"
+    )
     db_session.add_all([user, stock, gold])
     db_session.flush()
 
@@ -61,8 +63,8 @@ def test_get_portfolio_summary_computes_value_allocation_and_gain(db_session):
     allocation_by_class = {item.asset_class: item for item in summary.allocation}
     assert allocation_by_class[AssetClass.STOCK].value == Decimal("1000.00")
     assert allocation_by_class[AssetClass.STOCK].percent == Decimal("80.00")
-    assert allocation_by_class[AssetClass.GOLD].value == Decimal("250.00")
-    assert allocation_by_class[AssetClass.GOLD].percent == Decimal("20.00")
+    assert allocation_by_class[AssetClass.PRECIOUS_METAL].value == Decimal("250.00")
+    assert allocation_by_class[AssetClass.PRECIOUS_METAL].percent == Decimal("20.00")
 
     # en guncel fiyatin tarihi (stock icin 2 Ocak) as_of olarak yansimali
     assert summary.as_of == date(2026, 1, 2)
