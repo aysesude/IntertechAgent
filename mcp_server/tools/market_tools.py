@@ -65,8 +65,11 @@ def register(mcp: FastMCP) -> list[str]:
         Returns:
             Başarılı: {"success": true, "data": {"results": [{"content": "...",
             "metadata": {...}, "distance": 0.0}, ...]}}.
-            Hata: {"success": false, "error": {"code": "NOT_FOUND", "message":
-            "..."}} — veritabanında sorguyla yeterince alakalı bir kayıt yoksa.
+            Hata: {"success": false, "error": {"code": "NOT_FOUND"}} —
+            veritabanında sorguyla yeterince alakalı bir kayıt yoksa;
+            {"code": "PROVIDER_UNAVAILABLE"} — Chroma'ya ulaşılamıyorsa
+            (sözleşme §2; `rag/vector_store.py` `ProviderUnavailableError`
+            fırlatır, `@tool_handler` otomatik eşler).
         """
         retriever = await anyio.to_thread.run_sync(_get_retriever)
         results = await anyio.to_thread.run_sync(retriever.retrieve, query, top_k)
