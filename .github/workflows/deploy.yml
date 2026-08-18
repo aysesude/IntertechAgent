@@ -70,10 +70,14 @@ jobs:
             # yeni dokumani goremez.
             #
             # Idempotent: ayni icerikli parcalar atlanir, tekrar calistirmak
-            # zararsiz. Dokuman yoksa ingest 1 doner — bu bir hata degil, bu
-            # yuzden deploy'u kirmiyoruz.
-            $COMPOSE exec -T -w / api python -m rag.ingest \
-              || echo "  (indekslenecek dokuman yok, atlandi)"
+            # zararsiz.
+            #
+            # `|| true` / `|| echo` YOK ve eklenmemeli. Bir kez `|| echo ...` ile
+            # yazilmisti; ingest sessizce cokerken deploy yesil kaldi ve RAG'in
+            # neden bos oldugunu bulmak saatler aldi. Dokuman yoksa ingest artik
+            # 0 donuyor (bkz. rag/ingest.py), dolayisiyla buraya dusen her hata
+            # GERCEK bir hatadir ve deploy'u kirmalidir.
+            $COMPOSE exec -T -w / api python -m rag.ingest
 
             echo "--> Saglik kontrolu"
             for i in $(seq 1 18); do
