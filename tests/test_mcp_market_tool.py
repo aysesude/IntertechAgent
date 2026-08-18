@@ -99,3 +99,29 @@ async def test_search_market_news_tool_beklenmeyen_hatada_cokmez(mcp_server, mon
     assert envelope["success"] is False
     assert envelope["error"]["code"] == ToolErrorCode.INTERNAL_ERROR.value
     assert "nonetype" not in envelope["error"]["message"].lower()
+
+
+def test_warm_up_gercek_sorguyu_calistirir(monkeypatch):
+    """warm_up, sunucu acilirken ilk kullaniciyi beklemeden embedding modelini
+    ve Chroma baglantisini yukler (bkz. market_tools.warm_up docstring'i)."""
+    fake = _FakeRetriever([])
+    monkeypatch.setattr(market_tools, "_get_retriever", lambda: fake)
+
+    calls: list[tuple[str, int]] = []
+    fake.retrieve = lambda query, top_k: calls.append((query, top_k))
+
+    market_tools.warm_up()
+
+    assert len(calls) == 1
+
+
+def test_warm_up_chroma_ayakta_degilse_cokmez(monkeypatch):
+    """Isitma sirasinda Chroma ayakta degilse sunucu yine de acilmali; ilk
+    gercek istek normal PROVIDER_UNAVAILABLE yolundan gecer."""
+
+    def patlat():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(market_tools, "_get_retriever", patlat)
+
+    market_tools.warm_up()  # istisna firlatmamali
