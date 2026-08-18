@@ -66,6 +66,11 @@ _PREFIX_MATCH_LEN = (
     4  # Türkçe çekim ekleri için (şirket/şirketin gibi) tam eşleşme yerine önek karşılaştırması
 )
 
+# Chroma'dan çekilecek en az aday sayısı (top_k'dan bağımsız): ham vektör
+# mesafesi doğru dokümanı her zaman ilk birkaç sıraya koymuyor (ölçümle
+# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır.
+_MIN_CANDIDATE_POOL = 20
+
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
 _TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"})
@@ -80,14 +85,35 @@ def _keywords(text: str) -> set[str]:
     return {t for t in tokens if len(t) >= _MIN_KEYWORD_LEN and t not in _STOPWORDS}
 
 
+# Bir sonucun "yeterince örtüşüyor" sayılması için sorgu kelimelerinin en az
+# yarısından FAZLASININ eşleşmesi gerekir (tam yarısı yetmez — bkz. altta).
+_MIN_KEYWORD_OVERLAP_RATIO = 0.5
+
+
+def _query_keyword_matches(qk: str, candidate_keywords: set[str]) -> bool:
+    prefix_len = min(len(qk), _PREFIX_MATCH_LEN)
+    qk_prefix = qk[:prefix_len]
+    return any(len(ck) >= prefix_len and ck[:prefix_len] == qk_prefix for ck in candidate_keywords)
+
+
 def _shares_a_keyword(query_keywords: set[str], candidate_keywords: set[str]) -> bool:
-    for qk in query_keywords:
-        prefix_len = min(len(qk), _PREFIX_MATCH_LEN)
-        qk_prefix = qk[:prefix_len]
-        for ck in candidate_keywords:
-            if len(ck) >= prefix_len and ck[:prefix_len] == qk_prefix:
-                return True
-    return False
+    """Gerçek verideki iki bulgu: "hisse", "çeyrek", "net kâr" gibi finans
+    jargonu neredeyse her dokümanda geçiyor. Tek bir ortak kelime yeterli
+    sayılırsa (eski davranış) alakasız bir sorgu ("Bitcoin fiyatı ne kadar")
+    salt "fiyat" kelimesi üzerinden bir analist raporuyla eşleşiyor; ya da iki
+    şirketin de "ikinci çeyrek net kâr açıkladı" gibi neredeyse aynı kalıpla
+    yazılmış bilançoları arasında, sorgudaki asıl şirket adı hiç eşleşmese
+    bile jenerik kelimeler üzerinden yanlış şirket kapıdan geçebiliyor
+    (ölçümle doğrulandı — gerçek THYAO/ASELSAN dokümanlarıyla test edildi).
+
+    Bu yüzden "en az yarısından fazlası eşleşsin" kuralı var: `> 0.5`, `>= 0.5`
+    değil — 2 kelimelik bir sorguda tek kelimenin (%50) eşleşmesi yetmemeli,
+    ikisinin de eşleşmesi gerekir; bu da "Bitcoin fiyatı" gibi sorguları
+    tek kelimeden (fiyat) geçirmeyi engeller."""
+    if not query_keywords:
+        return False
+    matched = sum(1 for qk in query_keywords if _query_keyword_matches(qk, candidate_keywords))
+    return matched / len(query_keywords) > _MIN_KEYWORD_OVERLAP_RATIO
 
 
 def _result_keywords(result: dict) -> set[str]:
@@ -98,6 +124,20 @@ def _result_keywords(result: dict) -> set[str]:
         if value:
             text = f"{text} {value}"
     return _keywords(text)
+
+
+def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
+    """İki farklı şirketin bilançosu neredeyse aynı jenerik kalıpla
+    yazıldığında ("ikinci çeyrek net kâr açıklandı") ikisi de aynı kelime-
+    örtüşme oranını alabiliyor (ölçümle doğrulandı: gerçek THYAO/ASELSAN
+    dokümanlarıyla). Bu durumda, sonucun KENDİ `sirket` alanı sorgudaki
+    kelimelerden biriyle eşleşiyorsa sıralamada öne alınır — jenerik içerik
+    kelimeleri değil, dokümanın ait olduğu şirketin kendisi tercih sebebidir."""
+    sirket = (result.get("metadata") or {}).get("sirket")
+    if not sirket:
+        return False
+    sirket_keywords = _keywords(str(sirket))
+    return any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords)
 
 
 def _build_where(
@@ -187,16 +227,28 @@ class Retriever:
         if not query_keywords:
             return []
 
+        # Chroma'dan istenen top_k'dan daha GENİŞ bir aday havuzu çekilir: ham
+        # vektör mesafesi doğru dokümanı ilk top_k'ya sokmayabiliyor (ör. iki
+        # şirketin bilançosu neredeyse aynı kalıpla yazıldığında yanlış şirket
+        # mesafece daha yakın çıkabiliyor — ölçümle doğrulandı). Süzme
+        # (mesafe eşiği + kelime örtüşmesi) bu geniş havuz üzerinde yapılır,
+        # sonra çağıranın istediği top_k'ya kesilir.
+        candidate_pool = max(top_k * 4, _MIN_CANDIDATE_POOL)
         where = _build_where(sirket, donem, donem_listesi, tur)
-        results = self._store.similarity_search(query, top_k=top_k, where=where)
+        results = self._store.similarity_search(query, top_k=candidate_pool, where=where)
 
-        return [
+        filtered = [
             r
             for r in results
             if r.get("distance", 1.0) <= settings.rag_distance_threshold
             and _shares_a_keyword(query_keywords, _result_keywords(r))
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
+        # Chroma zaten mesafeye göre sıralı döndürdüğü için stabil sort,
+        # kendi şirketi sorguyla eşleşen sonuçları öne alırken aynı grup
+        # içinde mesafe sırasını korur.
+        filtered.sort(key=lambda r: not _sirket_matches_query(r, query_keywords))
+        return filtered[:top_k]
 
     def answer(self, query: str, top_k: int | None = None) -> dict:
         """Doğrudan kullanım için: bul ya da 'bulunamadı' söyle. LLM'e ya da
