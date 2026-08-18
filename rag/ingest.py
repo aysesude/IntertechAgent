@@ -112,7 +112,13 @@ def main() -> int:
         logger.error("Hiçbir dosya ayrıştırılamadı.")
         return 1
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    # chunk_overlap=0: parçalar arası üst üste binme, sınırdaki bir başlığın
+    # (ör. "## Not") hem bir önceki hem bir sonraki parçada aynen tekrar
+    # etmesine yol açıyordu — ikisi de sonuca girip art arda eklenince aynı
+    # başlık iki kez görünüyordu (ölçümle doğrulandı). Dokümanlar zaten
+    # markdown başlıklarında bölündüğü için (RecursiveCharacterTextSplitter'ın
+    # varsayılan ayraçları) bağlam kaybı riski düşük.
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
     chunks = splitter.split_documents(documents)
     if not chunks:
         logger.error("Dokümanlar parçalanamadı.")

@@ -130,4 +130,11 @@ docker compose exec -w / api python -m rag.ingest
 
 ## Örnek
 
-`ornek-dokuman.md` dosyasına bak — kopyalayıp üzerine yazabilirsin.
+Bu klasördeki gerçek dokümanlardan birine bak (ör. bir `bilanco`
+dosyasını) — kopyalayıp üzerine yazabilirsin.
+
+**Sahte/şablon içerik bu klasöre eklenmemeli.** Daha önce burada bir
+`ornek-dokuman.md` şablonu vardı; gerçek dokümanlarla neredeyse aynı
+kalıpta yazıldığı için (aynı başlıklar, aynı üslup) RAG sorgularında
+gerçek şirket verisiyle karışıyordu — ölçümle doğrulandı, kaldırıldı.
+Format örneği için artık gerçek bir doküman kopyalanmalı.
