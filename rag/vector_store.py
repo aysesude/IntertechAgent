@@ -4,10 +4,35 @@ sadece burada yeni bir implementasyon eklenecek, çağıran kod değişmeyecek."
 import hashlib
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import cached_property
 from typing import Any
 
 from app.core.config import settings
+from app.core.exceptions import AppError, ProviderUnavailableError
+
+
+@contextmanager
+def _provider_errors(operation: str, target: str) -> Iterator[None]:
+    """Chroma'dan gelen her hatayı `ProviderUnavailableError`'a çevirir.
+
+    Sözleşme (docs/MCP-TOOLS.md §2) "dış kaynak yanıt vermiyor" durumunu
+    PROVIDER_UNAVAILABLE olarak zarfa yazmayı şart koşuyor ve ajanın bu kodda
+    zarif düşüş yapmasını bekliyor. Bunu tool'un istisna tiplerini tek tek
+    tanıması değil, sağlayıcı katmanının doğru istisnayı fırlatması sağlar:
+    `@tool_handler` `AppError` türevlerini otomatik eşliyor.
+
+    Yalnızca chromadb çağrılarını saran bloklarda kullanılır; kendi
+    `AppError`'larımız olduğu gibi geçer ki kod hatamız "kaynak erişilemiyor"
+    kılığına girmesin.
+    """
+    try:
+        yield
+    except AppError:
+        raise
+    except Exception as exc:
+        raise ProviderUnavailableError(f"Chroma {operation} failed at {target}: {exc}") from exc
 
 
 class VectorStore(ABC):
@@ -45,15 +70,23 @@ class ChromaVectorStore(VectorStore):
         import chromadb
         from chromadb.utils import embedding_functions
 
-        client = chromadb.HttpClient(host=self._host, port=self._port)
-        embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=self._embedding_model
-        )
-        return client.get_or_create_collection(
-            name=self._collection_name,
-            embedding_function=embedding_fn,
-            metadata={"hnsw:space": "cosine"},
-        )
+        # Hata durumunda cached_property değeri saklamaz; sonraki çağrı yeniden
+        # dener. Chroma geç ayağa kalktıysa süreç yeniden başlatılmadan toparlar.
+        with _provider_errors("connection", self._target):
+            client = chromadb.HttpClient(host=self._host, port=self._port)
+            embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name=self._embedding_model
+            )
+            return client.get_or_create_collection(
+                name=self._collection_name,
+                embedding_function=embedding_fn,
+                metadata={"hnsw:space": "cosine"},
+            )
+
+    @property
+    def _target(self) -> str:
+        """Log ve istisna metni için bağlantı adresi. Kullanıcıya gitmez."""
+        return f"{self._host}:{self._port}"
 
     @staticmethod
     def _make_id(document: str, metadata: dict[str, Any]) -> str:
@@ -66,14 +99,16 @@ class ChromaVectorStore(VectorStore):
         if not documents:
             return
         ids = [self._make_id(doc, meta) for doc, meta in zip(documents, metadatas)]
-        self._collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
+        with _provider_errors("upsert", self._target):
+            self._collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
 
     def similarity_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        count = self._collection.count()
-        if count == 0:
-            return []
+        with _provider_errors("query", self._target):
+            count = self._collection.count()
+            if count == 0:
+                return []
 
-        result = self._collection.query(query_texts=[query], n_results=min(top_k, count))
+            result = self._collection.query(query_texts=[query], n_results=min(top_k, count))
         docs = result.get("documents") or [[]]
         metadatas = result.get("metadatas") or [[]]
         distances = result.get("distances") or [[]]
