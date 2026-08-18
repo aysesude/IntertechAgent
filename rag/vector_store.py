@@ -12,7 +12,9 @@ from app.core.config import settings
 
 class VectorStore(ABC):
     @abstractmethod
-    def add_documents(self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+    def add_documents(
+        self, documents: list[str], metadatas: list[dict[str, Any]]
+    ) -> None:
         """Doküman parçalarını (chunk) embedding'leriyle birlikte saklar."""
 
     @abstractmethod
@@ -59,10 +61,14 @@ class ChromaVectorStore(VectorStore):
     def _make_id(document: str, metadata: dict[str, Any]) -> str:
         """Aynı içerik + metadata her zaman aynı id'yi üretir, böylece
         `upsert` yeniden çalıştırmada kopya değil güncelleme yapar (idempotent)."""
-        meta_repr = json.dumps(metadata, sort_keys=True, ensure_ascii=False, default=str)
-        return hashlib.sha256(f"{meta_repr}::{document}".encode("utf-8")).hexdigest()
+        meta_repr = json.dumps(
+            metadata, sort_keys=True, ensure_ascii=False, default=str
+        )
+        return hashlib.sha256(f"{meta_repr}::{document}".encode()).hexdigest()
 
-    def add_documents(self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+    def add_documents(
+        self, documents: list[str], metadatas: list[dict[str, Any]]
+    ) -> None:
         if not documents:
             return
         ids = [self._make_id(doc, meta) for doc, meta in zip(documents, metadatas)]
@@ -73,7 +79,9 @@ class ChromaVectorStore(VectorStore):
         if count == 0:
             return []
 
-        result = self._collection.query(query_texts=[query], n_results=min(top_k, count))
+        result = self._collection.query(
+            query_texts=[query], n_results=min(top_k, count)
+        )
         docs = result.get("documents") or [[]]
         metadatas = result.get("metadatas") or [[]]
         distances = result.get("distances") or [[]]

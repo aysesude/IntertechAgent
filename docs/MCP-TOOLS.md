@@ -140,7 +140,7 @@ Her çağrı için tek satır, `@tool_handler` yazar:
 
 ```
 [MCP] tool=get_portfolio_summary sonuc=OK sure_ms=41 arg=user_id=6f1a...
-[MCP] tool=search_market_news sonuc=TIMEOUT sure_ms=60002 arg=query=enflasyon..., session_id=...
+[MCP] tool=search_market_news sonuc=TIMEOUT sure_ms=60002 arg=query=enflasyon..., top_k=5
 ```
 
 Hata yollarında ayrıca bir `WARNING`/`ERROR` satırı düşer ve **iç metin oraya**

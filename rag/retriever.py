@@ -14,20 +14,53 @@ kelime paylaşırsa "bulundu" sayılır."""
 import re
 
 from app.core.config import settings
+
 from rag.vector_store import VectorStore, get_vector_store
 
-NOT_FOUND_MESSAGE = "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı."
+NOT_FOUND_MESSAGE = (
+    "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı."
+)
 
 # Kelime örtüşmesi kontrolünde göz ardı edilecek, ayırt edici olmayan Türkçe
 # kelimeler (aksansız/ASCII-katlanmış halleriyle — bkz. _normalize). Bunlar
 # olmasaydı "ne kadar", "hakkında" gibi hemen her sorguda geçen kelimeler,
 # alakasız dokümanlarla bile sahte örtüşme yaratırdı.
 _STOPWORDS = {
-    "ve", "veya", "ile", "bir", "bu", "su", "o", "de", "da",
-    "mi", "mu", "midir",
-    "ne", "kadar", "icin", "gibi", "cok", "az", "en", "daha",
-    "olan", "olarak", "gore", "kac", "hangi", "nasil", "nedir",
-    "hakkinda", "bilgi", "haber", "lutfen", "acaba", "son", "var", "yok",
+    "ve",
+    "veya",
+    "ile",
+    "bir",
+    "bu",
+    "su",
+    "o",
+    "de",
+    "da",
+    "mi",
+    "mu",
+    "midir",
+    "ne",
+    "kadar",
+    "icin",
+    "gibi",
+    "cok",
+    "az",
+    "en",
+    "daha",
+    "olan",
+    "olarak",
+    "gore",
+    "kac",
+    "hangi",
+    "nasil",
+    "nedir",
+    "hakkinda",
+    "bilgi",
+    "haber",
+    "lutfen",
+    "acaba",
+    "son",
+    "var",
+    "yok",
 }
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)

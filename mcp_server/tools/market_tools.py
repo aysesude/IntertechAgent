@@ -15,9 +15,9 @@ import logging
 from typing import Any
 
 import anyio.to_thread
+from app.core.config import settings
 from fastmcp import FastMCP
 
-from app.core.config import settings
 from mcp_server.tools._base import ToolErrorCode, ToolFailure, tool_handler
 from rag.retriever import NOT_FOUND_MESSAGE, Retriever
 
@@ -36,7 +36,9 @@ def _get_retriever() -> Retriever:
     dahil) donar."""
     global _retriever
     if _retriever is None:
-        logger.info("RAG retriever hazırlanıyor (embedding modeli + Chroma bağlantısı)...")
+        logger.info(
+            "RAG retriever hazırlanıyor (embedding modeli + Chroma bağlantısı)..."
+        )
         _retriever = Retriever()
         logger.info("RAG retriever hazır.")
     return _retriever
@@ -56,7 +58,7 @@ def register(mcp: FastMCP) -> list[str]:
 
         Ne zaman kullanılmaz: kullanıcının kendi portföyüne ait sorular
         (get_portfolio_summary), kendi riskine ait sorular
-        (get_risk_assessment), güncel fiyat sorgusu (get_market_snapshot).
+        (get_risk_assessment).
 
         Args:
             query: Kullanıcının piyasa/haber sorusu (Türkçe, serbest metin).
