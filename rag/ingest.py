@@ -98,11 +98,15 @@ def main() -> int:
     dosyalar = sorted(p for p in DOCUMENTS_DIR.glob("*.md") if p.name.lower() not in {"readme.md"})
 
     if not dosyalar:
-        logger.error(
-            "İşlenecek doküman yok. data/documents/ klasörüne .md dosyaları ekleyin "
-            "(format için o klasördeki README.md dosyasına bakın)."
+        # Bilinçli olarak 0 dönüyoruz: doküman eklenmemiş olması bir HATA değil,
+        # yalnızca yapılacak iş olmaması. Bu ayrım kritik — deploy script'i artık
+        # hataları `|| true` ile yutmak zorunda değil, dolayısıyla gerçek bir
+        # ingest çökmesi deploy'u kırar ve görünür olur.
+        logger.warning(
+            "İşlenecek doküman yok, atlanıyor. data/documents/ klasörüne .md "
+            "dosyaları ekleyin (format için o klasördeki README.md dosyasına bakın)."
         )
-        return 1
+        return 0
 
     logger.info("%d dosya bulundu.", len(dosyalar))
 

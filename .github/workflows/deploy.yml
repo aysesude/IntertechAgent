@@ -64,6 +64,21 @@ jobs:
             echo "--> Sema gocu"
             $COMPOSE exec -T api alembic upgrade head
 
+            echo "--> RAG dokumanlari indeksleniyor"
+            # data/documents/ altina yeni bir .md eklendiginde Chroma'nin da
+            # guncellenmesi gerekiyor; aksi halde deploy gecer ama Piyasa Ajani
+            # yeni dokumani goremez.
+            #
+            # Idempotent: ayni icerikli parcalar atlanir, tekrar calistirmak
+            # zararsiz.
+            #
+            # `|| true` / `|| echo` YOK ve eklenmemeli. Bir kez `|| echo ...` ile
+            # yazilmisti; ingest sessizce cokerken deploy yesil kaldi ve RAG'in
+            # neden bos oldugunu bulmak saatler aldi. Dokuman yoksa ingest artik
+            # 0 donuyor (bkz. rag/ingest.py), dolayisiyla buraya dusen her hata
+            # GERCEK bir hatadir ve deploy'u kirmalidir.
+            $COMPOSE exec -T -w / api python -m rag.ingest
+
             echo "--> Saglik kontrolu"
             for i in $(seq 1 18); do
               KOD=$(curl -s -o /dev/null -w "%{http_code}" \
