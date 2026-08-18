@@ -85,8 +85,8 @@ anlamı yanlış" durumlar içindir.
 - Para/fiyat servis katmanında `Decimal`; JSON'a giderken float
   (`app/schemas/portfolio.py::Money` kalıbı). Tarihler ISO 8601 string.
 - **Tool hesap yapmaz, SQL yazmaz.** Yalnızca `app/services/*` çağırır.
-  (Bugünkü tek istisna `market_tools`'un RAG pipeline'ını çağırması; pipeline
-  getirme/üretim olarak ikiye ayrılınca düzelecek.)
+  (Bugünkü tek istisna `market_tools`'un `rag/retriever.py` üzerinden Chroma'yı
+  çağırması — saf getirme, LLM/hesap yok, bu yüzden servis katmanı gerekmiyor.)
 - Tool çıktısına "Bu bir yatırım tavsiyesi değildir" **gömülmez**; sorumluluk
   reddi sunum katmanının işidir (CLAUDE.md).
 
@@ -140,7 +140,7 @@ Her çağrı için tek satır, `@tool_handler` yazar:
 
 ```
 [MCP] tool=get_portfolio_summary sonuc=OK sure_ms=41 arg=user_id=6f1a...
-[MCP] tool=search_market_news sonuc=TIMEOUT sure_ms=60002 arg=query=enflasyon..., session_id=...
+[MCP] tool=search_market_news sonuc=TIMEOUT sure_ms=60002 arg=query=enflasyon..., top_k=5
 ```
 
 Hata yollarında ayrıca bir `WARNING`/`ERROR` satırı düşer ve **iç metin oraya**
@@ -252,6 +252,3 @@ Testler `.venv` ile Docker'sız da koşar: `pytest -q` (SQLite üzerinde).
   yeni `Client` açıyor ve süre sınırı vermiyor; sunucu hiç yanıt vermezse ajan
   asılı kalır. MCP bağlantı havuzuyla birlikte "çoklu ajan ortamı" görevinde.
 - **Ajan başına tool yetkisi yok** (AK 5.4) — her ajan her tool'u çağırabilir.
-- **RAG getirme/üretim ayrımı yok**: `search_market_news` ham doküman yerine
-  üretilmiş metin döndürüyor, dolayısıyla kaynak izlenebilirliği (AK 5.11) tool
-  seviyesinde henüz sağlanmıyor.

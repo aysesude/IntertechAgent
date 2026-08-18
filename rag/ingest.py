@@ -16,6 +16,7 @@ from pathlib import Path
 
 import yaml
 from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -88,17 +89,24 @@ def main() -> int:
         logger.error("Hiçbir dosya ayrıştırılamadı.")
         return 1
 
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = splitter.split_documents(documents)
+    if not chunks:
+        logger.error("Dokümanlar parçalanamadı.")
+        return 1
+
     # Import burada: embedding modelinin yüklenmesi birkaç saniye sürüyor,
     # dosya doğrulaması başarısızsa boşuna beklemeyelim.
-    from rag.pipeline import FinancialRAGAssistant
+    from rag.vector_store import get_vector_store
 
-    logger.info("RAG asistanı yükleniyor...")
-    assistant = FinancialRAGAssistant()
+    logger.info("%d parça vektör veritabanına işleniyor...", len(chunks))
+    store = get_vector_store()
+    store.add_documents(
+        documents=[c.page_content for c in chunks],
+        metadatas=[c.metadata for c in chunks],
+    )
 
-    logger.info("%d doküman işleniyor...", len(documents))
-    assistant.ingest_live_data(documents)
-
-    logger.info("Bitti. Toplam parça sayısı: %d", len(assistant.all_chunks))
+    logger.info("Bitti. Toplam parça sayısı: %d", len(chunks))
     return 0
 
 
