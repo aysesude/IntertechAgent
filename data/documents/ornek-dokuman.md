@@ -5,6 +5,8 @@ kaynak_url: https://www.kap.org.tr/tr/Bildirim/0000000
 tarih: 2026-07-28
 sirket: ORNEK
 tur: bilanco
+donem: 2026-Q2
+konsolide_mi: true
 dil: tr
 ---
 
@@ -45,4 +47,6 @@ seyretti.
 
 Yukarıdaki veriler tamamen kurgusaldır ve yalnızca doküman formatını
 göstermek amacıyla üretilmiştir. Gerçek dokümanlarda kaynak belirtilmeli ve
-sayılar orijinal bildirimle birebir örtüşmelidir.
+sayılar orijinal bildirimle birebir örtüşmelidir. `donem` ve `konsolide_mi`
+alanları yalnızca `tur: bilanco` dokümanlarında zorunludur (bkz. README.md);
+`tur: haber` gibi diğer türlerde boş bırakılabilir.

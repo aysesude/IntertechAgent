@@ -43,4 +43,11 @@ register_all(mcp)
 
 
 if __name__ == "__main__":
+    # RAG'ın embedding modeli + Chroma bağlantısı ilk kullanımda ~30-60 sn
+    # sürüyor; burada ısıtılmazsa bu süre ilk kullanıcının sorgusuna biner ve
+    # istemci tarafı zaman aşımı olmadığı için istek sessizce kesilir (bkz.
+    # market_tools.warm_up docstring'i). Deploy sağlık kontrolü zaten 90 sn'ye
+    # kadar toleranslı (bkz. .github/workflows/deploy.yml), bu süre onu aşmaz.
+    logger.info("[MCP] RAG isitiliyor (embedding modeli + Chroma baglantisi)...")
+    market_tools.warm_up()
     mcp.run(transport="http", host=settings.mcp_server_host, port=settings.mcp_server_port)

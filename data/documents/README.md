@@ -22,6 +22,8 @@ kaynak_url: https://www.kap.org.tr/tr/Bildirim/1234567
 tarih: 2026-07-28
 sirket: ASELS
 tur: bilanco
+donem: 2026-Q2
+konsolide_mi: true
 dil: tr
 ---
 
@@ -41,6 +43,8 @@ tablolar kullanılabilir.
 | `tarih` | Evet | `YYYY-AA-GG` formatında. Ajan "son çeyrek" gibi soruları buna göre filtreler |
 | `sirket` | Hayır | Borsa kodu (`ASELS`, `THYAO`). Genel piyasa haberlerinde boş bırakılır |
 | `tur` | Evet | `haber` · `bilanco` · `analiz` · `duyuru` · `makro` |
+| `donem` | `tur: bilanco` ise Evet | `YYYY-Qn` formatında (ör. `2026-Q2`). Hangi çeyreğe ait olduğunu deterministik filtreler için işaretler — eksikse "yanlış çeyrek döndürme" riskine karşı korunamaz |
+| `konsolide_mi` | `tur: bilanco` ise Evet | `true`/`false`. Solo ile konsolide tablo aynı çeyrekte farklı rakamlar verir; hangisi olduğu belirsizse karıştırılabilir |
 | `dil` | Evet | `tr` veya `en` |
 
 ---
@@ -115,11 +119,11 @@ git push -u origin feature/dokuman-ekleme
 
 Sonra `test`'e PR aç. Merge edilince sunucuya otomatik gider.
 
-RAG pipeline hazır olduğunda dokümanlar şu komutla vektör veritabanına
-yüklenecek:
+Merge sonrası (veya kendi lokalinde) dokümanlar şu komutla vektör
+veritabanına işlenir — tekrar çalıştırmak güvenlidir, kopya yaratmaz:
 
 ```bash
-docker compose -p finans-test exec -w / api python -m rag.ingest
+docker compose exec -w / api python -m rag.ingest
 ```
 
 ---

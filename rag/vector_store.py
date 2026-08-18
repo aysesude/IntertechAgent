@@ -41,8 +41,15 @@ class VectorStore(ABC):
         """Doküman parçalarını (chunk) embedding'leriyle birlikte saklar."""
 
     @abstractmethod
-    def similarity_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """Sorguya en yakın doküman parçalarını döndürür."""
+    def similarity_search(
+        self, query: str, top_k: int = 5, where: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """Sorguya en yakın doküman parçalarını döndürür.
+
+        `where` verilirse (Chroma metadata filtre sözdizimi), arama uzayı
+        vektör benzerliği hesaplanmadan ÖNCE bu filtreyle daraltılır —
+        benzerlik aramasının yapısal olarak dönem/şirket karıştırmasını
+        önlemesi için (bkz. rag/retriever.py ön filtre)."""
 
 
 class ChromaVectorStore(VectorStore):
@@ -102,13 +109,17 @@ class ChromaVectorStore(VectorStore):
         with _provider_errors("upsert", self._target):
             self._collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
 
-    def similarity_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+    def similarity_search(
+        self, query: str, top_k: int = 5, where: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         with _provider_errors("query", self._target):
             count = self._collection.count()
             if count == 0:
                 return []
 
-            result = self._collection.query(query_texts=[query], n_results=min(top_k, count))
+            result = self._collection.query(
+                query_texts=[query], n_results=min(top_k, count), where=where or None
+            )
         docs = result.get("documents") or [[]]
         metadatas = result.get("metadatas") or [[]]
         distances = result.get("distances") or [[]]

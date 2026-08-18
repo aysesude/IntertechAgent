@@ -42,6 +42,28 @@ def _get_retriever() -> Retriever:
     return _retriever
 
 
+def warm_up() -> None:
+    """Sunucu AÇILIRKEN (ilk kullanıcı sorgusundan önce) bir kez çağrılır:
+    embedding modelini ve Chroma bağlantısını önceden yükler.
+
+    Neden gerekli: bu yükleme ~30-60 saniye sürüyor. Isıtma olmadan bu süre
+    ilk kullanıcının sorgusuna biniyor; `agents/base.py::call_mcp_tool`'da
+    istemci tarafı zaman aşımı olmadığı için (docs/MCP-TOOLS.md §10) istek
+    ne hata ne yanıt döner — SSE bağlantısı çoğunlukla ara sunucu/tarayıcı
+    tarafından süresi dolmuş sayılıp sessizce kesilir, kullanıcı "hiç yanıt
+    gelmedi" görür (ölçümle doğrulandı).
+
+    Chroma bu sırada ayakta değilse hata yutulur: sunucu yine de açılır,
+    ilk gerçek istek normal hata yolundan (PROVIDER_UNAVAILABLE) geçer —
+    ısıtma bir gereklilik değil, bir optimizasyondur."""
+    try:
+        retriever = _get_retriever()
+        retriever.retrieve("ısınma sorgusu", top_k=1)
+        logger.info("RAG isinma sorgusu tamamlandi.")
+    except Exception:
+        logger.exception("RAG isinma sorgusu basarisiz (Chroma ayakta olmayabilir)")
+
+
 def register(mcp: FastMCP) -> list[str]:
     @mcp.tool(name="search_market_news")
     @tool_handler(timeout=settings.mcp_tool_timeout_rag)
@@ -71,8 +93,15 @@ def register(mcp: FastMCP) -> list[str]:
             (sözleşme §2; `rag/vector_store.py` `ProviderUnavailableError`
             fırlatır, `@tool_handler` otomatik eşler).
         """
-        retriever = await anyio.to_thread.run_sync(_get_retriever)
-        results = await anyio.to_thread.run_sync(retriever.retrieve, query, top_k)
+        # abandon_on_cancel=True: @tool_handler'daki settings.mcp_tool_timeout_rag
+        # süresi dolunca çağıran taraf beklemeden TIMEOUT alsın. Bu olmadan
+        # anyio, thread bitene kadar iptali erteliyor — 60 sn'lik zaman aşımı
+        # ısınmamış (soğuk) bir yüklemede fiilen işlemiyordu (ölçümle
+        # doğrulandı: bir istek 106 sn sürüp yine de "OK" döndü).
+        retriever = await anyio.to_thread.run_sync(_get_retriever, abandon_on_cancel=True)
+        results = await anyio.to_thread.run_sync(
+            retriever.retrieve, query, top_k, abandon_on_cancel=True
+        )
 
         if not results:
             raise ToolFailure(ToolErrorCode.NOT_FOUND, NOT_FOUND_MESSAGE)
