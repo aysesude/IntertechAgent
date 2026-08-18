@@ -133,14 +133,20 @@ class Settings(BaseSettings):
     chat_context_message_limit: int = 10
 
     # --- RAG ---
-    # Chroma'nın kalıcı dosyalarını tuttuğu dizin. Konteyner içindeki mutlak yol
-    # verilmeli; göreli yol çalışma dizinine göre değişir ve MCP sunucusu ile API
-    # farklı dizinlerden başlatıldığı için tutarsızlık üretir.
-    rag_persist_directory: str = "/data/chroma_db"
     rag_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    rag_company_mappings_path: str = "/data/company_mappings.json"
     # Kaç doküman parçası getirilecek.
     rag_top_k: int = 3
+    # Chroma cosine mesafesi (0 = birebir, 2 = alakasız). Bu eşiğin üzerindeki
+    # sonuçlar "alakasız" sayılıp elenir — RAG'ın LLM'siz "veri var/yok" kararını
+    # bu eşik verir.
+    #
+    # paraphrase-multilingual-MiniLM-L12-v2 için tek örnek dokümanla ölçülen
+    # gerçek değerler: alakalı sorgu ~0.82-0.84, alakasız sorgu ~0.86-0.90
+    # (bkz. data/documents/ornek-dokuman.md). 0.85 bu ikisini ayırıyor ama tek
+    # dokümanlık bir örnekleme — hedef 30-50 dokümanlık gerçek külliyat
+    # yüklenince (docs/AGENTS.md) bu değeri gerçek sorgularla yeniden kalibre
+    # edin.
+    rag_distance_threshold: float = 0.85
 
     # --- Veri katmanı ---
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi

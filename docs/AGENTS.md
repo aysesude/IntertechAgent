@@ -34,11 +34,18 @@ class AgentResponse(BaseModel):
    **Sayısal hiçbir değer LLM tarafından üretilmez** — LLM sadece tool'dan
    gelen veriyi Türkçe anlatıya döker.
 
-## Market / Risk Ajanları — iskelet
+## Piyasa Araştırma Ajanı (`agents/market_agent.py`) — çalışıyor
 
-`agents/market_agent.py`, `agents/risk_agent.py`: `BaseAgent`'i implement
-eder, `execute()` gövdesi `NotImplementedError`. Karşılık gelen MCP tool'ları
-(`search_market_news`, `get_risk_assessment`) de aynı şekilde iskelet.
+`search_market_news` MCP tool'unu çağırır. Tool saf DB tabanlı RAG'dır (LLM
+yok, internetten canlı veri çekmez); ajan da üstüne LLM'e gitmez, tool'dan
+gelen doküman parçalarını ya da "bulunamadı" mesajını olduğu gibi
+`summary_text`'e taşır.
+
+## Risk Ajanı — iskelet
+
+`agents/risk_agent.py`: `BaseAgent`'i implement eder, `execute()` gövdesi
+`NotImplementedError`. Karşılık gelen MCP tool'u (`get_risk_assessment`) de
+aynı şekilde iskelet.
 
 Risk eşikleri (volatilite, yoğunlaşma limitleri vb.) tanımları kullanıcıyla
 netleştirilmeden `app/core/config.py`'ye eklenmedi — bkz. oradaki TODO notu.

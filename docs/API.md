@@ -103,7 +103,19 @@ Girdi:  { "user_id": "<UUID>" }
 `user_id` geçersiz UUID ise tool çağrılmadan otomatik `ValidationError` fırlar
 (pydantic, tip anotasyonundan üretilen JSON şemasıyla).
 
+### `search_market_news` (çalışıyor)
+
+```
+Girdi:  { "query": "...", "top_k": 5 }
+Çıktı (başarı): { "success": true, "data": { "found": bool, "message": str | null,
+                  "results": [{ "content": "...", "metadata": {...}, "distance": 0.0 }, ...] } }
+Çıktı (hata):   { "success": false, "error": { "code": "RAG_ERROR", "message": "..." } }
+```
+Saf DB tabanlı arama: LLM yanıt üretmez, internetten canlı veri çekmez.
+`data/documents/` altındaki dokümanlar `python -m rag.ingest` ile Chroma'ya
+yüklenir; sorguya `rag_distance_threshold` (bkz. `app/core/config.py`) altında
+kalan bir sonuç yoksa `found: false` ve bulunamadı mesajı döner.
+
 ### İskelet tool'lar (`NotImplementedError`)
 
-- `search_market_news(query: str, top_k: int = 5)` — `mcp_server/tools/market_tools.py`
 - `get_risk_assessment(user_id: str)` — `mcp_server/tools/risk_tools.py`
