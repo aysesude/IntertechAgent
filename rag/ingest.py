@@ -27,6 +27,19 @@ DOCUMENTS_DIR = Path("/data/documents")
 _FRONT_MATTER_SINIRI = "---"
 
 
+def _chroma_deger(v: object) -> str | int | float | bool:
+    """Chroma metadata değerleri yalnızca str/int/float/bool kabul eder.
+    `datetime.date` gibi (YAML'ın `tarih: 2026-07-28` satırından ürettiği)
+    diğer tipler metne çevrilir; str/int/float/bool olduğu gibi kalır — bool'u
+    string'e çevirmek "true" filtresinin "True" metniyle eşleşmemesine yol
+    açar (bkz. rag/retriever.py `where` filtresi)."""
+    if v is None:
+        return ""
+    if isinstance(v, str | int | float | bool):
+        return v
+    return str(v)
+
+
 def _parse_document(path: Path) -> Document | None:
     """Bir markdown dosyasını front matter + içerik olarak ayrıştırır."""
     raw = path.read_text(encoding="utf-8")
@@ -51,18 +64,26 @@ def _parse_document(path: Path) -> Document | None:
         logger.warning("%s: içerik boş, atlanıyor", path.name)
         return None
 
-    # Chroma metadata değerleri yalnızca basit tip kabul eder, bu yüzden hepsini
-    # metne çeviriyoruz.
-    #
-    # `tarih: 2026-07-28` gibi bir satırı YAML otomatik olarak `datetime.date`
-    # nesnesine çeviriyor. Önceki sürüm yalnızca str/int/float/bool kabul ettiği
-    # için tarih alanı sessizce düşüyor ve "zorunlu alan eksik" uyarısı çıkıyordu.
-    temiz_metadata = {k: ("" if v is None else str(v)) for k, v in metadata.items()}
+    temiz_metadata = {k: _chroma_deger(v) for k, v in metadata.items()}
     temiz_metadata["dosya"] = path.name
 
     eksik = [alan for alan in ("baslik", "tarih", "tur") if not temiz_metadata.get(alan)]
     if eksik:
         logger.warning("%s: zorunlu alan(lar) eksik: %s", path.name, ", ".join(eksik))
+
+    # Bilanço/finansal sonuç dokümanları sayısal değer taşır; hangi çeyreğe ve
+    # solo/konsolide hangi tabloya ait olduğu belirsizse "dönem karıştırma"
+    # riskini deterministik filtrelerle kapatamayız (bkz. rag/retriever.py).
+    if temiz_metadata.get("tur") == "bilanco":
+        bilanco_eksik = [
+            alan for alan in ("donem", "konsolide_mi") if temiz_metadata.get(alan, "") == ""
+        ]
+        if bilanco_eksik:
+            logger.warning(
+                "%s: tur=bilanco için zorunlu alan(lar) eksik: %s",
+                path.name,
+                ", ".join(bilanco_eksik),
+            )
 
     return Document(page_content=content, metadata=temiz_metadata)
 

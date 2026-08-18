@@ -100,15 +100,85 @@ def _result_keywords(result: dict) -> set[str]:
     return _keywords(text)
 
 
+def _build_where(
+    sirket: str | None, donem: str | None, donem_listesi: list[str] | None, tur: str | None
+) -> dict | None:
+    """Chroma metadata filtresi üretir. Şirket/dönem/tür verilirse arama uzayı
+    vektör benzerliği hesaplanmadan ÖNCE daraltılır — bu, benzerlik aramasının
+    yapısal olarak yanlış şirket/dönem döndürmesini engeller (post-filter tek
+    başına yeterli değil: ilk top_k sonucun tamamı yanlış şirketten gelebilir
+    ve gerçek eşleşme hiç görünmeyebilir)."""
+    if donem and donem_listesi:
+        raise ValueError("donem ve donem_listesi birlikte verilemez")
+
+    kosullar = []
+    if sirket:
+        kosullar.append({"sirket": sirket})
+    if donem:
+        kosullar.append({"donem": donem})
+    if donem_listesi:
+        kosullar.append({"donem": {"$in": donem_listesi}})
+    if tur:
+        kosullar.append({"tur": tur})
+
+    if not kosullar:
+        return None
+    if len(kosullar) == 1:
+        return kosullar[0]
+    return {"$and": kosullar}
+
+
+def _matches_filters(
+    result: dict,
+    sirket: str | None,
+    donem: str | None,
+    donem_listesi: list[str] | None,
+    tur: str | None,
+) -> bool:
+    """Son filtre: Chroma'nın `where`'i doğru uyguladığını varsaymak yerine
+    dönen sonucu istenen alanlara karşı tekrar doğrular (bkz. Market Research
+    Ajanı tasarımındaki "son filtre" adımı — vektör aramasının yapısal olarak
+    engelleyemediği yanılsamalara karşı ikinci bir savunma hattı)."""
+    metadata = result.get("metadata") or {}
+    if sirket and metadata.get("sirket") != sirket:
+        return False
+    if donem and metadata.get("donem") != donem:
+        return False
+    if donem_listesi and metadata.get("donem") not in donem_listesi:
+        return False
+    if tur and metadata.get("tur") != tur:
+        return False
+    return True
+
+
 class Retriever:
     def __init__(self, store: VectorStore | None = None) -> None:
         self._store = store or get_vector_store()
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, str]]:
-        """Sorguya en yakın doküman parçalarını döndürür. Bir sonuç ancak hem
-        Chroma mesafesi `settings.rag_distance_threshold` altındaysa HEM DE
-        sorguyla en az bir anlamlı kelime paylaşıyorsa döner. İkisi de
-        sağlanmazsa boş liste döner."""
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        *,
+        sirket: str | None = None,
+        donem: str | None = None,
+        donem_listesi: list[str] | None = None,
+        tur: str | None = None,
+    ) -> list[dict[str, str]]:
+        """Sorguya en yakın doküman parçalarını döndürür.
+
+        `sirket`/`donem`/`donem_listesi`/`tur` verilirse deterministik
+        filtre olarak uygulanır (hem arama uzayını daraltan ön filtre, hem
+        dönen sonucu doğrulayan son filtre) — serbest metin benzerliğinin
+        yanlış şirket/dönem döndürmesi yapısal olarak engellenir. Bu alanlar
+        `None` bırakılırsa (bugünkü tek çağıran, search_market_news, hep
+        böyle çağırır) davranış öncekiyle aynıdır: yalnızca serbest metin
+        araması + mesafe/kelime örtüşmesi kontrolü.
+
+        Bir sonuç ancak hem Chroma mesafesi `settings.rag_distance_threshold`
+        altındaysa HEM DE sorguyla en az bir anlamlı kelime paylaşıyorsa (ya
+        da yapılandırılmış filtrelerle geldiyse) döner. Hiçbiri sağlanmazsa
+        boş liste döner."""
         query = query.strip()
         if not query:
             return []
@@ -117,12 +187,15 @@ class Retriever:
         if not query_keywords:
             return []
 
-        results = self._store.similarity_search(query, top_k=top_k)
+        where = _build_where(sirket, donem, donem_listesi, tur)
+        results = self._store.similarity_search(query, top_k=top_k, where=where)
+
         return [
             r
             for r in results
             if r.get("distance", 1.0) <= settings.rag_distance_threshold
             and _shares_a_keyword(query_keywords, _result_keywords(r))
+            and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
 
     def answer(self, query: str, top_k: int | None = None) -> dict:
