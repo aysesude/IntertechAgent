@@ -27,16 +27,40 @@ class AssetClass(str, Enum):
 class RiskProfile(str, Enum):
     CONSERVATIVE = "conservative"
     BALANCED = "balanced"
+    GROWTH = "growth"
     AGGRESSIVE = "aggressive"
 
 
 class RiskLevel(str, Enum):
-    """Hesaplanan risk skorunun (0-100) kullanıcıya gösterilen etiketi
-    (bkz. Settings.risk_score_low_max / risk_score_medium_max)."""
+    """Yıllık portföy volatilitesinden (kategori bazlı kovaryans hesabından)
+    türetilen 7 kademeli risk etiketi (bkz. RISK_LEVEL_VOLATILITY_UPPER_BOUNDS).
 
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    Eski 3 kademeli (low/medium/high) kompozit skor sistemi kaldırıldı: risk
+    seviyesi artık yalnızca volatiliteden gelir, yoğunlaşma/çeşitlendirme gibi
+    ölçütler skora karışmaz — onlar risk_service.py'de yalnızca kök neden
+    teşhisinde (risk neden yüksek çıktı) kullanılır."""
+
+    VERY_LOW = "very_low"  # Çok Düşük
+    LOW = "low"  # Düşük
+    LOW_MEDIUM = "low_medium"  # Düşük-Orta
+    MEDIUM = "medium"  # Orta
+    MEDIUM_HIGH = "medium_high"  # Orta-Yüksek
+    HIGH = "high"  # Yüksek
+    VERY_HIGH = "very_high"  # Çok Yüksek
+
+
+# Yıllık portföy volatilitesi (oran, 0.05 = %5) -> risk seviyesi. Üst sınıra
+# kadar dahildir (tam %5 -> VERY_LOW). Listedeki son sınırın (0.40) üzerindeki
+# her volatilite VERY_HIGH sayılır. Analist notu: bu tablo değiştiğinde
+# risk_service.py'ye dokunmaya gerek yok.
+RISK_LEVEL_VOLATILITY_UPPER_BOUNDS: list[tuple[Decimal, RiskLevel]] = [
+    (Decimal("0.05"), RiskLevel.VERY_LOW),
+    (Decimal("0.10"), RiskLevel.LOW),
+    (Decimal("0.15"), RiskLevel.LOW_MEDIUM),
+    (Decimal("0.20"), RiskLevel.MEDIUM),
+    (Decimal("0.30"), RiskLevel.MEDIUM_HIGH),
+    (Decimal("0.40"), RiskLevel.HIGH),
+]
 
 
 class PriceSource(str, Enum):
@@ -115,6 +139,124 @@ for _profile, _targets in RISK_PROFILE_TARGET_ALLOCATION.items():
         raise ValueError(
             f"RISK_PROFILE_TARGET_ALLOCATION[{_profile.value}] toplami 100 olmali, "
             f"su an {sum(_targets.values())}."
+        )
+# ANALİST NOTU: RISK_PROFILE_TARGET_ALLOCATION yalnızca eski basit "hedef % -
+# mevcut %" yeniden dengeleme yolunun kalıntısı; yeni senaryo motoru
+# (Aksiyon A/B/C) devreye girince bu tablo ve onu kullanan
+# risk_service._rebalance_actions kaldırılacak. Bilerek Büyüme profiline
+# genişletilmedi.
+
+
+# --- Senaryo üretimi kısıtları (profil bağımlı) ---
+# Analist notu: tüm değerler Risk/Strateji Ajanı belgesindeki tablolarla
+# birebir aynıdır (Korumacı/Dengeli/Büyüme/Agresif).
+
+# Tek varlığın portföy içindeki üst sınırı (oran, 0.20 = %20).
+RISK_MAX_ASSET_WEIGHT: dict[RiskProfile, Decimal] = {
+    RiskProfile.CONSERVATIVE: Decimal("0.20"),
+    RiskProfile.BALANCED: Decimal("0.35"),
+    RiskProfile.GROWTH: Decimal("0.40"),
+    RiskProfile.AGGRESSIVE: Decimal("0.50"),
+}
+
+# Kategori üst sınırları (oran). Tahvil/Nakit'te Korumacı ve Dengeli'de
+# %100 olabilmesi kasıtlı — bu profillerde savunma kategorilerinin üst
+# sınırı yok, alt sınırı (RISK_DEFENSE_FLOOR) var.
+RISK_MAX_CATEGORY_WEIGHT: dict[RiskProfile, dict[AssetClass, Decimal]] = {
+    RiskProfile.CONSERVATIVE: {
+        AssetClass.STOCK: Decimal("0.25"),
+        AssetClass.PRECIOUS_METAL: Decimal("0.25"),
+        AssetClass.CURRENCY: Decimal("0.30"),
+        AssetClass.BOND: Decimal("1.00"),
+        AssetClass.CASH: Decimal("1.00"),
+    },
+    RiskProfile.BALANCED: {
+        AssetClass.STOCK: Decimal("0.50"),
+        AssetClass.PRECIOUS_METAL: Decimal("0.30"),
+        AssetClass.CURRENCY: Decimal("0.30"),
+        AssetClass.BOND: Decimal("0.80"),
+        AssetClass.CASH: Decimal("0.40"),
+    },
+    RiskProfile.GROWTH: {
+        AssetClass.STOCK: Decimal("0.70"),
+        AssetClass.PRECIOUS_METAL: Decimal("0.30"),
+        AssetClass.CURRENCY: Decimal("0.35"),
+        AssetClass.BOND: Decimal("0.60"),
+        AssetClass.CASH: Decimal("0.30"),
+    },
+    RiskProfile.AGGRESSIVE: {
+        AssetClass.STOCK: Decimal("0.85"),
+        AssetClass.PRECIOUS_METAL: Decimal("0.35"),
+        AssetClass.CURRENCY: Decimal("0.40"),
+        AssetClass.BOND: Decimal("0.50"),
+        AssetClass.CASH: Decimal("0.25"),
+    },
+}
+
+for _profile in RiskProfile:
+    if _profile not in RISK_MAX_CATEGORY_WEIGHT or set(RISK_MAX_CATEGORY_WEIGHT[_profile]) != set(
+        AssetClass
+    ):
+        raise ValueError(f"RISK_MAX_CATEGORY_WEIGHT[{_profile.value}] tum kategorileri icermeli.")
+
+# Savunma tabanı: senaryo sonunda Tahvil + Nakit toplam ağırlığı bu oranın
+# altına inemez (oran, 0.40 = %40).
+RISK_DEFENSE_FLOOR: dict[RiskProfile, Decimal] = {
+    RiskProfile.CONSERVATIVE: Decimal("0.40"),
+    RiskProfile.BALANCED: Decimal("0.20"),
+    RiskProfile.GROWTH: Decimal("0.10"),
+    RiskProfile.AGGRESSIVE: Decimal("0.00"),
+}
+
+# Aksiyon B'nin durma koşulu: hedef yıllık volatilite bandı (alt, üst), oran.
+# Mevcut volatilite bandın üst sınırını <=5 puan aşıyorsa hedef=üst sınır,
+# >5 puan aşıyorsa hedef=bandın orta noktası (risk_service.py'de uygulanır).
+RISK_TARGET_VOLATILITY_BAND: dict[RiskProfile, tuple[Decimal, Decimal]] = {
+    RiskProfile.CONSERVATIVE: (Decimal("0.00"), Decimal("0.10")),
+    RiskProfile.BALANCED: (Decimal("0.10"), Decimal("0.20")),
+    RiskProfile.GROWTH: (Decimal("0.20"), Decimal("0.30")),
+    RiskProfile.AGGRESSIVE: (Decimal("0.30"), Decimal("0.40")),
+}
+
+# AK-4: alıcı kategori seçiminde korelasyon farkı eşiğin altındaysa (bkz.
+# Settings.risk_scenario_correlation_tie_threshold) bu sıra belirleyicidir.
+RISK_RECEIVER_PREFERENCE_ORDER: dict[RiskProfile, list[AssetClass]] = {
+    RiskProfile.CONSERVATIVE: [
+        AssetClass.BOND,
+        AssetClass.CASH,
+        AssetClass.PRECIOUS_METAL,
+        AssetClass.CURRENCY,
+        AssetClass.STOCK,
+    ],
+    RiskProfile.BALANCED: [
+        AssetClass.BOND,
+        AssetClass.PRECIOUS_METAL,
+        AssetClass.CURRENCY,
+        AssetClass.CASH,
+        AssetClass.STOCK,
+    ],
+    RiskProfile.GROWTH: [
+        AssetClass.PRECIOUS_METAL,
+        AssetClass.CURRENCY,
+        AssetClass.BOND,
+        AssetClass.STOCK,
+        AssetClass.CASH,
+    ],
+    RiskProfile.AGGRESSIVE: [
+        AssetClass.PRECIOUS_METAL,
+        AssetClass.CURRENCY,
+        AssetClass.STOCK,
+        AssetClass.BOND,
+        AssetClass.CASH,
+    ],
+}
+
+for _profile in RiskProfile:
+    if _profile not in RISK_RECEIVER_PREFERENCE_ORDER or set(
+        RISK_RECEIVER_PREFERENCE_ORDER[_profile]
+    ) != set(AssetClass):
+        raise ValueError(
+            f"RISK_RECEIVER_PREFERENCE_ORDER[{_profile.value}] tum kategorileri icermeli."
         )
 
 
@@ -264,50 +406,71 @@ class Settings(BaseSettings):
     # boşken doğrudan yedek orana düşülür.
     risk_free_rate_evds_series: str | None = None
 
-    # --- Kompozit risk skoru bileşen ağırlıkları (toplamı 1.0 olmalı) ---
-    risk_weight_volatility: float = 0.35
-    risk_weight_concentration: float = 0.25
-    risk_weight_diversification: float = 0.20
-    risk_weight_asset_class: float = 0.20
-
-    # Yıllıklandırılmış volatilite (oran, 0.10 = %10) -> 0-100 puan aralığı.
-    risk_volatility_low: float = 0.10
-    risk_volatility_high: float = 0.35
-
-    # Tek bir varlığın portföy içindeki ağırlığı (oran, 0.40 = %40).
-    risk_concentration_low: float = 0.10
-    risk_concentration_high: float = 0.40
-
-    # Etkin varlık sayısı (1 / Herfindahl endeksi). Çeşitlendirme arttıkça
-    # (sayı büyüdükçe) risk azalır; eşikler bu yüzden ters sırada verilir.
-    risk_effective_holdings_low: float = 15.0
-    risk_effective_holdings_high: float = 3.0
-
-    # Skor -> etiket sınırları (bu değere kadar dâhil).
-    risk_score_low_max: float = 33.0
-    risk_score_medium_max: float = 66.0
-
     # Hedeften bu kadar puandan az sapan varlık sınıfı "dengede" sayılır.
+    # ANALİST NOTU: yalnızca eski RISK_PROFILE_TARGET_ALLOCATION yolu
+    # kaldırılana kadar kullanılır (bkz. o tablonun yanındaki not).
     risk_rebalance_tolerance_percent: float = 5.0
+
+    # --- Kök neden teşhisi eşikleri ("risk neden yüksek çıktı") ---
+    # Bunlar risk SEVİYESİNİ (RiskLevel) etkilemez, yalnızca yüksek risk
+    # çıktığında sebebi açıklamak için kullanılır.
+    #
+    # Neden 1 — Yoğunlaşma: aşağıdakilerden en az biri doğruysa tetiklenir.
+    risk_cause_max_asset_weight: float = 0.35
+    risk_cause_max_category_weight: float = 0.60
+    risk_cause_hhi_threshold: float = 0.25
+    #
+    # Neden 2 — Yüksek volatiliteli varlık: aşağıdakilerden en az biri.
+    risk_cause_high_vol_asset_annual_vol: float = 0.35
+    risk_cause_high_vol_asset_weight: float = 0.30
+    risk_cause_risk_contribution_threshold: float = 0.50
+    risk_cause_risk_contribution_excess: float = 0.15
+    #
+    # Neden 3 — Korelasyon: aşağıdakilerden en az biri.
+    risk_cause_pairwise_correlation: float = 0.60
+    risk_cause_pairwise_weight_sum: float = 0.40
+    risk_cause_dr_threshold: float = 1.10
+    risk_cause_hhi_low_threshold: float = 0.25
+
+    # --- Senaryo üretim motoru ---
+    # STEP: her transferin büyüklüğü (puan).
+    risk_scenario_step_percent: float = 5.0
+    # Yeni açılan bir kategoriye ilk transferde verilecek en az pay (puan).
+    risk_scenario_min_new_category_weight_percent: float = 5.0
+    # Sonsuz döngü koruması: aksiyon başına en fazla adım sayısı.
+    risk_scenario_max_iterations: int = 20
+    # Senaryo başına toplam değişim (turnover) tavanı (puan). ANALİST NOTU:
+    # kaynak belgede hem %25 (KK-2) hem %30 (skor formülü) yazıyor,
+    # netleşene kadar %30 kullanılıyor (Yağız onayıyla).
+    risk_scenario_max_turnover_percent: float = 30.0
+    # Eleme kuralı: bu puandan küçük turnover anlamsız sayılır.
+    risk_scenario_min_turnover_percent: float = 2.0
+    # Eleme kuralı: "yeterli" risk azalması için göreli azalma eşiği (oran).
+    risk_scenario_min_relative_risk_reduction: float = 0.15
+    # Sıralama skoru ağırlıkları (toplamı 1.0 olmalı).
+    risk_scenario_score_risk_weight: float = 0.7
+    risk_scenario_score_turnover_weight: float = 0.3
+    # Kullanıcıya gösterilecek en iyi senaryo sayısı.
+    risk_scenario_top_n: int = 3
+    # Aksiyon C'nin durma koşulu: çeşitlendirme oranı (DR) hedefi.
+    risk_scenario_dr_target: float = 1.15
+    # AK-4: iki adayın korelasyon farkı bu değerden küçükse profil tercih
+    # sırası (RISK_RECEIVER_PREFERENCE_ORDER) belirleyici olur.
+    risk_scenario_correlation_tie_threshold: float = 0.10
+    # Senaryo etiketleme eşikleri (turnover, puan).
+    risk_scenario_label_small_max_turnover: float = 10.0
+    risk_scenario_label_balanced_max_turnover: float = 18.0
 
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @model_validator(mode="after")
-    def _validate_risk_weights(self) -> "Settings":
-        """Ağırlıklar .env'den ayrı ayrı geçersiz kılınabildiği için toplamlarının
-        1.0 kalacağı garanti değil; bozuk bir kombinasyon skoru sessizce 0-100
-        aralığının dışına taşır. Yapılandırma yüklenirken yakalıyoruz."""
-        total = (
-            self.risk_weight_volatility
-            + self.risk_weight_concentration
-            + self.risk_weight_diversification
-            + self.risk_weight_asset_class
-        )
+    def _validate_risk_scenario_score_weights(self) -> "Settings":
+        total = self.risk_scenario_score_risk_weight + self.risk_scenario_score_turnover_weight
         if abs(total - 1.0) > 1e-9:
             raise ValueError(
-                "RISK_WEIGHT_* ağırlıklarının toplamı 1.0 olmalı, "
+                "RISK_SCENARIO_SCORE_* ağırlıklarının toplamı 1.0 olmalı, "
                 f"şu an {total}. (.env dosyanızı kontrol edin.)"
             )
         return self
