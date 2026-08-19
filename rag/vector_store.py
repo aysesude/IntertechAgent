@@ -41,6 +41,19 @@ class VectorStore(ABC):
         """Doküman parçalarını (chunk) embedding'leriyle birlikte saklar."""
 
     @abstractmethod
+    def clear(self) -> None:
+        """Koleksiyondaki tüm parçaları siler.
+
+        `add_documents` yalnızca upsert yapar — bir kaynak dosya silinirse
+        veya parçalama stratejisi (chunk_size/overlap) değişirse eski
+        parçalar kendiliğinden silinmez, kalıcı olarak birikir (ölçümle
+        doğrulandı: `data/documents/`'dan kaldırılan bir dosyanın parçaları
+        production Chroma'da aylarca kalabilir). `rag.ingest` bu yüzden her
+        çalıştığında önce `clear()` çağırır, sonra mevcut dosyalardan
+        yeniden yükler — Chroma her zaman `data/documents/`'ın birebir
+        yansıması olur, sapma birikmez."""
+
+    @abstractmethod
     def similarity_search(
         self, query: str, top_k: int = 5, where: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
@@ -69,26 +82,39 @@ class ChromaVectorStore(VectorStore):
         self._collection_name = collection_name
         self._embedding_model = embedding_model
 
-    # Bağlantı ve embedding modeli ilk kullanımda kurulur: import anında Chroma
-    # container'ı ayakta olmayabilir, ayrıca embedding modelinin yüklenmesi
-    # birkaç saniye sürüyor — her istekte tekrarlanmamalı.
+    # Bağlantı ilk kullanımda kurulur: import anında Chroma container'ı ayakta
+    # olmayabilir. `clear()` sonrası sıfırlanır ki bir sonraki erişim
+    # koleksiyonu yeniden (boş) oluştursun.
+    @cached_property
+    def _client(self):
+        import chromadb
+
+        with _provider_errors("connection", self._target):
+            return chromadb.HttpClient(host=self._host, port=self._port)
+
     @cached_property
     def _collection(self):
-        import chromadb
         from chromadb.utils import embedding_functions
 
         # Hata durumunda cached_property değeri saklamaz; sonraki çağrı yeniden
         # dener. Chroma geç ayağa kalktıysa süreç yeniden başlatılmadan toparlar.
         with _provider_errors("connection", self._target):
-            client = chromadb.HttpClient(host=self._host, port=self._port)
             embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
                 model_name=self._embedding_model
             )
-            return client.get_or_create_collection(
+            return self._client.get_or_create_collection(
                 name=self._collection_name,
                 embedding_function=embedding_fn,
                 metadata={"hnsw:space": "cosine"},
             )
+
+    def clear(self) -> None:
+        with _provider_errors("clear", self._target):
+            # Önce var olduğundan emin olunur (idempotent) ki delete_collection
+            # "koleksiyon yok" durumunu bağlantı hatasıyla karıştırmasın.
+            self._client.get_or_create_collection(self._collection_name)
+            self._client.delete_collection(self._collection_name)
+        self.__dict__.pop("_collection", None)
 
     @property
     def _target(self) -> str:
