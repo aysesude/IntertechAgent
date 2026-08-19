@@ -165,3 +165,50 @@ def test_retrieve_buyuk_i_harfi_kelimeyi_parcalamaz():
     sirketler = {r["metadata"]["sirket"] for r in results}
     assert "THYAO" not in sirketler
     assert "BIMAS" in sirketler
+
+
+def test_retrieve_yalnizca_jenerik_kelimelerle_eslesme_reddedilir():
+    """Uydurma/alakasız bir şirket adı + genel finans kelimeleri içeren bir
+    sorgu ("xyzabc uydurma bir şirketin hisse fiyatı ne kadar" gibi), hiçbir
+    gerçek şirket/konu adı eşleşmese bile salt "hisse"/"fiyat"/"şirket" gibi
+    klişelerin üçü tesadüfen tek bir dokümanda birlikte geçtiği için oran
+    barajını (>0.5) geçebiliyordu (ölçümle doğrulandı: gerçek THYAO analist
+    raporuyla). Bu test, yalnızca jenerik klişelerle örtüşen bir sonucun artık
+    reddedildiğini doğrular — eşleşen kelimelerden en az biri klişe dışı
+    olmalı."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Şirket ikinci çeyrek net kâr açıkladı. Hedef fiyatlar hakkında "
+                "hissesinde analist görüşleri farklılaştı.",
+                sirket="THYAO",
+                distance=0.3,
+            )
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("xyzabc uydurma bir şirketin hisse fiyatı ne kadar")
+
+    assert results == []
+
+
+def test_retrieve_jenerik_olmayan_eslesme_varsa_kabul_edilir():
+    """Yukarıdaki kısıtlama gerçek eşleşmeleri kırmamalı: sorgu jenerik
+    kelimelerin yanında en az bir belirgin (şirket adı gibi) kelime de
+    içeriyorsa sonuç yine dönmeli."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "THYAO ikinci çeyrek bilançosu sonrası hedef fiyat açıklandı",
+                sirket="THYAO",
+                distance=0.3,
+            )
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("THYAO hedef fiyatı ne kadar")
+
+    assert len(results) == 1
+    assert results[0]["metadata"]["sirket"] == "THYAO"
