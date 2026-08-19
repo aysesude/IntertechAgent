@@ -53,9 +53,26 @@ class OrchestratorState(TypedDict):
 
 
 async def detect_intent(state: OrchestratorState) -> dict:
-    """Kullanıcının niyetini LLM yardımıyla 'portfolio', 'market' veya 'both' olarak sınıflandırır."""
+    """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
     query = state["message"].strip()
+    query_lower = query.lower()
     
+    # 1. Kural Tabanlı Kapsam Kontrolü (Scope Guard)
+    transaction_keywords = {"transfer", "gönder", "yolla", "al", "sat", "alım", "satım"}
+    if any(k in query_lower for k in transaction_keywords):
+        return {
+            "intent": "out_of_scope", 
+            "final_answer": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim."
+        }
+        
+    out_of_scope_keywords = {"hava", "nasılsın", "kimsin", "şarkı", "film", "yemek"}
+    if any(k in query_lower for k in out_of_scope_keywords):
+        return {
+            "intent": "out_of_scope", 
+            "final_answer": "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.\n\nÖrnek sorular:\n- Portföyüm ne durumda?\n- Son piyasa haberleri neler?"
+        }
+    
+    # 2. LLM Tabanlı Niyet Tespiti
     llm = get_llm_client()
     system_prompt = (
         "Sen bir niyet sınıflandırma motorusun. SADECE tek kelime çıktı vereceksin: PORTFOLIO, MARKET veya BOTH.\n"
@@ -113,68 +130,95 @@ async def run_market_agent(state: OrchestratorState) -> dict:
     return {"agent_responses": [response]}
 
 
+async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) -> dict:
+    """Kapsam dışı durumlarda LLM'e gitmeden doğrudan uyarı mesajını akıtır."""
+    # Metni kelime kelime akıtarak animasyonlu hissi ver
+    words = state["final_answer"].split(" ")
+    for i, word in enumerate(words):
+        writer({"delta": word + (" " if i < len(words) - 1 else "")})
+    return {}
+
+
 async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dict:
     successful = [r.summary_text for r in state["agent_responses"] if r.success]
+    errors = [r.error for r in state["agent_responses"] if r.error]
     
-    if successful:
-        llm = get_llm_client()
-        combined_text = "\n\n---\n\n".join(successful)
-        system_prompt = (
-            "Aşağıda bir veya daha fazla veri kaynağından/uzman ajandan gelen ham yanıtlar bulunmaktadır.\n"
-            "Görev: Bu verileri alıp, objektif, pürüzsüz, tekil ve anlaşılır bir Türkçe yanıt oluşturarak son kullanıcıya sun.\n"
-            "Verilerin hangi ajan veya RAG'den geldiğini söyleme, doğrudan bilgiyi harmanlayıp ver.\n"
-            "Hiçbir bilgiyi silme veya uydurma yapma, sadece metinleri iyi bir düzene sok.\n"
-            "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver."
-        )
+    # Hiçbir ajan başarılı olmadıysa (İç Hata Gizliliği)
+    if not successful:
+        final_answer = "Şu an sistemlerimize ulaşılamıyor, lütfen daha sonra tekrar deneyin."
+        writer({"delta": final_answer})
+        return {"final_answer": final_answer}
         
-        final_answer = ""
-        try:
-            async for chunk in llm.stream(combined_text, system=system_prompt):
-                final_answer += chunk
-                writer({"delta": chunk})
-        except Exception as e:
-            logger.error(f"[ORCHESTRATOR] Merge LLM hatası: {e}")
-            final_answer = "\n\n".join(successful)
-            writer({"delta": final_answer})
-    else:
-        errors = [r.error for r in state["agent_responses"] if r.error]
-        final_answer = errors[0] if errors else "Üzgünüm, isteğinizi işlerken bir sorun oluştu."
+    llm = get_llm_client()
+    
+    # Kısmi veya tam başarı durumu
+    combined_texts = []
+    if successful:
+        combined_texts.append("BAŞARILI BİLGİLER:\n" + "\n\n---\n\n".join(successful))
+    if errors:
+        combined_texts.append("ALINAMAYAN BİLGİLER (KULLANICIYA BELİRT):\n" + "\n".join(errors))
+        
+    combined_text = "\n\n".join(combined_texts)
+    
+    system_prompt = (
+        "Aşağıda bir veya daha fazla veri kaynağından/uzman ajandan gelen ham yanıtlar ve varsa eksik bilgiler bulunmaktadır.\n"
+        "Görev: Bu verileri alıp, objektif, pürüzsüz, tekil ve anlaşılır bir Türkçe yanıt oluşturarak son kullanıcıya sun.\n"
+        "Verilerin hangi ajan veya RAG'den geldiğini söyleme, doğrudan bilgiyi harmanlayıp ver.\n"
+        "Eğer bazı bilgiler eksikse ('ALINAMAYAN BİLGİLER' kısmı varsa), bunu kullanıcıya doğal bir dille ('Şu an piyasa verilerine ulaşamıyorum ancak portföyünüz...' gibi) belirt.\n"
+        "Hiçbir bilgiyi silme veya uydurma yapma, sadece metinleri iyi bir düzene sok.\n"
+        "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver.\n"
+        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle."
+    )
+    
+    final_answer = ""
+    try:
+        async for chunk in llm.stream(combined_text, system=system_prompt):
+            final_answer += chunk
+            writer({"delta": chunk})
+    except Exception as e:
+        logger.error(f"[ORCHESTRATOR] Merge LLM hatası: {e}")
+        final_answer = "\n\n".join(successful) + "\n\nBu bir yatırım tavsiyesi değildir."
         writer({"delta": final_answer})
         
     return {"final_answer": final_answer}
 
 
-def _route_after_intent(state: OrchestratorState) -> str:
-    """Niyet 'market' ise doğrudan Piyasa Ajanı'na, diğer durumlarda önce
-    Portföy Ajanı'na gider."""
-    return "market_agent" if state["intent"] == "market" else "portfolio_agent"
-
-
-def _route_after_portfolio(state: OrchestratorState) -> str:
-    """Niyet 'both' ise Portföy Ajanı'ndan sonra Piyasa Ajanı da çalışır."""
-    return "market_agent" if state["intent"] == "both" else "merge"
+def _route_after_intent(state: OrchestratorState) -> list[str]:
+    """Niyete göre ilgili ajanlara paralel dağıtım yapar veya kapsam dışı akışına yönlendirir."""
+    if state["intent"] == "out_of_scope":
+        return ["handle_out_of_scope"]
+    if state["intent"] == "both":
+        return ["portfolio_agent", "market_agent"]
+    if state["intent"] == "market":
+        return ["market_agent"]
+    return ["portfolio_agent"]
 
 
 def _build_graph():
     graph = StateGraph(OrchestratorState)
     graph.add_node("detect_intent", detect_intent)
+    graph.add_node("handle_out_of_scope", handle_out_of_scope)
     graph.add_node("portfolio_agent", run_portfolio_agent)
     graph.add_node("market_agent", run_market_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
+    
     graph.add_conditional_edges(
         "detect_intent",
         _route_after_intent,
-        {"portfolio_agent": "portfolio_agent", "market_agent": "market_agent"},
+        {
+            "handle_out_of_scope": "handle_out_of_scope",
+            "portfolio_agent": "portfolio_agent",
+            "market_agent": "market_agent"
+        }
     )
-    graph.add_conditional_edges(
-        "portfolio_agent",
-        _route_after_portfolio,
-        {"market_agent": "market_agent", "merge": "merge"},
-    )
+    
+    graph.add_edge("handle_out_of_scope", END)
+    graph.add_edge("portfolio_agent", "merge")
     graph.add_edge("market_agent", "merge")
     graph.add_edge("merge", END)
+    
     return graph.compile()
 
 
