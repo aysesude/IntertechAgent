@@ -82,8 +82,17 @@ function ChatBox({ userId }: ChatBoxProps): JSX.Element {
           onToken: (event) => {
             updateLastAssistantMessage((msg) => ({ ...msg, content: msg.content + event.delta }));
           },
-          onDone: () => {
-            updateLastAssistantMessage((msg) => ({ ...msg, streaming: false }));
+          onDone: (event) => {
+            // Ajan basarisiz oldugunda (ör. RAG NOT_FOUND, PROVIDER_UNAVAILABLE)
+            // agent.execute() on_token'i hic cagirmiyor - "token" olayi hic
+            // gelmiyor, mesaj bos kaliyor. Boyle durumlarda hata/bulunamadi
+            // metni yalnizca final_answer'da geliyor; icerik zaten doluysa
+            // (normal akis streaming'le doldurdu) buraya dokunmuyoruz.
+            updateLastAssistantMessage((msg) => ({
+              ...msg,
+              content: msg.content || event.final_answer,
+              streaming: false,
+            }));
           },
           onError: (event) => {
             updateLastAssistantMessage((msg) => ({
