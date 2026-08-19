@@ -56,9 +56,7 @@ _ZERO = Decimal(0)
 
 _logger = logging.getLogger(__name__)
 
-_EMPTY_PORTFOLIO_WARNING = (
-    "Portföyünüzde varlık bulunmadığı için risk değerlendirmesi yapılamadı."
-)
+_EMPTY_PORTFOLIO_WARNING = "Portföyünüzde varlık bulunmadığı için risk değerlendirmesi yapılamadı."
 
 
 def _round2(value: Decimal) -> Decimal:
@@ -107,14 +105,30 @@ def _inverse_normal_cdf(p: float) -> float:
     if not 0.0 < p < 1.0:
         raise ValueError("p (0, 1) aralığında olmalı")
 
-    a = [-3.969683028665376e01, 2.209460984245205e02, -2.759285104469687e02,
-         1.383577518672690e02, -3.066479806614716e01, 2.506628277459239e00]
-    b = [-5.447609879822406e01, 1.615858368580409e02, -1.556989798598866e02,
-         6.680131188771972e01, -1.328068155288572e01]
-    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00,
-         -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00]
-    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00,
-         3.754408661907416e00]
+    a = [
+        -3.969683028665376e01,
+        2.209460984245205e02,
+        -2.759285104469687e02,
+        1.383577518672690e02,
+        -3.066479806614716e01,
+        2.506628277459239e00,
+    ]
+    b = [
+        -5.447609879822406e01,
+        1.615858368580409e02,
+        -1.556989798598866e02,
+        6.680131188771972e01,
+        -1.328068155288572e01,
+    ]
+    c = [
+        -7.784894002430293e-03,
+        -3.223964580411365e-01,
+        -2.400758277161838e00,
+        -2.549732539343734e00,
+        4.374664141464968e00,
+        2.938163982698783e00,
+    ]
+    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00]
 
     p_low = 0.02425
     p_high = 1 - p_low
@@ -127,9 +141,9 @@ def _inverse_normal_cdf(p: float) -> float:
     if p <= p_high:
         q = p - 0.5
         r = q * q
-        return (
-            (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
-        ) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+        return ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (
+            ((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1
+        )
     q = math.sqrt(-2 * math.log(1 - p))
     return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
         (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
@@ -562,9 +576,7 @@ def get_risk_assessment(
                     )
 
         # Kovaryans tabanlı yıllık portföy volatilitesi (AK 2.3): w^T * Sigma * w.
-        vols_by_asset = {
-            aid: _annualized_volatility(returns_by_asset[aid]) for aid in ordered_ids
-        }
+        vols_by_asset = {aid: _annualized_volatility(returns_by_asset[aid]) for aid in ordered_ids}
         if all(v is not None for v in vols_by_asset.values()):
             variance = 0.0
             for a_id in ordered_ids:
@@ -589,9 +601,7 @@ def get_risk_assessment(
         # Portföy beklenen getirisi (yıllık) — aynı veri setinden, Sharpe için.
         mean_returns = {aid: _annualized_mean_return(returns_by_asset[aid]) for aid in ordered_ids}
         if all(v is not None for v in mean_returns.values()):
-            portfolio_return = sum(
-                float(weights[aid]) * mean_returns[aid] for aid in ordered_ids
-            )
+            portfolio_return = sum(float(weights[aid]) * mean_returns[aid] for aid in ordered_ids)
 
         # VaR (parametrik, AK 2.4): kovaryans tabanlı volatilite varsa onu,
         # yoksa doğrudan portföy değer serisinden hesaplanan volatiliteyi kullanır.
