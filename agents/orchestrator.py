@@ -33,7 +33,6 @@ from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
 from app.core.config import settings
-
 from app.core.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
