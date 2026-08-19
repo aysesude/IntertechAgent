@@ -139,3 +139,76 @@ def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
     results = retriever.retrieve("bilanço net kâr açıklamaları")
 
     assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}
+
+
+def test_retrieve_buyuk_i_harfi_kelimeyi_parcalamaz():
+    """str.lower() Türkçe büyük "İ" harfini "i" + birleşen nokta işaretine
+    çevirir; bu, \\w+ regex'inin kelimeyi ("BİM" -> "bi"+"m" gibi) anlamsız
+    parçalara bölmesine yol açıyordu ve şirket adı sorgudan tamamen
+    düşüyordu (bkz. rag/retriever.py _normalize). Bu test "İ" içeren bir
+    şirket adının hâlâ geçerli bir arama kelimesi olarak tanınmasını
+    doğrular."""
+    store = _FakeVectorStore(
+        [
+            _doc("BİM Birleşik Mağazalar hedef fiyat açıklandı", sirket="BIMAS", distance=0.3),
+            _doc(
+                "THYAO için bilanço sonrası hedef fiyat açıklandı",
+                sirket="THYAO",
+                distance=0.1,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("BİM hedef fiyat")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert "THYAO" not in sirketler
+    assert "BIMAS" in sirketler
+
+
+def test_retrieve_yalnizca_jenerik_kelimelerle_eslesme_reddedilir():
+    """Uydurma/alakasız bir şirket adı + genel finans kelimeleri içeren bir
+    sorgu ("xyzabc uydurma bir şirketin hisse fiyatı ne kadar" gibi), hiçbir
+    gerçek şirket/konu adı eşleşmese bile salt "hisse"/"fiyat"/"şirket" gibi
+    klişelerin üçü tesadüfen tek bir dokümanda birlikte geçtiği için oran
+    barajını (>0.5) geçebiliyordu (ölçümle doğrulandı: gerçek THYAO analist
+    raporuyla). Bu test, yalnızca jenerik klişelerle örtüşen bir sonucun artık
+    reddedildiğini doğrular — eşleşen kelimelerden en az biri klişe dışı
+    olmalı."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Şirket ikinci çeyrek net kâr açıkladı. Hedef fiyatlar hakkında "
+                "hissesinde analist görüşleri farklılaştı.",
+                sirket="THYAO",
+                distance=0.3,
+            )
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("xyzabc uydurma bir şirketin hisse fiyatı ne kadar")
+
+    assert results == []
+
+
+def test_retrieve_jenerik_olmayan_eslesme_varsa_kabul_edilir():
+    """Yukarıdaki kısıtlama gerçek eşleşmeleri kırmamalı: sorgu jenerik
+    kelimelerin yanında en az bir belirgin (şirket adı gibi) kelime de
+    içeriyorsa sonuç yine dönmeli."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "THYAO ikinci çeyrek bilançosu sonrası hedef fiyat açıklandı",
+                sirket="THYAO",
+                distance=0.3,
+            )
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("THYAO hedef fiyatı ne kadar")
+
+    assert len(results) == 1
+    assert results[0]["metadata"]["sirket"] == "THYAO"

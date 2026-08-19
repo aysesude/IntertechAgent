@@ -76,7 +76,14 @@ _TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "
 
 
 def _normalize(text: str) -> str:
-    return text.lower().translate(_TURKISH_FOLD_MAP)
+    # Python'un str.lower()'ı Türkçe büyük "İ" (U+0130) harfini Unicode
+    # varsayılanına göre "i" + birleşen nokta işaretine (U+0307) çevirir, tek
+    # bir "i" harfine değil. Bu, \w+ regex'inin o karakteri kelime sınırı
+    # sayıp "BİM" gibi bir kelimeyi "bi" + "m" gibi anlamsız parçalara
+    # bölmesine yol açıyordu (ölçümle doğrulandı: "BİM hedef fiyat" sorgusu
+    # şirket adını hiç kelime olarak taşımıyordu). Düz "İ" büyük harfi
+    # lower()'dan ÖNCE normal "i"ye çevrilerek bu parçalanma engellenir.
+    return text.replace("İ", "i").lower().translate(_TURKISH_FOLD_MAP)
 
 
 def _keywords(text: str) -> set[str]:
@@ -88,11 +95,49 @@ def _keywords(text: str) -> set[str]:
 # yarısından FAZLASININ eşleşmesi gerekir (tam yarısı yetmez — bkz. altta).
 _MIN_KEYWORD_OVERLAP_RATIO = 0.5
 
+# "hisse", "fiyat", "şirket" gibi kelimeler neredeyse HER bilanço/analiz
+# dokümanında birlikte geçiyor (bkz. _shares_a_keyword). Korpus büyüdükçe,
+# uydurma bir şirket adı içeren ama tesadüfen bu jenerik kelimelerin
+# üçünü/dördünü barındıran bir sorgu ("xyzabc uydurma bir şirketin hisse
+# fiyatı ne kadar" gibi), gerçek bir şirket adı hiç eşleşmese bile salt bu
+# jenerik kelimelerle >0.5 oranını geçebiliyor (ölçümle doğrulandı: THYAO
+# analist raporunun "Bilanço bağlamı" parçasıyla 3/5 oranında eşleşip
+# "bulunamadı" yerine alakasız bir gerçek doküman döndü). Bu yüzden eşleşen
+# kelimelerin EN AZ BİRİ bu jenerik listenin dışında olmalı — yalnızca
+# jenerik finans klişeleriyle örtüşen bir sonuç artık kabul edilmiyor.
+_GENERIC_FINANCE_TERMS = {
+    "hisse",
+    "fiyat",
+    "sirket",
+    "ceyrek",
+    "bilanco",
+    "milyar",
+    "hedef",
+    "yuzde",
+    "kurum",
+    "rapor",
+    "yatirim",
+    "aciklama",
+    "donem",
+    "artis",
+    "ortalama",
+    "tavsiye",
+}
+
 
 def _query_keyword_matches(qk: str, candidate_keywords: set[str]) -> bool:
     prefix_len = min(len(qk), _PREFIX_MATCH_LEN)
     qk_prefix = qk[:prefix_len]
     return any(len(ck) >= prefix_len and ck[:prefix_len] == qk_prefix for ck in candidate_keywords)
+
+
+def _is_generic_finance_keyword(word: str) -> bool:
+    prefix_len = min(len(word), _PREFIX_MATCH_LEN)
+    word_prefix = word[:prefix_len]
+    return any(
+        len(term) >= prefix_len and term[:prefix_len] == word_prefix
+        for term in _GENERIC_FINANCE_TERMS
+    )
 
 
 def _shares_a_keyword(query_keywords: set[str], candidate_keywords: set[str]) -> bool:
@@ -108,11 +153,24 @@ def _shares_a_keyword(query_keywords: set[str], candidate_keywords: set[str]) ->
     Bu yüzden "en az yarısından fazlası eşleşsin" kuralı var: `> 0.5`, `>= 0.5`
     değil — 2 kelimelik bir sorguda tek kelimenin (%50) eşleşmesi yetmemeli,
     ikisinin de eşleşmesi gerekir; bu da "Bitcoin fiyatı" gibi sorguları
-    tek kelimeden (fiyat) geçirmeyi engeller."""
+    tek kelimeden (fiyat) geçirmeyi engeller.
+
+    Ama oran tek başına yetmiyor: sorgu 3+ kelimeliyse ve bu kelimelerin
+    çoğu "hisse", "fiyat", "şirket" gibi jenerik finans klişesiyse, tümü
+    tesadüfen tek bir dokümanda birlikte geçtiği için oran barajını
+    geçebiliyor — sorgudaki asıl (uydurma ya da alakasız) konu hiç
+    eşleşmemiş olsa bile (ölçümle doğrulandı, bkz. _GENERIC_FINANCE_TERMS).
+    Bu yüzden eşleşen kelimelerden EN AZ BİRİNİN bu jenerik listenin
+    dışında olması da şart — yalnızca klişelerle örtüşen bir sonuç artık
+    "bulundu" sayılmıyor."""
     if not query_keywords:
         return False
-    matched = sum(1 for qk in query_keywords if _query_keyword_matches(qk, candidate_keywords))
-    return matched / len(query_keywords) > _MIN_KEYWORD_OVERLAP_RATIO
+    matched = {qk for qk in query_keywords if _query_keyword_matches(qk, candidate_keywords)}
+    if not matched:
+        return False
+    ratio_yeterli = len(matched) / len(query_keywords) > _MIN_KEYWORD_OVERLAP_RATIO
+    belirgin_eslesme_var = any(not _is_generic_finance_keyword(qk) for qk in matched)
+    return ratio_yeterli and belirgin_eslesme_var
 
 
 def _result_keywords(result: dict) -> set[str]:
