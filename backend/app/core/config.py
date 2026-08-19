@@ -165,7 +165,15 @@ class Settings(BaseSettings):
     llm_provider: LLMProvider = LLMProvider.OLLAMA
 
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5.6-luna"
+    # OpenAI uyumlu her ağ geçidi (gateway/proxy) buradan yönlendirilir —
+    # resmi API, kurum içi bir vekil ya da apimaster.ai gibi bir kanal
+    # toplayıcı. Kod değişmiyor, yalnızca .env değişiyor.
+    openai_base_url: str = "https://api.openai.com/v1"
+    # Bazı yeni nesil modeller `temperature` parametresini reddediyor
+    # (yalnızca varsayılan değeri kabul ediyorlar). Sağlayıcı 400 dönerse
+    # .env'de OPENAI_TEMPERATURE'ı boş bırak: parametre isteğe hiç eklenmez.
+    openai_temperature: float | None = 0.1
 
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
