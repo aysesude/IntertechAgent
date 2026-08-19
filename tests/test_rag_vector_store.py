@@ -117,3 +117,46 @@ def test_where_filtresi_chroma_query_cagrisina_gecirilir():
     store.similarity_search("enflasyon", where={"sirket": "ASELS"})
 
     assert koleksiyon.son_where == {"sirket": "ASELS"}
+
+
+def test_clear_koleksiyonu_siler_ve_cache_i_temizler():
+    """`add_documents` yalnızca upsert yapar; data/documents/'dan kaldırılan
+    bir dosyanın parçaları temizlenmeden kalıcı olarak birikir (production'da
+    ölçümle doğrulandı). `clear()` bunu önler: koleksiyonu silip cached_property
+    önbelleğini boşaltır ki sonraki erişim koleksiyonu boş yeniden kursun."""
+
+    class _SahteClient:
+        def __init__(self) -> None:
+            self.cagrilar: list[tuple[str, str]] = []
+
+        def get_or_create_collection(self, name, **kwargs):
+            self.cagrilar.append(("get_or_create", name))
+            return object()
+
+        def delete_collection(self, name):
+            self.cagrilar.append(("delete", name))
+
+    store = ChromaVectorStore(host="chroma", port=8000, collection_name="financial_documents")
+    sahte_client = _SahteClient()
+    store.__dict__["_client"] = sahte_client
+    store.__dict__["_collection"] = object()  # onceden erisilmis gibi davran
+
+    store.clear()
+
+    assert sahte_client.cagrilar == [
+        ("get_or_create", "financial_documents"),
+        ("delete", "financial_documents"),
+    ]
+    assert "_collection" not in store.__dict__
+
+
+def test_clear_chroma_hatasini_provider_unavailable_yapar():
+    class _PatlayanClient:
+        def get_or_create_collection(self, name, **kwargs):
+            raise ConnectionError("connection refused")
+
+    store = ChromaVectorStore(host="chroma", port=8000)
+    store.__dict__["_client"] = _PatlayanClient()
+
+    with pytest.raises(ProviderUnavailableError):
+        store.clear()
