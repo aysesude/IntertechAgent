@@ -37,6 +37,7 @@ from app.core.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
+
 class OrchestratorState(TypedDict):
     user_id: str
     session_id: str
@@ -54,22 +55,22 @@ async def detect_intent(state: OrchestratorState) -> dict:
     """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
     query = state["message"].strip()
     query_lower = query.lower()
-    
+
     # 1. Kural Tabanlı Kapsam Kontrolü (Scope Guard)
     transaction_keywords = {"transfer", "gönder", "yolla", "al", "sat", "alım", "satım"}
     if any(k in query_lower for k in transaction_keywords):
         return {
-            "intent": "out_of_scope", 
-            "final_answer": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim."
+            "intent": "out_of_scope",
+            "final_answer": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim.",
         }
-        
+
     out_of_scope_keywords = {"hava", "nasılsın", "kimsin", "şarkı", "film", "yemek"}
     if any(k in query_lower for k in out_of_scope_keywords):
         return {
-            "intent": "out_of_scope", 
-            "final_answer": "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.\n\nÖrnek sorular:\n- Portföyüm ne durumda?\n- Son piyasa haberleri neler?"
+            "intent": "out_of_scope",
+            "final_answer": "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.\n\nÖrnek sorular:\n- Portföyüm ne durumda?\n- Son piyasa haberleri neler?",
         }
-    
+
     # 2. LLM Tabanlı Niyet Tespiti
     llm = get_llm_client()
     system_prompt = (
@@ -79,22 +80,22 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "- Eğer kullanıcı her ikisini de aynı anda soruyorsa (örneğin 'Portföyüm ne durumda ve son haberler neler?'): BOTH dön.\n"
         "Asla açıklama yapma, sadece kategori adını büyük harfle döndür."
     )
-    
+
     try:
         response = await llm.generate(query, system=system_prompt)
         response_text = response.strip().upper()
-        
+
         if "BOTH" in response_text:
             intent = "both"
         elif "MARKET" in response_text or "RAG" in response_text:
             intent = "market"
         else:
-            intent = "portfolio" # Varsayılan (fallback) değer
-            
+            intent = "portfolio"  # Varsayılan (fallback) değer
+
     except Exception as e:
         logger.error(f"[ORCHESTRATOR] Niyet tespiti LLM hatası: {e}")
         intent = "portfolio"
-        
+
     logger.info(
         "[ORCHESTRATOR] LLM niyet tespiti: %s | sorgu=%r",
         intent,
@@ -114,17 +115,13 @@ def _build_request(state: OrchestratorState) -> AgentRequest:
 
 async def run_portfolio_agent(state: OrchestratorState) -> dict:
     agent = PortfolioAgent(mcp_server_url=settings.mcp_server_url)
-    response = await agent.execute(
-        _build_request(state), on_token=None
-    )
+    response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
 
 async def run_market_agent(state: OrchestratorState) -> dict:
     agent = MarketAgent(mcp_server_url=settings.mcp_server_url)
-    response = await agent.execute(
-        _build_request(state), on_token=None
-    )
+    response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
 
@@ -140,24 +137,24 @@ async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) ->
 async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dict:
     successful = [r.summary_text for r in state["agent_responses"] if r.success]
     errors = [r.error for r in state["agent_responses"] if r.error]
-    
+
     # Hiçbir ajan başarılı olmadıysa (İç Hata Gizliliği)
     if not successful:
         final_answer = "Şu an sistemlerimize ulaşılamıyor, lütfen daha sonra tekrar deneyin."
         writer({"delta": final_answer})
         return {"final_answer": final_answer}
-        
+
     llm = get_llm_client()
-    
+
     # Kısmi veya tam başarı durumu
     combined_texts = []
     if successful:
         combined_texts.append("BAŞARILI BİLGİLER:\n" + "\n\n---\n\n".join(successful))
     if errors:
         combined_texts.append("ALINAMAYAN BİLGİLER (KULLANICIYA BELİRT):\n" + "\n".join(errors))
-        
+
     combined_text = "\n\n".join(combined_texts)
-    
+
     system_prompt = (
         "Aşağıda bir veya daha fazla veri kaynağından/uzman ajandan gelen ham yanıtlar ve varsa eksik bilgiler bulunmaktadır.\n"
         "Görev: Bu verileri alıp, objektif, pürüzsüz, tekil ve anlaşılır bir Türkçe yanıt oluşturarak son kullanıcıya sun.\n"
@@ -167,7 +164,7 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver.\n"
         "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle."
     )
-    
+
     final_answer = ""
     try:
         async for chunk in llm.stream(combined_text, system=system_prompt):
@@ -177,7 +174,7 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         logger.error(f"[ORCHESTRATOR] Merge LLM hatası: {e}")
         final_answer = "\n\n".join(successful) + "\n\nBu bir yatırım tavsiyesi değildir."
         writer({"delta": final_answer})
-        
+
     return {"final_answer": final_answer}
 
 
@@ -201,22 +198,22 @@ def _build_graph():
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
-    
+
     graph.add_conditional_edges(
         "detect_intent",
         _route_after_intent,
         {
             "handle_out_of_scope": "handle_out_of_scope",
             "portfolio_agent": "portfolio_agent",
-            "market_agent": "market_agent"
-        }
+            "market_agent": "market_agent",
+        },
     )
-    
+
     graph.add_edge("handle_out_of_scope", END)
     graph.add_edge("portfolio_agent", "merge")
     graph.add_edge("market_agent", "merge")
     graph.add_edge("merge", END)
-    
+
     return graph.compile()
 
 
