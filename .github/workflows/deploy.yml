@@ -59,7 +59,14 @@ jobs:
             COMPOSE="$COMPOSE -p ${{ steps.env.outputs.project }}"
 
             echo "--> Konteynerler guncelleniyor"
-            $COMPOSE up -d --build
+            # --force-recreate SART: `--build` imaji yeniden derliyor ama
+            # compose bunu ayni ":latest" etiketine yazdigi icin bazen
+            # calisan container'i degismemis sayip YENIDEN BASLATMIYOR.
+            # Bir kez tam boyle oldu: api/mcp_server imaj build edildikten
+            # SONRA bile 16 saat boyunca eski kodla calismaya devam etti,
+            # RAG duzeltmeleri sessizce hic devreye girmedi (production'da
+            # ölçümle doğrulandı). --force-recreate bu riski ortadan kaldirir.
+            $COMPOSE up -d --build --force-recreate
 
             echo "--> Sema gocu"
             $COMPOSE exec -T api alembic upgrade head
