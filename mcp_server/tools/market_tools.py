@@ -1,68 +1,82 @@
 """search_market_news MCP tool'u. Piyasa Araştırma Ajanı'nın finansal haber ve
-raporlara eriştiği tek kapı.
+rapor dokümanlarına eriştiği tek kapı.
 
-Mimari kural: ajanlar veriye doğrudan erişmez. Bu yüzden `rag/pipeline.py`
-doğrudan ajandan değil, buradan çağrılır — böylece yetkilendirme, loglama ve
-zaman aşımı politikası ileride tek noktada uygulanabilir.
+Mimari kural: ajanlar veriye doğrudan erişmez. Bu yüzden `rag/retriever.py`
+doğrudan ajandan değil, buradan çağrılır — yetkilendirme, loglama ve zaman
+aşımı politikası tek noktada uygulanabilsin diye.
 
-Not: `FinancialRAGAssistant` getirme (retrieval) ve yanıt üretimini birlikte
-yapıyor, bu yüzden tool ham doküman yerine üretilmiş metni döndürüyor. Portföy
-tool'undaki "tool veri döner, ajan yorumlar" ayrımı burada tam sağlanamıyor;
-pipeline ikiye ayrılırsa düzeltilmeli (TODO).
+Saf DB tabanlı RAG: LLM yanıt üretmez, internetten canlı veri çekmez —
+yalnızca `data/documents/`'dan `rag.ingest` ile Chroma'ya işlenmiş dokümanları
+arar ve ham parçaları döndürür. Bu, `docs/MCP-TOOLS.md`'nin §10'daki "RAG
+getirme/üretim ayrımı yok" notunu kapatır.
 """
 
 import logging
 from typing import Any
 
+import anyio.to_thread
 from fastmcp import FastMCP
+
+from app.core.config import settings
+from mcp_server.tools._base import ToolErrorCode, ToolFailure, tool_handler
+from rag.retriever import NOT_FOUND_MESSAGE, Retriever
 
 logger = logging.getLogger(__name__)
 
-# Embedding modeli ve Chroma indeksi ilk kullanımda bir kez yüklenir ve süreç
-# boyunca bellekte kalır. Her istekte yeniden oluşturulursa her soru 10-20
+# Embedding modeli ve Chroma bağlantısı ilk kullanımda bir kez kurulur ve süreç
+# boyunca bellekte kalır. Her istekte yeniden oluşturulursa her soru birkaç
 # saniye ek gecikme demek.
-_assistant = None
+_retriever: Retriever | None = None
 
 
-def _get_assistant():
-    global _assistant
-    if _assistant is None:
-        from rag.pipeline import FinancialRAGAssistant
+def _get_retriever() -> Retriever:
+    """Bloklayan yükleme (embedding modeli + Chroma bağlantısı). ASLA olay
+    döngüsünden doğrudan çağrılmaz; çağıran taraf thread'e alır — aksi hâlde
+    ilk piyasa sorusu boyunca tüm süreç (diğer kullanıcıların SSE akışları
+    dahil) donar."""
+    global _retriever
+    if _retriever is None:
+        logger.info("RAG retriever hazırlanıyor (embedding modeli + Chroma bağlantısı)...")
+        _retriever = Retriever()
+        logger.info("RAG retriever hazır.")
+    return _retriever
 
-        logger.info("RAG asistanı yükleniyor (embedding modeli + Chroma indeksi)...")
-        _assistant = FinancialRAGAssistant()
-        logger.info("RAG asistanı hazır.")
-    return _assistant
 
-
-def register(mcp: FastMCP) -> None:
+def register(mcp: FastMCP) -> list[str]:
     @mcp.tool(name="search_market_news")
-    async def search_market_news(query: str, session_id: str = "default") -> dict[str, Any]:
-        """Finansal haber, bilanço ve analiz dokümanlarında hibrit arama
-        (vektör + anahtar kelime) yapar ve bulunan kaynaklara dayalı bir yanıt
-        üretir. Yanıt yalnızca dokümanlardaki bilgiye dayanır.
+    @tool_handler(timeout=settings.mcp_tool_timeout_rag)
+    async def search_market_news(query: str, top_k: int = 5) -> dict[str, Any]:
+        """Finansal haber, bilanço ve analiz dokümanlarında vektör + anahtar
+        kelime tabanlı hibrit arama yapar. Yanıt LLM tarafından üretilmez,
+        internetten de çekilmez — yalnızca veritabanındaki dokümanlar aranır.
+
+        Ne zaman kullanılır: piyasa gelişmeleri, şirket bilançoları, faiz ve
+        enflasyon haberleri, "X şirketinin son çeyreği nasıldı" gibi dış dünyaya
+        ait sorular.
+
+        Ne zaman kullanılmaz: kullanıcının kendi portföyüne ait sorular
+        (get_portfolio_summary), kendi riskine ait sorular
+        (get_risk_assessment).
 
         Args:
-            query: Kullanıcının piyasa/haber sorusu.
-            session_id: Çok turlu sohbette bağlamı korumak için oturum kimliği.
+            query: Kullanıcının piyasa/haber sorusu (Türkçe, serbest metin).
+            top_k: Getirilecek en fazla doküman parçası sayısı.
 
         Returns:
-            Başarılıysa {"success": true, "data": {"answer": "..."}}.
-            Hata durumunda {"success": false, "error": {"code": ..., "message": ...}}.
+            Başarılı: {"success": true, "data": {"results": [{"content": "...",
+            "metadata": {...}, "distance": 0.0}, ...]}}.
+            Hata: {"success": false, "error": {"code": "NOT_FOUND"}} —
+            veritabanında sorguyla yeterince alakalı bir kayıt yoksa;
+            {"code": "PROVIDER_UNAVAILABLE"} — Chroma'ya ulaşılamıyorsa
+            (sözleşme §2; `rag/vector_store.py` `ProviderUnavailableError`
+            fırlatır, `@tool_handler` otomatik eşler).
         """
-        try:
-            assistant = _get_assistant()
-            answer = await assistant.chat_async(query, session_id=session_id)
-            return {"success": True, "data": {"answer": answer}}
-        except FileNotFoundError as exc:
-            logger.exception("RAG yapılandırma dosyası bulunamadı")
-            return {
-                "success": False,
-                "error": {"code": "RAG_CONFIG_MISSING", "message": str(exc)},
-            }
-        except Exception as exc:  # noqa: BLE001 - tool sınırında hata sızdırılmaz
-            logger.exception("RAG sorgusu başarısız")
-            return {
-                "success": False,
-                "error": {"code": "RAG_ERROR", "message": str(exc)},
-            }
+        retriever = await anyio.to_thread.run_sync(_get_retriever)
+        results = await anyio.to_thread.run_sync(retriever.retrieve, query, top_k)
+
+        if not results:
+            raise ToolFailure(ToolErrorCode.NOT_FOUND, NOT_FOUND_MESSAGE)
+
+        return {"results": results}
+
+    return ["search_market_news"]
