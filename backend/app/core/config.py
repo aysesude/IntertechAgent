@@ -2,10 +2,11 @@
 yerinde sabit bağlantı adresi, anahtar veya model adı bulunmamalıdır."""
 
 from datetime import date
+from decimal import Decimal
 from enum import Enum
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,15 @@ class RiskProfile(str, Enum):
     CONSERVATIVE = "conservative"
     BALANCED = "balanced"
     AGGRESSIVE = "aggressive"
+
+
+class RiskLevel(str, Enum):
+    """Hesaplanan risk skorunun (0-100) kullanıcıya gösterilen etiketi
+    (bkz. Settings.risk_score_low_max / risk_score_medium_max)."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class PriceSource(str, Enum):
@@ -56,6 +66,56 @@ PRICE_SOURCE_PRIORITY: dict[PriceSource, int] = {
     PriceSource.TCMB: 4,
     PriceSource.TCMB_EVDS: 4,
 }
+
+
+# AK 2.6 / BR: varlık sınıfının, geçmiş fiyat verisinden bağımsız "içkin"
+# risk seviyesi (0-100 ölçekte, risk_service._composite_score'un diğer
+# bileşenleriyle aynı ölçek). Hisse en riskli, tahvil en az riskli kabul
+# edilir; döviz orta-yüksek (3 seviyeli bir enum'a sığmadığı için sayısal
+# ölçek kullanılır — "orta-yüksek" burada 65 gibi bir ara değerle ifade
+# edilir). Analistler bu tabloyu risk_service.py'ye dokunmadan kalibre
+# edebilir.
+ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
+    AssetClass.STOCK: Decimal(85),
+    AssetClass.CURRENCY: Decimal(65),
+    AssetClass.PRECIOUS_METAL: Decimal(50),
+    AssetClass.BOND: Decimal(20),
+    AssetClass.CASH: Decimal(5),
+}
+
+# Risk profiline göre hedef varlık sınıfı dağılımı (yüzde, toplamı 100
+# olmalı). Yeniden dengeleme önerisi (risk_service._rebalance_actions) bunu
+# mevcut dağılımla kıyaslar.
+RISK_PROFILE_TARGET_ALLOCATION: dict[RiskProfile, dict[AssetClass, Decimal]] = {
+    RiskProfile.CONSERVATIVE: {
+        AssetClass.STOCK: Decimal(15),
+        AssetClass.BOND: Decimal(40),
+        AssetClass.PRECIOUS_METAL: Decimal(15),
+        AssetClass.CURRENCY: Decimal(10),
+        AssetClass.CASH: Decimal(20),
+    },
+    RiskProfile.BALANCED: {
+        AssetClass.STOCK: Decimal(35),
+        AssetClass.BOND: Decimal(25),
+        AssetClass.PRECIOUS_METAL: Decimal(15),
+        AssetClass.CURRENCY: Decimal(15),
+        AssetClass.CASH: Decimal(10),
+    },
+    RiskProfile.AGGRESSIVE: {
+        AssetClass.STOCK: Decimal(55),
+        AssetClass.BOND: Decimal(10),
+        AssetClass.PRECIOUS_METAL: Decimal(15),
+        AssetClass.CURRENCY: Decimal(15),
+        AssetClass.CASH: Decimal(5),
+    },
+}
+
+for _profile, _targets in RISK_PROFILE_TARGET_ALLOCATION.items():
+    if sum(_targets.values()) != Decimal(100):
+        raise ValueError(
+            f"RISK_PROFILE_TARGET_ALLOCATION[{_profile.value}] toplami 100 olmali, "
+            f"su an {sum(_targets.values())}."
+        )
 
 
 class AssetSubType(str, Enum):
@@ -105,7 +165,15 @@ class Settings(BaseSettings):
     llm_provider: LLMProvider = LLMProvider.OLLAMA
 
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5.6-luna"
+    # OpenAI uyumlu her ağ geçidi (gateway/proxy) buradan yönlendirilir —
+    # resmi API, kurum içi bir vekil ya da apimaster.ai gibi bir kanal
+    # toplayıcı. Kod değişmiyor, yalnızca .env değişiyor.
+    openai_base_url: str = "https://api.openai.com/v1"
+    # Bazı yeni nesil modeller `temperature` parametresini reddediyor
+    # (yalnızca varsayılan değeri kabul ediyorlar). Sağlayıcı 400 dönerse
+    # .env'de OPENAI_TEMPERATURE'ı boş bırak: parametre isteğe hiç eklenmez.
+    openai_temperature: float | None = 0.1
 
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
@@ -144,16 +212,19 @@ class Settings(BaseSettings):
     # Kaç doküman parçası getirilecek.
     rag_top_k: int = 3
     # Chroma cosine mesafesi (0 = birebir, 2 = alakasız). Bu eşiğin üzerindeki
-    # sonuçlar "alakasız" sayılıp elenir — RAG'ın LLM'siz "veri var/yok" kararını
-    # bu eşik verir.
+    # sonuçlar elenir — ama asıl "alakasız" kararını (rag/retriever.py'deki)
+    # kelime örtüşmesi eşiği veriyor, bu değer yalnızca gevşek bir emniyet
+    # supabı.
     #
-    # paraphrase-multilingual-MiniLM-L12-v2 için tek örnek dokümanla ölçülen
-    # gerçek değerler: alakalı sorgu ~0.82-0.84, alakasız sorgu ~0.86-0.90
-    # (bkz. data/documents/ornek-dokuman.md). 0.85 bu ikisini ayırıyor ama tek
-    # dokümanlık bir örnekleme — hedef 30-50 dokümanlık gerçek külliyat
-    # yüklenince (docs/AGENTS.md) bu değeri gerçek sorgularla yeniden kalibre
-    # edin.
-    rag_distance_threshold: float = 0.85
+    # 6 gerçek dokümanlık (THYAO/ASELS/TCMB/BIST/analist raporu) külliyatla
+    # ölçüldü: paraphrase-multilingual-MiniLM-L12-v2 mesafesi alakalı ve
+    # alakasız sorguları GÜVENİLİR AYIRMIYOR — "Bitcoin fiyatı ne kadar"
+    # (0.58) gerçekten alakalı bir sorgudan ("ASELSAN FAVÖK marjı", 0.73-0.89)
+    # daha düşük (daha "yakın") mesafe alabiliyor. 0.85 gibi sıkı bir eşik
+    # gerçek eşleşmeleri eliyordu (ör. 0.886 mesafeli doğru FAVÖK verisi).
+    # Bu yüzden eşik gevşetildi; alakasızlığı asıl kelime örtüşmesi eşiği
+    # (_MIN_KEYWORD_OVERLAP_RATIO, rag/retriever.py) engelliyor.
+    rag_distance_threshold: float = 0.95
 
     # --- Veri katmanı ---
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
@@ -166,12 +237,80 @@ class Settings(BaseSettings):
     # --- Sabitler (sihirli sayı yerine config) ---
     supported_asset_classes: list[AssetClass] = list(AssetClass)
 
-    # TODO: Risk/Strateji Ajanı uygulanırken risk eşikleri (ör. volatilite, yoğunlaşma
-    # limitleri) buraya eklenecek. Tanımları kullanıcıyla netleştirilmeden eklenmedi.
+    # --- Risk/Strateji Ajanı ---
+    # ANALİST NOTU: risk metodolojisinin ayarlanabilir tek adresi burasıdır —
+    # app/services/risk_service.py'de hiçbir eşik/ağırlık sabit sayı olarak
+    # yazılmaz. Değer değiştirmek için servis koduna dokunmak gerekmez.
+
+    # Volatilite/korelasyon/kovaryans hesabı için gereken en az ortak fiyat
+    # günü sayısı. Altında kalınırsa AK 2.7 gereği hesaplanamaz, uyarıyla
+    # birlikte kalan ölçütlerle skorlanır (uydurulmaz).
+    risk_min_price_points: int = 30
+    # Günlük volatiliteyi/getiriyi yıllıklandırmak için işlem günü sayısı.
+    risk_trading_days_per_year: int = 252
+    # VaR (Value at Risk) güven seviyesi (AK 2.4). %95 sektör standardıdır.
+    risk_var_confidence: float = 0.95
+    # VaR ufku (gün). 1 = ertesi gün için parametrik VaR.
+    risk_var_horizon_days: int = 1
+
+    # Sharpe oranı (AK 2.5) için risksiz getiri oranı. Önce TCMB EVDS'ten canlı
+    # çekilir (risk_free_rate_evds_series doluysa); seri boş/tanımsız, anahtar
+    # eksik ya da istek başarısızsa bu sabit yedeğe düşülür (aynı öncelik
+    # mantığı: gerçek veri > yedek, hiçbir zaman uydurma). Yedek değer TCMB'nin
+    # Temmuz 2026 itibarıyla göstergesel gecelik faiz oranına (%37) dayanır,
+    # periyodik olarak elle güncellenmelidir.
+    risk_free_rate_fallback_annual: float = 0.37
+    # Doğru EVDS seri kodu doğrulanana kadar boş bırakılır (bkz. proje notları);
+    # boşken doğrudan yedek orana düşülür.
+    risk_free_rate_evds_series: str | None = None
+
+    # --- Kompozit risk skoru bileşen ağırlıkları (toplamı 1.0 olmalı) ---
+    risk_weight_volatility: float = 0.35
+    risk_weight_concentration: float = 0.25
+    risk_weight_diversification: float = 0.20
+    risk_weight_asset_class: float = 0.20
+
+    # Yıllıklandırılmış volatilite (oran, 0.10 = %10) -> 0-100 puan aralığı.
+    risk_volatility_low: float = 0.10
+    risk_volatility_high: float = 0.35
+
+    # Tek bir varlığın portföy içindeki ağırlığı (oran, 0.40 = %40).
+    risk_concentration_low: float = 0.10
+    risk_concentration_high: float = 0.40
+
+    # Etkin varlık sayısı (1 / Herfindahl endeksi). Çeşitlendirme arttıkça
+    # (sayı büyüdükçe) risk azalır; eşikler bu yüzden ters sırada verilir.
+    risk_effective_holdings_low: float = 15.0
+    risk_effective_holdings_high: float = 3.0
+
+    # Skor -> etiket sınırları (bu değere kadar dâhil).
+    risk_score_low_max: float = 33.0
+    risk_score_medium_max: float = 66.0
+
+    # Hedeften bu kadar puandan az sapan varlık sınıfı "dengede" sayılır.
+    risk_rebalance_tolerance_percent: float = 5.0
 
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _validate_risk_weights(self) -> "Settings":
+        """Ağırlıklar .env'den ayrı ayrı geçersiz kılınabildiği için toplamlarının
+        1.0 kalacağı garanti değil; bozuk bir kombinasyon skoru sessizce 0-100
+        aralığının dışına taşır. Yapılandırma yüklenirken yakalıyoruz."""
+        total = (
+            self.risk_weight_volatility
+            + self.risk_weight_concentration
+            + self.risk_weight_diversification
+            + self.risk_weight_asset_class
+        )
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(
+                "RISK_WEIGHT_* ağırlıklarının toplamı 1.0 olmalı, "
+                f"şu an {total}. (.env dosyanızı kontrol edin.)"
+            )
+        return self
 
 
 @lru_cache

@@ -4,10 +4,35 @@ sadece burada yeni bir implementasyon eklenecek, çağıran kod değişmeyecek."
 import hashlib
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import cached_property
 from typing import Any
 
 from app.core.config import settings
+from app.core.exceptions import AppError, ProviderUnavailableError
+
+
+@contextmanager
+def _provider_errors(operation: str, target: str) -> Iterator[None]:
+    """Chroma'dan gelen her hatayı `ProviderUnavailableError`'a çevirir.
+
+    Sözleşme (docs/MCP-TOOLS.md §2) "dış kaynak yanıt vermiyor" durumunu
+    PROVIDER_UNAVAILABLE olarak zarfa yazmayı şart koşuyor ve ajanın bu kodda
+    zarif düşüş yapmasını bekliyor. Bunu tool'un istisna tiplerini tek tek
+    tanıması değil, sağlayıcı katmanının doğru istisnayı fırlatması sağlar:
+    `@tool_handler` `AppError` türevlerini otomatik eşliyor.
+
+    Yalnızca chromadb çağrılarını saran bloklarda kullanılır; kendi
+    `AppError`'larımız olduğu gibi geçer ki kod hatamız "kaynak erişilemiyor"
+    kılığına girmesin.
+    """
+    try:
+        yield
+    except AppError:
+        raise
+    except Exception as exc:
+        raise ProviderUnavailableError(f"Chroma {operation} failed at {target}: {exc}") from exc
 
 
 class VectorStore(ABC):
@@ -16,8 +41,28 @@ class VectorStore(ABC):
         """Doküman parçalarını (chunk) embedding'leriyle birlikte saklar."""
 
     @abstractmethod
-    def similarity_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """Sorguya en yakın doküman parçalarını döndürür."""
+    def clear(self) -> None:
+        """Koleksiyondaki tüm parçaları siler.
+
+        `add_documents` yalnızca upsert yapar — bir kaynak dosya silinirse
+        veya parçalama stratejisi (chunk_size/overlap) değişirse eski
+        parçalar kendiliğinden silinmez, kalıcı olarak birikir (ölçümle
+        doğrulandı: `data/documents/`'dan kaldırılan bir dosyanın parçaları
+        production Chroma'da aylarca kalabilir). `rag.ingest` bu yüzden her
+        çalıştığında önce `clear()` çağırır, sonra mevcut dosyalardan
+        yeniden yükler — Chroma her zaman `data/documents/`'ın birebir
+        yansıması olur, sapma birikmez."""
+
+    @abstractmethod
+    def similarity_search(
+        self, query: str, top_k: int = 5, where: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """Sorguya en yakın doküman parçalarını döndürür.
+
+        `where` verilirse (Chroma metadata filtre sözdizimi), arama uzayı
+        vektör benzerliği hesaplanmadan ÖNCE bu filtreyle daraltılır —
+        benzerlik aramasının yapısal olarak dönem/şirket karıştırmasını
+        önlemesi için (bkz. rag/retriever.py ön filtre)."""
 
 
 class ChromaVectorStore(VectorStore):
@@ -37,23 +82,44 @@ class ChromaVectorStore(VectorStore):
         self._collection_name = collection_name
         self._embedding_model = embedding_model
 
-    # Bağlantı ve embedding modeli ilk kullanımda kurulur: import anında Chroma
-    # container'ı ayakta olmayabilir, ayrıca embedding modelinin yüklenmesi
-    # birkaç saniye sürüyor — her istekte tekrarlanmamalı.
+    # Bağlantı ilk kullanımda kurulur: import anında Chroma container'ı ayakta
+    # olmayabilir. `clear()` sonrası sıfırlanır ki bir sonraki erişim
+    # koleksiyonu yeniden (boş) oluştursun.
+    @cached_property
+    def _client(self):
+        import chromadb
+
+        with _provider_errors("connection", self._target):
+            return chromadb.HttpClient(host=self._host, port=self._port)
+
     @cached_property
     def _collection(self):
-        import chromadb
         from chromadb.utils import embedding_functions
 
-        client = chromadb.HttpClient(host=self._host, port=self._port)
-        embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=self._embedding_model
-        )
-        return client.get_or_create_collection(
-            name=self._collection_name,
-            embedding_function=embedding_fn,
-            metadata={"hnsw:space": "cosine"},
-        )
+        # Hata durumunda cached_property değeri saklamaz; sonraki çağrı yeniden
+        # dener. Chroma geç ayağa kalktıysa süreç yeniden başlatılmadan toparlar.
+        with _provider_errors("connection", self._target):
+            embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name=self._embedding_model
+            )
+            return self._client.get_or_create_collection(
+                name=self._collection_name,
+                embedding_function=embedding_fn,
+                metadata={"hnsw:space": "cosine"},
+            )
+
+    def clear(self) -> None:
+        with _provider_errors("clear", self._target):
+            # Önce var olduğundan emin olunur (idempotent) ki delete_collection
+            # "koleksiyon yok" durumunu bağlantı hatasıyla karıştırmasın.
+            self._client.get_or_create_collection(self._collection_name)
+            self._client.delete_collection(self._collection_name)
+        self.__dict__.pop("_collection", None)
+
+    @property
+    def _target(self) -> str:
+        """Log ve istisna metni için bağlantı adresi. Kullanıcıya gitmez."""
+        return f"{self._host}:{self._port}"
 
     @staticmethod
     def _make_id(document: str, metadata: dict[str, Any]) -> str:
@@ -66,14 +132,20 @@ class ChromaVectorStore(VectorStore):
         if not documents:
             return
         ids = [self._make_id(doc, meta) for doc, meta in zip(documents, metadatas)]
-        self._collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
+        with _provider_errors("upsert", self._target):
+            self._collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
 
-    def similarity_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        count = self._collection.count()
-        if count == 0:
-            return []
+    def similarity_search(
+        self, query: str, top_k: int = 5, where: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        with _provider_errors("query", self._target):
+            count = self._collection.count()
+            if count == 0:
+                return []
 
-        result = self._collection.query(query_texts=[query], n_results=min(top_k, count))
+            result = self._collection.query(
+                query_texts=[query], n_results=min(top_k, count), where=where or None
+            )
         docs = result.get("documents") or [[]]
         metadatas = result.get("metadatas") or [[]]
         distances = result.get("distances") or [[]]

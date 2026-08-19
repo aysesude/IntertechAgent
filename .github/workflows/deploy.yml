@@ -59,10 +59,53 @@ jobs:
             COMPOSE="$COMPOSE -p ${{ steps.env.outputs.project }}"
 
             echo "--> Konteynerler guncelleniyor"
-            $COMPOSE up -d --build
+            # --force-recreate SART: `--build` imaji yeniden derliyor ama
+            # compose bunu ayni ":latest" etiketine yazdigi icin bazen
+            # calisan container'i degismemis sayip YENIDEN BASLATMIYOR.
+            # Bir kez tam boyle oldu: api/mcp_server imaj build edildikten
+            # SONRA bile 16 saat boyunca eski kodla calismaya devam etti,
+            # RAG duzeltmeleri sessizce hic devreye girmedi (production'da
+            # ölçümle doğrulandı). --force-recreate bu riski ortadan kaldirir.
+            #
+            # -V (--renew-anon-volumes) SART: frontend servisi node_modules'i
+            # anonim bir volume'de tutuyor (docker-compose.yml). Bu volume
+            # container yeniden olusturulsa bile OTOMATIK YENILENMIYOR - yeni
+            # bir npm bagimliligi eklense (ornegin react-markdown) bile
+            # calisan container eski, o bagimliligi icermeyen volume'u
+            # kullanmaya devam ediyor ve "Failed to resolve import" hatasi
+            # veriyor (production'da olculdu). -V, yalnizca ANONIM volume'leri
+            # (bu projede tek ornegi frontend/node_modules) sifirlayip
+            # image'in kendi icerigiyle yeniden doldurur; postgres/chroma gibi
+            # ISIMLI volume'lere dokunmaz, veritabanini SILMEZ.
+            $COMPOSE up -d --build --force-recreate -V
 
             echo "--> Sema gocu"
             $COMPOSE exec -T api alembic upgrade head
+
+            echo "--> RAG dokumanlari indeksleniyor"
+            # data/documents/ altina yeni bir .md eklendiginde Chroma'nin da
+            # guncellenmesi gerekiyor; aksi halde deploy gecer ama Piyasa Ajani
+            # yeni dokumani goremez.
+            #
+            # rag.ingest her calistiginda Chroma koleksiyonunu SILIP yeniden
+            # olusturur (rag/vector_store.py clear()) - upsert degil, tam
+            # senkronizasyon. Eskiden veri kalici olarak birikiyordu.
+            #
+            # `|| true` / `|| echo` YOK ve eklenmemeli. Bir kez `|| echo ...` ile
+            # yazilmisti; ingest sessizce cokerken deploy yesil kaldi ve RAG'in
+            # neden bos oldugunu bulmak saatler aldi. Dokuman yoksa ingest artik
+            # 0 donuyor (bkz. rag/ingest.py), dolayisiyla buraya dusen her hata
+            # GERCEK bir hatadir ve deploy'u kirmalidir.
+            $COMPOSE exec -T -w / api python -m rag.ingest
+
+            echo "--> mcp_server yeniden baslatiliyor (RAG koleksiyon referansini tazelemek icin)"
+            # mcp_server acilirken (warm_up) Chroma koleksiyonuna bir referans
+            # alip bellekte tutuyor. Yukaridaki adim koleksiyonu SILIP yeniden
+            # olusturdugu icin, mcp_server hala eski (artik var olmayan)
+            # koleksiyona isaret eder - chat sessizce yanit vermez olur
+            # (production'da olculdu). restart, warm_up'i tazelenmis
+            # koleksiyonla yeniden calistirir.
+            $COMPOSE restart mcp_server
 
             echo "--> Saglik kontrolu"
             for i in $(seq 1 18); do

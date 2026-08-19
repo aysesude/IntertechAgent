@@ -17,7 +17,7 @@ from fastmcp import FastMCP
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from mcp_server.tools import market_tools, portfolio_tools
+from mcp_server.tools import market_tools, portfolio_tools, risk_tools
 
 # API süreci bunu app/main.py'de yapıyor; MCP sunucusu ayrı bir süreç olduğu
 # için kendi logging kurulumunu kendi yapmalı, yoksa tool logları görünmez.
@@ -25,8 +25,7 @@ setup_logging()
 
 logger = logging.getLogger(__name__)
 
-# TODO: risk_tools.get_risk_assessment uygulandığında listeye eklenecek.
-_TOOL_MODULES = [portfolio_tools, market_tools]
+_TOOL_MODULES = [portfolio_tools, market_tools, risk_tools]
 
 
 def register_all(mcp: FastMCP) -> list[str]:
@@ -43,4 +42,11 @@ register_all(mcp)
 
 
 if __name__ == "__main__":
+    # RAG'ın embedding modeli + Chroma bağlantısı ilk kullanımda ~30-60 sn
+    # sürüyor; burada ısıtılmazsa bu süre ilk kullanıcının sorgusuna biner ve
+    # istemci tarafı zaman aşımı olmadığı için istek sessizce kesilir (bkz.
+    # market_tools.warm_up docstring'i). Deploy sağlık kontrolü zaten 90 sn'ye
+    # kadar toleranslı (bkz. .github/workflows/deploy.yml), bu süre onu aşmaz.
+    logger.info("[MCP] RAG isitiliyor (embedding modeli + Chroma baglantisi)...")
+    market_tools.warm_up()
     mcp.run(transport="http", host=settings.mcp_server_host, port=settings.mcp_server_port)

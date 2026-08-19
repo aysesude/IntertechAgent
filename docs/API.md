@@ -110,7 +110,7 @@ Girdi:  { "user_id": "<UUID>" }
 ```
 Girdi:  { "query": "...", "top_k": 5 }
 Çıktı (başarı): { "success": true, "data": { "results": [{ "content": "...", "metadata": {...}, "distance": 0.0 }, ...] } }
-Çıktı (hata):   { "success": false, "error": { "code": "NOT_FOUND", "message": "..." } }
+Çıktı (hata):   { "success": false, "error": { "code": "NOT_FOUND" | "PROVIDER_UNAVAILABLE", "message": "..." } }
 ```
 Saf DB tabanlı arama: LLM yanıt üretmez, internetten canlı veri çekmez.
 `data/documents/` altındaki dokümanlar `python -m rag.ingest` ile Chroma'ya
