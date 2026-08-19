@@ -66,7 +66,18 @@ jobs:
             # SONRA bile 16 saat boyunca eski kodla calismaya devam etti,
             # RAG duzeltmeleri sessizce hic devreye girmedi (production'da
             # ölçümle doğrulandı). --force-recreate bu riski ortadan kaldirir.
-            $COMPOSE up -d --build --force-recreate
+            #
+            # -V (--renew-anon-volumes) SART: frontend servisi node_modules'i
+            # anonim bir volume'de tutuyor (docker-compose.yml). Bu volume
+            # container yeniden olusturulsa bile OTOMATIK YENILENMIYOR - yeni
+            # bir npm bagimliligi eklense (ornegin react-markdown) bile
+            # calisan container eski, o bagimliligi icermeyen volume'u
+            # kullanmaya devam ediyor ve "Failed to resolve import" hatasi
+            # veriyor (production'da olculdu). -V, yalnizca ANONIM volume'leri
+            # (bu projede tek ornegi frontend/node_modules) sifirlayip
+            # image'in kendi icerigiyle yeniden doldurur; postgres/chroma gibi
+            # ISIMLI volume'lere dokunmaz, veritabanini SILMEZ.
+            $COMPOSE up -d --build --force-recreate -V
 
             echo "--> Sema gocu"
             $COMPOSE exec -T api alembic upgrade head
