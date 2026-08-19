@@ -14,6 +14,9 @@ class _FakeVectorStore(VectorStore):
     def add_documents(self, documents, metadatas) -> None:
         raise NotImplementedError
 
+    def clear(self) -> None:
+        raise NotImplementedError
+
     def similarity_search(self, query: str, top_k: int = 5, where: dict | None = None):
         self.son_where = where
         return self._documents
@@ -95,3 +98,44 @@ def test_retrieve_donem_ve_donem_listesi_birlikte_verilemez():
 
     with pytest.raises(ValueError):
         retriever.retrieve("soru", donem="2026-Q2", donem_listesi=["2026-Q1", "2026-Q2"])
+
+
+def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
+    """sirket= parametresi verilmeden (serbest metin yolu — bugünkü tek
+    çağıran search_market_news hep böyle çağırır), iki şirketin bilançosu
+    aynı jenerik kalıpla yazıldığında ikisi de kelime-örtüşme eşiğini
+    geçebiliyor (ölçümle doğrulandı: gerçek ASELS/THYAO dokümanlarıyla).
+    Sonuçlardan biri sorgudaki şirketle eşleştiyse, başka bir şirkete
+    etiketli sonuçlar sıralamada geriye atılmakla kalmaz, tamamen elenir."""
+    store = _FakeVectorStore(
+        [
+            _doc("ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3),
+            _doc("THYAO ikinci çeyrek net kâr açıkladı", sirket="THYAO", distance=0.2),
+            _doc("Piyasada ikinci çeyrek net kâr haberleri", sirket="", distance=0.4),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("ASELSAN ikinci çeyrek net kârı")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert "THYAO" not in sirketler
+    assert "ASELS" in sirketler
+    assert "" in sirketler  # etiketsiz genel haber elenmez
+
+
+def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
+    """Sorgu belirli bir şirkete işaret etmiyorsa (ör. sektör geneli bir
+    soru), farklı şirketlerin sonuçları bir arada kalabilir — eleme yalnızca
+    sonuçlardan biri gerçekten sorgudaki şirketle eşleştiğinde devreye girer."""
+    store = _FakeVectorStore(
+        [
+            _doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS", distance=0.3),
+            _doc("THYAO bilançosu net kâr açıklandı", sirket="THYAO", distance=0.4),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("bilanço net kâr açıklamaları")
+
+    assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}

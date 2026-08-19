@@ -52,7 +52,6 @@ _STOPWORDS = {
     "nedir",
     "hakkinda",
     "bilgi",
-    "haber",
     "lutfen",
     "acaba",
     "son",
@@ -244,6 +243,24 @@ class Retriever:
             and _shares_a_keyword(query_keywords, _result_keywords(r))
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
+
+        # Sorgu belirli bir şirkete işaret ediyorsa (sonuçlardan biri kendi
+        # `sirket` alanıyla eşleştiyse), BAŞKA bir şirkete etiketli sonuçlar
+        # tamamen elenir — yalnızca sıralamada geriye atmak yetmiyordu:
+        # "ASELSAN'ın ... nasıl?" sorusuna THYAO'nun parçaları da (aynı
+        # jenerik bilanço kalıbı yüzünden) kelime-örtüşme eşiğini geçip
+        # sonuca karışabiliyordu (ölçümle doğrulandı). Etiketsiz genel
+        # haber/makro dokümanlar (`sirket` boş) bu elemeden muaf — "ASELSAN
+        # hakkında haber var mı" sorusunda ASELSAN'ı yalnızca geçerken anan
+        # genel bir piyasa haberi hâlâ geçerli bir sonuçtur.
+        if any(_sirket_matches_query(r, query_keywords) for r in filtered):
+            filtered = [
+                r
+                for r in filtered
+                if not (r.get("metadata") or {}).get("sirket")
+                or _sirket_matches_query(r, query_keywords)
+            ]
+
         # Chroma zaten mesafeye göre sıralı döndürdüğü için stabil sort,
         # kendi şirketi sorguyla eşleşen sonuçları öne alırken aynı grup
         # içinde mesafe sırasını korur.

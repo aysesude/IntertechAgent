@@ -4,8 +4,12 @@ front matter'ı metadata'ya çevirir ve vektör veritabanına işler.
 Çalıştırma:
     docker compose exec -w / api python -m rag.ingest
 
-Tekrar çalıştırılabilir (idempotent): pipeline aynı içerikli parçaları
-atladığı için mevcut dokümanlar yeniden yüklenmez.
+Tekrar çalıştırılabilir (idempotent): her çalıştırma önce koleksiyonu
+temizler, sonra data/documents/'daki dosyalardan yeniden yükler. Chroma
+her zaman bu klasörün birebir yansımasıdır — kaldırılan bir dosyanın ya
+da eski bir parçalama ayarının (chunk_size/overlap) izi kalmaz. Yalnızca
+upsert yapan bir önceki sürüm, silinen dosyaların parçalarını kalıcı
+olarak biriktiriyordu (production'da ölçümle doğrulandı).
 
 Doküman formatı için bkz. data/documents/README.md
 """
@@ -116,7 +120,13 @@ def main() -> int:
         logger.error("Hiçbir dosya ayrıştırılamadı.")
         return 1
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    # chunk_overlap=0: parçalar arası üst üste binme, sınırdaki bir başlığın
+    # (ör. "## Not") hem bir önceki hem bir sonraki parçada aynen tekrar
+    # etmesine yol açıyordu — ikisi de sonuca girip art arda eklenince aynı
+    # başlık iki kez görünüyordu (ölçümle doğrulandı). Dokümanlar zaten
+    # markdown başlıklarında bölündüğü için (RecursiveCharacterTextSplitter'ın
+    # varsayılan ayraçları) bağlam kaybı riski düşük.
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
     chunks = splitter.split_documents(documents)
     if not chunks:
         logger.error("Dokümanlar parçalanamadı.")
@@ -129,6 +139,10 @@ def main() -> int:
     logger.info("%d parça vektör veritabanına işleniyor...", len(chunks))
     store = get_vector_store()
     try:
+        # Önce temizlenir: yalnızca upsert yapmak, data/documents/'dan
+        # kaldırılan dosyaların veya eski chunk_size/overlap ayarıyla
+        # üretilmiş parçaların kalıcı olarak birikmesine yol açıyordu.
+        store.clear()
         store.add_documents(
             documents=[c.page_content for c in chunks],
             metadatas=[c.metadata for c in chunks],

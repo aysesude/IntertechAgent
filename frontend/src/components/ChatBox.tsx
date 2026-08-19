@@ -1,6 +1,34 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { streamChat } from "../api/chat";
 import type { MessageRole } from "../types/chat";
+
+// Asistan cevapları (RAG dokümanlarından gelen) markdown başlık/tablo
+// içeriyor; ReactMarkdown olmadan "| Gösterge | 2026 Ç2 |" gibi ham
+// sözdizimi ekrana aynen basılıyordu. remarkGfm, tablo (GFM) desteği için
+// gerekli — temel react-markdown bunu kapsamaz.
+const MARKDOWN_COMPONENTS = {
+  table: (props: React.ComponentPropsWithoutRef<"table">) => (
+    <table className="my-1 w-full border-collapse text-xs" {...props} />
+  ),
+  th: (props: React.ComponentPropsWithoutRef<"th">) => (
+    <th className="border border-gray-300 bg-gray-50 px-2 py-1 text-left" {...props} />
+  ),
+  td: (props: React.ComponentPropsWithoutRef<"td">) => (
+    <td className="border border-gray-300 px-2 py-1" {...props} />
+  ),
+  p: (props: React.ComponentPropsWithoutRef<"p">) => <p className="mb-1.5 last:mb-0" {...props} />,
+  ul: (props: React.ComponentPropsWithoutRef<"ul">) => (
+    <ul className="mb-1.5 list-disc pl-4" {...props} />
+  ),
+  h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
+    <h1 className="mb-1 mt-1 text-base font-semibold first:mt-0" {...props} />
+  ),
+  h2: (props: React.ComponentPropsWithoutRef<"h2">) => (
+    <h2 className="mb-1 mt-2 text-sm font-semibold first:mt-0" {...props} />
+  ),
+};
 
 interface DisplayMessage {
   role: MessageRole;
@@ -90,7 +118,13 @@ function ChatBox({ userId }: ChatBoxProps): JSX.Element {
               message.role === "user" ? "ml-auto bg-blue-50" : "bg-gray-100"
             }`}
           >
-            {message.content}
+            {message.role === "assistant" ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                {message.content}
+              </ReactMarkdown>
+            ) : (
+              message.content
+            )}
             {message.streaming && <span className="animate-pulse">▍</span>}
           </div>
         ))}
