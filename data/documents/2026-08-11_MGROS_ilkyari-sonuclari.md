@@ -1,0 +1,40 @@
+---
+baslik: Migros 2026 İlk Yarı Finansal Sonuçları ve Mağaza Yatırımları
+kaynak: DHA
+kaynak_url: https://www.dha.com.tr/ekonomi/migros-yilin-ilk-yarisinda-toplam-6-3-milyar-tl-yatirim-yapti-2926035
+tarih: 2026-08-11
+sirket: MGROS
+tur: bilanco
+donem: 2026-H1
+konsolide_mi: true
+dil: tr
+---
+
+# Migros 2026 İlk Yarı Finansal Sonuçları
+
+Migros Ticaret A.Ş. (MGROS), 2026 yılı ilk yarı finansal sonuçlarını
+ve mağazacılık yatırımlarını açıkladı.
+
+## Satış ve kârlılık
+
+Şirket, 2026 yılının ilk yarısında satışlarını reel bazda yüzde 4,5
+artırarak 241,3 milyar TL'ye çıkardı. Aynı dönemde 1 milyar 78 milyon
+TL net kâr elde etti.
+
+## Mağaza ağı yatırımı
+
+Yılın ilk 6 ayında farklı formatlarda 115 yeni mağaza açan şirket,
+toplam mağaza sayısını 3.830'a ulaştırdı. Bu dönemde toplam 6,3
+milyar TL yatırım harcaması gerçekleştirdi.
+
+## 2026 yılı hedefleri
+
+Migros Grubu CFO'su Cem Doğan, 2026 yılının tamamında 180-200 yeni
+mağaza açmayı ve yüzde 5-7 konsolide satış büyümesi elde etmeyi
+hedeflediklerini açıkladı.
+
+## Değerlendirme
+
+Yatırım harcamalarının önemli bir bölümü yeni mağaza açılışlarının
+yanı sıra mevcut mağazaların yenilenmesine ve mağaza içi verimliliği
+artırmaya yönelik projelere ayrıldı.

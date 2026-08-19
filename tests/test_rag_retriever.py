@@ -139,3 +139,29 @@ def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
     results = retriever.retrieve("bilanço net kâr açıklamaları")
 
     assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}
+
+
+def test_retrieve_buyuk_i_harfi_kelimeyi_parcalamaz():
+    """str.lower() Türkçe büyük "İ" harfini "i" + birleşen nokta işaretine
+    çevirir; bu, \\w+ regex'inin kelimeyi ("BİM" -> "bi"+"m" gibi) anlamsız
+    parçalara bölmesine yol açıyordu ve şirket adı sorgudan tamamen
+    düşüyordu (bkz. rag/retriever.py _normalize). Bu test "İ" içeren bir
+    şirket adının hâlâ geçerli bir arama kelimesi olarak tanınmasını
+    doğrular."""
+    store = _FakeVectorStore(
+        [
+            _doc("BİM Birleşik Mağazalar hedef fiyat açıklandı", sirket="BIMAS", distance=0.3),
+            _doc(
+                "THYAO için bilanço sonrası hedef fiyat açıklandı",
+                sirket="THYAO",
+                distance=0.1,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("BİM hedef fiyat")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert "THYAO" not in sirketler
+    assert "BIMAS" in sirketler

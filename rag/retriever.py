@@ -76,7 +76,14 @@ _TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "
 
 
 def _normalize(text: str) -> str:
-    return text.lower().translate(_TURKISH_FOLD_MAP)
+    # Python'un str.lower()'ı Türkçe büyük "İ" (U+0130) harfini Unicode
+    # varsayılanına göre "i" + birleşen nokta işaretine (U+0307) çevirir, tek
+    # bir "i" harfine değil. Bu, \w+ regex'inin o karakteri kelime sınırı
+    # sayıp "BİM" gibi bir kelimeyi "bi" + "m" gibi anlamsız parçalara
+    # bölmesine yol açıyordu (ölçümle doğrulandı: "BİM hedef fiyat" sorgusu
+    # şirket adını hiç kelime olarak taşımıyordu). Düz "İ" büyük harfi
+    # lower()'dan ÖNCE normal "i"ye çevrilerek bu parçalanma engellenir.
+    return text.replace("İ", "i").lower().translate(_TURKISH_FOLD_MAP)
 
 
 def _keywords(text: str) -> set[str]:
