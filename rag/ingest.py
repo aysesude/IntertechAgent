@@ -123,10 +123,15 @@ def main() -> int:
     # chunk_overlap=0: parçalar arası üst üste binme, sınırdaki bir başlığın
     # (ör. "## Not") hem bir önceki hem bir sonraki parçada aynen tekrar
     # etmesine yol açıyordu — ikisi de sonuca girip art arda eklenince aynı
-    # başlık iki kez görünüyordu (ölçümle doğrulandı). Dokümanlar zaten
-    # markdown başlıklarında bölündüğü için (RecursiveCharacterTextSplitter'ın
-    # varsayılan ayraçları) bağlam kaybı riski düşük.
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
+    # başlık iki kez görünüyordu (ölçümle doğrulandı).
+    #
+    # chunk_size=500 -> 800: 500 çoğu paragrafı ortasından kesiyordu (ör. bir
+    # THYAO paragrafı "...artan yakıt" diye bitip devamı ["maliyetleri
+    # arttı"] ayrı bir parçaya düşüyordu; o parça sorguyla tek başına yeterli
+    # kelime örtüşmesi sağlamadığı için sonuca hiç girmiyor, cevap yarım
+    # cümleyle bitiyordu — ölçümle doğrulandı). 800, bu projedeki dokümanların
+    # tek paragraflarının büyük çoğunluğunu bölmeden içine alıyor.
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=0)
     chunks = splitter.split_documents(documents)
     if not chunks:
         logger.error("Dokümanlar parçalanamadı.")
