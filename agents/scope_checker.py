@@ -1,6 +1,7 @@
 import re
-import yaml
 from pathlib import Path
+
+import yaml
 
 # Config yolunu dinamik al
 CONFIG_PATH = Path(__file__).parent / "scope.yaml"

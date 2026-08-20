@@ -50,7 +50,6 @@ class OrchestratorState(TypedDict):
 async def detect_intent(state: OrchestratorState) -> dict:
     """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
     query = state["message"].strip()
-    query_lower = query.lower()
 
     # 1. Kural Tabanlı Kapsam Kontrolü (Scope Guard)
     scope_result = check_scope(query)
