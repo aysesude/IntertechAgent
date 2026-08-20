@@ -212,3 +212,70 @@ def test_retrieve_jenerik_olmayan_eslesme_varsa_kabul_edilir():
 
     assert len(results) == 1
     assert results[0]["metadata"]["sirket"] == "THYAO"
+
+
+def test_retrieve_takma_ad_ile_baska_sirketler_elenir():
+    """AKBNK ticker kodu foldlanınca "akbnk" olur, "Akbank" kelimesi ise
+    "akbank" — ilk 4 harf ("akbn" vs "akba") örtüşmüyor. Bu yüzden salt
+    ticker koduna dayanan önek karşılaştırması, kullanıcı günlük şirket
+    adını yazdığında hiç tetiklenmiyor ve "başka şirketi tamamen ele"
+    güvenlik ağı devreye girmiyordu (ölçümle doğrulandı: canlıda "Akbank'ın
+    ikinci çeyrek net karı" sorgusu AKBNK'nın yanında GARAN/SISE/YKBNK/
+    KCHOL'u de döndürdü). _SIRKET_ALIASES bu tür tickerlar için açık takma
+    ad sağlıyor; bu test AKBNK sorgusunun artık yalnızca AKBNK döndürmesini
+    doğrular."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Akbank ikinci çeyrek net kâr açıkladı, 15,19 milyar TL",
+                sirket="AKBNK",
+                distance=0.3,
+            ),
+            _doc(
+                "Garanti BBVA ikinci çeyrek net kâr açıkladı",
+                sirket="GARAN",
+                distance=0.2,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("Akbank'ın ikinci çeyrek net karı ne kadar")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert sirketler == {"AKBNK"}
+
+
+def test_retrieve_takma_adlar_onekte_carpismaz():
+    """ "Türk" (THYAO takma adı) ile "Turkcell" (TCELL takma adı) ilk 4
+    harfte örtüşüyor ("turk"). İçerik seviyesindeki gevşek önek eşleşmesi
+    yüzünden her iki doküman da karşı sorgunun ilk kelime-örtüşme kapısını
+    geçebiliyor (bu beklenen/değişmeyen davranış) — ama takma ad eşleşmesi
+    önekle değil TAM eşleşmeyle yapılmazsa, bu durumda "başka şirketi ele"
+    güvenlik ağı da yanlışlıkla her ikisini "sorguyla eşleşti" sayıp hiçbirini
+    elemiyordu (ölçümle doğrulandı: canlıda iki yönde de çapraz bulaşma
+    görüldü). Bu test, TAM eşleşme sayesinde güvenlik ağının doğru şirketi
+    ayırt edebildiğini doğrular."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Turkcell ikinci çeyrek net kâr açıkladı",
+                baslik="Turkcell (TCELL) 2026 2. Çeyrek Sonuçları",
+                sirket="TCELL",
+                distance=0.2,
+            ),
+            _doc(
+                "Türk Hava Yolları ikinci çeyrek net kâr açıkladı",
+                baslik="Türk Hava Yolları (THYAO) 2026 2. Çeyrek Sonuçları",
+                sirket="THYAO",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    tcell_sonuc = retriever.retrieve("Turkcell ikinci çeyrek net karı")
+    assert {r["metadata"]["sirket"] for r in tcell_sonuc} == {"TCELL"}
+
+    thyao_sonuc = retriever.retrieve("Türk Hava Yolları ikinci çeyrek")
+    assert {r["metadata"]["sirket"] for r in thyao_sonuc} == {"THYAO"}
