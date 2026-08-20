@@ -80,13 +80,42 @@ PORTFOLIO_ARCHETYPES: dict[str, dict[AssetClass, tuple[float, int]]] = {
     },
 }
 PORTFOLIO_ARCHETYPE_CYCLE = list(PORTFOLIO_ARCHETYPES)
-RISK_PROFILE_CYCLE = [RiskProfile.CONSERVATIVE, RiskProfile.BALANCED, RiskProfile.AGGRESSIVE]
+# Dört profilin tamamı üretilir. 'growth' (Büyüme) b26e8dab6ef9 ile enum'a
+# eklendi ve risk_service'in senaryo motoru onun için ayrı sabitler tanımlıyor
+# (RISK_TARGET_VOLATILITY_BAND vb.); seed onu üretmezse o kod yolu hiç
+# çalışmaz ve demoda gösterilemez.
+RISK_PROFILE_CYCLE = [
+    RiskProfile.CONSERVATIVE,
+    RiskProfile.BALANCED,
+    RiskProfile.GROWTH,
+    RiskProfile.AGGRESSIVE,
+]
 
 _TRY_QUANT = Decimal("0.0001")
 
 
 def _tx_datetime(d) -> datetime:
     return datetime.combine(d, time(hour=11), tzinfo=timezone.utc)
+
+
+def _profile_and_archetype(user_index: int) -> tuple[RiskProfile, str]:
+    """Kullanıcı sırasından (risk profili, arketip adı) çifti üretir.
+
+    İki döngü AYRI sayaçlarla ilerler. Aynı sayaç kullanılırsa üretilen
+    bileşim sayısı iki uzunluğun en küçük ortak katıyla sınırlanır: profil ve
+    arketip listelerinin ikisi de 4 uzunlukta olduğu için ekok 4'tür ve 16
+    bileşimden yalnızca 4'ü (her profil tek bir arketiple) üretilirdi —
+    ör. agresif profil YALNIZCA nakit ağırlıklı portföyle görülürdü. Arketip
+    hızlı (her kullanıcıda), profil yavaş (her dört kullanıcıda bir) dönerse
+    16 bileşimin tamamı üretilir.
+
+    Determinizm: rastgelelik yok, yalnızca sıra numarasının fonksiyonu.
+    """
+    archetype_name = PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
+    profile = RISK_PROFILE_CYCLE[
+        (user_index // len(PORTFOLIO_ARCHETYPE_CYCLE)) % len(RISK_PROFILE_CYCLE)
+    ]
+    return profile, archetype_name
 
 
 def _load_price_book(
@@ -143,10 +172,11 @@ def seed_ledger(session: Session) -> int:
     tx_count = 0
 
     for user_index in range(NUM_USERS):
+        risk_profile, archetype_name = _profile_and_archetype(user_index)
         user = User(
             email=fake.unique.email(),
             full_name=fake.name(),
-            risk_profile=RISK_PROFILE_CYCLE[user_index % len(RISK_PROFILE_CYCLE)],
+            risk_profile=risk_profile,
         )
         session.add(user)
         session.flush()
@@ -154,9 +184,7 @@ def seed_ledger(session: Session) -> int:
         session.add(portfolio)
         session.flush()
 
-        archetype = PORTFOLIO_ARCHETYPES[
-            PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
-        ]
+        archetype = PORTFOLIO_ARCHETYPES[archetype_name]
         budget = Decimal(rng.randrange(500_000, 2_000_000, 10_000))
 
         # Portföy, geçmişin ilk günlerinde tek DEPOSIT ile fonlanır.

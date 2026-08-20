@@ -336,3 +336,132 @@ def test_get_risk_assessment_generates_scenarios_when_include_scenarios_true(db_
     # dedup sonrasi tek bir sonucta birlesebilir; bu yuzden ozellikle EN
     # yuksek skorlu senaryoyu degil, en az bir senaryoyu kontrol ediyoruz.
     assert any("A" in s.actions_applied for s in assessment.scenarios)
+
+
+def _forty_day_two_asset_portfolio(db_session, risk_profile):
+    """test_get_risk_assessment_full_scenario ile AYNI portfoy; tek fark
+    kullanicinin risk profili. Ayni sayilarin profile gore farkli yorumlandigini
+    gostermek icin paylasilir."""
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=risk_profile)
+    stock = Asset(symbol="TST", name="Test Hisse", asset_class=AssetClass.STOCK, currency="TRY")
+    gold = Asset(
+        symbol="TAU", name="Test Altin", asset_class=AssetClass.PRECIOUS_METAL, currency="TRY"
+    )
+    db_session.add_all([stock, gold])
+    db_session.flush()
+
+    start = date(2026, 1, 1)
+    rows = []
+    for i in range(40):
+        day = start + timedelta(days=i)
+        rows.append(
+            PriceHistory(asset_id=stock.id, price_date=day, close_price=Decimal(100 + (i % 5) - 2))
+        )
+        rows.append(
+            PriceHistory(asset_id=gold.id, price_date=day, close_price=Decimal(50 - (i % 3) + 1))
+        )
+    db_session.add_all(rows)
+    db_session.add_all(
+        [
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=stock.id,
+                quantity=Decimal(10),
+                avg_cost_price=Decimal(95),
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=gold.id,
+                quantity=Decimal(20),
+                avg_cost_price=Decimal(45),
+            ),
+        ]
+    )
+    db_session.commit()
+    return user
+
+
+def test_ak_2_2_growth_profili_kendi_hedef_bandiyla_degerlendirilir(db_session):
+    """'growth' (Buyume) profili b26e8dab6ef9 ile eklendi; RiskProfile
+    enum'unda ve RISK_TARGET_VOLATILITY_BAND gibi profil bazli sabitlerde
+    karsiligi var. Bu test o kod yolunun gercekten calistigini gosterir:
+    Korumaci profille 'profil disi' sayilan AYNI portfoy (~%28 yillik
+    volatilite), Buyume profilinin hedef bandi (%20-%30) icinde kaldigi
+    icin 'profil ici' sayilmali ve kok neden teshisi uretilmemeli."""
+    user = _forty_day_two_asset_portfolio(db_session, RiskProfile.GROWTH)
+
+    assessment = get_risk_assessment(db_session, user.id)
+
+    assert assessment.risk_profile == RiskProfile.GROWTH
+    assert assessment.risk_profile_source.value == "user"
+    assert assessment.risk_level == RiskLevel.MEDIUM_HIGH
+    # Ayni sayilar Korumaci profilde is_within_profile=False veriyordu
+    # (bkz. test_get_risk_assessment_full_scenario_computes_category_stats).
+    assert assessment.is_within_profile is True
+    assert assessment.causes is None
+    assert assessment.scenarios == []
+
+
+def test_ak_2_6_growth_profili_band_ustunde_senaryo_uretir(db_session):
+    """Buyume profilinin senaryo motoru yolu: volatilite hedef bandin
+    (%20-%30) ustundeyse kok neden teshisi ve include_scenarios=True ile
+    yeniden dengeleme senaryolari uretilmeli. Senaryo motoru profil bazli
+    sabitlerle calisiyor (RISK_MAX_ASSET_WEIGHT, RISK_DEFENSE_FLOOR,
+    RISK_RECEIVER_PREFERENCE_ORDER); bu test onlarin 'growth' anahtarinin
+    varligina ve kullanildigina baglidir."""
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=RiskProfile.GROWTH)
+    stock = Asset(
+        symbol="TSTV", name="Cok Oynak Hisse", asset_class=AssetClass.STOCK, currency="TRY"
+    )
+    gold = Asset(
+        symbol="TAUV", name="Cok Oynak Altin", asset_class=AssetClass.PRECIOUS_METAL, currency="TRY"
+    )
+    cash = Asset(symbol="TNKT", name="Test Nakit", asset_class=AssetClass.CASH, currency="TRY")
+    db_session.add_all([stock, gold, cash])
+    db_session.flush()
+
+    start = date(2026, 1, 1)
+    rows = []
+    for i in range(40):
+        day = start + timedelta(days=i)
+        rows.append(
+            PriceHistory(asset_id=stock.id, price_date=day, close_price=Decimal(100 + 40 * (i % 2)))
+        )
+        rows.append(
+            PriceHistory(asset_id=gold.id, price_date=day, close_price=Decimal(50 + 20 * (i % 2)))
+        )
+        rows.append(PriceHistory(asset_id=cash.id, price_date=day, close_price=Decimal(1)))
+    db_session.add_all(rows)
+    db_session.add_all(
+        [
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=stock.id,
+                quantity=Decimal(10),
+                avg_cost_price=Decimal(100),
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=gold.id,
+                quantity=Decimal(10),
+                avg_cost_price=Decimal(50),
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=cash.id,
+                quantity=Decimal(200),
+                avg_cost_price=Decimal(1),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assessment = get_risk_assessment(db_session, user.id, include_scenarios=True)
+
+    assert assessment.risk_profile == RiskProfile.GROWTH
+    assert assessment.is_within_profile is False
+    assert assessment.causes is not None
+    assert assessment.scenarios, "Buyume profilinde senaryo uretilmedi"
+    for scenario in assessment.scenarios:
+        assert scenario.volatility_after_percent < scenario.volatility_before_percent
+        assert scenario.label
