@@ -324,9 +324,17 @@ sistem_bilgisi:
 # Destek talepleri (karar K-13) — OUT_OF_SCOPE, desteğe özel mesaj varyantı
 # ---------------------------------------------------------------------------
 destek_talebi:
+  # Etiketler KELİME SINIRIYLA aranır (scope_checker._matches_word). Tek başına
+  # duran genel kelimeler buraya YAZILMAZ; eşleşmesi kullanıcıyı reddediyor.
+  # Kaldırılanlar ve sebepleri:
+  #   destek      -> "destek seviyesi" teknik analiz terimi, meşru bir soru
+  #   çalışmıyor  -> "borsa çalışmıyor mu" meşru bir piyasa sorusu
+  #   bug         -> "bugün" içinde eşleşiyordu; kelime sınırı bunu çözdü ama
+  #                  "hata alıyorum" zaten kapsıyor, tekil değeri yok
   etiketler: [şifremi unuttum, giriş yapamıyorum, hesabıma giremiyorum,
               uygulama donuyor, uygulama açılmıyor, hata alıyorum,
-              müşteri hizmetleri, destek, çalışmıyor, bug]
+              müşteri hizmetleri, destek talebi, teknik destek, destek ekibi,
+              uygulama çalışmıyor, site çalışmıyor]
   sonuc: OUT_OF_SCOPE
   mesaj_varyanti: destek
 
