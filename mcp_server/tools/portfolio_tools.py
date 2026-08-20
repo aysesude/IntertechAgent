@@ -17,11 +17,23 @@ from uuid import UUID
 from fastmcp import FastMCP
 
 from app.core.config import TimeWindow
+
+# Takma adlar zorunlu: aşağıdaki tool fonksiyonlarının adı servis
+# fonksiyonlarıyla aynı, takma ad olmadan tool kendi kendini çağırırdı.
+# Beş ayrı satır isort'un varsayılan davranışı (combine-as-imports kapalı).
 from app.services.portfolio_service import (
     get_benchmark_comparison as fetch_benchmark,
+)
+from app.services.portfolio_service import (
     get_holdings_valuation as fetch_holdings,
+)
+from app.services.portfolio_service import (
     get_portfolio_performance as fetch_performance,
+)
+from app.services.portfolio_service import (
     get_portfolio_summary as fetch_portfolio_summary,
+)
+from app.services.portfolio_service import (
     get_transactions as fetch_transactions,
 )
 from mcp_server.tools._base import db_session, tool_handler

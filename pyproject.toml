@@ -32,11 +32,6 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "agents", "mcp_server", "rag", "data", "tests"]
-# MCP tool modülleri servis fonksiyonlarını `as fetch_*` diye içe aktarıyor:
-# tool fonksiyonunun adı servis fonksiyonuyla aynı olduğu için takma ad şart
-# (aksi halde tool kendi kendini çağırırdı). Bu ayar olmadan isort aynı
-# modülden gelen beş takma adı beş ayrı `from ... import` bloğuna bölüyor.
-combine-as-imports = true
 
 [tool.black]
 line-length = 100
