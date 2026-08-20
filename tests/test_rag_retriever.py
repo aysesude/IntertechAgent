@@ -279,3 +279,37 @@ def test_retrieve_takma_adlar_onekte_carpismaz():
 
     thyao_sonuc = retriever.retrieve("Türk Hava Yolları ikinci çeyrek")
     assert {r["metadata"]["sirket"] for r in thyao_sonuc} == {"THYAO"}
+
+
+def test_retrieve_etiketsiz_dokuman_turkiye_kelimesiyle_sizmaz():
+    """ "Türkiye" bu korpustaki hemen her makro dokümanda (TÜİK/TCMB vb.)
+    geçiyor ve "Turkcell" sorgu kelimesiyle ilk 4 harfte tesadüfen
+    örtüşüyor ("turk"). Etiketsiz (sirket boş) genel bir makro dokümanı bu
+    yüzden "Turkcell" sorgusuna yanlışlıkla eşleşip, şirket-eleme güvenlik
+    ağından muaf olduğu için (etiketsiz dokümanlar kasıtlı olarak muaf
+    tutuluyor) sonuçlara sızıyordu (ölçümle doğrulandı: canlıda TÜİK
+    işsizlik dokümanı "Turkcell'in ikinci çeyrek sonuçları" sorgusuna
+    karıştı). "Türkiye"/"Türk" artık stopword; bu test etiketsiz bir
+    dokümanın salt bu kelime üzerinden artık eşleşmediğini doğrular."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Turkcell ikinci çeyrek net kâr açıkladı",
+                baslik="Turkcell (TCELL) 2026 2. Çeyrek Sonuçları",
+                sirket="TCELL",
+                distance=0.3,
+            ),
+            _doc(
+                "Türkiye İstatistik Kurumu ikinci çeyrek işsizlik oranını açıkladı",
+                baslik="TÜİK İşsizlik Oranını Açıkladı",
+                sirket="",
+                distance=0.35,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("Turkcell'in ikinci çeyrek sonuçları neler")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert sirketler == {"TCELL"}

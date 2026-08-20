@@ -57,6 +57,18 @@ _STOPWORDS = {
     "son",
     "var",
     "yok",
+    # "Türkiye"/"Türk" bu korpusta (TCMB/TÜİK/Hazine vb. makro dokümanlar
+    # yüzünden) neredeyse HER dokümanda geçiyor — ayırt edici gücü "ve"/
+    # "ile" kadar düşük. Ayrıca "Turkcell" sorgu kelimesiyle ilk 4 harfte
+    # tesadüfen örtüşüyor ("turk"): sorgu "Turkcell'in ikinci çeyrek
+    # sonuçları" iken, sirket alanı boş (ve bu yüzden şirket-eleme güvenlik
+    # ağından muaf) herhangi bir TÜİK/TCMB dokümanı sadece "Türkiye"
+    # kelimesi üzerinden yanlışlıkla eşleşip sonuçlara karışabiliyordu
+    # (ölçümle doğrulandı: TÜİK işsizlik dokümanı "Turkcell" sorgusuna
+    # sızdı). Stopword yapmak hem bu çakışmayı hem de düşük bilgi değerini
+    # aynı anda çözüyor.
+    "turkiye",
+    "turk",
 }
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -198,7 +210,10 @@ def _result_keywords(result: dict) -> set[str]:
 _SIRKET_ALIASES: dict[str, set[str]] = {
     "AKBNK": {"akbank"},
     "KCHOL": {"koc", "holding"},
-    "THYAO": {"turk", "hava", "yollari", "thy"},
+    # "turk" burada yok: artık stopword (bkz. _STOPWORDS), sorgu
+    # kelimeleri arasında hiç görünmez — eklense de hiçbir zaman
+    # eşleşmeyecek ölü bir giriş olurdu.
+    "THYAO": {"hava", "yollari", "thy"},
     "YKBNK": {"yapi", "kredi"},
     "PGSUS": {"pegasus"},
     "TCELL": {"turkcell"},
