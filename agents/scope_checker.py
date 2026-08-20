@@ -16,6 +16,34 @@ def load_scope_config():
 
 scope_config = load_scope_config()
 
+# Türkçe büyük "İ" ayrı ele alınır: "İ".lower() birleşen noktalı bir "i̇"
+# üretir ve "i" ile eşleşmez ("İş Bankası" -> "i̇ş bankası").
+_UPPER_DOTTED_I = str.maketrans({"İ": "i"})
+
+
+def _normalize(text: str) -> str:
+    return text.translate(_UPPER_DOTTED_I).lower().strip()
+
+
+def _matches_word(query: str, phrase: str) -> bool:
+    """Kelime sınırıyla eşleşme (alt dize DEĞİL).
+
+    Alt dize araması sessizce yanlış eşleşiyordu: `bug` etiketi "**bug**ün"
+    içinde, `al` fiili "**al**tın"/"an**al**iz" içinde. Sonuç, meşru soruların
+    reddedilmesiydi — "bugün portföyüm ne durumda" müşteri hizmetlerine
+    yönlendiriliyordu.
+
+    ÖDÜNLEŞME: Türkçe çekim ekleri yakalanmaz (`destekten`, `alabilir`). Yön
+    bilinçli — meşru bir soruyu reddetmek, kapsam dışı bir soruyu ajana
+    göndermekten daha maliyetli (PR #40'ta alınan karar).
+
+    KURAL: eşleşmesi kullanıcıyı REDDEDEN kontroller bunu kullanır. Yalnızca
+    bayrak ekleyen kontroller (`tavsiye_bayragi`) alt dize aramasında kalır;
+    orada çekim ekini yakalamak istenen davranıştır ve yanlış pozitifin
+    bedeli yok.
+    """
+    return re.search(r"\b" + re.escape(phrase) + r"\b", query) is not None
+
 
 def check_scope(query: str) -> dict:
     """
@@ -29,7 +57,7 @@ def check_scope(query: str) -> dict:
     if not scope_config:
         return {"intent": "pass_to_llm", "flags": []}
 
-    query_lower = query.lower().strip()
+    query_lower = _normalize(query)
     words = query_lower.split()
     flags = []
 
@@ -63,12 +91,12 @@ def check_scope(query: str) -> dict:
             )
 
         for kategori, liste in varyantlar.items():
-            if any(k in query_lower for k in liste):
+            if any(_matches_word(query_lower, k) for k in liste):
                 return {"intent": "INJECTION_ATTEMPT", "message": varsayilan_mesaj, "flags": flags}
 
     # 2.2 Destek Talebi
     destek = scope_config.get("destek_talebi", {})
-    if any(k in query_lower for k in destek.get("etiketler", [])):
+    if any(_matches_word(query_lower, k) for k in destek.get("etiketler", [])):
         mesajlar = scope_config.get("mesajlar", {})
         destek_mesaji = mesajlar.get("out_of_scope", {}).get(
             "destek", "Destek talepleri için Müşteri Hizmetleri ile iletişime geçebilirsiniz."
@@ -80,19 +108,17 @@ def check_scope(query: str) -> dict:
         return {"intent": "OUT_OF_SCOPE", "message": destek_mesaji, "flags": flags}
 
     # 3. İşlem Talebi (UNAUTHORIZED_ACTION)
-    # Hata düzeltmesi: Alt dize yerine kelime sınırı (\b) ile kontrol
     islem_talebi = scope_config.get("islem_talebi", {})
     fiiller = islem_talebi.get("fiiller", [])
     istisnalar = islem_talebi.get("istisna_kaliplari", [])
 
-    # Önce istisnaları kontrol et (örn. "alayım mı")
+    # İstisnalar çok kelimeli kalıplar ("alayım mı") ve REDDETMEYİ ENGELLİYOR;
+    # geniş eşleşme burada güvenli yönde hata yapar, alt dize kalıyor.
     is_istisna = any(istisna in query_lower for istisna in istisnalar)
 
     if not is_istisna:
-        # Fiilleri kelime sınırlarıyla ara
         for fiil in fiiller:
-            pattern = r"\b" + re.escape(fiil) + r"\b"
-            if re.search(pattern, query_lower):
+            if _matches_word(query_lower, fiil):
                 return {
                     "intent": "UNAUTHORIZED_ACTION",
                     "message": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim.",
@@ -100,6 +126,8 @@ def check_scope(query: str) -> dict:
                 }
 
     # 4. Tavsiye Bayrağı (advice_seeking)
+    # Alt dize bilerek: bu kontrol REDDETMİYOR, yalnızca bayrak ekliyor.
+    # Çekim ekli biçimleri ("önerin", "tavsiyeniz") yakalamak istenen davranış.
     tavsiye_config = scope_config.get("tavsiye_bayragi", {})
     tavsiye_tetikleyiciler = tavsiye_config.get("tetikleyiciler", [])
     if any(t in query_lower for t in tavsiye_tetikleyiciler):
@@ -109,29 +137,19 @@ def check_scope(query: str) -> dict:
     varlik_siniflari = scope_config.get("varlik_siniflari", {})
     kapsam_disi_varliklar = varlik_siniflari.get("kapsam_disi", [])
 
-    kapsam_disi_bulundu = False
-    for v_sinif in kapsam_disi_varliklar:
-        etiketler = v_sinif.get("etiketler", [])
-        for etiket in etiketler:
-            pattern = r"\b" + re.escape(etiket.lower()) + r"\b"
-            if re.search(pattern, query_lower):
-                kapsam_disi_bulundu = True
-                break
-        if kapsam_disi_bulundu:
-            break
+    kapsam_disi_bulundu = any(
+        _matches_word(query_lower, _normalize(etiket))
+        for v_sinif in kapsam_disi_varliklar
+        for etiket in v_sinif.get("etiketler", [])
+    )
 
     # Eğer kapsam dışı bir varlık bulunduysa (Örn. kripto, emlak) ve kapsam içi varlık yoksa reddedelim.
     kapsam_ici_varliklar = varlik_siniflari.get("kapsam_ici", [])
-    kapsam_ici_bulundu = False
-    for v_sinif in kapsam_ici_varliklar:
-        etiketler = v_sinif.get("etiketler", [])
-        for etiket in etiketler:
-            pattern = r"\b" + re.escape(etiket.lower()) + r"\b"
-            if re.search(pattern, query_lower):
-                kapsam_ici_bulundu = True
-                break
-        if kapsam_ici_bulundu:
-            break
+    kapsam_ici_bulundu = any(
+        _matches_word(query_lower, _normalize(etiket))
+        for v_sinif in kapsam_ici_varliklar
+        for etiket in v_sinif.get("etiketler", [])
+    )
 
     if kapsam_disi_bulundu and not kapsam_ici_bulundu:
         return {
