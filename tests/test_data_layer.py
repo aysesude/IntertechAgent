@@ -4,6 +4,8 @@ Test adları kabul kriterlerine bağlanır (izlenebilirlik zinciri):
     I1  test_ledger_reconciliation                    -> AK 5.12
     I2  test_cash_never_negative                      -> defter dengesi
     I3  test_synthetic_never_overwrites_real          -> AK 5.1, 5.5
+        test_synthetic_is_not_interleaved_with_real   -> AK 5.1, FR-3, FR-4
+        test_no_transaction_priced_from_synthetic_row -> FR-3
     I4  test_ak_5_3_price_source_and_timestamp        -> AK 5.3
     I5  test_ak_5_7_fx_conversion                     -> AK 5.7
     I6  test_external_flow_excluded_from_return       -> FR-3
@@ -23,7 +25,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import AssetClass, PriceSource, settings
-from app.models import Asset, Holding, Portfolio, PriceHistory, TransactionType, User
+from app.models import (
+    Asset,
+    Holding,
+    Portfolio,
+    PriceHistory,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.providers.base import PricePoint
 from app.providers.universe import ASSET_UNIVERSE, SPEC_BY_SYMBOL
 from app.services.ledger_service import (
@@ -143,6 +153,75 @@ def test_record_transaction_rejects_overdraft(seeded):
 # --------------------------------------------------------------------------
 # I3 — sentetik, gerçek satırı asla ezemez (AK 5.1, 5.5)
 # --------------------------------------------------------------------------
+
+
+def test_synthetic_is_not_interleaved_with_real(seeded):
+    """Gerçek serinin içinde sentetik satır kalmamalı (AK 5.1, FR-3, FR-4).
+
+    `trading_days()` resmî tatilleri bilmiyor; BIST/TEFAS o günlerde fiyat
+    yayımlamadığı için gerçek serinin ORTASINDA sentetik satırlar kalıyordu.
+    Sentetik `base_price` gerçek fiyattan kat kat sapabildiğinden (ölçülen:
+    TCD 5,42 vs gerçek 35,63) her delik hem sahte bir günlük getiri
+    (volatilite/korelasyon/VaR/TWR bozulur) hem de sahte maliyet üretiyordu
+    (defter alımı o güne düşerse). Ölçülen yayılım: 35 varlığın hepsinde
+    2-10 delik, 151 işlem, 50 portföyden 48'i.
+    """
+    with Session(seeded) as session:
+        asset_ids = session.execute(select(Asset.id)).scalars().all()
+        for asset_id in asset_ids:
+            real_days = set(
+                session.execute(
+                    select(PriceHistory.price_date).where(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.source != PriceSource.SYNTHETIC,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not real_days:
+                continue  # tamamen sentetik varlık (mevduat) — beklenen
+            synthetic_days = (
+                session.execute(
+                    select(PriceHistory.price_date).where(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.source == PriceSource.SYNTHETIC,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            inside = [d for d in synthetic_days if min(real_days) <= d <= max(real_days)]
+            symbol = session.execute(select(Asset.symbol).where(Asset.id == asset_id)).scalar_one()
+            assert not inside, f"{symbol}: gerçek serinin içinde {len(inside)} sentetik gün"
+
+
+def test_no_transaction_priced_from_synthetic_row(seeded):
+    """Gerçek verisi olan bir varlıkta hiçbir işlem sentetik güne düşmemeli.
+
+    I3'ün defter tarafındaki sonucu. Tamamen sentetik varlıklar (mevduat,
+    ya da ağ olmadan koşan test ortamının tamamı) kapsam dışı: orada ölçek
+    tutarlıdır, tehlike yalnızca KARIŞIMDA.
+    """
+    with Session(seeded) as session:
+        assets_with_real = select(PriceHistory.asset_id).where(
+            PriceHistory.source != PriceSource.SYNTHETIC
+        )
+        rows = session.execute(
+            select(func.count())
+            .select_from(Transaction)
+            .join(
+                PriceHistory,
+                (PriceHistory.asset_id == Transaction.asset_id)
+                & (PriceHistory.price_date == func.date(Transaction.transaction_date)),
+            )
+            .where(
+                Transaction.asset_id.is_not(None),
+                Transaction.asset_id.in_(assets_with_real),
+                PriceHistory.source == PriceSource.SYNTHETIC,
+            )
+        ).scalar_one()
+        assert rows == 0, f"{rows} işlem sentetik fiyatlı güne denk geliyor"
 
 
 def test_synthetic_never_overwrites_real(seeded):

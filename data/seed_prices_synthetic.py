@@ -29,7 +29,7 @@ import random
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import AssetClass, PriceSource, settings
@@ -40,6 +40,12 @@ from app.services.price_ingest import upsert_prices
 
 SEED = 42
 HISTORY_DAYS = 365  # takvim günü; içinden hafta içi günler kullanılır
+
+# Bu kadar gerçek satırı olan varlık "gerçek verili" sayılır ve sentetik
+# satırlarının TAMAMI silinir (bkz. drop_synthetic_where_real_exists). ~6 hafta:
+# risk penceresinin anlamlı çalışabileceği en küçük geçmiş. Altındaki
+# varlıklarda yalnızca gerçek aralığın içindeki delikler temizlenir.
+MIN_REAL_ROWS_FOR_PURE_REAL = 30
 
 # Varlık sınıfı başına (günlük drift, günlük volatilite).
 ASSET_CLASS_DAILY_DRIFT_VOLATILITY: dict[AssetClass, tuple[float, float]] = {
@@ -175,4 +181,60 @@ def seed_prices_synthetic(session: Session, assets_by_symbol: dict[str, Asset]) 
         total_rows += upsert_prices(session, assets_by_symbol[symbol].id, points)
 
     session.flush()
+    total_rows -= drop_synthetic_where_real_exists(session)
+    session.flush()
     return total_rows
+
+
+def drop_synthetic_where_real_exists(session: Session) -> int:
+    """Gerçek veriyle iç içe geçmiş sentetik satırları siler; silinen sayıyı döndürür.
+
+    NEDEN GEREKLİ. `trading_days()` yalnızca hafta sonunu eler, resmî tatilleri
+    bilmez. BIST/TEFAS tatilde fiyat yayımlamaz, dolayısıyla gerçek serinin
+    ORTASINDA sentetik satırlar kalıyordu — üzerlerine yazacak gerçek satır
+    olmadığı için öncelik kuralı devreye girmiyor. Ölçülen: 35 varlığın
+    hepsinde 2-10 arası "delik", ayrıca gerçek serinin öncesinde 13 gün.
+
+    Sentetik `base_price` gerçek fiyattan kat kat sapabildiği için (TCD: 5,42
+    vs gerçek 35,63; PPF: 118,50 vs gerçek 3,50-5,17) her delik şunları üretir:
+
+    - **Sahte günlük getiri.** TCD'de 2026-03-20'de -%85, ertesi gün +%680.
+      Volatilite, korelasyon, VaR ve TWR bundan doğrudan etkilenir.
+    - **Sahte maliyet.** `seed_ledger` alım gününü fiyatı olan günlerden seçer;
+      deliğe düşen alım 7 kat ucuza alınmış görünür. Ölçülen: 151 işlem,
+      48 portföy (50 kullanıcıdan 48'i).
+
+    KURAL. Gerçek kapsaması yeterli olan varlıkta sentetik satır hiç kalmaz.
+    Sentetiğin amacı çevrimdışı çalışabilirlikti (A1); backfill koştuktan sonra
+    veritabanının kendisi zaten o deponun yerini alıyor, iç içe duran sentetik
+    satır hiçbir şey eklemeden yukarıdaki hataları üretiyor.
+
+    Kapsama yetersizse (yeni eklenmiş varlık, yarım backfill) yalnızca gerçek
+    aralığın İÇİNDEKİ delikler silinir; öncesindeki sentetik geçmiş korunur ki
+    risk penceresi tamamen boşalmasın.
+
+    Tatil günlerinde fiyatın hiç olmaması doğru davranıştır — piyasa kapalıydı.
+    `PriceBook` carry-forward yapıyor, volatilite ortak günlerden hesaplanıyor,
+    `seed_ledger` o günü alım için seçemiyor.
+    """
+    real_ranges = session.execute(
+        select(
+            PriceHistory.asset_id,
+            func.count().label("real_rows"),
+            func.min(PriceHistory.price_date).label("first_real"),
+            func.max(PriceHistory.price_date).label("last_real"),
+        )
+        .where(PriceHistory.source != PriceSource.SYNTHETIC)
+        .group_by(PriceHistory.asset_id)
+    ).all()
+
+    deleted = 0
+    for asset_id, real_rows, first_real, last_real in real_ranges:
+        condition = (PriceHistory.asset_id == asset_id) & (
+            PriceHistory.source == PriceSource.SYNTHETIC
+        )
+        if real_rows < MIN_REAL_ROWS_FOR_PURE_REAL:
+            condition &= PriceHistory.price_date.between(first_real, last_real)
+        deleted += session.execute(delete(PriceHistory).where(condition)).rowcount or 0
+
+    return deleted
