@@ -11,9 +11,10 @@ KURALLAR:
 
 VARLIK SINIFI KARŞILIKLARI (JSON'daki İngilizce adları bu Türkçe karşılıklarla yaz):
 - stock → Hisse Senedi
-- gold → Altın
+- precious_metal → Kıymetli Maden
 - currency → Döviz
 - bond → Tahvil
+- cash → Nakit
 
 Kullanıcı sorusu: {query}
 

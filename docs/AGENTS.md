@@ -50,25 +50,43 @@ gelen doküman parçalarını olduğu gibi `summary_text`'e taşır. Sorguyla
 alakalı kayıt yoksa tool `NOT_FOUND` döner, ajan bunu diğer tool
 hatalarıyla aynı yoldan (`AgentResponse.error`) taşır.
 
-## Risk Ajanı — iskelet
+## Risk/Strateji Ajanı (`agents/risk_agent.py`) — çalışıyor
 
-`agents/risk_agent.py`: `BaseAgent`'i implement eder, `execute()` gövdesi
-`NotImplementedError`. Karşılık gelen `get_risk_assessment` tool'u da iskelet
-ve **kayıtlı değil** (`_TOOL_MODULES`'a eklenmedi): yarım bir tool'un kayıtlı
-olması, ajana "yok" yerine "bozuk" görünür.
+`get_risk_assessment` MCP tool'unu çağırır, dönen değerlendirmeyi
+`prompts/risk_agent.md` ile Türkçeye döker. Portföy Ajanı'yla aynı kalıp:
+volatilite, VaR, Sharpe ve senaryoların tamamı `app/services/risk_service.py`
+tarafından hesaplanır, LLM yalnızca özetler.
 
-Risk eşikleri (volatilite, yoğunlaşma limitleri vb.) tanımları kullanıcıyla
-netleştirilmeden `app/core/config.py`'ye eklenmedi — bkz. oradaki TODO notu.
+İki ayrıntı:
+
+- **Senaryolar isteğe bağlı.** Tool'da `include_scenarios` varsayılan olarak
+  kapalı (ek hesap maliyeti). Ajan, sorguda "dengele", "azalt", "öneri",
+  "strateji" gibi bir kök geçiyorsa açar (`_wants_scenarios`).
+- **Değerlendirme küçültülerek verilir** (`_compact`). Ham `RiskAssessment`
+  korelasyon matrisi ve senaryo başına varlık kırılımı taşıyor; küçük bir
+  modele tamamını vermek hem yavaş hem dikkat dağıtıcı. `None` alanlar
+  KORUNUR — risk hesaplanamadığında model bunu görüp "hesaplanamadı" demeli
+  (CLAUDE.md §4 uydurmama ilkesi).
 
 ## Orchestrator (`agents/orchestrator.py`) — LangGraph
 
 ```
-detect_intent → portfolio_agent → merge
+detect_intent ─┬─> handle_out_of_scope ─────────────> END
+               ├─> portfolio_agent ─┐
+               ├─> market_agent ────┼─> merge ─────> END
+               └─> risk_agent ──────┘
 ```
 
-- `detect_intent`: şu an niyet sabit `"portfolio"` (tek ajan bağlı olduğu
-  için gerçek niyet tespiti henüz yok).
-- `portfolio_agent` node'u `writer: StreamWriter` parametresi alır —
+- `detect_intent` iki aşamalı: önce kural tabanlı kapsam filtresi (işlem
+  talepleri ve finans dışı sohbet, LLM'e hiç gitmeden reddedilir), sonra LLM
+  ile niyet sınıflandırma. Sınıflandırıcı `PORTFOLIO`, `MARKET`, `RISK`
+  etiketlerinden **bir veya birkaçını** döndürebilir; seçilen ajanlar sırayla
+  çalışır. Etiket tanınmazsa ya da LLM düşerse portföy ajanına düşülür.
+- **Kapsam filtresi kelime bazlı eşleşir, alt dizi değil.** Alt dizi araması
+  "portföy an**al**izi", "**al**tın ne durumda", "**hava**cılık hisseleri"
+  gibi meşru soruları işlem talebi sayıp reddediyordu (üretimde gözlendi,
+  bkz. `tests/test_orchestrator_routing.py`).
+- Ajan node'ları `writer: StreamWriter` parametresi alır —
   LangGraph tarafından otomatik enjekte edilir, `stream_mode="custom"`
   kullanılmadığında no-op'tur. Bu sayede **tek bir graf** hem tek seferlik
   (`run_orchestrator`, testler için) hem stream'li (`stream_orchestrator`,
@@ -80,8 +98,23 @@ detect_intent → portfolio_agent → merge
   (`AgentRequest.context["recent_messages"]`'a geçiyor). **PortfolioAgent şu
   an bunu prompt'una dahil etmiyor** (tek turluk çalışıyor) — çok turlu bağlam
   gereken ajanlar için altyapı hazır tutuluyor.
-- `merge`: başarılı ajan yanıtlarının `summary_text`'lerini birleştirir; hiçbiri
-  başarılı değilse ilk hatayı `final_answer` olarak döner.
+- `merge` üç yoldan biriyle çalışır ve **her yolda kullanıcıya en az bir delta
+  akıtır**:
+  1. Kullanılabilir metin yoksa tool'ların hata mesajları gösterilir (bunlar
+     kullanıcıya gösterilmek üzere yazılmıştır, bkz. `tools/_base.py`
+     `DEFAULT_MESSAGES`); hiç yanıt yoksa genel sistem mesajı.
+  2. Tek ajan çalıştıysa ve eksik bilgi yoksa metin **doğrudan** akıtılır —
+     ikinci bir LLM turu bilgi eklemeden gecikme (≤5 sn hedefi) ve bir kırılma
+     noktası ekler.
+  3. Birden fazla kaynak ya da kısmi başarı varsa LLM ile tek metne indirilir;
+     LLM boş dönerse ya da düşerse ham metinlere düşülür.
+
+  Boş yanıt koruması şuradan geliyor: merge LLM'i istisna atmadan boş yanıt
+  döndürdüğünde ne token ne hata üretiliyordu, arayüzde boş balon kalıyordu
+  (üretimde gözlendi).
+- Sorumluluk reddi (`DISCLAIMER`) her yolda **kod tarafından** garanti edilir;
+  LLM'in eklemesine güvenilmez (CLAUDE.md §4). Metin zaten taşıyorsa
+  ikilenmez.
 
 ## Yeni bir ajan eklerken
 
