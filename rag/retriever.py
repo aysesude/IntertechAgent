@@ -183,18 +183,55 @@ def _result_keywords(result: dict) -> set[str]:
     return _keywords(text)
 
 
+# Ticker kodu (frontmatter'daki `sirket` alanı) ile şirketin günlük dilde
+# kullanılan adı her zaman aynı 4 harfle başlamıyor — ör. "AKBNK" foldlanınca
+# "akbnk" olur, "Akbank" ise "akbank"; 4 harflik önekleri "akbn" ile "akba"
+# farklı, dolayısıyla önek eşleşmesi hiç tetiklenmiyor. Bu durumda
+# _sirket_matches_query hiçbir sonuç için True dönmüyor, "başka şirketi
+# tamamen ele" güvenlik ağı devreye girmiyor ve sorguyla alakasız şirketler
+# sızabiliyor (ölçümle doğrulandı: "Akbank'ın ikinci çeyrek net karı"
+# sorgusu AKBNK'nın yanında GARAN/SISE/YKBNK/KCHOL'u de döndürdü — hiçbiri
+# tesadüfen önek paylaşmıyordu). Diğer tickerlar (ASELS/Aselsan,
+# GARAN/Garanti, TUPRS/Tüpraş, EREGL/Ereğli, SISE/Şişecam, BIMAS/BİM)
+# tesadüfen ilk harflerde örtüştüğü için soruna girmiyor; örtüşmeyenler için
+# açık takma ad listesi.
+_SIRKET_ALIASES: dict[str, set[str]] = {
+    "AKBNK": {"akbank"},
+    "KCHOL": {"koc", "holding"},
+    "THYAO": {"turk", "hava", "yollari", "thy"},
+    "YKBNK": {"yapi", "kredi"},
+    "PGSUS": {"pegasus"},
+    "TCELL": {"turkcell"},
+    "FROTO": {"ford", "otosan", "otomotiv"},
+    "MGROS": {"migros"},
+}
+
+
 def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
     """İki farklı şirketin bilançosu neredeyse aynı jenerik kalıpla
     yazıldığında ("ikinci çeyrek net kâr açıklandı") ikisi de aynı kelime-
     örtüşme oranını alabiliyor (ölçümle doğrulandı: gerçek THYAO/ASELSAN
     dokümanlarıyla). Bu durumda, sonucun KENDİ `sirket` alanı sorgudaki
     kelimelerden biriyle eşleşiyorsa sıralamada öne alınır — jenerik içerik
-    kelimeleri değil, dokümanın ait olduğu şirketin kendisi tercih sebebidir."""
+    kelimeleri değil, dokümanın ait olduğu şirketin kendisi tercih sebebidir.
+
+    Ticker kodu (`sirket_keywords`) hâlâ 4 harflik ÖNEK ile karşılaştırılır
+    (ör. "Aselsan" -> "asel" -> "ASELS" ile örtüşüyor, mevcut davranış
+    korunuyor). Ama _SIRKET_ALIASES TAM eşleşmeyle karşılaştırılır, önekle
+    değil: "Türk" (THYAO takma adı) ile "Turkcell" (TCELL takma adı) ilk 4
+    harfte örtüşüyor ("turk"), önek karşılaştırması kullanılsaydı "Turkcell
+    ikinci çeyrek sonuçları" sorgusu THYAO'yu da, "Türk Hava Yolları ikinci
+    çeyrek" sorgusu TCELL'i de yanlışlıkla eşleştirirdi (ölçümle
+    doğrulandı). Takma adlar zaten tam, belirli kelimeler olarak seçildiği
+    için tam eşleşme yeterli ve bu çapraz bulaşmayı engelliyor."""
     sirket = (result.get("metadata") or {}).get("sirket")
     if not sirket:
         return False
     sirket_keywords = _keywords(str(sirket))
-    return any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords)
+    if any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords):
+        return True
+    aliases = _SIRKET_ALIASES.get(str(sirket).upper())
+    return bool(aliases and query_keywords & aliases)
 
 
 def _build_where(
