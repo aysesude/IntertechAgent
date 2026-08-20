@@ -49,12 +49,28 @@ class AllocationItem(BaseModel):
 
 
 class PortfolioSummary(BaseModel):
+    """Portföy özeti.
+
+    İki farklı taban vardır, karıştırılmamalı:
+
+    - `total_cost_basis`: yalnızca ELDE TUTULAN varlıkların maliyeti. Serbest
+      nakit içermez, çünkü nakit satın alınmış bir varlık değildir.
+    - `net_invested`: dışarıdan konan net sermaye (yatırma − çekme). Serbest
+      nakit de bunun içindedir.
+
+    `total_gain_loss` **`net_invested`'a göre** hesaplanır ve
+    `total_value - net_invested`'a eşittir; böylece ekrandaki üç rakam
+    birbirini tutar. `total_cost_basis` kullanılsaydı hesapta duran, hiç
+    yatırıma dönüşmemiş para kâr sayılırdı.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     user_id: UUID
     as_of: date
     total_value: Money
     total_cost_basis: Money
+    net_invested: Money
     total_gain_loss: GainLoss
     allocation: list[AllocationItem]
     holdings_count: int

@@ -28,7 +28,7 @@ from app.schemas.portfolio import (
     TransactionList,
     TransactionRow,
 )
-from app.services.ledger_service import cash_balance_as_of, position_as_of
+from app.services.ledger_service import cash_balance_as_of, net_invested_as_of, position_as_of
 from app.services.price_service import WINDOW_DAYS, bucket_last, resolve_granularity
 from app.services.valuation_service import (
     FX_SYMBOL_BY_CURRENCY,
@@ -182,8 +182,26 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         total_value += cash_balance
         class_values[AssetClass.CASH] = class_values.get(AssetClass.CASH, Decimal(0)) + cash_balance
 
-    gain_amount = total_value - total_cost_basis
-    gain_percent = (gain_amount / total_cost_basis * 100) if total_cost_basis > 0 else Decimal(0)
+    # Getirinin tabanı dışarıdan konan net sermayedir, holdings maliyeti DEĞİL.
+    # total_cost_basis kullanıldığında serbest nakit değere giriyor ama tabana
+    # girmiyordu; hesapta duran, hiç yatırıma dönüşmemiş para kâr olarak
+    # raporlanıyordu (ölçüldü: 1.87M yatırmış bir portföyde 187.654 TL serbest
+    # nakit, getiriyi %43,37 yerine %59,36 gösteriyordu).
+    #
+    # Bu tabanla `total_value - net_invested` özdeşliği korunur, yani ekrandaki
+    # üç rakam birbirini tutar. Temettü/faiz dış akış olmadığı için kazanç
+    # tarafında kalır — istenen davranış.
+    net_invested = net_invested_as_of(db, portfolio.id)
+    # Taban pozitif değilse varlık maliyetine düşülür. İki durumda olur:
+    #   1. Defterden gelmeyen portföy (holdings elle yazılmış, dış akış kaydı
+    #      yok) — `net_invested` 0 çıkar. Yaygın olan bu.
+    #   2. Kullanıcı yatırdığından fazlasını çekmiş — taban negatif. Bu durumda
+    #      raporlanan kazanç eksik kalır (kapatılmış portföy: maliyet de 0'a
+    #      yaklaştığı için sonuç 0 görünür). Seed bu durumu üretmiyor; gerçek
+    #      bir çekim akışı eklenirse burası yeniden ele alınmalı.
+    gain_base = net_invested if net_invested > 0 else total_cost_basis
+    gain_amount = total_value - gain_base
+    gain_percent = (gain_amount / gain_base * 100) if gain_base > 0 else Decimal(0)
 
     class_order = {asset_class: i for i, asset_class in enumerate(settings.supported_asset_classes)}
     allocation = [
@@ -200,6 +218,7 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         as_of=max(as_of_dates) if as_of_dates else date.today(),
         total_value=_round2(total_value),
         total_cost_basis=_round2(total_cost_basis),
+        net_invested=_round2(net_invested),
         total_gain_loss=GainLoss(amount=_round2(gain_amount), percent=_round2(gain_percent)),
         allocation=allocation,
         # Tamamen satılmış (quantity=0) satırlar gerçekleşmiş K-Z taşımak için

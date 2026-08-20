@@ -10,21 +10,42 @@
 ```json
 {
   "user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "as_of": "2026-08-10",
-  "total_value": 1497558.96,
-  "total_cost_basis": 1570215.80,
-  "total_gain_loss": { "amount": -72656.84, "percent": -4.63 },
+  "as_of": "2026-08-20",
+  "total_value": 2681069.66,
+  "total_cost_basis": 1682346.32,
+  "net_invested": 1870000.00,
+  "total_gain_loss": { "amount": 811069.66, "percent": 43.37 },
   "allocation": [
-    { "asset_class": "stock", "value": 167808.53, "percent": 11.21 },
-    { "asset_class": "precious_metal", "value": 555795.65, "percent": 37.11 },
-    { "asset_class": "currency", "value": 471330.61, "percent": 31.47 },
-    { "asset_class": "bond", "value": 302624.17, "percent": 20.21 }
+    { "asset_class": "stock", "value": 1194764.65, "percent": 44.56 },
+    { "asset_class": "precious_metal", "value": 452028.34, "percent": 16.86 },
+    { "asset_class": "currency", "value": 356314.16, "percent": 13.29 },
+    { "asset_class": "bond", "value": 279635.57, "percent": 10.43 },
+    { "asset_class": "cash", "value": 398326.94, "percent": 14.87 }
   ],
-  "holdings_count": 14
+  "holdings_count": 10
 }
 ```
 
 404 → `{"detail": "Portfolio not found for user_id ..."}`
+
+**İki taban vardır, karıştırılmamalıdır:**
+
+| Alan | Ne | Serbest nakit |
+|---|---|---|
+| `total_cost_basis` | Elde tutulan varlıkların maliyeti | **hariç** |
+| `net_invested` | Dışarıdan konan net sermaye (yatırma − çekme) | **dahil** |
+
+`total_gain_loss` **`net_invested`'a göre** hesaplanır, yani
+`total_value - net_invested`'a eşittir. Arayüz kullanıcıya taban olarak
+`net_invested`'ı ("Yatırılan tutar") göstermelidir; `total_cost_basis`
+gösterilirse üç rakam birbirini tutmaz ve aradaki fark (yatırıma dönüşmemiş
+nakit) açıklamasız kalır.
+
+Taban neden maliyet değil: hesapta duran para da kullanıcının koyduğu paradır,
+kazanç değildir. Maliyet taban alındığında serbest nakdin tamamı kâr olarak
+raporlanıyordu (ölçüldü: 1.87M yatırmış bir portföyde 187.654 TL nakit,
+getiriyi %43,37 yerine %59,36 gösteriyordu). Temettü ve mevduat faizi ise dış
+akış olmadığı için bu farkta doğru biçimde kazanç tarafında kalır.
 
 Not: sayısal alanlar hesaplamada `Decimal` ile tutulur, JSON'a `float` olarak
 serialize edilir (bkz. `app/schemas/portfolio.py`'deki `Money` tipi) — string

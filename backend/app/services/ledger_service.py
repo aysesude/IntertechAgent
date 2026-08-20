@@ -48,6 +48,27 @@ def cash_balance_as_of(db: Session, portfolio_id: uuid.UUID, day: date | None = 
     return Decimal(str(db.execute(query).scalar_one()))
 
 
+def net_invested_as_of(db: Session, portfolio_id: uuid.UUID, day: date | None = None) -> Decimal:
+    """Dışarıdan konan net sermaye = SUM(DEPOSIT) - SUM(WITHDRAW).
+
+    Getirinin doğru tabanı budur, `holdings` maliyeti değil: hesapta duran ama
+    hiç yatırıma dönüşmemiş nakit de kullanıcının koyduğu paradır ve kâr
+    sayılamaz. `total_value - net_invested` toplam kazancı verir; temettü ve
+    mevduat faizi nakit girişi yarattığı ama dış akış olmadığı için bu farkta
+    doğru biçimde kazanç tarafında kalır.
+
+    `external_flows` aynı kaynağı tarih tarih döndürür (TWR için); burada tek
+    skaler isteniyor.
+    """
+    query = select(func.coalesce(func.sum(Transaction.cash_amount_try), 0)).where(
+        Transaction.portfolio_id == portfolio_id,
+        Transaction.transaction_type.in_([TransactionType.DEPOSIT, TransactionType.WITHDRAW]),
+    )
+    if day is not None:
+        query = query.where(func.date(Transaction.transaction_date) <= day)
+    return Decimal(str(db.execute(query).scalar_one()))
+
+
 def record_transaction(
     db: Session,
     portfolio_id: uuid.UUID,
