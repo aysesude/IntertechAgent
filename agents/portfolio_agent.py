@@ -345,10 +345,15 @@ def _render(data: dict[str, Any]) -> str:
     summary = data.get("summary")
     if summary:
         gain = summary.get("total_gain_loss") or {}
+        # "Yatırılan tutar" (net_invested), "toplam maliyet"in yerini alır:
+        # kâr/zarar artık ona göre hesaplanıyor ve `değer - yatırılan = kâr`
+        # özdeşliği tutuyor. Maliyet gösterilseydi üç rakam birbirini tutmaz,
+        # aradaki fark (serbest nakit) açıklamasız kalırdı.
         lines = [
             f"Portföy özeti ({summary.get('as_of', '—')})",
             f"Toplam değer: {_tr_amount(summary.get('total_value'))} TL",
-            f"Toplam maliyet: {_tr_amount(summary.get('total_cost_basis'))} TL",
+            f"Yatırılan tutar: {_tr_amount(summary.get('net_invested'))} TL",
+            f"Varlık maliyeti: {_tr_amount(summary.get('total_cost_basis'))} TL",
             f"Kâr/zarar: {_tr_amount(gain.get('amount'))} TL "
             f"({_tr_percent(gain.get('percent'), signed=True)})",
         ]

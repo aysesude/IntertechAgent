@@ -60,12 +60,20 @@ def register(mcp: FastMCP) -> list[str]:
 
         Returns:
             Başarılı: {"success": true, "data": {"user_id": ..., "as_of":
-            "2026-08-01", "total_value": 125430.5, "total_cost_basis": ...,
-            "total_gain_loss": {"amount": ..., "percent": ...}, "allocation":
-            [{"asset_class": "stock", "value": ..., "percent": ...}, ...],
-            "holdings_count": 7}}. Tüm tutarlar TRY, sayı (string değil).
+            "2026-08-20", "total_value": 125430.5, "total_cost_basis": ...,
+            "net_invested": ..., "total_gain_loss": {"amount": ..., "percent":
+            ...}, "allocation": [{"asset_class": "stock", "value": ...,
+            "percent": ...}, ...], "holdings_count": 7}}. Tüm tutarlar TRY,
+            sayı (string değil).
             Hata: {"success": false, "error": {"code": "NOT_FOUND",
             "message": "..."}} — kullanıcının portföyü yoksa.
+
+            İki taban karıştırılmamalı: `total_cost_basis` elde tutulan
+            varlıkların maliyetidir (serbest nakit hariç), `net_invested`
+            dışarıdan konan net sermayedir (yatırma − çekme, nakit dahil).
+            `total_gain_loss` **net_invested'a göre** hesaplanır ve
+            `total_value - net_invested`'a eşittir. Kullanıcıya "maliyet"
+            değil "yatırılan tutar" gösterilmeli ki üç rakam birbirini tutsun.
         """
         with db_session() as db:
             return fetch_portfolio_summary(db, user_id).model_dump(mode="json")
