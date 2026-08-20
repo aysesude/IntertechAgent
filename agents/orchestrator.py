@@ -1,7 +1,7 @@
 """Orkestratör (Orchestrator) Modülü
 
 Bu modül, LangGraph kullanarak uygulamanın kalbini oluşturur.
-Gelen isteği alır, niyetine göre uygun ajan(lar)a PARALEL olarak (fan-out) dağıtır ve 
+Gelen isteği alır, niyetine göre uygun ajan(lar)a PARALEL olarak (fan-out) dağıtır ve
 ajanlardan gelen yanıtları tek bir LLM çağrısıyla harmanlayarak (merge) son kullanıcıya sunar.
 
 Özellikler:
@@ -57,7 +57,10 @@ async def detect_intent(state: OrchestratorState) -> dict:
         logger.info("[ORCHESTRATOR] Kapsam kontrolü yakaladı: %s", scope_result["intent"])
         return {
             "intent": scope_result["intent"],
-            "final_answer": scope_result.get("message", "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.")
+            "final_answer": scope_result.get(
+                "message",
+                "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
+            ),
         }
 
     # 2. LLM Tabanlı Niyet Tespiti
@@ -172,15 +175,21 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
 def _route_after_intent(state: OrchestratorState) -> list[str]:
     """Niyete göre ilgili ajanlara paralel dağıtım yapar veya kapsam dışı akışına yönlendirir."""
     early_exit_intents = {
-        "OUT_OF_SCOPE", "UNAUTHORIZED_ACTION", "SYSTEM_INFO", 
-        "UNSUPPORTED_LANGUAGE", "INJECTION_ATTEMPT", "AMBIGUOUS"
+        "OUT_OF_SCOPE",
+        "UNAUTHORIZED_ACTION",
+        "SYSTEM_INFO",
+        "UNSUPPORTED_LANGUAGE",
+        "INJECTION_ATTEMPT",
+        "AMBIGUOUS",
     }
-    
+
     if state["intent"] in early_exit_intents:
         if state["intent"] == "AMBIGUOUS" and not state.get("final_answer"):
-            state["final_answer"] = "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen 'Portföyüm ne durumda?' veya 'Son piyasa haberleri neler?' şeklinde daha açık bir soru sorar mısınız?"
+            state["final_answer"] = (
+                "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen 'Portföyüm ne durumda?' veya 'Son piyasa haberleri neler?' şeklinde daha açık bir soru sorar mısınız?"
+            )
         return ["handle_out_of_scope"]
-        
+
     if state["intent"] == "both":
         return ["portfolio_agent", "market_agent"]
     if state["intent"] == "market":
