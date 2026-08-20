@@ -8,7 +8,10 @@ Test adları kabul kriterlerine bağlanır (izlenebilirlik zinciri):
     I5  test_ak_5_7_fx_conversion                     -> AK 5.7
     I6  test_external_flow_excluded_from_return       -> FR-3
     I7  test_derived_price_matches_factor             -> türetilmiş tutarlılık
+    I8  test_fund_asset_class_follows_economic_risk   -> FR-4, AK 5.1
         test_synthetic_correlation_nonzero            -> AK-2.2, AK-2.6
+        test_only_deposits_remain_synthetic           -> AK 5.1
+        test_fx_conversion_has_a_subject              -> AK 5.7
 """
 
 import math
@@ -22,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import AssetClass, PriceSource, settings
 from app.models import Asset, Holding, Portfolio, PriceHistory, TransactionType, User
 from app.providers.base import PricePoint
-from app.providers.universe import SPEC_BY_SYMBOL
+from app.providers.universe import ASSET_UNIVERSE, SPEC_BY_SYMBOL
 from app.services.ledger_service import (
     LedgerError,
     cash_balance_as_of,
@@ -188,11 +191,13 @@ def test_ak_5_7_fx_conversion(seeded):
         session.add(portfolio)
         session.flush()
 
-        eurobond = session.execute(select(Asset).where(Asset.symbol == "EUROBOND1")).scalar_one()
+        # AKE = eurobond fonu; evrendeki tek TRY dışı varlık, bu yüzden AK 5.7
+        # kur dönüşümünü egzersiz eden tek enstrüman (bkz. providers/universe).
+        eurobond = session.execute(select(Asset).where(Asset.symbol == "AKE")).scalar_one()
         assert eurobond.currency == "USD"
 
         buy_day = _last_trading_day(session)
-        bond_price_usd = _price_on(session, "EUROBOND1", buy_day)
+        bond_price_usd = _price_on(session, "AKE", buy_day)
         fx_at_buy = _price_on(session, "USDTRY", buy_day)
 
         record_transaction(
@@ -216,7 +221,7 @@ def test_ak_5_7_fx_conversion(seeded):
         rebuild_holdings(session, portfolio.id)
 
         summary = get_portfolio_summary(session, user.id)
-        latest_bond_usd = _latest_price(session, "EUROBOND1")
+        latest_bond_usd = _latest_price(session, "AKE")
         latest_fx = _latest_price(session, "USDTRY")
 
         bond_alloc = next(
@@ -341,3 +346,60 @@ def test_synthetic_correlation_nonzero(seeded):
         # Bağımsız random walk'larda bu değerler ~0 çıkıyordu (ölçülen -0.001).
         assert stock_pair > 0.35, f"hisse-hisse korelasyonu çok düşük: {stock_pair:.3f}"
         assert fx_pair > 0.6, f"döviz-döviz korelasyonu çok düşük: {fx_pair:.3f}"
+
+
+# --------------------------------------------------------------------------
+# I8 — Fon sınıflandırması: fonun ekonomik riski neyse sınıfı odur (AK 5.1)
+# --------------------------------------------------------------------------
+
+
+def test_fund_asset_class_follows_economic_risk():
+    """Her TEFAS fonu, taşıdığı ekonomik riskin sınıfında olmalı.
+
+    Beklenen tablo üretimdeki eşlemeden bağımsız yazılıdır; `_fund()` sınıfı
+    `_FUND_ASSET_CLASS`'tan türettiği için o sözlüğü burada tekrar kullanmak
+    kendini doğrulayan bir test olurdu.
+
+    Regresyon koruması: tüm fonlar bir zamanlar AssetClass.STOCK idi. Altın
+    fonu ve para piyasası fonu bu yüzden FR-4'ün "Hisse -> Yüksek" risk
+    etiketini alıyor, risk motorunda savunma tarafında (BOND+CASH) sayılması
+    gereken enstrüman hisse riski taşıyor görünüyordu.
+    """
+    expected = {
+        "TI2": AssetClass.STOCK,  # hisse senedi fonu
+        "TCD": AssetClass.STOCK,  # değişken fon
+        "AFT": AssetClass.STOCK,  # teknoloji hisse fonu
+        "PPF": AssetClass.CASH,  # para piyasası fonu
+        "GTA": AssetClass.PRECIOUS_METAL,  # altın fonu
+        "AK2": AssetClass.BOND,  # uzun vadeli borçlanma araçları
+        "APT": AssetClass.BOND,  # orta vadeli borçlanma araçları
+        "AKE": AssetClass.BOND,  # eurobond
+        "AYR": AssetClass.BOND,  # özel sektör borçlanma araçları
+    }
+    funds = {s.symbol: s for s in ASSET_UNIVERSE if s.data_source is PriceSource.TEFAS}
+    assert set(funds) == set(expected), "TEFAS fon listesi değişti; beklenen tabloyu güncelleyin"
+    for symbol, asset_class in expected.items():
+        assert (
+            funds[symbol].asset_class is asset_class
+        ), f"{symbol}: {funds[symbol].asset_class.value} bekleniyordu {asset_class.value}"
+
+
+def test_only_deposits_remain_synthetic():
+    """Mevduat dışında canlı kaynağı olmayan varlık kalmamalı (AK 5.1).
+
+    Mevduat kasıtlı istisna: birim fiyatı sabit 1,00 TL, getirisi INTEREST
+    işlemlerinden gelir. Buraya yeni bir sembol düşerse o varlık sonsuza kadar
+    bayat fiyatla değerlenir ve portföy özetinin as_of tarihi yanıltıcı olur.
+    """
+    synthetic = {s.symbol for s in ASSET_UNIVERSE if s.data_source is PriceSource.SYNTHETIC}
+    assert synthetic == {"MEVDUAT-V", "MEVDUAT-VS"}, f"beklenmeyen sentetik varlık: {synthetic}"
+
+
+def test_fx_conversion_has_a_subject():
+    """AK 5.7 kur dönüşümünü egzersiz eden en az bir TRY dışı varlık olmalı.
+
+    test_ak_5_7_fx_conversion buna dayanır; evrenden çıkarsa o kod yolu
+    seed'li evrende hiç çalışmaz ve testi sessizce anlamsızlaşır.
+    """
+    foreign = [s.symbol for s in ASSET_UNIVERSE if s.currency != "TRY"]
+    assert foreign, "evrende TRY dışı varlık yok — AK 5.7 test edilemez"

@@ -71,10 +71,41 @@ make daily-update          # her gün: günün fiyatları (cron'a bağlanacak i�
 Sonuçlar `data_ingest_log`'a yazılır. Başarısız kaynak DB'deki son veriyi
 bozmaz; `make seed` de birikmiş gerçek veriyi silemez (öncelik kuralı).
 
+### Varlık evreni (37 varlık)
+
+| Sınıf | Adet | Kaynak |
+|---|---|---|
+| Hisse | 18 | yfinance (15 BIST) + TEFAS (3 hisse fonu) |
+| Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
+| Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
+| Tahvil | 4 | TEFAS borçlanma araçları fonları |
+| Nakit | 3 | TEFAS (para piyasası fonu) + 2 mevduat (**sentetik**) |
+
+Sentetik kalan tek grup mevduattır ve bu kasıtlıdır: birim fiyatı sabit
+1,00 TL'dir (`ASSET_CLASS_DAILY_DRIFT_VOLATILITY[CASH] = (0.0, 0.0)`),
+getirisi fiyattan değil `INTEREST` işlemlerinden gelir.
+
+Tahvil tarafı fonlarla temsil edilir: Türk tahvillerinin ücretsiz güvenilir
+bir fiyat kaynağı yok, uydurma ISIN'ler ise hiçbir sağlayıcıdan çekilemediği
+için sonsuza kadar bayat kalıyordu. Fon tahvil değildir (vade/kupon yok) ama
+tahvil riski taşır ve gerçek fiyatlanır.
+
+`AKE` evrendeki **tek TRY dışı varlıktır** (USD); AK 5.7 kur dönüşümünü
+egzersiz eden tek enstrüman odur (`test_ak_5_7_fx_conversion`). Kaldırılırsa
+o kod yolu seed'li evrende test edilmez hale gelir.
+
 ### Yeni varlık eklemek
 `backend/app/providers/universe.py` → `ASSET_UNIVERSE`'e bir `AssetSpec`
 satırı ekleyin, `make seed` çalıştırın. **Başka hiçbir kod değişmez.**
 Sağlayıcı eşlemesi (`data_source`, `provider_symbol`) spec'in içindedir.
+
+**Fon eklerken sınıfı elle vermeyin:** `_fund()` varlık sınıfını alt türden
+türetir (`_FUND_ASSET_CLASS`). Fonun ekonomik riski neyse sınıfı odur — para
+piyasası fonu `CASH`, altın fonu `PRECIOUS_METAL`, borçlanma araçları fonu
+`BOND`. Eskiden tüm fonlar `STOCK` idi; altın fonu ve para piyasası fonu
+FR-4'ün "Hisse → Yüksek" risk etiketini alıyor, risk motorunda savunma
+tarafında (`BOND`+`CASH`) sayılması gereken enstrüman hisse riski taşıyor
+görünüyordu.
 
 ### Yeni veri sağlayıcısı eklemek
 1. `backend/app/providers/` altına yeni dosya: `fetch_series`/`fetch_latest`

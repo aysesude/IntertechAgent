@@ -292,10 +292,19 @@ class AssetSubType(str, Enum):
     """assets.sub_type için bilinen değerler. DB kolonu String'dir (yeni
     enstrüman tipi migration istemesin); doğrulama seed anında Python
     tarafında yapılır. Risk motoru buna göre dallanmaz — sunum/filtreleme
-    metadata'sıdır."""
+    metadata'sıdır.
+
+    Fon alt türleri varlık SINIFINI belirler (universe._FUND_ASSET_CLASS):
+    fonun ekonomik riski neyse sınıfı odur. Doğrudan tahvil değerleri
+    (GOVERNMENT_BOND, CORPORATE_BOND, EUROBOND) şu an evrende kullanılmıyor —
+    gerçek ISIN'li bir tahvil eklenirse yerleri hazır."""
 
     EQUITY_FUND = "equity_fund"
     MONEY_MARKET_FUND = "money_market_fund"
+    GOLD_FUND = "gold_fund"
+    BOND_FUND = "bond_fund"
+    CORPORATE_BOND_FUND = "corporate_bond_fund"
+    EUROBOND_FUND = "eurobond_fund"
     GOVERNMENT_BOND = "government_bond"
     CORPORATE_BOND = "corporate_bond"
     EUROBOND = "eurobond"
