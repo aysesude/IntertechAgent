@@ -1,19 +1,14 @@
-"""Orchestrator: kullanıcı isteğini alır, niyeti tespit eder, ilgili ajanlara
-dağıtır, sonuçları birleştirip tek bir cevap üretir (LangGraph).
+"""Orkestratör (Orchestrator) Modülü
 
-Graf yapısı:
+Bu modül, LangGraph kullanarak uygulamanın kalbini oluşturur.
+Gelen isteği alır, niyetine göre uygun ajan(lar)a PARALEL olarak (fan-out) dağıtır ve
+ajanlardan gelen yanıtları tek bir LLM çağrısıyla harmanlayarak (merge) son kullanıcıya sunar.
 
-    detect_intent ─┬─> portfolio_agent ─┬─> market_agent ─> merge ─> END
-                   │                    └─> merge
-                   └─> market_agent ────────> merge
-
-Yani niyet "portfolio" ise yalnızca Portföy Ajanı, "market" ise yalnızca Piyasa
-Ajanı, "both" ise ikisi **sırayla** çalışır.
-
-Neden paralel değil de sıralı: her iki ajan da token akışı üretiyor. Paralel
-çalıştırıldıklarında token'lar iç içe geçip okunamaz bir metin oluşuyor.
-Sıralı çalıştırmak akışı bozmuyor; paralellik ancak akış birleştirme mantığı
-yazılırsa anlamlı olur (TODO).
+Özellikler:
+- Kural tabanlı kapsam kontrolü (Scope Guard) ile kapsam dışı soruları anında reddeder.
+- Ajanlar eşzamanlı olarak çalışır; böylece gecikme (latency) düşer.
+- Sadece yapısal verileri (JSON/Dictionary) toplayıp tek bir birleştirme (merge) adımında son yanıtı üretir.
+- Hata durumunda (örn. ajanlardan biri çökerse) çalışan diğer ajanın verilerini kurtarır.
 
 `run_portfolio_agent` ve `run_market_agent` node'ları `writer: StreamWriter`
 parametresi alır: LangGraph tarafından otomatik enjekte edilir,
@@ -32,6 +27,7 @@ from langgraph.types import StreamWriter
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
+from agents.scope_checker import check_scope
 from app.core.config import settings
 from app.core.llm_client import get_llm_client
 
@@ -54,21 +50,17 @@ class OrchestratorState(TypedDict):
 async def detect_intent(state: OrchestratorState) -> dict:
     """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
     query = state["message"].strip()
-    query_lower = query.lower()
 
     # 1. Kural Tabanlı Kapsam Kontrolü (Scope Guard)
-    transaction_keywords = {"transfer", "gönder", "yolla", "al", "sat", "alım", "satım"}
-    if any(k in query_lower for k in transaction_keywords):
+    scope_result = check_scope(query)
+    if scope_result["intent"] != "pass_to_llm":
+        logger.info("[ORCHESTRATOR] Kapsam kontrolü yakaladı: %s", scope_result["intent"])
         return {
-            "intent": "out_of_scope",
-            "final_answer": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim.",
-        }
-
-    out_of_scope_keywords = {"hava", "nasılsın", "kimsin", "şarkı", "film", "yemek"}
-    if any(k in query_lower for k in out_of_scope_keywords):
-        return {
-            "intent": "out_of_scope",
-            "final_answer": "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.\n\nÖrnek sorular:\n- Portföyüm ne durumda?\n- Son piyasa haberleri neler?",
+            "intent": scope_result["intent"],
+            "final_answer": scope_result.get(
+                "message",
+                "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
+            ),
         }
 
     # 2. LLM Tabanlı Niyet Tespiti
@@ -89,12 +81,14 @@ async def detect_intent(state: OrchestratorState) -> dict:
             intent = "both"
         elif "MARKET" in response_text or "RAG" in response_text:
             intent = "market"
+        elif "PORTFOLIO" in response_text:
+            intent = "portfolio"
         else:
-            intent = "portfolio"  # Varsayılan (fallback) değer
+            intent = "AMBIGUOUS"  # Varsayılan (fallback) değer
 
     except Exception as e:
         logger.error(f"[ORCHESTRATOR] Niyet tespiti LLM hatası: {e}")
-        intent = "portfolio"
+        intent = "AMBIGUOUS"
 
     logger.info(
         "[ORCHESTRATOR] LLM niyet tespiti: %s | sorgu=%r",
@@ -180,8 +174,22 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
 
 def _route_after_intent(state: OrchestratorState) -> list[str]:
     """Niyete göre ilgili ajanlara paralel dağıtım yapar veya kapsam dışı akışına yönlendirir."""
-    if state["intent"] == "out_of_scope":
+    early_exit_intents = {
+        "OUT_OF_SCOPE",
+        "UNAUTHORIZED_ACTION",
+        "SYSTEM_INFO",
+        "UNSUPPORTED_LANGUAGE",
+        "INJECTION_ATTEMPT",
+        "AMBIGUOUS",
+    }
+
+    if state["intent"] in early_exit_intents:
+        if state["intent"] == "AMBIGUOUS" and not state.get("final_answer"):
+            state["final_answer"] = (
+                "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen 'Portföyüm ne durumda?' veya 'Son piyasa haberleri neler?' şeklinde daha açık bir soru sorar mısınız?"
+            )
         return ["handle_out_of_scope"]
+
     if state["intent"] == "both":
         return ["portfolio_agent", "market_agent"]
     if state["intent"] == "market":
