@@ -27,6 +27,7 @@ from langgraph.types import StreamWriter
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
+from agents.risk_agent import RiskAgent
 from agents.scope_checker import check_scope
 from app.core.config import settings
 from app.core.llm_client import get_llm_client
@@ -45,6 +46,29 @@ class OrchestratorState(TypedDict):
     intent: str
     agent_responses: Annotated[list[AgentResponse], operator.add]
     final_answer: str
+
+
+# Ajana yönlendiren niyet etiketleri. `intent` alanı ya bir erken çıkış kodu
+# (OUT_OF_SCOPE, AMBIGUOUS vb.) ya da bunlardan bir veya birkaçının "+" ile
+# birleşmiş hâlidir ("risk", "portfolio+risk"). Alan orchestrator dışına
+# çıkmıyor; tek tüketicisi _route_after_intent.
+AGENT_INTENTS = ("portfolio", "market", "risk")
+
+AGENT_NODES = {
+    "portfolio": "portfolio_agent",
+    "market": "market_agent",
+    "risk": "risk_agent",
+}
+
+# Merge prompt'u bu metni istiyor; LLM düşerse kod tarafından garanti edilir
+# (CLAUDE.md §4). Kısa biçim, prompt'takiyle birebir aynı.
+_DISCLAIMER = "Bu bir yatırım tavsiyesi değildir."
+
+_AMBIGUOUS_MESSAGE = (
+    "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen "
+    "'Portföyüm ne durumda?', 'Riskim nedir?' veya 'Son piyasa haberleri neler?' "
+    "şeklinde daha açık bir soru sorar mısınız?"
+)
 
 
 async def detect_intent(state: OrchestratorState) -> dict:
@@ -66,25 +90,36 @@ async def detect_intent(state: OrchestratorState) -> dict:
     # 2. LLM Tabanlı Niyet Tespiti
     llm = get_llm_client()
     system_prompt = (
-        "Sen bir niyet sınıflandırma motorusun. SADECE tek kelime çıktı vereceksin: PORTFOLIO, MARKET veya BOTH.\n"
-        "- Eğer kullanıcı kendi varlıklarını, portföyünü, yatırımlarını veya parasının durumunu soruyorsa: PORTFOLIO dön.\n"
-        "- Eğer kullanıcı piyasa haberlerini, şirket bilançolarını, kurları, faiz oranlarını veya hisse fiyatlarını soruyorsa: MARKET dön.\n"
-        "- Eğer kullanıcı her ikisini de aynı anda soruyorsa (örneğin 'Portföyüm ne durumda ve son haberler neler?'): BOTH dön.\n"
-        "Asla açıklama yapma, sadece kategori adını büyük harfle döndür."
+        "Sen bir niyet sınıflandırma motorusun. Kullanıcının sorusunu aşağıdaki "
+        "etiketlerden BİR VEYA BİRKAÇINA ata. SADECE etiketleri virgülle ayırarak "
+        "yaz; açıklama, cümle, noktalama ekleme.\n\n"
+        "PORTFOLIO — kullanıcının kendi varlıkları: değeri, dağılımı, getirisi, "
+        "işlem geçmişi, tek tek pozisyonları.\n"
+        "  Örnek: 'portföyüm ne durumda', 'geçen ay ne aldım', 'varlıklarımı listele'\n"
+        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz.\n"
+        "  Örnek: 'Aselsan haberleri', 'dolar kuru ne durumda', 'BIST bugün nasıl'\n"
+        "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
+        "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
+        "etiket kullanılır.\n"
+        "  Örnek: 'riskim nedir', 'portföyümde çok fazla hisse mi var', "
+        "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
+        "'çok mu riskli yatırım yapıyorum'\n\n"
+        "Birden fazla konu varsa hepsini yaz: 'portföyüm ve riskim nasıl' → PORTFOLIO, RISK\n"
+        "Sorulmayan konuyu ekleme: soru yalnızca toplam değeri soruyorsa RISK yazma."
     )
 
     try:
         response = await llm.generate(query, system=system_prompt)
         response_text = response.strip().upper()
+        labels = [label for label in AGENT_INTENTS if label.upper() in response_text]
 
-        if "BOTH" in response_text:
-            intent = "both"
-        elif "MARKET" in response_text or "RAG" in response_text:
-            intent = "market"
-        elif "PORTFOLIO" in response_text:
-            intent = "portfolio"
-        else:
-            intent = "AMBIGUOUS"  # Varsayılan (fallback) değer
+        # Geriye dönük uyum: eski prompt tek kelimelik BOTH/RAG döndürüyordu.
+        if not labels and "BOTH" in response_text:
+            labels = ["portfolio", "market"]
+        elif not labels and "RAG" in response_text:
+            labels = ["market"]
+
+        intent = "+".join(labels) if labels else "AMBIGUOUS"
 
     except Exception as e:
         logger.error(f"[ORCHESTRATOR] Niyet tespiti LLM hatası: {e}")
@@ -119,6 +154,12 @@ async def run_market_agent(state: OrchestratorState) -> dict:
     return {"agent_responses": [response]}
 
 
+async def run_risk_agent(state: OrchestratorState) -> dict:
+    agent = RiskAgent(mcp_server_url=settings.mcp_server_url)
+    response = await agent.execute(_build_request(state), on_token=None)
+    return {"agent_responses": [response]}
+
+
 async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) -> dict:
     """Kapsam dışı durumlarda LLM'e gitmeden doğrudan uyarı mesajını akıtır."""
     # Metni kelime kelime akıtarak animasyonlu hissi ver
@@ -132,9 +173,22 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
     successful = [r.summary_text for r in state["agent_responses"] if r.success]
     errors = [r.error for r in state["agent_responses"] if r.error]
 
-    # Hiçbir ajan başarılı olmadıysa (İç Hata Gizliliği)
+    # Hiçbir ajan başarılı olmadı. Ajanların KENDİ hata mesajları gösterilir:
+    # bunlar kullanıcıya gösterilmek üzere yazılmış metinlerdir
+    # (mcp_server/tools/_base.py DEFAULT_MESSAGES) ve durumları ayırt eder —
+    # "İstenen kayıt bulunamadı." ile "Veri kaynağına şu anda ulaşılamıyor."
+    # aynı şey değildir.
+    #
+    # Eskiden ikisi de tek bir "sistemlerimize ulaşılamıyor" metnine düşüyordu;
+    # RAG'de doküman bulunamaması (NOT_FOUND) sistem arızası gibi görünüyor,
+    # kullanıcıya ayakta olan bir sistem çökmüş gibi sunuluyordu. İç hata
+    # gizliliği korunuyor: bu metinler kod/istisna detayı içermez.
     if not successful:
-        final_answer = "Şu an sistemlerimize ulaşılamıyor, lütfen daha sonra tekrar deneyin."
+        final_answer = (
+            "\n\n".join(dict.fromkeys(errors))
+            if errors
+            else "Şu an sistemlerimize ulaşılamıyor, lütfen daha sonra tekrar deneyin."
+        )
         writer({"delta": final_answer})
         return {"final_answer": final_answer}
 
@@ -166,7 +220,15 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
             writer({"delta": chunk})
     except Exception as e:
         logger.error(f"[ORCHESTRATOR] Merge LLM hatası: {e}")
-        final_answer = "\n\n".join(successful) + "\n\nBu bir yatırım tavsiyesi değildir."
+
+    # `stream` istisna atmadan HİÇ parça üretmezse final_answer boş kalır ve
+    # writer hiç çağrılmazdı: SSE'de ne token ne error olayı gider, arayüzde
+    # boş balon durur. Yukarıdaki `except` yalnızca istisnayı yakalıyordu,
+    # boş çıktıyı değil — iki durumu da aynı düşüş kapatıyor.
+    if not final_answer.strip():
+        final_answer = "\n\n".join(successful)
+        if _DISCLAIMER not in final_answer:
+            final_answer += f"\n\n{_DISCLAIMER}"
         writer({"delta": final_answer})
 
     return {"final_answer": final_answer}
@@ -185,16 +247,23 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
 
     if state["intent"] in early_exit_intents:
         if state["intent"] == "AMBIGUOUS" and not state.get("final_answer"):
-            state["final_answer"] = (
-                "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen 'Portföyüm ne durumda?' veya 'Son piyasa haberleri neler?' şeklinde daha açık bir soru sorar mısınız?"
-            )
+            state["final_answer"] = _AMBIGUOUS_MESSAGE
         return ["handle_out_of_scope"]
 
-    if state["intent"] == "both":
-        return ["portfolio_agent", "market_agent"]
-    if state["intent"] == "market":
-        return ["market_agent"]
-    return ["portfolio_agent"]
+    # Eski sürümde "both" tek etiketti; artık "portfolio+market" üretiliyor.
+    intent = "portfolio+market" if state["intent"] == "both" else state["intent"]
+    nodes = [AGENT_NODES[label] for label in intent.split("+") if label in AGENT_NODES]
+
+    if not nodes:
+        # Tanınmayan etiket. Eskiden burada koşulsuz ["portfolio_agent"] vardı;
+        # niyet tespiti RISK üretemediği için risk soruları buraya düşüp
+        # sessizce portföy özetiyle cevaplanıyordu — kullanıcı cevap aldığını
+        # sanıyordu. Anlaşılmayan soru artık açıkça soruluyor (CLAUDE.md §4).
+        logger.warning("[ORCHESTRATOR] Tanınmayan niyet etiketi: %r", state["intent"])
+        state["final_answer"] = _AMBIGUOUS_MESSAGE
+        return ["handle_out_of_scope"]
+
+    return nodes
 
 
 def _build_graph():
@@ -203,6 +272,7 @@ def _build_graph():
     graph.add_node("handle_out_of_scope", handle_out_of_scope)
     graph.add_node("portfolio_agent", run_portfolio_agent)
     graph.add_node("market_agent", run_market_agent)
+    graph.add_node("risk_agent", run_risk_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
@@ -214,12 +284,14 @@ def _build_graph():
             "handle_out_of_scope": "handle_out_of_scope",
             "portfolio_agent": "portfolio_agent",
             "market_agent": "market_agent",
+            "risk_agent": "risk_agent",
         },
     )
 
     graph.add_edge("handle_out_of_scope", END)
     graph.add_edge("portfolio_agent", "merge")
     graph.add_edge("market_agent", "merge")
+    graph.add_edge("risk_agent", "merge")
     graph.add_edge("merge", END)
 
     return graph.compile()
