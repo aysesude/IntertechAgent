@@ -11,6 +11,7 @@ arar ve ham parçaları döndürür. Bu, `docs/MCP-TOOLS.md`'nin §10'daki "RAG
 getirme/üretim ayrımı yok" notunu kapatır.
 """
 
+import functools
 import logging
 from typing import Any
 
@@ -67,7 +68,13 @@ def warm_up() -> None:
 def register(mcp: FastMCP) -> list[str]:
     @mcp.tool(name="search_market_news")
     @tool_handler(timeout=settings.mcp_tool_timeout_rag)
-    async def search_market_news(query: str, top_k: int = 5) -> dict[str, Any]:
+    async def search_market_news(
+        query: str,
+        top_k: int = 5,
+        sirket: str | None = None,
+        donem: str | None = None,
+        tur: str | None = None,
+    ) -> dict[str, Any]:
         """Finansal haber, bilanço ve analiz dokümanlarında vektör + anahtar
         kelime tabanlı hibrit arama yapar. Yanıt LLM tarafından üretilmez,
         internetten de çekilmez — yalnızca veritabanındaki dokümanlar aranır.
@@ -83,6 +90,15 @@ def register(mcp: FastMCP) -> list[str]:
         Args:
             query: Kullanıcının piyasa/haber sorusu (Türkçe, serbest metin).
             top_k: Getirilecek en fazla doküman parçası sayısı.
+            sirket: Borsa kodu ("ASELS"). Verilirse arama uzayı benzerlik
+                hesaplanmadan önce bu şirkete daraltılır — yanlış şirketin
+                dokümanını döndürmek yapısal olarak imkânsız hale gelir.
+                Emin olunmayan durumda VERİLMEZ: yanlış filtre, doğru doküman
+                veritabanında dururken "bulunamadı" dedirtir.
+            donem: "2026-Q2" biçiminde çeyrek. Aynı şirketin farklı
+                çeyreklerinde farklı rakamlar var; bu alan hangisinin
+                istendiğini deterministik olarak işaretler.
+            tur: Doküman türü ("bilanco", "haber", "analiz", "duyuru", "makro").
 
         Returns:
             Başarılı: {"success": true, "data": {"results": [{"content": "...",
@@ -99,9 +115,11 @@ def register(mcp: FastMCP) -> list[str]:
         # ısınmamış (soğuk) bir yüklemede fiilen işlemiyordu (ölçümle
         # doğrulandı: bir istek 106 sn sürüp yine de "OK" döndü).
         retriever = await anyio.to_thread.run_sync(_get_retriever, abandon_on_cancel=True)
-        results = await anyio.to_thread.run_sync(
-            retriever.retrieve, query, top_k, abandon_on_cancel=True
+        # run_sync anahtar kelimeli argüman almıyor; filtreler partial'a sarılır.
+        cagri = functools.partial(
+            retriever.retrieve, query, top_k, sirket=sirket, donem=donem, tur=tur
         )
+        results = await anyio.to_thread.run_sync(cagri, abandon_on_cancel=True)
 
         if not results:
             raise ToolFailure(ToolErrorCode.NOT_FOUND, NOT_FOUND_MESSAGE)

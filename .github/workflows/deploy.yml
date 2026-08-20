@@ -97,6 +97,27 @@ jobs:
             # GERCEK bir hatadir ve deploy'u kirmalidir.
             $COMPOSE exec -T -w / api python -m rag.ingest
 
+            echo "--> Uygulama sunuculari yeniden baslatiliyor"
+            # Iki ayri sebep, tek adim:
+            #
+            # 1) SIRA. Yukarida `up -d` mcp_server'i baslatiyor ve
+            #    market_tools.warm_up() koleksiyon nesnesini bellege aliyor.
+            #    Hemen ardindan calisan ingest ise koleksiyonu SILIP yeniden
+            #    yaratiyor (rag/vector_store.py `clear()`), yani yeni bir
+            #    koleksiyon kimligi olusuyor. Yeniden baslatma olmazsa MCP
+            #    sunucusu artik var olmayan bir koleksiyona bakar; deploy yesil
+            #    gecer ama Piyasa Ajani her soruya NOT_FOUND doner. Prod'da
+            #    tam olarak bu yasandi (2026-08-19).
+            #
+            # 2) BIND MOUNT. agents/, mcp_server/, rag/ imaja kopyalanmiyor,
+            #    volume olarak baglaniyor (bkz. docker-compose.yml). Bu
+            #    dizinlerde degisen kod imaji degistirmedigi icin
+            #    `up -d --build` konteyneri yeniden YARATMAZ; yeni kod diske
+            #    duser ama calisan surec eskisini bellekte tutar. api
+            #    `--reload` ile calissa bile uvicorn yalnizca /app'i izliyor,
+            #    /agents disarida kaliyor.
+            $COMPOSE restart api mcp_server
+
             echo "--> Saglik kontrolu"
             for i in $(seq 1 18); do
               KOD=$(curl -s -o /dev/null -w "%{http_code}" \

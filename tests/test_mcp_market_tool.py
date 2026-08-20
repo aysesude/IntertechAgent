@@ -19,8 +19,20 @@ class _FakeRetriever:
 
     def __init__(self, results: list[dict]) -> None:
         self._results = results
+        self.cagrilar: list[dict] = []
 
-    def retrieve(self, query: str, top_k: int) -> list[dict]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int,
+        *,
+        sirket: str | None = None,
+        donem: str | None = None,
+        tur: str | None = None,
+    ) -> list[dict]:
+        self.cagrilar.append(
+            {"query": query, "top_k": top_k, "sirket": sirket, "donem": donem, "tur": tur}
+        )
         return self._results
 
 
@@ -125,3 +137,46 @@ def test_warm_up_chroma_ayakta_degilse_cokmez(monkeypatch):
     monkeypatch.setattr(market_tools, "_get_retriever", patlat)
 
     market_tools.warm_up()  # istisna firlatmamali
+
+
+async def test_filtreler_retriever_a_oldugu_gibi_gecirilir(mcp_server, monkeypatch):
+    """sirket/donem/tur tool imzasinda durup retriever'a ulasmazsa deterministik
+    filtre sessizce devre disi kalir: arama calisir, yanlis sirketi dondurur ve
+    kimse fark etmez. Bu test o sessiz kaybi engeller."""
+    fake = _FakeRetriever([])
+    monkeypatch.setattr(market_tools, "_get_retriever", lambda: fake)
+
+    async with Client(mcp_server) as client:
+        await client.call_tool(
+            "search_market_news",
+            {
+                "query": "ASELSAN ikinci ceyrek",
+                "sirket": "ASELS",
+                "donem": "2026-Q2",
+                "tur": "bilanco",
+            },
+        )
+
+    assert fake.cagrilar == [
+        {
+            "query": "ASELSAN ikinci ceyrek",
+            "top_k": 5,
+            "sirket": "ASELS",
+            "donem": "2026-Q2",
+            "tur": "bilanco",
+        }
+    ]
+
+
+async def test_filtre_verilmezse_retriever_a_none_gider(mcp_server, monkeypatch):
+    """Filtresiz cagri eski davranisi korumali: retriever serbest metin
+    aramasi yapsin diye alanlar None gitmeli, bos string degil."""
+    fake = _FakeRetriever([])
+    monkeypatch.setattr(market_tools, "_get_retriever", lambda: fake)
+
+    async with Client(mcp_server) as client:
+        await client.call_tool("search_market_news", {"query": "piyasa nasil"})
+
+    assert fake.cagrilar[0]["sirket"] is None
+    assert fake.cagrilar[0]["donem"] is None
+    assert fake.cagrilar[0]["tur"] is None
