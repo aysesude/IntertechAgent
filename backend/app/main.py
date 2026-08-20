@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(portfolio.router)
+app.include_router(portfolio.price_router)
 app.include_router(market.router)
 app.include_router(chat.router)
 

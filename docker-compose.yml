@@ -42,6 +42,7 @@ services:
       - ./rag:/rag
       - ./data:/data
       - ./tests:/tests
+      - ./scripts:/scripts
       - ./pytest.ini:/pytest.ini
     depends_on:
       postgres:

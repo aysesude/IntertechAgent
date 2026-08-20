@@ -24,6 +24,34 @@ class AssetClass(str, Enum):
     CASH = "cash"
 
 
+class TimeWindow(str, Enum):
+    """Grafik ve kıyaslama pencereleri. Portföy bu pencereden gençse başlangıç
+    ilk işlem tarihine kırpılır ve bu durum çıktıda bildirilir."""
+
+    M1 = "1m"
+    M3 = "3m"
+    M6 = "6m"
+    M12 = "12m"
+
+
+class Granularity(str, Enum):
+    """Seri çözünürlüğü. AUTO ~60-120 nokta hedefler: 1m/3m/6m günlük,
+    12m haftalık. Volatilite günlük getirilerden hesaplandığı için risk
+    tarafı DAILY istemek zorundadır."""
+
+    AUTO = "auto"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
+class PriceCurrency(str, Enum):
+    """TRY: o günün kuruyla çevrilmiş. NATIVE: varlığın kendi para birimi."""
+
+    TRY = "try"
+    NATIVE = "native"
+
+
 class RiskProfile(str, Enum):
     CONSERVATIVE = "conservative"
     BALANCED = "balanced"
