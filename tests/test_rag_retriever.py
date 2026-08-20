@@ -313,3 +313,69 @@ def test_retrieve_etiketsiz_dokuman_turkiye_kelimesiyle_sizmaz():
 
     sirketler = {r["metadata"]["sirket"] for r in results}
     assert sirketler == {"TCELL"}
+
+
+def test_retrieve_holding_tek_kelimeyle_carpismaz():
+    """ "Holding" tek başına aşırı jenerik (Koç Holding, Sabancı Holding,
+    ...). KCHOL'un eski takma adı `{"koc", "holding"}` bir OR-kümesiydi;
+    bu yüzden "Sabancı Holding" sorgusu salt "holding" kelimesi üzerinden
+    KCHOL'u yanlışlıkla eşleştirip SAHOL'u değil onu döndürüyordu
+    (ölçümle doğrulandı). _SIRKET_ALIAS_PHRASES artık "koc" VE "holding"in
+    BİRLİKTE geçmesini şart koşuyor. Bu test iki yönde de doğru şirketin
+    döndüğünü doğrular."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Koç Holding ikinci çeyrek net kâr açıkladı",
+                baslik="Koç Holding (KCHOL) 2026 2. Çeyrek Sonuçları",
+                sirket="KCHOL",
+                distance=0.3,
+            ),
+            _doc(
+                "Sabancı Holding ikinci çeyrek net kâr açıkladı",
+                baslik="Sabancı Holding (SAHOL) 2026 2. Çeyrek Sonuçları",
+                sirket="SAHOL",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    koc_sonuc = retriever.retrieve("Koç Holding ikinci çeyrek net kârı")
+    assert {r["metadata"]["sirket"] for r in koc_sonuc} == {"KCHOL"}
+
+    sabanci_sonuc = retriever.retrieve("Sabancı Holding ikinci çeyrek net kârı")
+    assert {r["metadata"]["sirket"] for r in sabanci_sonuc} == {"SAHOL"}
+
+
+def test_retrieve_is_bankasi_diger_bankalarla_karismaz():
+    """ "İş Bankası" iki ayrı kelimeden ("iş" ve "bankası") oluşuyor; ikisi
+    de tek başına anlamsız ("iş" 2 harfe foldlanıp normalde elenirdi,
+    "bankası" ise her banka dokümanında geçer). Bu yüzden ISCTR hiçbir
+    zaman kendi sirket alanıyla eşleşmiyor, "başka bankayı ele" güvenlik
+    ağı devreye girmiyor ve sorgu diğer bankalara karışıyordu (ölçümle
+    doğrulandı: canlıda AKBNK/HALKB/YKBNK döndü, ISCTR hiç görünmedi).
+    _SHORT_KEYWORD_ALLOWLIST + _SIRKET_ALIAS_PHRASES["ISCTR"] bunu
+    düzeltiyor."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "İş Bankası ikinci çeyrek net kâr açıkladı",
+                baslik="Türkiye İş Bankası 2026 2. Çeyrek Sonuçları",
+                sirket="ISCTR",
+                distance=0.3,
+            ),
+            _doc(
+                "Akbank ikinci çeyrek net kâr açıkladı",
+                baslik="Akbank 2026 2. Çeyrek Sonuçları",
+                sirket="AKBNK",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("İş Bankası'nın ikinci çeyrek net kârı ne kadar")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert sirketler == {"ISCTR"}
