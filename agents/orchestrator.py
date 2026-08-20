@@ -105,7 +105,10 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
         "'çok mu riskli yatırım yapıyorum'\n\n"
         "Birden fazla konu varsa hepsini yaz: 'portföyüm ve riskim nasıl' → PORTFOLIO, RISK\n"
-        "Sorulmayan konuyu ekleme: soru yalnızca toplam değeri soruyorsa RISK yazma."
+        "Sorulmayan konuyu EKLEME. Soru yalnızca değer/dağılım soruyorsa RISK "
+        "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
+        "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
+        "'riskim nedir' → sadece RISK."
     )
 
     try:

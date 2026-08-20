@@ -10,10 +10,16 @@ Tool'un tam sözleşmesi: docs/MCP-TOOLS.md · metodoloji: gerek.md FR-4.
 
 import json
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
+from app.core.config import (
+    RISK_MAX_CATEGORY_WEIGHT,
+    RISK_TARGET_VOLATILITY_BAND,
+    RiskProfile,
+)
 from app.core.llm_client import get_llm_client
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "risk_agent.md").read_text(encoding="utf-8")
@@ -41,6 +47,19 @@ _FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s"
 def _wants_scenarios(query: str) -> bool:
     folded = query.replace("İ", "i").lower().translate(_FOLD_MAP)
     return any(stem in folded for stem in _SCENARIO_STEMS)
+
+
+def _risk_profile(value: Any) -> RiskProfile | None:
+    """Tool JSON'undaki profil değerini enum'a çevirir; tanınmazsa None."""
+    try:
+        return RiskProfile(value)
+    except ValueError:
+        return None
+
+
+def _pct(ratio: Decimal) -> float:
+    """Oranı yüzdeye çevirir (0.25 -> 25.0). Sunum için; hesap değil."""
+    return float(ratio * 100)
 
 
 def _compact(data: dict[str, Any]) -> dict[str, Any]:
@@ -77,6 +96,23 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
         "varlik_sayisi": metrics.get("holdings_count"),
         "uyarilar": data.get("warnings") or [],
     }
+
+    # Profilin beklenen sınırları. Kullanıcı "çok fazla hisse mi var" diye
+    # sorduğunda cevap ancak bir ÖLÇÜTLE verilebilir; ağırlığı tek başına
+    # söylemek soruyu cevapsız bırakıyordu (ölçüldü: %27,51 denip bırakılmış,
+    # Korumacı profilin %25 üst sınırına hiç değinilmemiş).
+    #
+    # Eşikler burada HESAPLANMIYOR, config'deki tek tanımdan okunuyor; ajan
+    # yalnızca taşıyor. Servis bunları ileride RiskAssessment'a eklerse bu
+    # blok silinir.
+    profile = _risk_profile(data.get("risk_profile"))
+    if profile is not None:
+        low, high = RISK_TARGET_VOLATILITY_BAND[profile]
+        compact["profil_hedef_volatilite_bandi_yuzde"] = [_pct(low), _pct(high)]
+        compact["profil_kategori_ust_sinirlari_yuzde"] = {
+            asset_class.value: _pct(cap)
+            for asset_class, cap in RISK_MAX_CATEGORY_WEIGHT[profile].items()
+        }
 
     causes = data.get("causes") or {}
     tetiklenen = [
