@@ -33,6 +33,14 @@ services/price_ingest.py  ──► price_history      ledger_service.record_tra
 3. **`price_history`'ye yalnızca `price_ingest.upsert_prices` yazar.** Upsert
    önceliği: `synthetic(0) < derived(1) < yfinance(2) < tefas/isportfoy(3) <
    tcmb(4)`. Gerçek veri sentetiği ezer; sentetik gerçeği **asla** ezemez.
+3b. **Sentetik satır gerçek serinin içine karışamaz.** Öncelik kuralı yalnızca
+   AYNI güne iki kayıt geldiğinde çalışır; gerçek kaynağın hiç yayın yapmadığı
+   günde (resmî tatil — `trading_days()` tatilleri bilmez) sentetik satır
+   üzerine yazılmadan kalır. `seed_prices_synthetic` sonunda
+   `drop_synthetic_where_real_exists` bunları siler: gerçek kapsaması
+   `MIN_REAL_ROWS_FOR_PURE_REAL`'i aşan varlıkta sentetik hiç kalmaz, altında
+   kalan varlıkta yalnızca gerçek aralığın içindeki delikler temizlenir.
+   Tatilde fiyatın hiç olmaması doğrudur — piyasa kapalıydı.
 4. **Fiyat/para her zaman `Decimal`**; float yasak.
 5. **Sağlayıcılar (providers/) saftır:** DB'ye dokunmaz, `except: pass` yapmaz,
    hata durumunda `ProviderError` fırlatır.
@@ -66,8 +74,19 @@ Docker yoksa: `.venv` ile `alembic upgrade head && python -m data.generate_dummy
 ### Gerçek fiyat verisi çekmek
 ```bash
 make backfill              # bir kerelik: 365 günlük gerçek geçmiş
-make daily-update          # her gün: günün fiyatları (cron'a bağlanacak iş)
+make daily-update          # her gün: günün fiyatları (test sunucusunda cron'da)
+make seed                  # ZORUNLU son adım — aşağıya bakın
 ```
+
+**Backfill'den sonra `make seed` çalıştırılmalı.** İki sebeple:
+
+1. Gerçek veri tatil günlerinde boşluk bırakır; temizlik
+   (`drop_synthetic_where_real_exists`) seed içinde koşar (altın kural 3b).
+2. `seed_ledger` işlem fiyatlarını `price_history`'den okur. Backfill sentetik
+   fiyatları gerçekle değiştirdiğinde eski defter, artık var olmayan
+   fiyatlardan alınmış görünür: maliyet bir evrenden, değerleme başka
+   evrenden gelir. Ölçülen sonuç 20 Ağustos 2026'da 151 işlem / 48 portföyde
+   sahte kâr-zarardı (bir varlıkta +%292).
 Sonuçlar `data_ingest_log`'a yazılır. Başarısız kaynak DB'deki son veriyi
 bozmaz; `make seed` de birikmiş gerçek veriyi silemez (öncelik kuralı).
 
