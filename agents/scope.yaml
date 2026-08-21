@@ -87,7 +87,10 @@ islem_talebi:
   # Not: "alayım mı" / "satayım mı" BURAYA GİRMEZ — onlar tavsiye bayrağıdır,
   # işlem talebi değildir. Ayrım kritik: soru soran kullanıcı reddedilmemeli.
   istisna_kaliplari: ["alayım mı", "satayım mı", "alsam mı", "satsam mı",
-                      "almalı mıyım", "satmalı mıyım", "ne zaman alınır"]
+                      "almalı mıyım", "satmalı mıyım", "ne zaman alınır",
+                      "geçmiş", "önce", "önceki", "hangisini", "neler",
+                      "almışım", "satmışım", "aldığım", "sattığım",
+                      "aldıklarım", "sattıklarım", "işlem"]
   sonuc: UNAUTHORIZED_ACTION
 
 # ---------------------------------------------------------------------------

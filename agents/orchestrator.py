@@ -133,7 +133,12 @@ async def detect_intent(state: OrchestratorState) -> dict:
         intent,
         state["message"][:80],
     )
-    return {"intent": intent}
+    
+    result = {"intent": intent}
+    if intent == "AMBIGUOUS":
+        result["final_answer"] = _AMBIGUOUS_MESSAGE
+        
+    return result
 
 
 def _build_request(state: OrchestratorState) -> AgentRequest:
@@ -249,8 +254,6 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
     }
 
     if state["intent"] in early_exit_intents:
-        if state["intent"] == "AMBIGUOUS" and not state.get("final_answer"):
-            state["final_answer"] = _AMBIGUOUS_MESSAGE
         return ["handle_out_of_scope"]
 
     # Eski sürümde "both" tek etiketti; artık "portfolio+market" üretiliyor.
