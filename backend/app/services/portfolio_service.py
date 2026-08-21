@@ -28,7 +28,12 @@ from app.schemas.portfolio import (
     TransactionList,
     TransactionRow,
 )
-from app.services.ledger_service import cash_balance_as_of, net_invested_as_of, position_as_of
+from app.services.ledger_service import (
+    cash_balance_as_of,
+    net_invested_as_of,
+    position_as_of,
+    total_deposits_as_of,
+)
 from app.services.price_service import WINDOW_DAYS, bucket_last, resolve_granularity
 from app.services.valuation_service import (
     FX_SYMBOL_BY_CURRENCY,
@@ -192,16 +197,29 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
     # üç rakam birbirini tutar. Temettü/faiz dış akış olmadığı için kazanç
     # tarafında kalır — istenen davranış.
     net_invested = net_invested_as_of(db, portfolio.id)
-    # Taban pozitif değilse varlık maliyetine düşülür. İki durumda olur:
-    #   1. Defterden gelmeyen portföy (holdings elle yazılmış, dış akış kaydı
-    #      yok) — `net_invested` 0 çıkar. Yaygın olan bu.
-    #   2. Kullanıcı yatırdığından fazlasını çekmiş — taban negatif. Bu durumda
-    #      raporlanan kazanç eksik kalır (kapatılmış portföy: maliyet de 0'a
-    #      yaklaştığı için sonuç 0 görünür). Seed bu durumu üretmiyor; gerçek
-    #      bir çekim akışı eklenirse burası yeniden ele alınmalı.
-    gain_base = net_invested if net_invested > 0 else total_cost_basis
-    gain_amount = total_value - gain_base
-    gain_percent = (gain_amount / gain_base * 100) if gain_base > 0 else Decimal(0)
+    total_deposits = total_deposits_as_of(db, portfolio.id)
+
+    # TUTAR ile ORAN farklı tabanlar kullanır ve bu kasıtlıdır.
+    #
+    # Tutar = değer - net sermaye. Çekim yapılmış portföyde de doğru sonucu
+    # verir (1.000 yatır → 1.500 → 500 çek → değer 1.000; kazanç 500).
+    #
+    # Oran = tutar / TOPLAM YATIRILAN. Net sermaye payda olarak kullanılırsa
+    # aynı örnekte %100 çıkar, oysa para %50 büyümüştür. Ayrıca toplam
+    # yatırılan hiçbir zaman negatif olamaz; çekim yatırımı aşarsa net sermaye
+    # negatife düşüyor ve oran anlamsızlaşıyordu.
+    #
+    # Defterden gelmeyen portföyde (holdings elle yazılmış, işlem kaydı yok)
+    # her iki taban da 0'dır; o durumda varlık maliyetine düşülür.
+    if total_deposits > 0:
+        gain_amount = total_value - net_invested
+        gain_percent = gain_amount / total_deposits * 100
+    elif total_cost_basis > 0:
+        gain_amount = total_value - total_cost_basis
+        gain_percent = gain_amount / total_cost_basis * 100
+    else:
+        gain_amount = Decimal(0)
+        gain_percent = Decimal(0)
 
     class_order = {asset_class: i for i, asset_class in enumerate(settings.supported_asset_classes)}
     allocation = [
@@ -216,6 +234,11 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
     return PortfolioSummary(
         user_id=user_id,
         as_of=max(as_of_dates) if as_of_dates else date.today(),
+        # Özet, her varlığın KENDİ son fiyatıyla değerlenir; bu tarihler
+        # birbirinden farklı olabilir. `as_of` en yenisini yazar, yani özet
+        # olduğundan taze görünebilir. En eskisi de raporlanır ki sunum
+        # katmanı ikisi ayrıştığında bunu söyleyebilsin (CLAUDE.md §4).
+        oldest_price_date=min(as_of_dates) if as_of_dates else None,
         total_value=_round2(total_value),
         total_cost_basis=_round2(total_cost_basis),
         net_invested=_round2(net_invested),

@@ -39,11 +39,16 @@ STOCK_FEE_RATE = Decimal("0.0015")
 # Vadeli mevduat aylık faizi (INTEREST kaydı olarak deftere işlenir).
 TIME_DEPOSIT_MONTHLY_RATE = Decimal("0.03")
 
+# Alım/satımda adet yuvarlaması. Hisse ve döviz tam sayı (lot/birim), diğerleri
+# küsuratlı. BOND tam sayıydı — doğrudan tahvil adet bazlı alınır — ama sınıfın
+# tamamı artık TEFAS borçlanma araçları fonu (bkz. providers/universe.py) ve
+# fonlar küsuratlı alınır; birim fiyatları 0,14 TL mertebesinde olduğundan tam
+# sayıya yuvarlamak da gereksiz bir sapma bırakıyordu.
 QUANTITY_PRECISION: dict[AssetClass, Decimal] = {
     AssetClass.STOCK: Decimal(1),
     AssetClass.PRECIOUS_METAL: Decimal("0.01"),
     AssetClass.CURRENCY: Decimal(1),
-    AssetClass.BOND: Decimal(1),
+    AssetClass.BOND: Decimal("0.01"),
     AssetClass.CASH: Decimal("0.01"),
 }
 

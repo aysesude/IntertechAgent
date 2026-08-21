@@ -67,7 +67,14 @@ class PortfolioSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     user_id: UUID
+    # Kullanılan fiyatların EN YENİ günü. Her varlık kendi son fiyatıyla
+    # değerlenir, dolayısıyla tek bir tarih tüm portföyü tarif etmez.
     as_of: date
+    # Kullanılan fiyatların EN ESKİ günü. `as_of`'tan farklıysa portföyün bir
+    # kısmı daha eski fiyatla değerlenmiş demektir ve arayüz bunu belirtmeli;
+    # yalnızca `as_of` gösterilirse özet olduğundan taze görünür.
+    # Hiç fiyatlı varlık yoksa None.
+    oldest_price_date: date | None = None
     total_value: Money
     total_cost_basis: Money
     net_invested: Money

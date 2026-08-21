@@ -116,7 +116,13 @@ def generate_synthetic_series(
     """Tek varlığın fiyat serisi. Sınıf faktörü yolunun deterministik olması
     için sınıf başına türetilmiş ayrı bir rng kullanılır (çağrı sırasından
     bağımsız)."""
-    drift, vol = ASSET_CLASS_DAILY_DRIFT_VOLATILITY[spec.asset_class]
+    # Sınıf varsayılanı, varlık kendi değerini vermişse ezilir. Gerekçesi
+    # AssetSpec.synthetic_daily_drift'te yazılı: bir varlık sınıfının tipik
+    # davranışından ayrılabiliyor (para piyasası fonu CASH sınıfındadır ama
+    # mevduat gibi sabit durmaz).
+    class_drift, class_vol = ASSET_CLASS_DAILY_DRIFT_VOLATILITY[spec.asset_class]
+    drift = class_drift if spec.synthetic_daily_drift is None else spec.synthetic_daily_drift
+    vol = class_vol if spec.synthetic_daily_volatility is None else spec.synthetic_daily_volatility
     market_share, class_share, idio_share = ASSET_CLASS_FACTOR_SHARES[spec.asset_class]
 
     class_rng = random.Random(f"{SEED}:{spec.asset_class.value}")

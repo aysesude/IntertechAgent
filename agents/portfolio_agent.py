@@ -352,6 +352,14 @@ def _render(data: dict[str, Any]) -> str:
         lines = [
             f"Portföy özeti ({summary.get('as_of', '—')})",
             f"Toplam değer: {_tr_amount(summary.get('total_value'))} TL",
+        ]
+        # Her varlık kendi son fiyatıyla değerlenir; tarihler ayrışıyorsa özet
+        # `as_of` ile olduğundan taze görünür. Fark varsa kullanıcıya söylenir
+        # (CLAUDE.md §4 uydurmama).
+        oldest = summary.get("oldest_price_date")
+        if oldest and oldest != summary.get("as_of"):
+            lines.append(f"En eski kullanılan fiyat tarihi: {oldest}")
+        lines += [
             f"Yatırılan tutar: {_tr_amount(summary.get('net_invested'))} TL",
             f"Varlık maliyeti: {_tr_amount(summary.get('total_cost_basis'))} TL",
             f"Kâr/zarar: {_tr_amount(gain.get('amount'))} TL "
