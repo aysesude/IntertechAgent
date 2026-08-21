@@ -81,8 +81,8 @@ varlik_siniflari:
 # İşlem talebi — varlık ekseninden ÖNCE çalışır
 # ---------------------------------------------------------------------------
 islem_talebi:
-  fiiller: [al, satın al, sat, transfer et, gönder, havale, eft, öde,
-            yatır, çek, aç, kapat, iptal et, emir ver, işlem yap,
+  fiiller: [al, satın al, sat, alım, satım, transfer, transfer et, gönder, havale, eft, öde,
+            yatır, çek, aç, kapat, iptal et, emir, emir ver, işlem yap,
             para gönder, hesap aç, abone ol]
   # Not: "alayım mı" / "satayım mı" BURAYA GİRMEZ — onlar tavsiye bayrağıdır,
   # işlem talebi değildir. Ayrım kritik: soru soran kullanıcı reddedilmemeli.
@@ -413,6 +413,7 @@ mesajlar:
     ornek_sorular_gosterilir: true
 
   smalltalk_meta:
+    etiketler: [merhaba, selam, günaydın, iyi akşamlar, nasılsın, merhaba bot, selamlar]
     varsayilan: >
       Merhaba! Portföyünüz ve piyasalar hakkındaki sorularınızı yanıtlayabilirim.
     ornek_sorular_gosterilir: true
