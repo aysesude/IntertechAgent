@@ -92,7 +92,14 @@ _MIN_CANDIDATE_POOL = 30
 
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
-_TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"})
+# "â" da dahildir ("kâr" -> "kar"): eksikliği ölçümle doğrulandı — "kârı"
+# hiç foldlanmadığı için "net kârı" gibi hemen her bilanço dokümanında
+# geçen evrensel bir ifade, jenerik kelime listesiyle eşleşemeyip uydurma
+# şirket sorgularının (ör. "ABC Holding'in ikinci çeyrek net kârı nedir")
+# yanlışlıkla "bulundu" sayılmasına katkı sağlıyordu.
+_TURKISH_FOLD_MAP = str.maketrans(
+    {"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a", "î": "i", "û": "u"}
+)
 
 
 def _normalize(text: str) -> str:
@@ -169,6 +176,30 @@ _GENERIC_FINANCE_TERMS = {
     "artis",
     "ortalama",
     "tavsiye",
+    # "holding"/"enerji" tek başına aşırı jenerik: onlarca `sirket_profili`
+    # dokümanında ya şirket adının parçası ("Koç Holding", "Astor Enerji")
+    # ya da faaliyet/iştirak alanı olarak geçiyor (ölçümle doğrulandı:
+    # "ABC Holding'in ikinci çeyrek net kârı nedir" ve "Falanca Enerji'nin
+    # ortaklık yapısı nasıl" gibi uydurma şirket sorguları, salt "holding"/
+    # "enerji" kelimeleri üzerinden TAV/Şişecam/Koç/Astor/Tüpraş/Enka gibi
+    # tamamen alakasız gerçek şirketlerin verisini "bulundu" saydırdı —
+    # uydurma kısım ("ABC", "Falanca") hiç eşleşmemesine rağmen). Gerçek
+    # "Koç Holding" / "Astor Enerji" sorguları etkilenmez: o sorgularda
+    # "koc"/"astor" gibi ayırt edici bir kelime zaten ayrıca eşleşiyor.
+    "holding",
+    "enerji",
+    # "ikinci çeyrek net kârı" hemen her bilanço dokümanının açılış cümlesi,
+    # "ortaklık yapısı" ise hemen her `sirket_profili` dokümanının başlığı.
+    # "holding"/"enerji" eklendikten SONRA bile "ABC Holding'in ikinci
+    # çeyrek net kârı" ve "Falanca Enerji'nin ortaklık yapısı" sorguları
+    # "ikinci"/"net"/"yapisi" tek başına ayırt edici kelime sayıldığı için
+    # hâlâ alakasız gerçek şirketleri "bulundu" saydırıyordu (ölçümle
+    # doğrulandı). "kari": "â" artık foldlandığı için "kârı" bu köke düşüyor.
+    "ikinci",
+    "net",
+    "kari",
+    "yapisi",
+    "ortaklik",
 }
 
 
