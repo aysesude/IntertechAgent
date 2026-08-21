@@ -3,7 +3,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass, RiskProfile
+from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass
 from app.models import Holding, PriceHistory, User
 from app.services.ledger_service import cash_balance_as_of
 from data.generate_dummy import (
@@ -14,7 +14,6 @@ from data.generate_dummy import (
 from data.generate_dummy import (
     main as generate_dummy_main,
 )
-from data.seed_ledger import PORTFOLIO_ARCHETYPES, _risk_profile_for_archetype
 
 
 def test_generate_dummy_creates_expected_data(engine):
@@ -71,22 +70,6 @@ def test_generate_dummy_is_deterministic(engine):
     assert first_run_holdings == second_run_holdings
 
 
-def test_risk_profile_for_archetype_matches_stock_weight_limit():
-    """ÜRÜN SAHİBİ NOTU (Not 5): risk profili, arketipin Hisse ağırlığını
-    kaldırabilecek en düşük (en az riskli) profil olmalı — böylece profil
-    hiçbir zaman portföyle çelişmez."""
-    assert (
-        _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["cash_heavy"]) == RiskProfile.CONSERVATIVE
-    )
-    assert (
-        _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["diversified"]) == RiskProfile.CONSERVATIVE
-    )
-    assert _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["mixed"]) == RiskProfile.BALANCED
-    assert _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["concentrated_equity"]) == (
-        RiskProfile.AGGRESSIVE
-    )
-
-
 def test_generate_dummy_risk_profile_never_mismatches_stock_weight(engine):
     """Not 3'ün dummy veri karşılığı: hiçbir üretilen kullanıcı, kendi risk
     profilinin Hisse üst sınırını aşan bir portföye sahip olmamalı."""
@@ -122,9 +105,9 @@ def test_generate_dummy_risk_profile_never_mismatches_stock_weight(engine):
             )
             stock_weight = stock_value / total_value
             limit = RISK_MAX_CATEGORY_WEIGHT[user.risk_profile][AssetClass.STOCK]
-            # Tolerans: _risk_profile_for_archetype arketipin NOMİNAL hisse
-            # ağırlığını profil sınırıyla karşılaştırır (ör. "diversified"
-            # tam olarak CONSERVATIVE'in %25 sınırına eşittir). Gerçek
+            # Tolerans: ARCHETYPE_RISK_PROFILE eşlemesi arketipin NOMİNAL
+            # hisse ağırlığını profil sınırıyla karşılaştırır
+            # (tests/test_seed_ledger_determinism.py bunu doğrular). Gerçek
             # üretimde işlem yuvarlaması (ROUND_DOWN), bazı varlıkların
             # geçerli işlem günü olmadığı için atlanması ve kısmi SELL
             # senaryoları gerçekleşen ağırlığı nominalden birkaç puan

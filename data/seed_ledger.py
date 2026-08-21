@@ -24,7 +24,7 @@ from faker import Faker
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass, RiskProfile, settings
+from app.core.config import AssetClass, RiskProfile, settings
 from app.models import Asset, PriceHistory, TransactionType
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
 
@@ -39,11 +39,16 @@ STOCK_FEE_RATE = Decimal("0.0015")
 # Vadeli mevduat aylık faizi (INTEREST kaydı olarak deftere işlenir).
 TIME_DEPOSIT_MONTHLY_RATE = Decimal("0.03")
 
+# Alım/satımda adet yuvarlaması. Hisse ve döviz tam sayı (lot/birim), diğerleri
+# küsuratlı. BOND tam sayıydı — doğrudan tahvil adet bazlı alınır — ama sınıfın
+# tamamı artık TEFAS borçlanma araçları fonu (bkz. providers/universe.py) ve
+# fonlar küsuratlı alınır; birim fiyatları 0,14 TL mertebesinde olduğundan tam
+# sayıya yuvarlamak da gereksiz bir sapma bırakıyordu.
 QUANTITY_PRECISION: dict[AssetClass, Decimal] = {
     AssetClass.STOCK: Decimal(1),
     AssetClass.PRECIOUS_METAL: Decimal("0.01"),
     AssetClass.CURRENCY: Decimal(1),
-    AssetClass.BOND: Decimal(1),
+    AssetClass.BOND: Decimal("0.01"),
     AssetClass.CASH: Decimal("0.01"),
 }
 
@@ -81,40 +86,71 @@ PORTFOLIO_ARCHETYPES: dict[str, dict[AssetClass, tuple[float, int]]] = {
 }
 PORTFOLIO_ARCHETYPE_CYCLE = list(PORTFOLIO_ARCHETYPES)
 
+# ÜRÜN SAHİBİ KARARI (Not 5, 2026-08): risk profili artık arketipten BAĞIMSIZ
+# ayrı bir sayaçla dönmüyor — "profil önce belirlenir, portföy ona göre
+# kurulur, tersine sistem izin vermez" ilkesinin (Not 3/4) dummy veri
+# karşılığı olarak her arketip TAM OLARAK bir risk profiline sabit biçimde
+# eşlenir (bkz. ARCHETYPE_RISK_PROFILE).
+#
+# Önceki tasarım (_profile_and_archetype, AK-2.6) profili arketipten bağımsız
+# ve farklı hızda döndürüyordu; bu KASITLI olarak uyumsuz kombinasyonlar da
+# üretiyordu (ör. CONSERVATIVE profilli %75 hisseli kullanıcı) — amaç, risk
+# motorunun uyumsuzluk-uyarısı yolunu dummy veriyle sergileyebilmekti. PO bu
+# kararı geri aldı: dummy veri artık gerçekçi/tutarlı olmalı; uyumsuzluk-
+# uyarısı yolu zaten kendi birim testleriyle (tests/test_risk_service.py)
+# doğrulanıyor, dummy veride bunun için kasıtlı bir bozukluğa gerek yok.
+#
+# 'growth' (Büyüme) enum'a b26e8dab6ef9 ile eklendi; risk_service onun için
+# ayrı sabitler taşıyor (RISK_TARGET_VOLATILITY_BAND, RISK_MAX_CATEGORY_WEIGHT,
+# RISK_DEFENSE_FLOOR, RISK_RECEIVER_PREFERENCE_ORDER — hepsinde GROWTH
+# anahtarı var). Aşağıdaki eşleme dört arketipi hisse ağırlığına göre artan
+# sırada, dört profille (yine artan risk sırasında) BİREBİR eşler; böylece
+# GROWTH dahil dört profilin tamamı üretilir ve hiçbir arketip kendi
+# profilinin Hisse üst sınırını aşmaz (bkz. tests/test_seed_ledger_determinism.py).
+_RISK_PROFILE_ORDER = [
+    RiskProfile.CONSERVATIVE,
+    RiskProfile.BALANCED,
+    RiskProfile.GROWTH,
+    RiskProfile.AGGRESSIVE,
+]
+
+
+def _build_archetype_risk_profiles() -> dict[str, RiskProfile]:
+    ordered_archetypes = sorted(
+        PORTFOLIO_ARCHETYPES,
+        key=lambda name: PORTFOLIO_ARCHETYPES[name].get(AssetClass.STOCK, (0.0, 0))[0],
+    )
+    assert len(ordered_archetypes) == len(
+        _RISK_PROFILE_ORDER
+    ), "arketip sayısı risk profili sayısıyla eşleşmiyor; eşleme elle güncellenmeli"
+    return dict(zip(ordered_archetypes, _RISK_PROFILE_ORDER))
+
+
+ARCHETYPE_RISK_PROFILE: dict[str, RiskProfile] = _build_archetype_risk_profiles()
+
+# Kullanıcı kimliklerinin tohuma bağlı olması için sabit ad alanı. Değeri
+# keyfi ama DEĞİŞMEMELİ: değişirse tüm kullanıcı UUID'leri değişir.
+USER_UUID_NAMESPACE = uuid.UUID("6f2a1c7e-9b34-4d51-8a0e-3c5d7e1f2b48")
+
 _TRY_QUANT = Decimal("0.0001")
+
+
+def _user_id(user_index: int) -> uuid.UUID:
+    """Kullanıcı sırasından deterministik UUID.
+
+    Model varsayılanı `uuid.uuid4` — işletim sisteminin rastgeleliğini kullanır
+    ve SEED'den etkilenmez. Sonuç: isimler, portföyler ve işlemler her seed'de
+    aynı üretilirken KİMLİKLER değişiyordu. Her `make seed` sonrası elde tutulan
+    test kimlikleri ölüyor, arayüzün seçili profili geçersizleşiyor, hata
+    raporlarındaki id başka bir kullanıcıya işaret ediyordu.
+
+    uuid5 ad alanı + isim üzerinden hesaplar, yani tohum gibi davranır.
+    """
+    return uuid.uuid5(USER_UUID_NAMESPACE, f"user-{user_index}")
 
 
 def _tx_datetime(d) -> datetime:
     return datetime.combine(d, time(hour=11), tzinfo=timezone.utc)
-
-
-def _risk_profile_for_archetype(
-    archetype: dict[AssetClass, tuple[float, int]],
-) -> RiskProfile:
-    """ÜRÜN SAHİBİ KARARI (2026-08, Not 5): risk profili artık üretilecek
-    portföyün BAĞIMSIZ bir döngüsü değil, en riskli kategorinin (Hisse)
-    hedef ağırlığından türetilir — "profil önce belirlenir, portföy ona göre
-    kurulur" ilkesinin (Not 3) dummy veri karşılığı. Hisse ağırlığını
-    RISK_MAX_CATEGORY_WEIGHT sınırı içinde barındırabilecek EN DÜŞÜK (en az
-    riskli) profil seçilir; böylece üretilen her portföy kendi profilinin
-    kategori sınırları içinde kalır, RISK_PROFILE_TARGET_ALLOCATION'ın eski
-    bağımsız döngüsündeki gibi "Korumacı kullanıcıda %75 hisse" gibi
-    tutarsızlıklar bir daha oluşmaz.
-
-    Eşikler config.py'den okunduğu için, tablo değişirse burası da kendini
-    günceller — elle eşleme yazılmadı."""
-    stock_weight = Decimal(str(archetype.get(AssetClass.STOCK, (0.0, 0))[0]))
-    for profile in (
-        RiskProfile.CONSERVATIVE,
-        RiskProfile.BALANCED,
-        RiskProfile.GROWTH,
-        RiskProfile.AGGRESSIVE,
-    ):
-        if stock_weight <= RISK_MAX_CATEGORY_WEIGHT[profile][AssetClass.STOCK]:
-            return profile
-    return (
-        RiskProfile.AGGRESSIVE
-    )  # sınırı en geniş profil bile aşarsa (olmamalı) yine de bir profil dön
 
 
 def _load_price_book(
@@ -171,13 +207,13 @@ def seed_ledger(session: Session) -> int:
     tx_count = 0
 
     for user_index in range(NUM_USERS):
-        archetype = PORTFOLIO_ARCHETYPES[
-            PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
-        ]
+        archetype_name = PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
+        archetype = PORTFOLIO_ARCHETYPES[archetype_name]
         user = User(
+            id=_user_id(user_index),
             email=fake.unique.email(),
             full_name=fake.name(),
-            risk_profile=_risk_profile_for_archetype(archetype),
+            risk_profile=ARCHETYPE_RISK_PROFILE[archetype_name],
         )
         session.add(user)
         session.flush()
