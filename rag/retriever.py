@@ -79,8 +79,16 @@ _PREFIX_MATCH_LEN = (
 
 # Chroma'dan çekilecek en az aday sayısı (top_k'dan bağımsız): ham vektör
 # mesafesi doğru dokümanı her zaman ilk birkaç sıraya koymuyor (ölçümle
-# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır.
-_MIN_CANDIDATE_POOL = 20
+# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır. 31
+# `sirket_profili` dokümanının "Ortaklık yapısı" bölümleri birbirine çok
+# benzer bir kalıpla yazıldığı için (hissedar/pay/yüzde gibi ortak kelimeler),
+# bazı şirketlerin kendi dokümanı havuzun hemen dışında kalabiliyor (ölçümle
+# doğrulandı: "Kardemir'in ortaklık yapısı nasıl" sorgusunda KRDMD 21.
+# sırada kalıp havuz 20 iken elenmiş, bunun yerine şirket-eleme güvenlik ağı
+# hiç devreye girmeden 5 alakasız şirketin profili dönmüştü). Havuz
+# genişletilerek KRDMD'nin kendi dokümanı havuza girip güvenlik ağını
+# (bkz. _sirket_matches_query) tetikleyebiliyor.
+_MIN_CANDIDATE_POOL = 30
 
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
