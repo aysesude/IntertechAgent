@@ -44,6 +44,7 @@ class OrchestratorState(TypedDict):
     # çalışıyorlar); alan, çok turlu bağlam gereken ajanlar için hazır tutuluyor.
     history: list[dict[str, str]]
     intent: str
+    flags: list[str]
     agent_responses: Annotated[list[AgentResponse], operator.add]
     final_answer: str
 
@@ -81,6 +82,7 @@ async def detect_intent(state: OrchestratorState) -> dict:
         logger.info("[ORCHESTRATOR] Kapsam kontrolü yakaladı: %s", scope_result["intent"])
         return {
             "intent": scope_result["intent"],
+            "flags": scope_result.get("flags", []),
             "final_answer": scope_result.get(
                 "message",
                 "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
@@ -134,7 +136,7 @@ async def detect_intent(state: OrchestratorState) -> dict:
         state["message"][:80],
     )
 
-    result = {"intent": intent}
+    result = {"intent": intent, "flags": scope_result.get("flags", [])}
     if intent == "AMBIGUOUS":
         result["final_answer"] = _AMBIGUOUS_MESSAGE
 
@@ -218,8 +220,15 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Eğer bazı bilgiler eksikse ('ALINAMAYAN BİLGİLER' kısmı varsa), bunu kullanıcıya doğal bir dille ('Şu an piyasa verilerine ulaşamıyorum ancak portföyünüz...' gibi) belirt.\n"
         "Hiçbir bilgiyi silme veya uydurma yapma, sadece metinleri iyi bir düzene sok.\n"
         "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver.\n"
-        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle."
+        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle.\n"
+        "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', 'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca veriyi nesnel bir şekilde ilet."
     )
+    
+    flags = state.get("flags", [])
+    if "advice_seeking" in flags:
+        system_prompt += "\nKULLANICI TAVSİYE İSTİYOR: Kesinlikle yönlendirici bir dil kullanma, sadece verileri objektif olarak sun."
+    if "kismi_kapsam" in flags:
+        system_prompt += "\nKISMİ KAPSAM: Kullanıcı kapsam dışı bir varlığı da sordu. Karşılaştırma yapmaktan kaçın."
 
     final_answer = ""
     try:
@@ -315,6 +324,7 @@ def _initial_state(
         "message": message,
         "history": history,
         "intent": "",
+        "flags": [],
         "agent_responses": [],
         "final_answer": "",
     }

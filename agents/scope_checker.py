@@ -25,24 +25,19 @@ def _normalize(text: str) -> str:
     return text.translate(_UPPER_DOTTED_I).lower().strip()
 
 
+_SUFFIX_SAFE_MIN = 5   # bu uzunluktan itibaren sonek toleransı güvenli
+
 def _matches_word(query: str, phrase: str) -> bool:
     """Kelime sınırıyla eşleşme (alt dize DEĞİL).
-
-    Alt dize araması sessizce yanlış eşleşiyordu: `bug` etiketi "**bug**ün"
-    içinde, `al` fiili "**al**tın"/"an**al**iz" içinde. Sonuç, meşru soruların
-    reddedilmesiydi — "bugün portföyüm ne durumda" müşteri hizmetlerine
-    yönlendiriliyordu.
-
-    ÖDÜNLEŞME: Türkçe çekim ekleri yakalanmaz (`destekten`, `alabilir`). Yön
-    bilinçli — meşru bir soruyu reddetmek, kapsam dışı bir soruyu ajana
-    göndermekten daha maliyetli (PR #40'ta alınan karar).
-
-    KURAL: eşleşmesi kullanıcıyı REDDEDEN kontroller bunu kullanır. Yalnızca
-    bayrak ekleyen kontroller (`tavsiye_bayragi`) alt dize aramasında kalır;
-    orada çekim ekini yakalamak istenen davranıştır ve yanlış pozitifin
-    bedeli yok.
+    ...
     """
-    return re.search(r"\b" + re.escape(phrase) + r"\b", query) is not None
+    if len(phrase) >= _SUFFIX_SAFE_MIN:
+        # "transfer" → "transferi", "kaldıraç" → "kaldıraçlı"
+        pattern = r"\b" + re.escape(phrase) + r"[a-zçğıöşü]{0,6}\b"
+    else:
+        # "al", "sat", "aç", "çek", "öde" → tam eşleşme kalır
+        pattern = r"\b" + re.escape(phrase) + r"\b"
+    return re.search(pattern, query) is not None
 
 
 def check_scope(query: str) -> dict:
@@ -91,8 +86,11 @@ def check_scope(query: str) -> dict:
             )
 
         for kategori, liste in varyantlar.items():
-            if any(_matches_word(query_lower, k) for k in liste):
-                return {"intent": "INJECTION_ATTEMPT", "message": varsayilan_mesaj, "flags": flags}
+            for k in liste:
+                parts = [re.escape(w) for w in k.split()]
+                pattern = r".{0,30}".join(parts)
+                if re.search(pattern, query_lower):
+                    return {"intent": "INJECTION_ATTEMPT", "message": varsayilan_mesaj, "flags": flags}
 
     # 2.2 Destek Talebi
     destek = scope_config.get("destek_talebi", {})
@@ -130,7 +128,13 @@ def check_scope(query: str) -> dict:
     # Çekim ekli biçimleri ("önerin", "tavsiyeniz") yakalamak istenen davranış.
     tavsiye_config = scope_config.get("tavsiye_bayragi", {})
     tavsiye_tetikleyiciler = tavsiye_config.get("tetikleyiciler", [])
-    if any(t in query_lower for t in tavsiye_tetikleyiciler):
+    
+    karisik_config = scope_config.get("karisik_varlik", {})
+    karsilastirma_kaliplari = karisik_config.get("karsilastirma_kaliplari", [])
+    
+    tum_tavsiye_tetikleyiciler = tavsiye_tetikleyiciler + karsilastirma_kaliplari
+
+    if any(t in query_lower for t in tum_tavsiye_tetikleyiciler):
         flags.append("advice_seeking")
 
     # 5. Varlık Ekseni (Kapsam Dışı Varlık)
@@ -160,6 +164,16 @@ def check_scope(query: str) -> dict:
 
     if kapsam_disi_bulundu and kapsam_ici_bulundu:
         flags.append("kismi_kapsam")
+
+    # 6. Smalltalk / Selamlaşma
+    smalltalk = scope_config.get("mesajlar", {}).get("smalltalk_meta", {})
+    smalltalk_etiketler = smalltalk.get("etiketler", [])
+    if any(_matches_word(query_lower, etiket) for etiket in smalltalk_etiketler):
+        return {
+            "intent": "SMALLTALK_META",
+            "message": smalltalk.get("varsayilan", "Merhaba! Portföyünüz ve piyasalar hakkındaki sorularınızı yanıtlayabilirim."),
+            "flags": flags
+        }
 
     # Hiçbir kural motora takılmadıysa LLM'e devret
     return {"intent": "pass_to_llm", "flags": flags}
