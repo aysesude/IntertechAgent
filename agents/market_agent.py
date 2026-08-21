@@ -89,9 +89,7 @@ class MarketAgent(BaseAgent):
         # boş dönerse bir kez de filtresiz denenir — filtre bir hızlandırma ve
         # doğruluk aracıdır, cevabı büsbütün engellememeli.
         if not tool_result.get("success") and filtreler:
-            tool_result = await self.call_mcp_tool(
-                "search_market_news", {"query": request.query}
-            )
+            tool_result = await self.call_mcp_tool("search_market_news", {"query": request.query})
 
         if not tool_result.get("success"):
             error = tool_result.get("error", {})
