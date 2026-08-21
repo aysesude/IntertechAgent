@@ -98,22 +98,9 @@ def _normalize(text: str) -> str:
     return text.replace("İ", "i").lower().translate(_TURKISH_FOLD_MAP)
 
 
-# "İş" ("İş Bankası") foldlanınca "is" olur — 2 harf, _MIN_KEYWORD_LEN'in
-# altında kaldığı için normalde tamamen elenirdi. Tek başına anlamsız
-# ("is" fiili/eki gibi başka bağlamlarda da geçebilir) olduğu için genel
-# uzunluk sınırını düşürmek yerine yalnızca bu kelimeye özel bir istisna
-# tanımlanır — _SIRKET_ALIAS_PHRASES["ISCTR"] zaten "bankasi" ile BİRLİKTE
-# geçmesini şart koşuyor, tek başına bir şeyi tetiklemiyor.
-_SHORT_KEYWORD_ALLOWLIST = {"is"}
-
-
 def _keywords(text: str) -> set[str]:
     tokens = _WORD_RE.findall(_normalize(text))
-    return {
-        t
-        for t in tokens
-        if (len(t) >= _MIN_KEYWORD_LEN or t in _SHORT_KEYWORD_ALLOWLIST) and t not in _STOPWORDS
-    }
+    return {t for t in tokens if len(t) >= _MIN_KEYWORD_LEN and t not in _STOPWORDS}
 
 
 # Bir sonucun "yeterince örtüşüyor" sayılması için sorgu kelimelerinin en az
@@ -222,43 +209,16 @@ def _result_keywords(result: dict) -> set[str]:
 # açık takma ad listesi.
 _SIRKET_ALIASES: dict[str, set[str]] = {
     "AKBNK": {"akbank"},
+    "KCHOL": {"koc", "holding"},
     # "turk" burada yok: artık stopword (bkz. _STOPWORDS), sorgu
     # kelimeleri arasında hiç görünmez — eklense de hiçbir zaman
     # eşleşmeyecek ölü bir giriş olurdu.
     "THYAO": {"hava", "yollari", "thy"},
+    "YKBNK": {"yapi", "kredi"},
     "PGSUS": {"pegasus"},
     "TCELL": {"turkcell"},
-    # "otomotiv" burada YOK: bu kelime tek başına aşırı jenerik ("Doğuş
-    # Otomotiv" sorgusu FROTO'yu yanlışlıkla eşleştiriyordu — ölçümle
-    # doğrulandı). "ford"/"otosan" zaten yeterince ayırt edici.
-    "FROTO": {"ford", "otosan"},
+    "FROTO": {"ford", "otosan", "otomotiv"},
     "MGROS": {"migros"},
-    "SAHOL": {"sabanci"},
-    "ARCLK": {"arcelik"},
-    "TOASO": {"tofas"},
-    "VAKBN": {"vakifbank", "vakiflar"},
-    "TTKOM": {"telekom"},
-    "CCOLA": {"coca", "cola", "icecek"},
-    "DOAS": {"dogus"},
-    "EKGYO": {"emlak", "konut"},
-    "KRDMD": {"kardemir"},
-}
-
-# Bazı şirket adları TEK kelimeyle aşırı jenerik oluyor: "holding" onlarca
-# dokümanda geçiyor (Koç Holding, Sabancı Holding, ...), "kredi" ve
-# "bankası" da öyle (her banka dokümanında var). Bu yüzden KCHOL'un eski
-# `{"koc", "holding"}` OR-eşleşmesi, "Sabancı Holding" sorgusunda salt
-# "holding" kelimesi üzerinden KCHOL'u yanlışlıkla eşleştiriyordu (ölçümle
-# doğrulandı). Bu tickerlar için OR yerine, listedeki kelimelerin TÜMÜNÜN
-# sorguda birlikte geçmesini şart koşan bir "ifade" (phrase) tanımlanır —
-# tek başına "holding"/"kredi"/"bankası" artık hiçbir şeyi tetiklemiyor.
-_SIRKET_ALIAS_PHRASES: dict[str, list[set[str]]] = {
-    "KCHOL": [{"koc", "holding"}],
-    "YKBNK": [{"yapi", "kredi"}],
-    # "iş" ("İş Bankası") normalde _MIN_KEYWORD_LEN altında kalıp elenir;
-    # bkz. _SHORT_KEYWORD_ALLOWLIST. "bankası" tek başına aşırı jenerik
-    # olduğu için yalnızca "iş" + "bankası" birlikte geçtiğinde eşleşir.
-    "ISCTR": [{"is", "bankasi"}],
 }
 
 
@@ -278,25 +238,25 @@ def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
     ikinci çeyrek sonuçları" sorgusu THYAO'yu da, "Türk Hava Yolları ikinci
     çeyrek" sorgusu TCELL'i de yanlışlıkla eşleştirirdi (ölçümle
     doğrulandı). Takma adlar zaten tam, belirli kelimeler olarak seçildiği
-    için tam eşleşme yeterli ve bu çapraz bulaşmayı engelliyor.
-
-    _SIRKET_ALIAS_PHRASES ayrıca kontrol edilir: bir tickerın listedeki
-    HER kelime grubundan biri sorguda TAMAMEN geçiyorsa eşleşme sayılır —
-    "holding"/"kredi"/"bankası" gibi tek başına aşırı jenerik kelimelerin
-    yalnızca belirli bir şirket adıyla BİRLİKTE geçtiğinde anlam
-    kazanmasını sağlar (bkz. _SIRKET_ALIAS_PHRASES tanımındaki not)."""
+    için tam eşleşme yeterli ve bu çapraz bulaşmayı engelliyor."""
     sirket = (result.get("metadata") or {}).get("sirket")
     if not sirket:
         return False
-    ticker = str(sirket).upper()
     sirket_keywords = _keywords(str(sirket))
     if any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords):
         return True
-    aliases = _SIRKET_ALIASES.get(ticker)
-    if aliases and query_keywords & aliases:
-        return True
-    phrases = _SIRKET_ALIAS_PHRASES.get(ticker)
-    return bool(phrases and any(phrase <= query_keywords for phrase in phrases))
+    aliases = _SIRKET_ALIASES.get(str(sirket).upper())
+    return bool(aliases and query_keywords & aliases)
+
+
+def _document_date(result: dict) -> str:
+    """Dokümanın `tarih` metadata'sı, sıralamaya uygun metin olarak.
+
+    `tarih` ingest sırasında ISO (YYYY-AA-GG) biçiminde yazılıyor; bu biçimde
+    metin sıralaması kronolojik sıralamaya eşittir, ayrıştırmaya gerek yok.
+    Alan boşsa boş metin döner ve o parça en eskiye düşer — tarihsiz bir
+    doküman "en güncel" sayılmamalı."""
+    return str((result.get("metadata") or {}).get("tarih") or "")
 
 
 def _build_where(
@@ -426,6 +386,78 @@ class Retriever:
         # içinde mesafe sırasını korur.
         filtered.sort(key=lambda r: not _sirket_matches_query(r, query_keywords))
         return filtered[:top_k]
+
+    def retrieve_for_symbols(
+        self,
+        symbols: list[str],
+        *,
+        top_k_per_symbol: int = 2,
+        types: list[str] | None = None,
+        query: str | None = None,
+    ) -> dict[str, list[dict]]:
+        """Verilen semboller için, sembol başına GRUPLANMIŞ ve TARİHE GÖRE
+        yeniden eskiye sıralı doküman parçaları döndürür.
+
+        `retrieve()`'den üç yapısal farkı var ve üçü de kasıtlıdır:
+
+        1. KELİME ÖRTÜŞMESİ ARANMAZ. `retrieve()`, serbest metin sorgusunun
+           alakasız doküman çekmesini kelime örtüşmesiyle engelliyor. Burada
+           öyle bir sorgu yok: arama uzayı `sirket` metadata'sıyla zaten
+           belirli varlıklara kilitli, dolayısıyla dönen her parça tanımı
+           gereği o varlığa ait. Kelime kapısını burada uygulamak
+           "portföyümle ilgili haberler" gibi jenerik bir istekte HER
+           sonucu elerdi (sorgu metni doküman metniyle kelime paylaşmaz).
+
+        2. MESAFE EŞİĞİ UYGULANMAZ. Aynı gerekçe: alaka kararını vektör
+           mesafesi değil, deterministik `sirket` filtresi veriyor. Eşik
+           burada yalnızca doğru şirkete ait gerçek dokümanları eleyebilirdi.
+
+        3. SIRALAMA TARİHE GÖRE. İş analisti "GÜNCEL haber, market bilgileri
+           ve analist yorumları" istiyor; benzerlik sırası güncelliği
+           garanti etmez (2026-04 tarihli bir analiz, 2026-08 tarihlinin
+           önüne geçebiliyor). `tarih` ISO (YYYY-AA-GG) yazıldığı için metin
+           sıralaması kronolojik sıralamaya eşittir.
+
+        Tek bir vektör sorgusu yapılır (sembol başına ayrı sorgu değil):
+        embedding hesabı çağrı başına ~50-100 ms ve 15 varlıklı bir portföy
+        bunu 15 kez ödeyemez. Gruplama Python tarafında yapılır.
+
+        Dokümanı olmayan sembol sonuç sözlüğünde HİÇ yer almaz — çağıran
+        taraf eksikliği görüp kullanıcıya bildirebilsin diye (AK 5.5).
+        """
+        symbols = [s for s in dict.fromkeys(symbols) if s]
+        if not symbols or top_k_per_symbol < 1:
+            return {}
+
+        kosullar: list[dict] = [{"sirket": {"$in": symbols}}]
+        if types:
+            kosullar.append({"tur": {"$in": list(types)}})
+        where = kosullar[0] if len(kosullar) == 1 else {"$and": kosullar}
+
+        # Havuz cömert tutuluyor: Chroma `where` süzgecinden geçen sonuçlar
+        # arasından en yakın n taneyi döndürür. Havuz darsa bir sembolün tüm
+        # parçaları başka sembollerinkinin gerisinde kalıp hiç görünmeyebilir.
+        candidate_pool = max(len(symbols) * top_k_per_symbol * 4, _MIN_CANDIDATE_POOL)
+        results = self._store.similarity_search(
+            query or " ".join(symbols), top_k=candidate_pool, where=where
+        )
+
+        gruplar: dict[str, list[dict]] = {}
+        for result in results:
+            metadata = result.get("metadata") or {}
+            sirket = str(metadata.get("sirket") or "")
+            # Son filtre: Chroma'nın `where`'i doğru uyguladığı varsayılmaz
+            # (bkz. _matches_filters'daki aynı gerekçe).
+            if sirket not in symbols:
+                continue
+            if types and metadata.get("tur") not in types:
+                continue
+            gruplar.setdefault(sirket, []).append(result)
+
+        for sirket, parcalar in gruplar.items():
+            parcalar.sort(key=_document_date, reverse=True)
+            gruplar[sirket] = parcalar[:top_k_per_symbol]
+        return gruplar
 
     def answer(self, query: str, top_k: int | None = None) -> dict:
         """Doğrudan kullanım için: bul ya da 'bulunamadı' söyle. LLM'e ya da

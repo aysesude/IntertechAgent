@@ -135,6 +135,44 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
     AssetClass.CASH: Decimal(5),
 }
 
+# --- Varlık sınıfı uygunluk tablosu (İŞ ANALİSTİ, 2026-08 güncellemesi) ---
+#
+# Şartnamedeki tanım aynen şöyle: "Kullanıcıların çözdüğü anket sonucu 1-7
+# arası bir risk puanı olur. Aşağıdaki risk seviyesi kullanıcının risk
+# seviyesinden büyükse kişi o varlık türünden satın alım ya da yatırım
+# TAVSİYESİ alamaz."
+#
+# Buradaki 1-7, volatiliteden hesaplanan `RiskLevel` ile AYNI ŞEY DEĞİLDİR —
+# ikisi de yedi kademeli olduğu için karıştırılmaya çok müsait. Bu tablo
+# ANKET puanıyla karşılaştırılır; `RiskLevel` ise portföyün ölçülen
+# oynaklığından çıkar. Aynı ölçekte oldukları için değil, tesadüfen ikisi de
+# 1-7 olduğu için benzer görünürler.
+#
+# Sayılar şartnameden birebir alınmıştır, türetilmemiştir. Kıymetli maden
+# ("ALTIN") ve döviz ("DOVIZ") aynı seviyededir (4).
+ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
+    AssetClass.CASH: 1,
+    AssetClass.BOND: 3,
+    AssetClass.CURRENCY: 4,
+    AssetClass.PRECIOUS_METAL: 4,
+    AssetClass.STOCK: 6,
+}
+
+# Anket puanının alabileceği aralık (dahil). Tabloyla karşılaştırma bu
+# aralıkta anlamlıdır; dışında bir değer gelirse çağıran taraf hata verir.
+RISK_SURVEY_SCORE_MIN = 1
+RISK_SURVEY_SCORE_MAX = 7
+
+if set(ASSET_CLASS_ADVICE_RISK_LEVEL) != set(AssetClass):
+    # Yeni bir varlık sınıfı eklenip bu tabloya yazılmazsa, uygunluk kontrolü
+    # o sınıfı sessizce "serbest" sayardı — yani profili tutmayan bir varlık
+    # tavsiye edilebilir hale gelirdi. Açılışta patlaması, sessizce yanlış
+    # davranmasından iyidir.
+    raise ValueError(
+        "ASSET_CLASS_ADVICE_RISK_LEVEL her AssetClass icin bir seviye tanimlamali: "
+        f"eksik={set(AssetClass) - set(ASSET_CLASS_ADVICE_RISK_LEVEL)}"
+    )
+
 # Risk profiline göre hedef varlık sınıfı dağılımı (yüzde, toplamı 100
 # olmalı). Yeniden dengeleme önerisi (risk_service._rebalance_actions) bunu
 # mevcut dağılımla kıyaslar.
@@ -404,6 +442,29 @@ class Settings(BaseSettings):
     # Bu yüzden eşik gevşetildi; alakasızlığı asıl kelime örtüşmesi eşiği
     # (_MIN_KEYWORD_OVERLAP_RATIO, rag/retriever.py) engelliyor.
     rag_distance_threshold: float = 0.95
+
+    # --- Portföy bazlı doküman getirme (get_portfolio_news) ---
+    # İŞ ANALİSTİ NOTU (2026-08 güncellemesi): "portföydeki varlıklarla ilgili
+    # güncel haber, market bilgileri ve analist yorumlarını çekip LLM'e
+    # verirsiniz" ve "her bulgu en az bir kaynak dokümana referans verir".
+    # Aşağıdakiler o getirmenin ayar noktalarıdır.
+
+    # Varlık başına kaç doküman parçası döneceği. Küçük tutuluyor: bir
+    # portföyde 15 varlık olabilir, her biri için 5 parça LLM bağlamını
+    # gereksiz şişirir ve asıl bulguyu boğar.
+    portfolio_news_per_asset: int = 2
+    # Portföy dokümanı getirmede dikkate alınan doküman türleri. `makro`
+    # kasıtlı olarak DIŞARIDA: makro dokümanların `sirket` alanı boştur,
+    # belirli bir varlığa bağlanamaz; strateji bölümünün "yalnızca portföyde
+    # fiilen bulunan varlıklar üzerinden kurulur" kuralını ihlal ederdi.
+    portfolio_news_types: list[str] = ["bilanco", "analiz", "haber", "duyuru"]
+    # Güven düzeyi eşiği: dokümanla desteklenen varlıkların portföy ağırlığı
+    # bu yüzdenin altındaysa çıktı "düşük güven" olarak işaretlenir.
+    # KABUL KRİTERİ KARŞILIĞI: "İlgili doküman bulunamadığında güven düzeyi
+    # düşük olarak döner ve durum kullanıcıya açıkça bildirilir."
+    # DİKKAT: 50 değeri bir POLİTİKA TERCİHİDİR, ölçülmüş bir eşik değildir —
+    # iş analistiyle teyit edilmeli.
+    portfolio_news_low_confidence_weight_percent: float = 50.0
 
     # --- Veri katmanı ---
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
