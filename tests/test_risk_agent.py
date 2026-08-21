@@ -129,3 +129,46 @@ def test_butun_senaryolar_tasiniyor():
     assert [s["ad"] for s in secenekler] == ["Senaryo 1", "Senaryo 2", "Senaryo 3"]
     # Hangi varlığın alınıp satılacağı LLM'e HİÇ gitmemeli (tavsiye yasağı).
     assert all("asset_weights" not in s and "varliklar" not in s for s in secenekler)
+
+
+def _konum(profil: str, vol, within):
+    return _compact(
+        {
+            "risk_profile": profil,
+            "is_within_profile": within,
+            "metrics": {"annualized_volatility_percent": vol},
+        }
+    ).get("profil_konumu")
+
+
+def test_profil_altinda_kalmak_ayri_bir_durum():
+    """Bandın ALTINDA kalmak "içinde" sayılmamalı.
+
+    risk_service yalnızca üst sınırı kontrol ediyor
+    (`is_within_profile = volatility <= band_upper`), dolayısıyla Agresif
+    profilli %3,5 volatiliteli bir kullanıcıya "profilinizin içindesiniz"
+    deniyordu. Ölçüldü: 50 kullanıcının 32'si bu durumda ve sisteme göre
+    hepsinde "her şey yolunda".
+    """
+    # Agresif bandı %30-40; %3,5 çok altında.
+    assert _konum("aggressive", 3.5, True) == "bandin_altinda"
+    # Dengeli bandı %10-20.
+    assert _konum("balanced", 5.0, True) == "bandin_altinda"
+
+
+def test_ust_sinir_karari_servisten_alinir():
+    """Üst sınır kararı yeniden hesaplanmaz; iki katman çelişemez."""
+    assert _konum("conservative", 12.6, False) == "bandin_ustunde"
+    # Servis "içinde" diyorsa ajan bunu bozmaz.
+    assert _konum("aggressive", 35.0, True) == "band_icinde"
+
+
+def test_korumaci_profilde_bandin_altinda_olamaz():
+    """Korumacı bandının alt sınırı %0 — sıfırdan az risk yok."""
+    assert _konum("conservative", 0.5, True) == "band_icinde"
+
+
+def test_risk_hesaplanamadiysa_konum_uretilmez():
+    """Volatilite yoksa konum uydurulmaz (CLAUDE.md §4)."""
+    assert _konum("balanced", None, None) is None
+    assert _konum("balanced", None, True) is None

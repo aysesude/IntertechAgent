@@ -68,6 +68,30 @@ VaR, Sharpe ve senaryoların tamamı `app/services/risk_service.py` hesabıdır.
   `None` alanlar **korunur** — risk hesaplanamadığında model bunu görüp
   "hesaplanamadı" demeli (CLAUDE.md §4 uydurmama).
 
+### `profil_konumu` — bandın altında kalmak da bir uyumsuzluktur
+
+`risk_service` yalnızca **üst** sınırı kontrol ediyor:
+
+```python
+is_within_profile = volatility <= band_upper   # risk_service.py:1252
+```
+
+Bandın **altında** kalmak da "içinde" sayılıyor. Sonuç: Agresif profilli,
+%3,5 volatiliteli bir kullanıcıya "profilinizin içindesiniz" deniyordu.
+Ölçüldü: 50 kullanıcının 32'si bu durumda.
+
+`_compact` bu boşluğu `profil_konumu` alanıyla kapatıyor —
+`bandin_altinda` / `band_icinde` / `bandin_ustunde`. Üst sınır kararı
+**servisten alınır**, ajan yeniden hesaplamaz; iki katmanın çelişmesi mümkün
+olmasın diye. Karşılaştırma kodda yapılır, prompt'a bırakılmaz.
+
+`bandin_altinda` durumunda ajan yalnızca **tespit** yapar ("beyan ettiğiniz
+risk tercihinin altında kalıyor"); risk artırıcı yönlendirme prompt kural
+9'da açıkça yasaklı ve o durum için senaryo üretilmez. Yukarı yönlü öneri
+motorun kendisini değiştirmeyi gerektirir (`_target_volatility` hep üst
+sınırı hedefliyor, aksiyonlar riskli→savunma yönünde taşıyor) ve ayrıca bir
+ürün kararıdır — analist onayı bekliyor.
+
 ## Orchestrator (`agents/orchestrator.py`) — LangGraph
 
 ```

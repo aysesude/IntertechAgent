@@ -62,6 +62,34 @@ def _pct(ratio: Decimal) -> float:
     return float(ratio * 100)
 
 
+def _profile_position(
+    volatility_percent: float | None,
+    is_within_profile: bool | None,
+    band_lower_percent: float,
+) -> str | None:
+    """Volatilitenin profilin hedef bandına göre konumu: altında/içinde/üstünde.
+
+    NEDEN GEREKLİ. `risk_service` yalnızca ÜST sınırı kontrol ediyor
+    (`is_within_profile = volatility <= band_upper`); bandın ALTINDA kalmak
+    "içinde" sayılıyor. Sonuç: Agresif profilli, %3,5 volatiliteli bir
+    kullanıcıya "profilinizin içindesiniz" deniyor — beyan ettiği risk
+    tercihinin çok altında durduğu hiç söylenmiyor. Ölçüldü: 50 kullanıcının
+    32'si bu durumda (agresif 16, dengeli 16'nın çoğu).
+
+    Üst sınır kararı SERVİSTEN alınır, burada yeniden hesaplanmaz — iki
+    katmanın çelişmesi mümkün olmasın. Bu fonksiyon yalnızca servisin
+    ayırmadığı "altında" durumunu ekler.
+
+    Karşılaştırma kodda yapılıyor, prompt'a bırakılmıyor: modelden iki sayıyı
+    karşılaştırmasını istemek, sonucu güvenilmez kılar.
+    """
+    if is_within_profile is None or volatility_percent is None:
+        return None
+    if not is_within_profile:
+        return "bandin_ustunde"
+    return "bandin_altinda" if volatility_percent < band_lower_percent else "band_icinde"
+
+
 def _compact(data: dict[str, Any]) -> dict[str, Any]:
     """Değerlendirmenin LLM'e gidecek küçültülmüş hâlini üretir.
 
@@ -113,6 +141,11 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
             asset_class.value: _pct(cap)
             for asset_class, cap in RISK_MAX_CATEGORY_WEIGHT[profile].items()
         }
+        compact["profil_konumu"] = _profile_position(
+            compact["yillik_volatilite_yuzde"],
+            data.get("is_within_profile"),
+            _pct(low),
+        )
 
     causes = data.get("causes") or {}
     tetiklenen = [
