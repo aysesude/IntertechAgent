@@ -87,8 +87,9 @@ jobs:
             # guncellenmesi gerekiyor; aksi halde deploy gecer ama Piyasa Ajani
             # yeni dokumani goremez.
             #
-            # Idempotent: ayni icerikli parcalar atlanir, tekrar calistirmak
-            # zararsiz.
+            # rag.ingest her calistiginda Chroma koleksiyonunu SILIP yeniden
+            # olusturur (rag/vector_store.py clear()) - upsert degil, tam
+            # senkronizasyon. Eskiden veri kalici olarak birikiyordu.
             #
             # `|| true` / `|| echo` YOK ve eklenmemeli. Bir kez `|| echo ...` ile
             # yazilmisti; ingest sessizce cokerken deploy yesil kaldi ve RAG'in
@@ -97,26 +98,14 @@ jobs:
             # GERCEK bir hatadir ve deploy'u kirmalidir.
             $COMPOSE exec -T -w / api python -m rag.ingest
 
-            echo "--> Uygulama sunuculari yeniden baslatiliyor"
-            # Iki ayri sebep, tek adim:
-            #
-            # 1) SIRA. Yukarida `up -d` mcp_server'i baslatiyor ve
-            #    market_tools.warm_up() koleksiyon nesnesini bellege aliyor.
-            #    Hemen ardindan calisan ingest ise koleksiyonu SILIP yeniden
-            #    yaratiyor (rag/vector_store.py `clear()`), yani yeni bir
-            #    koleksiyon kimligi olusuyor. Yeniden baslatma olmazsa MCP
-            #    sunucusu artik var olmayan bir koleksiyona bakar; deploy yesil
-            #    gecer ama Piyasa Ajani her soruya NOT_FOUND doner. Prod'da
-            #    tam olarak bu yasandi (2026-08-19).
-            #
-            # 2) BIND MOUNT. agents/, mcp_server/, rag/ imaja kopyalanmiyor,
-            #    volume olarak baglaniyor (bkz. docker-compose.yml). Bu
-            #    dizinlerde degisen kod imaji degistirmedigi icin
-            #    `up -d --build` konteyneri yeniden YARATMAZ; yeni kod diske
-            #    duser ama calisan surec eskisini bellekte tutar. api
-            #    `--reload` ile calissa bile uvicorn yalnizca /app'i izliyor,
-            #    /agents disarida kaliyor.
-            $COMPOSE restart api mcp_server
+            echo "--> mcp_server yeniden baslatiliyor (RAG koleksiyon referansini tazelemek icin)"
+            # mcp_server acilirken (warm_up) Chroma koleksiyonuna bir referans
+            # alip bellekte tutuyor. Yukaridaki adim koleksiyonu SILIP yeniden
+            # olusturdugu icin, mcp_server hala eski (artik var olmayan)
+            # koleksiyona isaret eder - chat sessizce yanit vermez olur
+            # (production'da olculdu). restart, warm_up'i tazelenmis
+            # koleksiyonla yeniden calistirir.
+            $COMPOSE restart mcp_server
 
             echo "--> Saglik kontrolu"
             for i in $(seq 1 18); do
