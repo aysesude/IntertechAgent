@@ -86,48 +86,53 @@ PORTFOLIO_ARCHETYPES: dict[str, dict[AssetClass, tuple[float, int]]] = {
 }
 PORTFOLIO_ARCHETYPE_CYCLE = list(PORTFOLIO_ARCHETYPES)
 
-# Dört profilin tamamı üretilir. 'growth' (Büyüme) b26e8dab6ef9 ile enum'a
-# eklendi ve risk_service onun için ayrı sabitler tanımlıyor
-# (RISK_TARGET_VOLATILITY_BAND, RISK_MAX_CATEGORY_WEIGHT, RISK_DEFENSE_FLOOR,
-# RISK_RECEIVER_PREFERENCE_ORDER — hepsinde GROWTH anahtarı var). Seed onu
-# üretmezse o kod yollarının tamamı hiç çalışmaz ve demoda gösterilemez.
-RISK_PROFILE_CYCLE = [
+# ÜRÜN SAHİBİ KARARI (Not 5, 2026-08): risk profili artık arketipten BAĞIMSIZ
+# ayrı bir sayaçla dönmüyor — "profil önce belirlenir, portföy ona göre
+# kurulur, tersine sistem izin vermez" ilkesinin (Not 3/4) dummy veri
+# karşılığı olarak her arketip TAM OLARAK bir risk profiline sabit biçimde
+# eşlenir (bkz. ARCHETYPE_RISK_PROFILE).
+#
+# Önceki tasarım (_profile_and_archetype, AK-2.6) profili arketipten bağımsız
+# ve farklı hızda döndürüyordu; bu KASITLI olarak uyumsuz kombinasyonlar da
+# üretiyordu (ör. CONSERVATIVE profilli %75 hisseli kullanıcı) — amaç, risk
+# motorunun uyumsuzluk-uyarısı yolunu dummy veriyle sergileyebilmekti. PO bu
+# kararı geri aldı: dummy veri artık gerçekçi/tutarlı olmalı; uyumsuzluk-
+# uyarısı yolu zaten kendi birim testleriyle (tests/test_risk_service.py)
+# doğrulanıyor, dummy veride bunun için kasıtlı bir bozukluğa gerek yok.
+#
+# 'growth' (Büyüme) enum'a b26e8dab6ef9 ile eklendi; risk_service onun için
+# ayrı sabitler taşıyor (RISK_TARGET_VOLATILITY_BAND, RISK_MAX_CATEGORY_WEIGHT,
+# RISK_DEFENSE_FLOOR, RISK_RECEIVER_PREFERENCE_ORDER — hepsinde GROWTH
+# anahtarı var). Aşağıdaki eşleme dört arketipi hisse ağırlığına göre artan
+# sırada, dört profille (yine artan risk sırasında) BİREBİR eşler; böylece
+# GROWTH dahil dört profilin tamamı üretilir ve hiçbir arketip kendi
+# profilinin Hisse üst sınırını aşmaz (bkz. tests/test_seed_ledger_determinism.py).
+_RISK_PROFILE_ORDER = [
     RiskProfile.CONSERVATIVE,
     RiskProfile.BALANCED,
     RiskProfile.GROWTH,
     RiskProfile.AGGRESSIVE,
 ]
 
+
+def _build_archetype_risk_profiles() -> dict[str, RiskProfile]:
+    ordered_archetypes = sorted(
+        PORTFOLIO_ARCHETYPES,
+        key=lambda name: PORTFOLIO_ARCHETYPES[name].get(AssetClass.STOCK, (0.0, 0))[0],
+    )
+    assert len(ordered_archetypes) == len(
+        _RISK_PROFILE_ORDER
+    ), "arketip sayısı risk profili sayısıyla eşleşmiyor; eşleme elle güncellenmeli"
+    return dict(zip(ordered_archetypes, _RISK_PROFILE_ORDER))
+
+
+ARCHETYPE_RISK_PROFILE: dict[str, RiskProfile] = _build_archetype_risk_profiles()
+
 # Kullanıcı kimliklerinin tohuma bağlı olması için sabit ad alanı. Değeri
 # keyfi ama DEĞİŞMEMELİ: değişirse tüm kullanıcı UUID'leri değişir.
 USER_UUID_NAMESPACE = uuid.UUID("6f2a1c7e-9b34-4d51-8a0e-3c5d7e1f2b48")
 
 _TRY_QUANT = Decimal("0.0001")
-
-
-def _profile_and_archetype(user_index: int) -> tuple[RiskProfile, str]:
-    """Kullanıcı sırasından (risk profili, arketip adı) çifti üretir.
-
-    İki döngü AYRI sayaçlarla ilerler. Aynı sayaç kullanılırsa üretilen bileşim
-    sayısı iki uzunluğun en küçük ortak katıyla sınırlanır: profil listesi
-    'growth' eklenince 4 uzunluğa çıktı, arketip listesi de 4 — ekok 4 olurdu
-    ve 16 bileşimden yalnızca 4'ü üretilirdi:
-
-        conservative → hep mixed        growth     → hep diversified
-        balanced     → hep concentrated aggressive → hep cash_heavy
-
-    Yani agresif profil YALNIZCA nakit ağırlıklı portföyle görülürdü ve risk
-    motoru ayrıştırılamaz hale gelirdi (AK-2.6 ihlali). Arketip hızlı (her
-    kullanıcıda), profil yavaş (her dört kullanıcıda bir) dönerse 16 bileşimin
-    tamamı üretilir.
-
-    Determinizm: rastgelelik yok, yalnızca sıra numarasının fonksiyonu.
-    """
-    archetype_name = PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
-    profile = RISK_PROFILE_CYCLE[
-        (user_index // len(PORTFOLIO_ARCHETYPE_CYCLE)) % len(RISK_PROFILE_CYCLE)
-    ]
-    return profile, archetype_name
 
 
 def _user_id(user_index: int) -> uuid.UUID:
@@ -202,12 +207,13 @@ def seed_ledger(session: Session) -> int:
     tx_count = 0
 
     for user_index in range(NUM_USERS):
-        profile, archetype_name = _profile_and_archetype(user_index)
+        archetype_name = PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
+        archetype = PORTFOLIO_ARCHETYPES[archetype_name]
         user = User(
             id=_user_id(user_index),
             email=fake.unique.email(),
             full_name=fake.name(),
-            risk_profile=profile,
+            risk_profile=ARCHETYPE_RISK_PROFILE[archetype_name],
         )
         session.add(user)
         session.flush()
@@ -215,7 +221,6 @@ def seed_ledger(session: Session) -> int:
         session.add(portfolio)
         session.flush()
 
-        archetype = PORTFOLIO_ARCHETYPES[archetype_name]
         budget = Decimal(rng.randrange(500_000, 2_000_000, 10_000))
 
         # Portföy, geçmişin ilk günlerinde tek DEPOSIT ile fonlanır.

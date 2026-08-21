@@ -173,12 +173,22 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
   `seed_ledger._user_id` bunu `uuid5(USER_UUID_NAMESPACE, f"user-{i}")` ile
   sabitler. **`USER_UUID_NAMESPACE` değiştirilmemeli** — değişirse tüm
   kullanıcı UUID'leri değişir ve elde tutulan bağlantılar ölür.
-- **Profil ve arketip AYRI sayaçlarla dağıtılır** (`_profile_and_archetype`).
-  Aynı sayaç kullanılsaydı bileşim sayısı iki liste uzunluğunun ekok'uyla
-  sınırlanırdı: ikisi de 4 uzunlukta olduğu için 16 bileşimden yalnızca 4'ü
-  üretilir, agresif profil yalnızca nakit ağırlıklı portföyle görülürdü
-  (AK-2.6 ihlali). Arketip her kullanıcıda, profil her dört kullanıcıda bir
-  döner.
+- **Risk profili, arketipten TÜRETİLİR** (`ARCHETYPE_RISK_PROFILE`,
+  `seed_ledger._build_archetype_risk_profiles`). ÜRÜN SAHİBİ KARARI (Not 5,
+  2026-08): dört arketip, hisse ağırlığına göre artan sırada, dört risk
+  profiliyle (yine artan risk sırasında) birebir eşlenir — `cash_heavy`→
+  conservative, `diversified`→balanced, `mixed`→growth,
+  `concentrated_equity`→aggressive. Böylece GROWTH dahil dört profilin
+  tamamı üretilir ve hiçbir kullanıcının portföyü kendi profilinin Hisse
+  üst sınırını (`RISK_MAX_CATEGORY_WEIGHT`) aşmaz — dummy veri artık gerçek
+  kullanıcı akışıyla aynı ilkeye (Not 3/4: "profil önce, portföy ona göre")
+  uyar.
+  Önceki tasarım (`_profile_and_archetype`, AK-2.6) profili arketipten
+  BAĞIMSIZ, farklı hızda bir sayaçla döndürüyordu ve kasıtlı olarak
+  uyumsuz kombinasyonlar da üretiyordu (risk motorunun uyumsuzluk-uyarısı
+  yolunu dummy veriyle sergileyebilmek için). PO bu kararı geri aldı;
+  uyumsuzluk-uyarısı yolu artık kendi birim testleriyle
+  (`tests/test_risk_service.py`) doğrulanıyor.
 - Fiyatlar yalnızca **işlem günlerinde** (hafta içi) üretilir; gerçek
   kaynaklarla takvim uyumu için.
 - Sentetik fiyatlar üç bileşenli **faktör modeli** kullanır (piyasa + sınıf +

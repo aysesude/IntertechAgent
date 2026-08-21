@@ -178,6 +178,17 @@ for _profile, _targets in RISK_PROFILE_TARGET_ALLOCATION.items():
 # --- Senaryo üretimi kısıtları (profil bağımlı) ---
 # Analist notu: tüm değerler Risk/Strateji Ajanı belgesindeki tablolarla
 # birebir aynıdır (Korumacı/Dengeli/Büyüme/Agresif).
+#
+# ÜRÜN SAHİBİ NOTU (2026-08): Bu tablolar (özellikle RISK_MAX_ASSET_WEIGHT ve
+# RISK_MAX_CATEGORY_WEIGHT) şu an yalnızca risk_service.py'nin OKUMA tarafında
+# (kök neden teşhisi, is_within_profile) kullanılıyor. PO kararına göre asıl
+# hedef, kullanıcının profiliyle uyuşmayan bir varlığı zaten SATIN ALAMAMASI
+# — profil önce (anket ile) belirlenir, portföy ona göre kurulur, tersi değil.
+# Bunu şu an burada uygulamıyoruz çünkü projede henüz canlı bir işlem/alım
+# (BUY) endpoint'i yok (yalnızca okuma amaçlı MCP tool'ları var). O endpoint
+# eklendiğinde, işlem kaydı oluşturmadan önce bu tablolara karşı bir doğrulama
+# eklenmesi gerekir (bkz. app/services/ledger_service.record_transaction) —
+# bilinen, kasıtlı bir eksik, şimdilik yalnızca not olarak duruyor.
 
 # Tek varlığın portföy içindeki üst sınırı (oran, 0.20 = %20).
 RISK_MAX_ASSET_WEIGHT: dict[RiskProfile, Decimal] = {
@@ -470,6 +481,16 @@ class Settings(BaseSettings):
     risk_cause_hhi_low_threshold: float = 0.25
 
     # --- Senaryo üretim motoru ---
+    # ÜRÜN SAHİBİ KARARI (2026-08): yeniden dengeleme senaryo önerisi ürün
+    # kapsamından çıkarıldı — "risk kişinin kendi yatırım eylemidir, profil
+    # uyuşmuyorsa sistem yalnızca uyarır, ne yapılacağını önermez" (bkz. PO
+    # notları). Motor kod olarak DURUYOR (ileride fikir değişirse tek satırla
+    # geri açılabilsin diye) ama bu bayrak False olduğu sürece
+    # get_risk_assessment hiçbir zaman senaryo üretmez — `include_scenarios`
+    # çağıran tarafından True verilse bile. Aksiyon A/B/C mantığına
+    # dokunulmadı, yalnızca bu tek nokta ekiplendi.
+    risk_scenarios_enabled: bool = False
+
     # STEP: her transferin büyüklüğü (puan).
     risk_scenario_step_percent: float = 5.0
     # Yeni açılan bir kategoriye ilk transferde verilecek en az pay (puan).

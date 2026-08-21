@@ -1,58 +1,56 @@
-"""Seed'in belirlenimciliği ve profil × arketip dağıtımı — AK-2.6.
+"""Seed'in belirlenimciliği ve arketip × risk profili eşlemesi — Not 5 (PO, 2026-08).
 
 Saf fonksiyon testleri: veritabanı kullanmaz, `db_session` fixture'ına
 dokunmaz (o fixture teardown'da tüm tabloları siliyor).
+
+Not: Bu dosya daha önce (AK-2.6) profil ile arketipin BAĞIMSIZ, farklı hızda
+dönen sayaçlarla 16 kombinasyonun tamamını (kasıtlı uyumsuzluklar dahil)
+ürettiğini doğruluyordu. PO Not 5 ile bu tasarımı geri aldı: dummy veri artık
+tutarlı olmalı, her arketip tam olarak bir risk profiline sabit biçimde
+eşlenir. Aşağıdaki testler bu yeni sözleşmeyi doğrular.
 """
 
-from collections import Counter
-
-from app.core.config import RiskProfile
+from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass, RiskProfile
 from data.seed_ledger import (
+    ARCHETYPE_RISK_PROFILE,
     NUM_USERS,
     PORTFOLIO_ARCHETYPE_CYCLE,
-    RISK_PROFILE_CYCLE,
-    _profile_and_archetype,
+    PORTFOLIO_ARCHETYPES,
     _user_id,
 )
 
 
-def test_ak_2_6_butun_profil_arketip_bilesimleri_uretilir():
-    """16 bileşimin tamamı çıkmalı.
-
-    Regresyon: profil ve arketip AYNI sayaçla dönerse üretilen bileşim sayısı
-    iki uzunluğun en küçük ortak katıyla sınırlanır. 'growth' eklenmeden önce
-    listeler 3 ve 4 uzunluktaydı (aralarında asal, ekok 12 → hepsi çıkıyordu);
-    'growth' listeyi 4'e çıkarınca ekok 4 olur ve 16 bileşimden yalnızca 4'ü
-    üretilirdi — agresif profil YALNIZCA nakit ağırlıklı portföyle görülürdü.
-    """
-    bilesimler = {_profile_and_archetype(i) for i in range(NUM_USERS)}
-    beklenen = {
-        (profile, archetype)
-        for profile in RISK_PROFILE_CYCLE
-        for archetype in PORTFOLIO_ARCHETYPE_CYCLE
-    }
-    assert bilesimler == beklenen, f"eksik bileşim: {beklenen - bilesimler}"
+def test_her_arketipin_tam_olarak_bir_risk_profili_var():
+    """ÜRÜN SAHİBİ KARARI (Not 5): profil artık arketipten bağımsız değil —
+    her arketip tam olarak bir risk profiline, sabit biçimde eşlenir."""
+    assert set(ARCHETYPE_RISK_PROFILE) == set(
+        PORTFOLIO_ARCHETYPES
+    ), "eşleme tüm arketipleri kapsamalı"
+    assert set(ARCHETYPE_RISK_PROFILE.values()) == set(
+        RiskProfile
+    ), "dört profilin (GROWTH dahil) tamamı en az bir arketiple temsil edilmeli"
+    # İki arketip aynı profile düşmemeli: aksi halde bir profil hiç
+    # üretilmez ya da 50 kullanıcı arasındaki dağılım aşırı dengesizleşir.
+    assert len(set(ARCHETYPE_RISK_PROFILE.values())) == len(ARCHETYPE_RISK_PROFILE)
 
 
-def test_dort_profil_de_uretilir_ve_dengeli_dagilir():
-    """'growth' dahil dört profil de yeterli sayıda kullanıcıya düşmeli."""
-    dagilim = Counter(_profile_and_archetype(i)[0] for i in range(NUM_USERS))
+def test_eslesen_profil_arketipin_hisse_agirligini_kaldirabiliyor():
+    """Hiçbir arketip, eşlendiği profilin Hisse üst sınırını aşmamalı —
+    aksi halde bu eşleme daha üretim anında Not 3'ü ihlal eden veri üretir."""
+    for archetype_name, profile in ARCHETYPE_RISK_PROFILE.items():
+        stock_weight = PORTFOLIO_ARCHETYPES[archetype_name].get(AssetClass.STOCK, (0.0, 0))[0]
+        limit = float(RISK_MAX_CATEGORY_WEIGHT[profile][AssetClass.STOCK])
+        assert stock_weight <= limit, (
+            f"{archetype_name} (%{stock_weight:.0%} hisse) {profile.value} "
+            f"profilinin sınırını (%{limit:.0%}) aşıyor"
+        )
 
-    assert set(dagilim) == set(RiskProfile), "bir profil hiç üretilmiyor"
-    # Hiçbir profil tek örnekte kalmasın; risk motoru o yolda test edilemez.
-    assert min(dagilim.values()) >= NUM_USERS // len(RiskProfile) - 2
 
-
-def test_arketip_her_kullanicida_profil_her_dortte_bir_doner():
-    """Sayaç hızları farklı olmalı — bileşim çeşitliliği buna bağlı."""
-    ilk_dort = [_profile_and_archetype(i) for i in range(4)]
-    # Arketip her adımda değişir.
-    assert len({a for _, a in ilk_dort}) == 4
-    # Profil aynı kalır.
-    assert len({p for p, _ in ilk_dort}) == 1
-    # Beşinci kullanıcıda profil ilerler, arketip başa döner.
-    assert _profile_and_archetype(4)[0] != ilk_dort[0][0]
-    assert _profile_and_archetype(4)[1] == ilk_dort[0][1]
+def test_arketip_her_kullanicida_bir_ilerler():
+    """PORTFOLIO_ARCHETYPE_CYCLE her kullanıcıda bir döner; dört kullanıcıda
+    tüm arketipler (dolayısıyla tüm profiller) görülür."""
+    ilk_dort = [PORTFOLIO_ARCHETYPE_CYCLE[i % len(PORTFOLIO_ARCHETYPE_CYCLE)] for i in range(4)]
+    assert len(set(ilk_dort)) == len(PORTFOLIO_ARCHETYPE_CYCLE)
 
 
 def test_kullanici_kimlikleri_tohuma_bagli():

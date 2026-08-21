@@ -39,7 +39,7 @@ def downgrade() -> None:
     #
     # Bu dosya yazıldığında "hiçbir kullanıcı growth değil" varsayılıyordu.
     # Seed artık 'growth' kullanıcıları üretiyor (data/seed_ledger.py:
-    # RISK_PROFILE_CYCLE), yani bu satırların VAR OLMASI beklenen durum;
+    # ARCHETYPE_RISK_PROFILE), yani bu satırların VAR OLMASI beklenen durum;
     # varsayımla çalışmak downgrade'i ham bir cast hatasıyla düşürürdü.
     #
     # Hedef olarak 'balanced' seçildi: downgrade bilgi kaybı olmadan yapılamaz,
