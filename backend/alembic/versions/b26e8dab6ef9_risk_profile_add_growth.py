@@ -32,10 +32,22 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # PG enum'dan tek bir değer silinemez; tip yeniden yaratılır. Bu, hiçbir
-    # kullanıcının risk_profile='growth' OLMADIĞINI varsayar — varsa downgrade
-    # öncesi elle başka bir profile taşınmalı, aksi halde aşağıdaki USING
-    # cast'i hata verir (bkz. 9c31e7a0d2b4'teki aynı desen).
+    # PG enum'dan tek bir değer silinemez; tip yeniden yaratılır. Yeni tipte
+    # 'growth' bulunmadığı için o değeri taşıyan satırlar önce başka bir
+    # profile alınmalı — aksi halde aşağıdaki USING cast'i hata verir
+    # (bkz. 9c31e7a0d2b4'teki aynı desen).
+    #
+    # Bu dosya yazıldığında "hiçbir kullanıcı growth değil" varsayılıyordu.
+    # Seed artık 'growth' kullanıcıları üretiyor (data/seed_ledger.py:
+    # RISK_PROFILE_CYCLE), yani bu satırların VAR OLMASI beklenen durum;
+    # varsayımla çalışmak downgrade'i ham bir cast hatasıyla düşürürdü.
+    #
+    # Hedef olarak 'balanced' seçildi: downgrade bilgi kaybı olmadan yapılamaz,
+    # ama risk toleransını olduğundan DÜŞÜK varsaymak finansal üründe güvenli
+    # yöndür — 'aggressive'e taşımak kullanıcıya hak etmediği agresiflikte
+    # öneri ürettirirdi. GERİ ALINAMAZ: upgrade tekrar çalıştırıldığında bu
+    # kullanıcılar 'growth' değil 'balanced' olarak kalır.
+    op.execute("UPDATE users SET risk_profile = 'balanced' WHERE risk_profile = 'growth'")
     op.execute("ALTER TYPE risk_profile_enum RENAME TO risk_profile_enum_old")
     op.execute("CREATE TYPE risk_profile_enum AS ENUM ('conservative', 'balanced', 'aggressive')")
     op.execute(

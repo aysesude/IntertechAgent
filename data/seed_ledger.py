@@ -80,9 +80,63 @@ PORTFOLIO_ARCHETYPES: dict[str, dict[AssetClass, tuple[float, int]]] = {
     },
 }
 PORTFOLIO_ARCHETYPE_CYCLE = list(PORTFOLIO_ARCHETYPES)
-RISK_PROFILE_CYCLE = [RiskProfile.CONSERVATIVE, RiskProfile.BALANCED, RiskProfile.AGGRESSIVE]
+
+# Dört profilin tamamı üretilir. 'growth' (Büyüme) b26e8dab6ef9 ile enum'a
+# eklendi ve risk_service onun için ayrı sabitler tanımlıyor
+# (RISK_TARGET_VOLATILITY_BAND, RISK_MAX_CATEGORY_WEIGHT, RISK_DEFENSE_FLOOR,
+# RISK_RECEIVER_PREFERENCE_ORDER — hepsinde GROWTH anahtarı var). Seed onu
+# üretmezse o kod yollarının tamamı hiç çalışmaz ve demoda gösterilemez.
+RISK_PROFILE_CYCLE = [
+    RiskProfile.CONSERVATIVE,
+    RiskProfile.BALANCED,
+    RiskProfile.GROWTH,
+    RiskProfile.AGGRESSIVE,
+]
+
+# Kullanıcı kimliklerinin tohuma bağlı olması için sabit ad alanı. Değeri
+# keyfi ama DEĞİŞMEMELİ: değişirse tüm kullanıcı UUID'leri değişir.
+USER_UUID_NAMESPACE = uuid.UUID("6f2a1c7e-9b34-4d51-8a0e-3c5d7e1f2b48")
 
 _TRY_QUANT = Decimal("0.0001")
+
+
+def _profile_and_archetype(user_index: int) -> tuple[RiskProfile, str]:
+    """Kullanıcı sırasından (risk profili, arketip adı) çifti üretir.
+
+    İki döngü AYRI sayaçlarla ilerler. Aynı sayaç kullanılırsa üretilen bileşim
+    sayısı iki uzunluğun en küçük ortak katıyla sınırlanır: profil listesi
+    'growth' eklenince 4 uzunluğa çıktı, arketip listesi de 4 — ekok 4 olurdu
+    ve 16 bileşimden yalnızca 4'ü üretilirdi:
+
+        conservative → hep mixed        growth     → hep diversified
+        balanced     → hep concentrated aggressive → hep cash_heavy
+
+    Yani agresif profil YALNIZCA nakit ağırlıklı portföyle görülürdü ve risk
+    motoru ayrıştırılamaz hale gelirdi (AK-2.6 ihlali). Arketip hızlı (her
+    kullanıcıda), profil yavaş (her dört kullanıcıda bir) dönerse 16 bileşimin
+    tamamı üretilir.
+
+    Determinizm: rastgelelik yok, yalnızca sıra numarasının fonksiyonu.
+    """
+    archetype_name = PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
+    profile = RISK_PROFILE_CYCLE[
+        (user_index // len(PORTFOLIO_ARCHETYPE_CYCLE)) % len(RISK_PROFILE_CYCLE)
+    ]
+    return profile, archetype_name
+
+
+def _user_id(user_index: int) -> uuid.UUID:
+    """Kullanıcı sırasından deterministik UUID.
+
+    Model varsayılanı `uuid.uuid4` — işletim sisteminin rastgeleliğini kullanır
+    ve SEED'den etkilenmez. Sonuç: isimler, portföyler ve işlemler her seed'de
+    aynı üretilirken KİMLİKLER değişiyordu. Her `make seed` sonrası elde tutulan
+    test kimlikleri ölüyor, arayüzün seçili profili geçersizleşiyor, hata
+    raporlarındaki id başka bir kullanıcıya işaret ediyordu.
+
+    uuid5 ad alanı + isim üzerinden hesaplar, yani tohum gibi davranır.
+    """
+    return uuid.uuid5(USER_UUID_NAMESPACE, f"user-{user_index}")
 
 
 def _tx_datetime(d) -> datetime:
@@ -143,10 +197,12 @@ def seed_ledger(session: Session) -> int:
     tx_count = 0
 
     for user_index in range(NUM_USERS):
+        profile, archetype_name = _profile_and_archetype(user_index)
         user = User(
+            id=_user_id(user_index),
             email=fake.unique.email(),
             full_name=fake.name(),
-            risk_profile=RISK_PROFILE_CYCLE[user_index % len(RISK_PROFILE_CYCLE)],
+            risk_profile=profile,
         )
         session.add(user)
         session.flush()
@@ -154,9 +210,7 @@ def seed_ledger(session: Session) -> int:
         session.add(portfolio)
         session.flush()
 
-        archetype = PORTFOLIO_ARCHETYPES[
-            PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
-        ]
+        archetype = PORTFOLIO_ARCHETYPES[archetype_name]
         budget = Decimal(rng.randrange(500_000, 2_000_000, 10_000))
 
         # Portföy, geçmişin ilk günlerinde tek DEPOSIT ile fonlanır.
