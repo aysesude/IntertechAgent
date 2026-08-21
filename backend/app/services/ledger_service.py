@@ -69,6 +69,29 @@ def net_invested_as_of(db: Session, portfolio_id: uuid.UUID, day: date | None = 
     return Decimal(str(db.execute(query).scalar_one()))
 
 
+def total_deposits_as_of(db: Session, portfolio_id: uuid.UUID, day: date | None = None) -> Decimal:
+    """Hesaba şimdiye kadar konan toplam para (yalnızca DEPOSIT, çekimler hariç).
+
+    Getiri ORANININ paydası budur, `net_invested` değil. Çekim yapılmış bir
+    portföyde ikisi ayrışır ve net sermaye yanlış cevap verir:
+
+        1.000 yatır → 1.500'e çıkar → 500 çek → değer 1.000
+        kazanç        = 1.000 - 500  = 500        (doğru)
+        500'e göre    = %100                      (yanlış: para %50 büyüdü)
+        1.000'e göre  = %50                       (doğru)
+
+    Ayrıca payda hiçbir zaman negatif olamaz; çekilen tutar yatırılandan
+    fazlaysa `net_invested` negatife düşüyor ve oran hesabı anlamsızlaşıyordu.
+    """
+    query = select(func.coalesce(func.sum(Transaction.cash_amount_try), 0)).where(
+        Transaction.portfolio_id == portfolio_id,
+        Transaction.transaction_type == TransactionType.DEPOSIT,
+    )
+    if day is not None:
+        query = query.where(func.date(Transaction.transaction_date) <= day)
+    return Decimal(str(db.execute(query).scalar_one()))
+
+
 def record_transaction(
     db: Session,
     portfolio_id: uuid.UUID,

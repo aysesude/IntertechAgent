@@ -118,6 +118,19 @@ o kod yolu seed'li evrende test edilmez hale gelir.
 satırı ekleyin, `make seed` çalıştırın. **Başka hiçbir kod değişmez.**
 Sağlayıcı eşlemesi (`data_source`, `provider_symbol`) spec'in içindedir.
 
+**`base_price` uydurulmaz, ölçülür.** Sentetik serinin başlangıç değeridir;
+gerçek fiyattan kat kat saparsa çevrimdışı kurulum gerçekle alakasız bir
+evren üretir. Varlığın gerçek verisi varsa serinin İLK gerçek fiyatı okunur
+(bugünkü değil — `base_price` serinin başıdır); sorgu `universe.py`'nin
+başındaki not içinde. `test_fon_base_price_gercek_fiyatla_ayni_mertebede`
+ölçülen değerleri kilitler.
+
+**Varlık sınıfının tipik davranışından ayrılıyorsa** `synthetic_daily_drift`
+ve `synthetic_daily_volatility` ile sınıf varsayılanı ezilir. Tek örneği
+`PPF`: `CASH` sınıfındadır ama sınıfın parametreleri mevduat için yazılmış
+(drift 0, volatilite 0), oysa para piyasası fonu getirisini fiyatı üzerinden
+biriktirir.
+
 **Fon eklerken sınıfı elle vermeyin:** `_fund()` varlık sınıfını alt türden
 türetir (`_FUND_ASSET_CLASS`). Fonun ekonomik riski neyse sınıfı odur — para
 piyasası fonu `CASH`, altın fonu `PRECIOUS_METAL`, borçlanma araçları fonu

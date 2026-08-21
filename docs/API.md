@@ -11,6 +11,7 @@
 {
   "user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "as_of": "2026-08-20",
+  "oldest_price_date": "2026-08-20",
   "total_value": 2681069.66,
   "total_cost_basis": 1682346.32,
   "net_invested": 1870000.00,
@@ -28,6 +29,12 @@
 
 404 → `{"detail": "Portfolio not found for user_id ..."}`
 
+**`as_of` ile `oldest_price_date`:** özet her varlığı KENDİ son fiyatıyla
+değerler, dolayısıyla tek bir tarih tüm portföyü tarif etmez. `as_of` en
+yenisini, `oldest_price_date` en eskisini verir. **İkisi farklıysa arayüz
+bunu belirtmelidir** — yalnızca `as_of` gösterilirse özet olduğundan taze
+görünür. Hiç fiyatlı varlık yoksa `oldest_price_date` `null` döner.
+
 **İki taban vardır, karıştırılmamalıdır:**
 
 | Alan | Ne | Serbest nakit |
@@ -35,11 +42,24 @@
 | `total_cost_basis` | Elde tutulan varlıkların maliyeti | **hariç** |
 | `net_invested` | Dışarıdan konan net sermaye (yatırma − çekme) | **dahil** |
 
-`total_gain_loss` **`net_invested`'a göre** hesaplanır, yani
-`total_value - net_invested`'a eşittir. Arayüz kullanıcıya taban olarak
-`net_invested`'ı ("Yatırılan tutar") göstermelidir; `total_cost_basis`
-gösterilirse üç rakam birbirini tutmaz ve aradaki fark (yatırıma dönüşmemiş
-nakit) açıklamasız kalır.
+`total_gain_loss.amount` = `total_value - net_invested`. Arayüz kullanıcıya
+taban olarak `net_invested`'ı ("Yatırılan tutar") göstermelidir;
+`total_cost_basis` gösterilirse üç rakam birbirini tutmaz ve aradaki fark
+(yatırıma dönüşmemiş nakit) açıklamasız kalır.
+
+**`total_gain_loss.percent`'in paydası farklıdır: toplam YATIRILAN tutar**
+(yalnızca yatırmalar, çekimler düşülmeden). Çekim yapılmamış portföyde ikisi
+eşittir, ayrıştığında net sermaye yanlış cevap verir:
+
+```
+1.000 yatır → 1.500'e çıkar → 500 çek → değer 1.000
+kazanç              = 500        (doğru)
+net sermayeye göre  = %100       (yanlış: para %50 büyüdü)
+toplam yatırılana   = %50        (doğru)
+```
+
+Ayrıca payda hiçbir zaman negatif olamaz; çekim yatırımı aşarsa
+`net_invested` negatife düşüyor ve oran anlamsızlaşıyordu.
 
 Taban neden maliyet değil: hesapta duran para da kullanıcının koyduğu paradır,
 kazanç değildir. Maliyet taban alındığında serbest nakdin tamamı kâr olarak
