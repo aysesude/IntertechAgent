@@ -133,11 +133,11 @@ async def detect_intent(state: OrchestratorState) -> dict:
         intent,
         state["message"][:80],
     )
-    
+
     result = {"intent": intent}
     if intent == "AMBIGUOUS":
         result["final_answer"] = _AMBIGUOUS_MESSAGE
-        
+
     return result
 
 
