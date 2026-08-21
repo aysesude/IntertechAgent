@@ -81,3 +81,51 @@ def test_compact_tetiklenen_nedenleri_turkcelestirir():
             "islem_hacmi_yuzde": 12.0,
         }
     ]
+
+
+def test_profil_sinirlari_karsilastirma_icin_tasiniyor():
+    """ "Çok fazla hisse mi var" sorusu ancak bir ÖLÇÜTLE cevaplanabilir.
+
+    Ölçüldü: ajan "%27,51" deyip bırakıyor, Korumacı profilin %25 üst sınırına
+    hiç değinmiyordu — soru cevapsız kalıyordu. Eşikler burada hesaplanmıyor,
+    config'deki tek tanımdan okunuyor.
+    """
+    compact = _compact({"risk_profile": "conservative", "metrics": {}})
+
+    assert compact["profil_hedef_volatilite_bandi_yuzde"] == [0.0, 10.0]
+    assert compact["profil_kategori_ust_sinirlari_yuzde"]["stock"] == 25.0
+    # Tahvil/nakit Korumacı profilde üst sınırsız (alt sınır var, üst yok).
+    assert compact["profil_kategori_ust_sinirlari_yuzde"]["bond"] == 100.0
+
+
+def test_taninmayan_profil_cokmez_sinir_eklemez():
+    """Profil değeri beklenmedikse uydurulmuş bir sınır gösterilmez."""
+    compact = _compact({"risk_profile": "yok_boyle_bir_profil", "metrics": {}})
+
+    assert "profil_kategori_ust_sinirlari_yuzde" not in compact
+    assert "profil_hedef_volatilite_bandi_yuzde" not in compact
+
+
+def test_butun_senaryolar_tasiniyor():
+    """Motor üçe kadar senaryo üretiyor; hiçbiri düşürülmemeli.
+
+    Canlıda cevapta tek seçenek görünmüştü — prompt "yalnızca adını aktar"
+    ifadesini "yalnızca birini aktar" diye okumuş olabilir. Taşıma katmanının
+    hepsini verdiği burada kilitleniyor.
+    """
+    scenarios = [
+        {
+            "label": f"Senaryo {i}",
+            "volatility_before_percent": 12.7,
+            "volatility_after_percent": 9.0 + i,
+            "turnover_percent": 5.0 * i,
+        }
+        for i in range(1, 4)
+    ]
+    compact = _compact({"risk_profile": "balanced", "metrics": {}, "scenarios": scenarios})
+
+    secenekler = compact["yeniden_dengeleme_secenekleri"]
+    assert len(secenekler) == 3
+    assert [s["ad"] for s in secenekler] == ["Senaryo 1", "Senaryo 2", "Senaryo 3"]
+    # Hangi varlığın alınıp satılacağı LLM'e HİÇ gitmemeli (tavsiye yasağı).
+    assert all("asset_weights" not in s and "varliklar" not in s for s in secenekler)
