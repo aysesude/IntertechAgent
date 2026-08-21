@@ -1075,9 +1075,15 @@ def get_risk_assessment(
 
     `profile_override` verilirse hesaplama o profile göre yapılır ama
     kullanıcının DB'deki kalıcı profili değişmez — "ya agresif olsaydım?"
-    senaryosu için. `include_scenarios=True` VE volatilite profilin hedef
-    bandının üzerindeyse yeniden dengeleme senaryoları da üretilir (maliyetli
-    olduğu için varsayılan olarak kapalıdır)."""
+    senaryosu için.
+
+    `include_scenarios`: ÜRÜN SAHİBİ KARARIYLA (2026-08) devre dışı — bu
+    parametre True verilse bile `settings.risk_scenarios_enabled=False`
+    olduğu sürece `scenarios` her zaman boş liste döner. Risk artık yalnızca
+    tespit/uyarı içindir ("profilinize göre riskiniz yüksek"); ne yapılması
+    gerektiğini önermek kapsam dışı bırakıldı — kullanıcının kendi yatırım
+    kararı. Motor kod olarak duruyor, ileride ürün kararı değişirse
+    `risk_scenarios_enabled=True` yapmak yeterli."""
     user = db.get(User, user_id)
     if user is None:
         raise NotFoundError(f"User not found for user_id {user_id}")
@@ -1299,7 +1305,12 @@ def get_risk_assessment(
                     correlations=correlations,
                     diversification_ratio=diversification_ratio_value,
                 )
-                if include_scenarios:
+                # ÜRÜN SAHİBİ KARARI (2026-08): senaryo önerisi ürün
+                # kapsamından çıkarıldı (bkz. Settings.risk_scenarios_enabled
+                # yanındaki not). Motor kod olarak duruyor ama bu bayrak
+                # False olduğu sürece hiçbir zaman tetiklenmez — çağıran
+                # include_scenarios=True verse bile.
+                if include_scenarios and settings.risk_scenarios_enabled:
                     scenarios = _generate_rebalance_scenarios(
                         profile,
                         category_weights,

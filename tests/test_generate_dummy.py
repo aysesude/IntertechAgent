@@ -1,7 +1,11 @@
+from decimal import Decimal
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass, RiskProfile
 from app.models import Holding, PriceHistory, User
+from app.services.ledger_service import cash_balance_as_of
 from data.generate_dummy import (
     MAX_HOLDINGS_PER_USER,
     MIN_HOLDINGS_PER_USER,
@@ -10,6 +14,7 @@ from data.generate_dummy import (
 from data.generate_dummy import (
     main as generate_dummy_main,
 )
+from data.seed_ledger import PORTFOLIO_ARCHETYPES, _risk_profile_for_archetype
 
 
 def test_generate_dummy_creates_expected_data(engine):
@@ -64,3 +69,71 @@ def test_generate_dummy_is_deterministic(engine):
         )
 
     assert first_run_holdings == second_run_holdings
+
+
+def test_risk_profile_for_archetype_matches_stock_weight_limit():
+    """ÜRÜN SAHİBİ NOTU (Not 5): risk profili, arketipin Hisse ağırlığını
+    kaldırabilecek en düşük (en az riskli) profil olmalı — böylece profil
+    hiçbir zaman portföyle çelişmez."""
+    assert (
+        _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["cash_heavy"]) == RiskProfile.CONSERVATIVE
+    )
+    assert (
+        _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["diversified"]) == RiskProfile.CONSERVATIVE
+    )
+    assert _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["mixed"]) == RiskProfile.BALANCED
+    assert _risk_profile_for_archetype(PORTFOLIO_ARCHETYPES["concentrated_equity"]) == (
+        RiskProfile.AGGRESSIVE
+    )
+
+
+def test_generate_dummy_risk_profile_never_mismatches_stock_weight(engine):
+    """Not 3'ün dummy veri karşılığı: hiçbir üretilen kullanıcı, kendi risk
+    profilinin Hisse üst sınırını aşan bir portföye sahip olmamalı."""
+    generate_dummy_main()
+
+    with Session(engine) as session:
+        users = session.execute(select(User)).scalars().all()
+        assert users  # NUM_USERS>0 olduğu zaten başka testte doğrulanıyor
+
+        for user in users:
+            holdings = user.portfolio.holdings
+            # Maliyet bazlı (avg_cost_price), risk_service'in güncel fiyat
+            # bazlı hesabıyla birebir aynı değil ama arketip hedeflerinin
+            # gerçekten uygulandığını doğrulamak için yeterince yakın —
+            # asıl nokta nakit dahil TOPLAM üzerinden oranlamak (aksi halde
+            # yatırılmayan %10 komisyon/nakit payı hisse oranını yapay
+            # olarak şişirir).
+            holdings_value = sum(
+                (h.quantity * h.avg_cost_price for h in holdings if h.quantity > 0),
+                start=0,
+            )
+            cash = cash_balance_as_of(session, user.portfolio.id)
+            total_value = holdings_value + cash
+            if total_value <= 0:
+                continue
+            stock_value = sum(
+                (
+                    h.quantity * h.avg_cost_price
+                    for h in holdings
+                    if h.quantity > 0 and h.asset.asset_class == AssetClass.STOCK
+                ),
+                start=0,
+            )
+            stock_weight = stock_value / total_value
+            limit = RISK_MAX_CATEGORY_WEIGHT[user.risk_profile][AssetClass.STOCK]
+            # Tolerans: _risk_profile_for_archetype arketipin NOMİNAL hisse
+            # ağırlığını profil sınırıyla karşılaştırır (ör. "diversified"
+            # tam olarak CONSERVATIVE'in %25 sınırına eşittir). Gerçek
+            # üretimde işlem yuvarlaması (ROUND_DOWN), bazı varlıkların
+            # geçerli işlem günü olmadığı için atlanması ve kısmi SELL
+            # senaryoları gerçekleşen ağırlığı nominalden birkaç puan
+            # saptırabilir; küçük bir tolerans bu gürültüyü tolere ederken
+            # gerçek bir profil/portföy uyumsuzluğunu (asıl önlemek
+            # istediğimiz hata) yine de yakalar.
+            tolerance = Decimal("0.03")
+            assert stock_weight <= limit + tolerance, (
+                f"{user.email}: hisse ağırlığı {stock_weight:.2%}, "
+                f"{user.risk_profile.value} profilinin sınırı {limit:.0%} "
+                f"(tolerans dahil {limit + tolerance:.0%})"
+            )
