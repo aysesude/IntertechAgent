@@ -172,3 +172,57 @@ def test_risk_hesaplanamadiysa_konum_uretilmez():
     """Volatilite yoksa konum uydurulmaz (CLAUDE.md §4)."""
     assert _konum("balanced", None, None) is None
     assert _konum("balanced", None, True) is None
+
+
+def test_celisen_iki_alan_birlikte_gonderilmez():
+    """`profil_bandinda_mi` ile `profil_konumu` aynı anda bulunmamalı.
+
+    `is_within_profile` yalnızca ÜST sınırı kontrol ediyor, dolayısıyla bandın
+    altındaki portföyde `true` olur ve `profil_konumu="bandin_altinda"` ile
+    yüzeyde çelişir. Canlıda model bu çelişkiyi fark edip açıklamaya çalıştı ve
+    iç alan adlarını kullanıcıya yazdı:
+
+        "profil_bandinda_mi alanında 'evet' bilgisi yer alsa da profil_konumu
+         alanı portföyün beklenen aralığın altında olduğunu gösteriyor."
+
+    Konum alanı üç durumu da ayırdığı için ikili alanın yerini alır.
+    """
+    for profil, vol, within in [
+        ("aggressive", 3.29, True),
+        ("conservative", 15.48, False),
+        ("balanced", 15.0, True),
+    ]:
+        compact = _compact(
+            {
+                "risk_profile": profil,
+                "is_within_profile": within,
+                "metrics": {"annualized_volatility_percent": vol},
+            }
+        )
+        assert "profil_konumu" in compact
+        assert "profil_bandinda_mi" not in compact, f"{profil}: iki alan birlikte gitti"
+
+
+def test_konum_hesaplanamazsa_ikili_alan_korunur():
+    """Konum üretilemiyorsa bilgi tamamen kaybolmamalı."""
+    # Tanınmayan profil: band bilinmiyor, konum hesaplanamaz.
+    compact = _compact(
+        {
+            "risk_profile": "yok_boyle_bir_profil",
+            "is_within_profile": True,
+            "metrics": {"annualized_volatility_percent": 12.0},
+        }
+    )
+    assert compact["profil_bandinda_mi"] is True
+    assert "profil_konumu" not in compact
+
+
+def test_prompt_alan_adi_yazmayi_yasakliyor():
+    """Sızıntının ikinci savunması prompt'ta olmalı.
+
+    Alan adları prompt'ta geçmek zorunda (modele veriyi nerede bulacağını
+    söylüyorlar), bu yüzden "yazma" kuralı açıkça bulunmalı.
+    """
+    from agents.risk_agent import _PROMPT_TEMPLATE
+
+    assert "JSON ALAN ADLARINI ASLA YAZMA" in _PROMPT_TEMPLATE

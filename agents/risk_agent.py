@@ -108,6 +108,12 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
         "tarih": data.get("as_of"),
         "risk_profili": data.get("risk_profile"),
         "risk_seviyesi": data.get("risk_level"),
+        # Aşağıda `profil_konumu` ile DEĞİŞTİRİLİR (hesaplanabildiği sürece).
+        # İkisi birlikte gönderilmemeli: `is_within_profile` yalnızca üst sınırı
+        # kontrol ettiği için bandın altındaki portföyde `true` olur ve
+        # `profil_konumu="bandin_altinda"` ile yüzeyde çelişir. Canlıda model bu
+        # çelişkiyi fark edip AÇIKLAMAYA çalıştı ve iç alan adlarını kullanıcıya
+        # yazdı ("profil_bandinda_mi alanında 'evet' bilgisi yer alsa da...").
         "profil_bandinda_mi": data.get("is_within_profile"),
         "toplam_deger_try": data.get("total_value"),
         "yillik_volatilite_yuzde": metrics.get("annualized_volatility_percent"),
@@ -141,11 +147,16 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
             asset_class.value: _pct(cap)
             for asset_class, cap in RISK_MAX_CATEGORY_WEIGHT[profile].items()
         }
-        compact["profil_konumu"] = _profile_position(
+        konum = _profile_position(
             compact["yillik_volatilite_yuzde"],
             data.get("is_within_profile"),
             _pct(low),
         )
+        if konum is not None:
+            # Konum üç durumu da ayırdığı için ikili alanın yerini alır; ikisi
+            # birlikte gönderilirse yüzeyde çelişirler (bkz. yukarıdaki not).
+            compact["profil_konumu"] = konum
+            compact.pop("profil_bandinda_mi", None)
 
     causes = data.get("causes") or {}
     tetiklenen = [
