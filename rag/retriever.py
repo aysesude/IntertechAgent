@@ -98,9 +98,22 @@ def _normalize(text: str) -> str:
     return text.replace("İ", "i").lower().translate(_TURKISH_FOLD_MAP)
 
 
+# "İş" ("İş Bankası") foldlanınca "is" olur — 2 harf, _MIN_KEYWORD_LEN'in
+# altında kaldığı için normalde tamamen elenirdi. Tek başına anlamsız
+# ("is" fiili/eki gibi başka bağlamlarda da geçebilir) olduğu için genel
+# uzunluk sınırını düşürmek yerine yalnızca bu kelimeye özel bir istisna
+# tanımlanır — _SIRKET_ALIAS_PHRASES["ISCTR"] zaten "bankasi" ile BİRLİKTE
+# geçmesini şart koşuyor, tek başına bir şeyi tetiklemiyor.
+_SHORT_KEYWORD_ALLOWLIST = {"is"}
+
+
 def _keywords(text: str) -> set[str]:
     tokens = _WORD_RE.findall(_normalize(text))
-    return {t for t in tokens if len(t) >= _MIN_KEYWORD_LEN and t not in _STOPWORDS}
+    return {
+        t
+        for t in tokens
+        if (len(t) >= _MIN_KEYWORD_LEN or t in _SHORT_KEYWORD_ALLOWLIST) and t not in _STOPWORDS
+    }
 
 
 # Bir sonucun "yeterince örtüşüyor" sayılması için sorgu kelimelerinin en az
@@ -209,16 +222,43 @@ def _result_keywords(result: dict) -> set[str]:
 # açık takma ad listesi.
 _SIRKET_ALIASES: dict[str, set[str]] = {
     "AKBNK": {"akbank"},
-    "KCHOL": {"koc", "holding"},
     # "turk" burada yok: artık stopword (bkz. _STOPWORDS), sorgu
     # kelimeleri arasında hiç görünmez — eklense de hiçbir zaman
     # eşleşmeyecek ölü bir giriş olurdu.
     "THYAO": {"hava", "yollari", "thy"},
-    "YKBNK": {"yapi", "kredi"},
     "PGSUS": {"pegasus"},
     "TCELL": {"turkcell"},
-    "FROTO": {"ford", "otosan", "otomotiv"},
+    # "otomotiv" burada YOK: bu kelime tek başına aşırı jenerik ("Doğuş
+    # Otomotiv" sorgusu FROTO'yu yanlışlıkla eşleştiriyordu — ölçümle
+    # doğrulandı). "ford"/"otosan" zaten yeterince ayırt edici.
+    "FROTO": {"ford", "otosan"},
     "MGROS": {"migros"},
+    "SAHOL": {"sabanci"},
+    "ARCLK": {"arcelik"},
+    "TOASO": {"tofas"},
+    "VAKBN": {"vakifbank", "vakiflar"},
+    "TTKOM": {"telekom"},
+    "CCOLA": {"coca", "cola", "icecek"},
+    "DOAS": {"dogus"},
+    "EKGYO": {"emlak", "konut"},
+    "KRDMD": {"kardemir"},
+}
+
+# Bazı şirket adları TEK kelimeyle aşırı jenerik oluyor: "holding" onlarca
+# dokümanda geçiyor (Koç Holding, Sabancı Holding, ...), "kredi" ve
+# "bankası" da öyle (her banka dokümanında var). Bu yüzden KCHOL'un eski
+# `{"koc", "holding"}` OR-eşleşmesi, "Sabancı Holding" sorgusunda salt
+# "holding" kelimesi üzerinden KCHOL'u yanlışlıkla eşleştiriyordu (ölçümle
+# doğrulandı). Bu tickerlar için OR yerine, listedeki kelimelerin TÜMÜNÜN
+# sorguda birlikte geçmesini şart koşan bir "ifade" (phrase) tanımlanır —
+# tek başına "holding"/"kredi"/"bankası" artık hiçbir şeyi tetiklemiyor.
+_SIRKET_ALIAS_PHRASES: dict[str, list[set[str]]] = {
+    "KCHOL": [{"koc", "holding"}],
+    "YKBNK": [{"yapi", "kredi"}],
+    # "iş" ("İş Bankası") normalde _MIN_KEYWORD_LEN altında kalıp elenir;
+    # bkz. _SHORT_KEYWORD_ALLOWLIST. "bankası" tek başına aşırı jenerik
+    # olduğu için yalnızca "iş" + "bankası" birlikte geçtiğinde eşleşir.
+    "ISCTR": [{"is", "bankasi"}],
 }
 
 
@@ -238,15 +278,25 @@ def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
     ikinci çeyrek sonuçları" sorgusu THYAO'yu da, "Türk Hava Yolları ikinci
     çeyrek" sorgusu TCELL'i de yanlışlıkla eşleştirirdi (ölçümle
     doğrulandı). Takma adlar zaten tam, belirli kelimeler olarak seçildiği
-    için tam eşleşme yeterli ve bu çapraz bulaşmayı engelliyor."""
+    için tam eşleşme yeterli ve bu çapraz bulaşmayı engelliyor.
+
+    _SIRKET_ALIAS_PHRASES ayrıca kontrol edilir: bir tickerın listedeki
+    HER kelime grubundan biri sorguda TAMAMEN geçiyorsa eşleşme sayılır —
+    "holding"/"kredi"/"bankası" gibi tek başına aşırı jenerik kelimelerin
+    yalnızca belirli bir şirket adıyla BİRLİKTE geçtiğinde anlam
+    kazanmasını sağlar (bkz. _SIRKET_ALIAS_PHRASES tanımındaki not)."""
     sirket = (result.get("metadata") or {}).get("sirket")
     if not sirket:
         return False
+    ticker = str(sirket).upper()
     sirket_keywords = _keywords(str(sirket))
     if any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords):
         return True
-    aliases = _SIRKET_ALIASES.get(str(sirket).upper())
-    return bool(aliases and query_keywords & aliases)
+    aliases = _SIRKET_ALIASES.get(ticker)
+    if aliases and query_keywords & aliases:
+        return True
+    phrases = _SIRKET_ALIAS_PHRASES.get(ticker)
+    return bool(phrases and any(phrase <= query_keywords for phrase in phrases))
 
 
 def _build_where(
