@@ -9,7 +9,12 @@ v2 (Risk/Strateji Ajanı analist belgesi): risk seviyesi artık kategori bazlı
 kademeli bir etikettir; eski 0-100 kompozit `risk_score` ve profil hedef
 yüzdesine dayanan basit `RebalanceAction` kaldırıldı. Yerlerini
 `RiskCauseDiagnosis` (risk neden yüksek çıktı) ve `RebalanceScenario` (kural
-tabanlı simülasyon) aldı."""
+tabanlı simülasyon) aldı.
+
+2026-08 eki: `RiskMetrics.asset_metrics` — iş analistinin "portföydeki
+varlıkların tek tek risk durumu" talebi. Bu, kategori-bazlı v2 metodolojisini
+GERİ ALMAZ: yalnızca her varlığın kendi volatilitesini ve etiketini taşır,
+NxN korelasyon/katkı hesaplamaz (bkz. AssetRiskMetrics docstring'i)."""
 
 from datetime import date
 from enum import Enum
@@ -62,6 +67,34 @@ class CategoryMetrics(BaseModel):
     # yakındır). Aksiyon B'nin "en yüksek RC%'li kategoriden al" kuralında
     # ve kök neden teşhisinde kullanılır.
     risk_contribution_percent: Money | None
+
+
+class AssetRiskMetrics(BaseModel):
+    """Tek bir VARLIĞIN (kategori değil) risk durumu — iş analistinin 2026-08
+    talebi: "portföydeki varlıkların tek tek risk durumunu hesaplama".
+
+    KASITLI OLARAK `risk_contribution_percent` YOK: portföy varyansına katkı,
+    varlıklar arası NxN korelasyon matrisi gerektirir; v2 metodolojisi
+    bilinçli olarak yalnızca 5x5 KATEGORİ matrisini hesaplıyor (bkz. bu
+    dosyanın v2 notu ve risk_service.py'nin modül docstring'i — "Kapsam
+    sınırlaması"). Bu alan varlığın KENDİ volatilitesini ve ondan türeyen
+    etiketi taşır; portföyün risk kaynağı analizi hâlâ `RiskCauseDiagnosis`
+    ve kategori düzeyindeki `CategoryMetrics.risk_contribution_percent`'te.
+
+    `risk_level`, `RISK_LEVEL_VOLATILITY_UPPER_BOUNDS` ile — kategori/portföy
+    volatilitesiyle AYNI merdivenle — hesaplanır (bkz. scripts/varlik_risk_
+    olcum.py: temiz veri üzerinde bu merdiven varlık düzeyinde de 6/7 kademeyi
+    anlamlı şekilde ayrıştırıyor; ayrı bir varlık-bazlı tablo gerekmedi)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    asset_symbol: str
+    asset_class: AssetClass
+    weight_percent: Money
+    # Yeterli ortak fiyat günü yoksa (bkz. Settings.risk_min_price_points)
+    # None döner — tahmini bir değerle doldurulmaz (AK 2.7).
+    annualized_volatility_percent: Money | None
+    risk_level: RiskLevel | None
 
 
 class ConcentrationCause(BaseModel):
@@ -172,6 +205,10 @@ class RiskMetrics(BaseModel):
     max_drawdown_percent: Money | None
     category_metrics: list[CategoryMetrics]
     category_correlation_matrix: list[CategoryCorrelationPair]
+    # Varlık düzeyinde kırılım — bkz. AssetRiskMetrics docstring'i. Elde
+    # tutulan her varlık için bir kayıt (volatilite hesaplanamıyorsa dahi;
+    # o durumda yalnızca annualized_volatility_percent/risk_level None'dır).
+    asset_metrics: list[AssetRiskMetrics]
     # DR = (Σ wᵢ×σᵢ) / σ_portföy. 1'e yakınsa çeşitlendirme etkisi zayıf,
     # büyüdükçe (>1) çeşitlendirme riski azaltıyor demektir.
     diversification_ratio: Money | None

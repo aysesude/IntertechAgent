@@ -50,6 +50,7 @@ def test_get_risk_assessment_empty_portfolio_returns_neutral_result(db_session):
     assert assessment.total_value == Decimal(0)
     assert assessment.warnings  # bos portfoy uyarisi var
     assert assessment.metrics.category_metrics == []
+    assert assessment.metrics.asset_metrics == []
     assert assessment.metrics.category_correlation_matrix == []
     assert assessment.causes is None
     assert assessment.scenarios == []
@@ -89,6 +90,7 @@ def test_get_risk_assessment_insufficient_history_skips_stats(db_session):
     assert assessment.metrics.value_at_risk_try is None
     assert assessment.metrics.sharpe_ratio is None
     assert assessment.metrics.category_correlation_matrix == []
+    assert assessment.metrics.asset_metrics == []
     assert any("en az" in w for w in assessment.warnings)
 
 
@@ -159,6 +161,18 @@ def test_get_risk_assessment_full_scenario_computes_category_stats(db_session):
     assert by_class[AssetClass.CASH].weight_percent == Decimal("0.00")
     assert by_class[AssetClass.CASH].annualized_volatility_percent is None
 
+    # Varlik duzeyi kirilim: elde tutulan her varlik icin bir kayit, profil
+    # disi olsa DAHI (asset_metrics is_within_profile'dan bagimsiz hesaplanir
+    # — bkz. test_get_risk_assessment_asset_metrics_populated_when_within_profile).
+    assert len(metrics.asset_metrics) == 2
+    asset_by_symbol = {m.asset_symbol: m for m in metrics.asset_metrics}
+    assert asset_by_symbol["TST"].asset_class == AssetClass.STOCK
+    assert asset_by_symbol["TST"].weight_percent == Decimal("50.00")
+    assert asset_by_symbol["TST"].annualized_volatility_percent is not None
+    assert asset_by_symbol["TST"].risk_level is not None
+    assert asset_by_symbol["TAU"].asset_class == AssetClass.PRECIOUS_METAL
+    assert asset_by_symbol["TAU"].weight_percent == Decimal("50.00")
+
     # tek kategori cifti: Hisse-Altin
     assert len(metrics.category_correlation_matrix) == 1
     pair = metrics.category_correlation_matrix[0]
@@ -185,6 +199,70 @@ def test_get_risk_assessment_full_scenario_computes_category_stats(db_session):
 
     # include_scenarios verilmedigi icin senaryo uretilmez (varsayilan kapali).
     assert assessment.scenarios == []
+
+
+def test_get_risk_assessment_asset_metrics_populated_when_within_profile(db_session):
+    """Varlik duzeyi kirilimi yalnizca profil DISI durumda degil, HER ZAMAN
+    hesaplanmali — is analistinin talebi "portfoydeki varliklarin tek tek
+    risk durumu" profille uyuma bagli degil.
+
+    Regresyon: eski kod `asset_vols`'u yalnizca `not is_within_profile`
+    dalinda (kok neden teshisi icin) hesapliyordu; bu test o dalin DISINDA
+    kalan (profile uyumlu) durumda asset_metrics'in bos kalmadigini kilitler.
+    """
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=RiskProfile.CONSERVATIVE)
+    stock = Asset(symbol="TST", name="Test Hisse", asset_class=AssetClass.STOCK, currency="TRY")
+    gold = Asset(
+        symbol="TAU", name="Test Altin", asset_class=AssetClass.PRECIOUS_METAL, currency="TRY"
+    )
+    db_session.add_all([stock, gold])
+    db_session.flush()
+
+    start = date(2026, 1, 1)
+    rows = []
+    for i in range(40):
+        day = start + timedelta(days=i)
+        rows.append(
+            PriceHistory(asset_id=stock.id, price_date=day, close_price=Decimal(100 + (i % 5) - 2))
+        )
+        rows.append(
+            PriceHistory(asset_id=gold.id, price_date=day, close_price=Decimal(50 - (i % 3) + 1))
+        )
+    db_session.add_all(rows)
+    db_session.add_all(
+        [
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=stock.id,
+                quantity=Decimal(10),
+                avg_cost_price=Decimal(95),
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=gold.id,
+                quantity=Decimal(20),
+                avg_cost_price=Decimal(45),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    # Ayni portfoy (~%28 volatilite), ama Buyume profilinin hedef bandi
+    # (%20-%30) bunu kapsiyor -> is_within_profile=True, kok neden teshisi
+    # TETIKLENMEZ — eski kodda tam da bu dalda asset_metrics bos kalirdi.
+    assessment = get_risk_assessment(db_session, user.id, profile_override=RiskProfile.GROWTH)
+
+    assert assessment.is_within_profile is True
+    assert assessment.causes is None
+
+    assert len(assessment.metrics.asset_metrics) == 2
+    by_symbol = {m.asset_symbol: m for m in assessment.metrics.asset_metrics}
+    assert by_symbol["TST"].asset_class == AssetClass.STOCK
+    assert by_symbol["TST"].annualized_volatility_percent is not None
+    assert by_symbol["TST"].risk_level is not None
+    assert by_symbol["TAU"].asset_class == AssetClass.PRECIOUS_METAL
+    assert by_symbol["TAU"].annualized_volatility_percent is not None
+    assert by_symbol["TAU"].risk_level is not None
 
 
 def test_get_risk_assessment_profile_override_does_not_persist(db_session):

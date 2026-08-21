@@ -78,3 +78,23 @@ Hiçbir şey yazmaz, salt okur.
 docker compose exec -w / api python scripts/varlik_risk_olcum.py
 docker compose exec -w / api python scripts/varlik_risk_olcum.py --gun 252
 ```
+
+## `fiyat_sicrama_teshis.py`
+
+**Ne zaman:** `varlik_risk_olcum.py` gerçekçi olmayan (örn. binlerce yüzde)
+bir volatilite değeri gösterdiğinde — eşik tasarımına geçmeden önce bunun
+piyasa hareketi mi yoksa veri hatası mı olduğunu ayırt etmek için.
+
+İki ayrı hipotezi doğrudan veriden doğrular/eler: (1) DB'deki
+`Asset.asset_class`, `providers/universe.py`'deki güncel tanımla aynı mı —
+farklıysa `data.generate_dummy` bu sınıf değişikliğinden sonra hiç
+çalışmamış demektir; (2) fiyat serisinde `seed_prices_synthetic.py`'nin
+belgelediği türden sahte bir tek-günlük sıçrama (sentetik/gerçek taban
+fiyat uyuşmazlığı) var mı.
+
+Hiçbir şey yazmaz, salt okur.
+
+```bash
+docker compose exec -w / api python scripts/fiyat_sicrama_teshis.py
+docker compose exec -w / api python scripts/fiyat_sicrama_teshis.py --sembol PPF,GTA
+```

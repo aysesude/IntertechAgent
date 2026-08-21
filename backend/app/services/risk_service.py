@@ -56,6 +56,7 @@ from app.core.exceptions import NotFoundError
 from app.models import Asset, Holding, Portfolio, PriceHistory, User
 from app.providers.tcmb import TcmbEvdsProvider
 from app.schemas.risk import (
+    AssetRiskMetrics,
     CategoryCorrelationPair,
     CategoryMetrics,
     ConcentrationCause,
@@ -1041,6 +1042,7 @@ def _empty_assessment(
             annualized_volatility_percent=None,
             max_drawdown_percent=None,
             category_metrics=[],
+            asset_metrics=[],
             category_correlation_matrix=[],
             diversification_ratio=None,
             value_at_risk_try=None,
@@ -1149,6 +1151,7 @@ def get_risk_assessment(
 
     # --- Bugünkü değer ve ağırlıklar ---
     symbol_by_asset_id = {h.asset_id: h.asset.symbol for h in holdings}
+    asset_class_by_id = {h.asset_id: h.asset.asset_class for h in holdings}
     market_values: dict[UUID, Decimal] = {}
     class_values: dict[AssetClass, Decimal] = {}
     asset_ids_by_class: dict[AssetClass, list[UUID]] = {}
@@ -1219,6 +1222,7 @@ def get_risk_assessment(
     volatility = drawdown = portfolio_return = sharpe = None
     var_try = var_percent = diversification_ratio_value = None
     category_metrics: list[CategoryMetrics] = []
+    asset_metrics: list[AssetRiskMetrics] = []
     correlation_pairs: list[CategoryCorrelationPair] = []
     causes: RiskCauseDiagnosis | None = None
     scenarios: list[RebalanceScenario] = []
@@ -1281,13 +1285,36 @@ def get_risk_assessment(
                     )
                 )
 
+            # Varlık düzeyinde volatilite/etiket: profille uyum durumundan
+            # BAĞIMSIZ, her zaman hesaplanır (iş analisti talebi — "tek tek
+            # risk durumu"). `_diagnose_causes` de aynı sözlüğü kullanır,
+            # ondan ÖNCE hesaplanıyor ki iki yerde ayrı ayrı hesaplanmasın.
+            asset_vols = {
+                aid: _annualized_volatility(
+                    _returns_aligned([try_series[aid][day] for day in sorted_dates])
+                )
+                for aid in asset_ids
+            }
+            asset_metrics = [
+                AssetRiskMetrics(
+                    asset_symbol=symbol_by_asset_id[aid],
+                    asset_class=asset_class_by_id[aid],
+                    weight_percent=_round2(weights.get(aid, _ZERO) * 100),
+                    annualized_volatility_percent=(
+                        _round2(Decimal(str(asset_vols[aid] * 100)))
+                        if asset_vols.get(aid) is not None
+                        else None
+                    ),
+                    risk_level=(
+                        _risk_level_from_volatility(asset_vols[aid])
+                        if asset_vols.get(aid) is not None
+                        else None
+                    ),
+                )
+                for aid in asset_ids
+            ]
+
             if not is_within_profile:
-                asset_vols = {
-                    aid: _annualized_volatility(
-                        _returns_aligned([try_series[aid][day] for day in sorted_dates])
-                    )
-                    for aid in asset_ids
-                }
                 causes = _diagnose_causes(
                     max_asset_weight=max_asset_weight,
                     max_asset_symbol=symbol_by_asset_id[top_asset_id],
@@ -1345,6 +1372,7 @@ def get_risk_assessment(
                 _round2(Decimal(str(drawdown * 100))) if drawdown is not None else None
             ),
             category_metrics=category_metrics,
+            asset_metrics=asset_metrics,
             category_correlation_matrix=correlation_pairs,
             diversification_ratio=(
                 _round2(Decimal(str(diversification_ratio_value)))
