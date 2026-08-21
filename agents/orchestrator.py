@@ -223,7 +223,7 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle.\n"
         "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', 'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca veriyi nesnel bir şekilde ilet."
     )
-    
+
     flags = state.get("flags", [])
     if "advice_seeking" in flags:
         system_prompt += "\nKULLANICI TAVSİYE İSTİYOR: Kesinlikle yönlendirici bir dil kullanma, sadece verileri objektif olarak sun."

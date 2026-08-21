@@ -25,7 +25,8 @@ def _normalize(text: str) -> str:
     return text.translate(_UPPER_DOTTED_I).lower().strip()
 
 
-_SUFFIX_SAFE_MIN = 5   # bu uzunluktan itibaren sonek toleransı güvenli
+_SUFFIX_SAFE_MIN = 5  # bu uzunluktan itibaren sonek toleransı güvenli
+
 
 def _matches_word(query: str, phrase: str) -> bool:
     """Kelime sınırıyla eşleşme (alt dize DEĞİL).
@@ -90,7 +91,11 @@ def check_scope(query: str) -> dict:
                 parts = [re.escape(w) for w in k.split()]
                 pattern = r".{0,30}".join(parts)
                 if re.search(pattern, query_lower):
-                    return {"intent": "INJECTION_ATTEMPT", "message": varsayilan_mesaj, "flags": flags}
+                    return {
+                        "intent": "INJECTION_ATTEMPT",
+                        "message": varsayilan_mesaj,
+                        "flags": flags,
+                    }
 
     # 2.2 Destek Talebi
     destek = scope_config.get("destek_talebi", {})
@@ -128,10 +133,10 @@ def check_scope(query: str) -> dict:
     # Çekim ekli biçimleri ("önerin", "tavsiyeniz") yakalamak istenen davranış.
     tavsiye_config = scope_config.get("tavsiye_bayragi", {})
     tavsiye_tetikleyiciler = tavsiye_config.get("tetikleyiciler", [])
-    
+
     karisik_config = scope_config.get("karisik_varlik", {})
     karsilastirma_kaliplari = karisik_config.get("karsilastirma_kaliplari", [])
-    
+
     tum_tavsiye_tetikleyiciler = tavsiye_tetikleyiciler + karsilastirma_kaliplari
 
     if any(t in query_lower for t in tum_tavsiye_tetikleyiciler):
@@ -171,8 +176,11 @@ def check_scope(query: str) -> dict:
     if any(_matches_word(query_lower, etiket) for etiket in smalltalk_etiketler):
         return {
             "intent": "SMALLTALK_META",
-            "message": smalltalk.get("varsayilan", "Merhaba! Portföyünüz ve piyasalar hakkındaki sorularınızı yanıtlayabilirim."),
-            "flags": flags
+            "message": smalltalk.get(
+                "varsayilan",
+                "Merhaba! Portföyünüz ve piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
+            ),
+            "flags": flags,
         }
 
     # Hiçbir kural motora takılmadıysa LLM'e devret
