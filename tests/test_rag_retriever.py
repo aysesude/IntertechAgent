@@ -87,7 +87,7 @@ def test_retrieve_son_filtre_yanlis_sirketi_eler():
     )
     retriever = Retriever(store=store)
 
-    results = retriever.retrieve("net kâr bilanço", sirket="ASELS")
+    results = retriever.retrieve("ASELS net kâr bilanço", sirket="ASELS")
 
     assert len(results) == 1
     assert results[0]["metadata"]["sirket"] == "ASELS"
@@ -103,7 +103,7 @@ def test_retrieve_donem_listesi_ile_son_ceyrekler_filtrelenir():
     retriever = Retriever(store=store)
 
     results = retriever.retrieve(
-        "net kâr bilanço", sirket="ASELS", donem_listesi=["2026-Q1", "2026-Q2"]
+        "ASELS net kâr bilanço", sirket="ASELS", donem_listesi=["2026-Q1", "2026-Q2"]
     )
 
     assert len(results) == 1
@@ -129,7 +129,12 @@ def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
         [
             _doc("ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3),
             _doc("THYAO ikinci çeyrek net kâr açıkladı", sirket="THYAO", distance=0.2),
-            _doc("Piyasada ikinci çeyrek net kâr haberleri", sirket="", distance=0.4),
+            _doc(
+                "Piyasada ASELSAN dahil savunma sanayi şirketlerinin ikinci çeyrek "
+                "net kâr haberleri konuşuluyor",
+                sirket="",
+                distance=0.4,
+            ),
         ]
     )
     retriever = Retriever(store=store)
@@ -148,13 +153,21 @@ def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
     sonuçlardan biri gerçekten sorgudaki şirketle eşleştiğinde devreye girer."""
     store = _FakeVectorStore(
         [
-            _doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS", distance=0.3),
-            _doc("THYAO bilançosu net kâr açıklandı", sirket="THYAO", distance=0.4),
+            _doc(
+                "BIST 100 endeksindeki ASELS bilançosu net kâr açıklandı",
+                sirket="ASELS",
+                distance=0.3,
+            ),
+            _doc(
+                "BIST 100 endeksindeki THYAO bilançosu net kâr açıklandı",
+                sirket="THYAO",
+                distance=0.4,
+            ),
         ]
     )
     retriever = Retriever(store=store)
 
-    results = retriever.retrieve("bilanço net kâr açıklamaları")
+    results = retriever.retrieve("BIST 100 endeksindeki şirketlerin net kâr açıklamaları")
 
     assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}
 
@@ -481,3 +494,33 @@ def test_retrieve_kesme_isareti_eki_sahte_kelime_uretmez():
     results = retriever.retrieve("XYZ Teknoloji'nin hisse fiyatı ne kadar")
 
     assert results == []
+
+
+def test_retrieve_uydurma_sirket_holding_enerji_kelimeleriyle_bulunmus_sayilmaz():
+    """ "Holding"/"enerji" tek başına aşırı jenerik: onlarca `sirket_profili`
+    dokümanında ya şirket adının parçası ("Koç Holding", "Astor Enerji") ya
+    da faaliyet alanı olarak geçiyor (ölçümle doğrulandı: "ABC Holding'in
+    ikinci çeyrek net kârı nedir" ve "Falanca Enerji'nin ortaklık yapısı
+    nasıl" gibi uydurma şirket sorguları, uydurma kısım hiç eşleşmemesine
+    rağmen salt "holding"/"enerji"/"ikinci"/"net"/"yapısı" gibi kelimeler
+    üzerinden tamamen alakasız gerçek şirketleri "bulundu" saydırdı)."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Koç Holding ikinci çeyrek net kârı açıklandı",
+                baslik="Koç Holding Şirket Profili",
+                sirket="KCHOL",
+                distance=0.3,
+            ),
+            _doc(
+                "Astor Enerji ortaklık yapısı hissedar bilgileri",
+                baslik="Astor Enerji Şirket Profili",
+                sirket="ASTOR",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    assert retriever.retrieve("ABC Holding'in ikinci çeyrek net kârı nedir") == []
+    assert retriever.retrieve("Falanca Enerji'nin ortaklık yapısı nasıl") == []
