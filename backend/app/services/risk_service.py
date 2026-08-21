@@ -6,29 +6,47 @@ ağırlıklar ve hedef dağılımlar `app/core/config.py`'de yaşar. Buradaki hi
 karşılaştırmada sabit sayı yoktur — analistler metodolojiyi bu dosyaya
 dokunmadan kalibre edebilir.
 
-Volatilite/korelasyon/kovaryans/VaR/Sharpe, kullanıcının *bugünkü* varlık
-ağırlıkları geçmiş fiyat serisine uygulanarak hesaplanır ("mevcut ağırlıkla
-geriye dönük bakış"). Bu, portföyün geçmişteki gerçek getirisi değildir —
-bugünkü portföyün geçmiş piyasa koşullarında nasıl dalgalanacağının ölçüsüdür.
+v2 (Risk/Strateji Ajanı analist belgesi, Google Doc "Intertech - Ekip 3"):
+volatilite/korelasyon artık VARLIK değil KATEGORİ bazlıdır (Hisse/Altın/
+Döviz/Tahvil/Nakit — sabit 5x5 matris). Bir kategorinin günlük getirisi,
+o kategorideki varlıkların BUGÜNKÜ TL ağırlıklı ortalamasıdır (u_i=V_i/V_k) —
+"bugünkü portföyün geçmiş piyasa koşullarında nasıl dalgalanacağı" ilkesiyle
+tutarlı, portföyün geçmişteki gerçek getirisi değildir. Risk seviyesi artık
+yalnızca yıllık portföy volatilitesinden gelen 7 kademeli bir etikettir; eski
+0-100 kompozit `risk_score` tamamen kaldırıldı. Yerini `RiskCauseDiagnosis`
+(risk neden yüksek çıktı — yalnızca kullanıcının profili için beklenen bandın
+üzerindeyken hesaplanır) ve `RebalanceScenario` (kural tabanlı, deterministik
+Aksiyon A/B/C simülasyonu) aldı.
 
 Döviz cinsinden varlıklar (AK 5.7 ile aynı ilke): her günün değeri O GÜNÜN kur
 kapanışıyla TRY'ye çevrilir (bugünkü kurla değil) — aksi halde döviz
-varlıkların volatilitesi kur hareketini hiç yansıtmaz."""
+varlıkların volatilitesi kur hareketini hiç yansıtmaz.
+
+Kapsam sınırlaması (bilinçli tasarım kararı, bkz. `_select_receiver`): AK-5/
+AK-6 — o an portföyde hiç bulunmayan (ağırlığı sıfır) bir kategorinin
+senaryoda "açılması" — uygulanmadı. O kategori için geçmiş volatilite/
+korelasyon verisi yok, dolayısıyla hangi transferin riski gerçekten
+azaltacağı hesaplanamaz. Desteklenmesi istenirse varsayılan bir kategori
+volatilite tablosu gerekir."""
 
 import logging
 import math
 import statistics
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from itertools import pairwise
+from itertools import combinations, pairwise
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import (
-    ASSET_CLASS_BASE_RISK_SCORE,
-    RISK_PROFILE_TARGET_ALLOCATION,
+    RISK_DEFENSE_FLOOR,
+    RISK_LEVEL_VOLATILITY_UPPER_BOUNDS,
+    RISK_MAX_ASSET_WEIGHT,
+    RISK_MAX_CATEGORY_WEIGHT,
+    RISK_RECEIVER_PREFERENCE_ORDER,
+    RISK_TARGET_VOLATILITY_BAND,
     AssetClass,
     RiskLevel,
     RiskProfile,
@@ -38,25 +56,35 @@ from app.core.exceptions import NotFoundError
 from app.models import Asset, Holding, Portfolio, PriceHistory, User
 from app.providers.tcmb import TcmbEvdsProvider
 from app.schemas.risk import (
-    CorrelationPair,
-    RebalanceAction,
-    RebalanceActionType,
+    CategoryCorrelationPair,
+    CategoryMetrics,
+    ConcentrationCause,
+    CorrelationCause,
+    HighVolatilityAssetCause,
+    RebalanceScenario,
     RiskAssessment,
+    RiskCauseDiagnosis,
     RiskMetrics,
     RiskProfileSource,
+    ScenarioAssetWeight,
+    ScenarioCategoryWeight,
 )
 from app.services.ledger_service import cash_balance_as_of
 from app.services.valuation_service import FX_SYMBOL_BY_CURRENCY, PriceBook
 
 _TWO_DECIMALS = Decimal("0.01")
-# HHI 0-1 aralığında olduğu için iki ondalık ayırt edici değil (0.08 ile 0.12
-# arasındaki fark çeşitlendirmede büyük fark demek); dört ondalıkla tutuluyor.
+# HHI ve korelasyon 0-1 aralığında olduğu için iki ondalık ayırt edici değil
+# (0.08 ile 0.12 arasındaki fark çeşitlendirmede büyük fark demek); dört
+# ondalıkla tutuluyor.
 _FOUR_DECIMALS = Decimal("0.0001")
 _ZERO = Decimal(0)
 
 _logger = logging.getLogger(__name__)
 
 _EMPTY_PORTFOLIO_WARNING = "Portföyünüzde varlık bulunmadığı için risk değerlendirmesi yapılamadı."
+
+# Aksiyonların KK-1 gereği her zaman uygulandığı sabit sıra.
+_ACTION_KEYS = ["A", "B", "C"]
 
 
 def _round2(value: Decimal) -> Decimal:
@@ -69,31 +97,17 @@ def _round4(value: Decimal) -> Decimal:
 
 def _insufficient_history_warning(available: int) -> str:
     return (
-        f"Volatilite, korelasyon, VaR ve Sharpe oranı hesaplanamadı: en az "
-        f"{settings.risk_min_price_points} günlük ortak fiyat geçmişi gerekiyor, "
-        f"{available} gün mevcut (AK 2.7). Risk skoru kalan ölçütlerle hesaplandı."
+        f"Risk seviyesi hesaplanamadı: en az {settings.risk_min_price_points} günlük ortak "
+        f"fiyat geçmişi gerekiyor, {available} gün mevcut (AK 2.7). Risk uydurulmaz."
     )
 
 
-def _linear_score(value: float, low: float, high: float) -> float:
-    """`low` değerini 0, `high` değerini 100 puana eşleyip arasını doğrusal
-    ölçekler; aralık dışını kırpar.
-
-    `low > high` olabilir: çeşitlendirme gibi "değer arttıkça risk azalan"
-    ölçütlerde eşikler ters sırada verilir ve formül kendiliğinden tersine döner.
-    """
-    if high == low:
-        return 0.0
-    ratio = (value - low) / (high - low)
-    return max(0.0, min(1.0, ratio)) * 100.0
-
-
-def _risk_level(score: float) -> RiskLevel:
-    if score <= settings.risk_score_low_max:
-        return RiskLevel.LOW
-    if score <= settings.risk_score_medium_max:
-        return RiskLevel.MEDIUM
-    return RiskLevel.HIGH
+def _missing_category_data_warning() -> str:
+    return (
+        "Portföy volatilitesi hesaplanamadı: elde tutulan kategorilerden en az birinin "
+        "yıllık volatilitesi yeterli fiyat verisiyle hesaplanamadı (AK 2.7). Risk seviyesi "
+        "bu nedenle gösterilemiyor."
+    )
 
 
 def _inverse_normal_cdf(p: float) -> float:
@@ -218,6 +232,17 @@ def _daily_returns(values: list[Decimal]) -> list[float]:
     ]
 
 
+def _returns_aligned(values: list[Decimal]) -> list[float]:
+    """`_daily_returns` gibi ama hizalıdır: `previous<=0` gibi (gerçek piyasa
+    verisinde neredeyse hiç olmayan) bir durumda o günü ATLAMAZ, 0.0 getiri
+    yazar. Kategori getirisini varlık bazında ağırlıklı toplarken tüm
+    serilerin aynı uzunlukta ve aynı gün indeksinde kalması gerekiyor."""
+    return [
+        float(current) / float(previous) - 1.0 if previous > 0 else 0.0
+        for previous, current in pairwise(values)
+    ]
+
+
 def _annualized_volatility(returns: list[float]) -> float | None:
     if len(returns) < 2:
         return None
@@ -258,87 +283,741 @@ def _pearson_correlation(a: list[float], b: list[float]) -> float | None:
         return None
 
 
-def _composite_score(
-    volatility: float | None,
-    max_asset_weight: float,
-    effective_holdings: float,
-    asset_class_risk_score: float,
+def _risk_level_from_volatility(volatility: float) -> RiskLevel:
+    """Yıllık portföy volatilitesinden 7 kademeli risk etiketi. Son sınırın
+    (0.40) üzerindeki her volatilite VERY_HIGH sayılır."""
+    vol_decimal = Decimal(str(volatility))
+    for upper_bound, level in RISK_LEVEL_VOLATILITY_UPPER_BOUNDS:
+        if vol_decimal <= upper_bound:
+            return level
+    return RiskLevel.VERY_HIGH
+
+
+# --------------------------------------------------------------------------
+# Kategori bazlı volatilite/korelasyon
+# --------------------------------------------------------------------------
+
+
+def _category_returns(
+    class_values: dict[AssetClass, Decimal],
+    asset_ids_by_class: dict[AssetClass, list[UUID]],
+    try_series: dict[UUID, dict[date, Decimal]],
+    market_values: dict[UUID, Decimal],
+    sorted_dates: list[date],
+) -> dict[AssetClass, list[float]]:
+    """Her kategori için ortak günler üzerinden günlük getiri serisi.
+
+    Kategori getirisi, o kategorideki varlıkların BUGÜNKÜ TL değer ağırlıklı
+    ortalamasıdır (u_i=V_i/V_kategori) — geçmişteki ağırlık değil, "bugünkü
+    portföy geçmiş koşullarda nasıl dalgalanır" ilkesiyle tutarlı. Serbest
+    nakit (ledger'dan) kategori DEĞERİNE dahildir ama fiyatlanan bir varlık
+    olmadığı için getiri serisine katkısı sıfırdır — bu da kategorinin
+    volatilitesini doğal biçimde seyreltir, ayrı bir "sıfır getirili satır"
+    icat etmeye gerek kalmaz. Yalnızca serbest nakitten oluşan (hiç fiyatlı
+    varlığı olmayan) bir kategori tamamen sıfır getirili bir seri alır —
+    doğru sonuç, nakit zaten volatil değildir."""
+    n_returns = max(len(sorted_dates) - 1, 0)
+    category_returns: dict[AssetClass, list[float]] = {}
+    for asset_class, category_value in class_values.items():
+        if category_value <= 0:
+            continue
+        weighted_daily = [0.0] * n_returns
+        for asset_id in asset_ids_by_class.get(asset_class, []):
+            weight = float(market_values[asset_id] / category_value)
+            if weight <= 0:
+                continue
+            asset_values = [try_series[asset_id][day] for day in sorted_dates]
+            asset_returns = _returns_aligned(asset_values)
+            for i, r in enumerate(asset_returns):
+                weighted_daily[i] += weight * r
+        category_returns[asset_class] = weighted_daily
+    return category_returns
+
+
+def _category_correlation_matrix(
+    category_returns: dict[AssetClass, list[float]],
+) -> dict[tuple[AssetClass, AssetClass], float]:
+    """Sabit 5x5 matrisin üst üçgeni (i<j, AssetClass tanım sırasıyla).
+    Hesaplanamayan çiftler (örn. sabit/sıfır getirili nakit serisiyle
+    stdev=0 olan bir seri) sözlükte yer almaz."""
+    pairs: dict[tuple[AssetClass, AssetClass], float] = {}
+    classes = [ac for ac in AssetClass if ac in category_returns]
+    for i, a in enumerate(classes):
+        for b in classes[i + 1 :]:
+            corr = _pearson_correlation(category_returns[a], category_returns[b])
+            if corr is not None:
+                pairs[(a, b)] = corr
+    return pairs
+
+
+def _correlation_between(
+    a: AssetClass, b: AssetClass, correlations: dict[tuple[AssetClass, AssetClass], float]
 ) -> float:
-    """Dört bileşenin ağırlıklı ortalaması (0-100): volatilite, yoğunlaşma,
-    çeşitlendirme, varlık sınıfı bazlı temel risk.
+    if a == b:
+        return 1.0
+    corr = correlations.get((a, b))
+    if corr is None:
+        corr = correlations.get((b, a))
+    return corr if corr is not None else 0.0
 
-    Volatilite hesaplanamadıysa (AK 2.7) o bileşen atılır ve kalan ağırlıklar
-    yeniden normalize edilir — eksik veriyi 0 puan sayıp riski olduğundan
-    düşük göstermemek için."""
-    components: list[tuple[float, float]] = [
-        (
-            settings.risk_weight_concentration,
-            _linear_score(
-                max_asset_weight, settings.risk_concentration_low, settings.risk_concentration_high
-            ),
-        ),
-        (
-            settings.risk_weight_diversification,
-            _linear_score(
-                effective_holdings,
-                settings.risk_effective_holdings_low,
-                settings.risk_effective_holdings_high,
-            ),
-        ),
-        (settings.risk_weight_asset_class, asset_class_risk_score),
-    ]
-    if volatility is not None:
-        components.append(
-            (
-                settings.risk_weight_volatility,
-                _linear_score(
-                    volatility, settings.risk_volatility_low, settings.risk_volatility_high
-                ),
+
+def _portfolio_volatility_from_categories(
+    category_weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float | None],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+) -> float | None:
+    """σ_portföy = sqrt(ΣᵢΣⱼ wᵢwⱼρᵢⱼσᵢσⱼ). Ağırlığı pozitif olan bir
+    kategorinin volatilitesi hesaplanamıyorsa (AK 2.7) portföy volatilitesi
+    de None döner — uydurulmaz."""
+    classes = [ac for ac in category_weights if category_weights[ac] > 0]
+    if not classes or any(category_vols.get(ac) is None for ac in classes):
+        return None
+    variance = 0.0
+    for a in classes:
+        for b in classes:
+            corr = _correlation_between(a, b, correlations)
+            variance += (
+                float(category_weights[a])
+                * float(category_weights[b])
+                * category_vols[a]
+                * category_vols[b]
+                * corr
             )
-        )
+    return math.sqrt(max(0.0, variance))
 
-    total_weight = sum(weight for weight, _ in components)
-    if total_weight <= 0:
+
+def _risk_contributions(
+    category_weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    portfolio_vol: float,
+) -> dict[AssetClass, float]:
+    """RC%ᵢ = wᵢ·(Σⱼ wⱼσᵢσⱼρᵢⱼ)/σ_portföy² (Euler varyans ayrıştırması,
+    Σ RC%ᵢ≈1). Aksiyon B'nin "en yüksek RC%'li kategoriden al" kuralında ve
+    kök neden teşhisinde kullanılır."""
+    if portfolio_vol <= 0:
+        return {}
+    classes = [ac for ac in category_weights if category_weights[ac] > 0]
+    contributions: dict[AssetClass, float] = {}
+    for a in classes:
+        marginal = sum(
+            float(category_weights[b])
+            * category_vols[a]
+            * category_vols[b]
+            * _correlation_between(a, b, correlations)
+            for b in classes
+        )
+        contributions[a] = float(category_weights[a]) * marginal / (portfolio_vol**2)
+    return contributions
+
+
+def _diversification_ratio(
+    category_weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    portfolio_vol: float,
+) -> float | None:
+    """DR = (Σ wᵢ×σᵢ) / σ_portföy. 1'e yakınsa çeşitlendirme etkisi zayıf,
+    büyüdükçe (>1) çeşitlendirme riski azaltıyor demektir."""
+    if portfolio_vol <= 0:
+        return None
+    weighted_sum = sum(
+        float(category_weights[ac]) * category_vols[ac]
+        for ac in category_weights
+        if category_weights[ac] > 0
+    )
+    return weighted_sum / portfolio_vol
+
+
+# --------------------------------------------------------------------------
+# Kök neden teşhisi ("risk neden yüksek çıktı")
+# --------------------------------------------------------------------------
+
+
+def _diagnose_causes(
+    max_asset_weight: Decimal,
+    max_asset_symbol: str | None,
+    category_weights: dict[AssetClass, Decimal],
+    herfindahl: Decimal,
+    asset_vols: dict[UUID, float | None],
+    asset_weights: dict[UUID, Decimal],
+    risk_contributions: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    diversification_ratio: float | None,
+) -> RiskCauseDiagnosis:
+    """Yalnızca portföy volatilitesi kullanıcının profili için beklenen
+    bandın üzerindeyken çağrılır (bkz. get_risk_assessment).
+
+    Rüveyda'nın onayladığı doğru eşleşme (formüller doğru, yalnızca alt
+    başlık atamaları yanlıştı — bu session'da netleştirildi):
+      Neden A — Yoğunlaşma: max(w_varlık)>eşik VEYA max(w_kategori)>eşik
+                VEYA HHI>eşik.
+      Neden B — Yüksek volatiliteli varlık: (yıllık vol>eşik olan
+                varlıkların toplam ağırlığı)>eşik VEYA (bir kategorinin
+                RC%>eşik VE RC%>o kategorinin ağırlığı+eşik).
+      Neden C — Korelasyon: (ağırlığı>=%10 olan kategoriler arasındaki en
+                yüksek ikili korelasyon>=eşik VE o çiftin toplam
+                ağırlığı>=eşik) VEYA (DR<eşik VE HHI<=eşik).
+    """
+    top_class = max(category_weights, key=lambda ac: category_weights[ac])
+    max_category_weight = category_weights[top_class]
+
+    # --- Neden A: Yoğunlaşma ---
+    concentration_triggered = (
+        float(max_asset_weight) > settings.risk_cause_max_asset_weight
+        or float(max_category_weight) > settings.risk_cause_max_category_weight
+        or float(herfindahl) > settings.risk_cause_hhi_threshold
+    )
+    concentration = ConcentrationCause(
+        triggered=concentration_triggered,
+        max_asset_weight_percent=_round2(max_asset_weight * 100),
+        max_asset_symbol=max_asset_symbol,
+        max_category_weight_percent=_round2(max_category_weight * 100),
+        max_category=top_class,
+        herfindahl_index=_round4(herfindahl),
+    )
+
+    # --- Neden B: Yüksek volatiliteli varlık ---
+    high_vol_weight = sum(
+        (
+            asset_weights[aid]
+            for aid, vol in asset_vols.items()
+            if vol is not None and vol > settings.risk_cause_high_vol_asset_annual_vol
+        ),
+        start=_ZERO,
+    )
+    max_rc_category = (
+        max(risk_contributions, key=lambda ac: risk_contributions[ac])
+        if risk_contributions
+        else None
+    )
+    max_rc_percent = (
+        risk_contributions.get(max_rc_category) if max_rc_category is not None else None
+    )
+    rc_condition = False
+    if max_rc_category is not None and max_rc_percent is not None:
+        rc_condition = (
+            max_rc_percent > settings.risk_cause_risk_contribution_threshold
+            and max_rc_percent
+            > float(category_weights.get(max_rc_category, _ZERO))
+            + settings.risk_cause_risk_contribution_excess
+        )
+    high_vol_triggered = (
+        float(high_vol_weight) > settings.risk_cause_high_vol_asset_weight or rc_condition
+    )
+    high_volatility_asset = HighVolatilityAssetCause(
+        triggered=high_vol_triggered,
+        high_volatility_assets_weight_percent=_round2(high_vol_weight * 100),
+        max_risk_contribution_category=max_rc_category,
+        max_risk_contribution_percent=(
+            _round2(Decimal(str(max_rc_percent * 100))) if max_rc_percent is not None else None
+        ),
+    )
+
+    # --- Neden C: Korelasyon ---
+    eligible = [ac for ac in category_weights if category_weights[ac] >= Decimal("0.10")]
+    best_pair: tuple[AssetClass, AssetClass] | None = None
+    best_corr: float | None = None
+    for i, a in enumerate(eligible):
+        for b in eligible[i + 1 :]:
+            corr = correlations.get((a, b))
+            if corr is None:
+                corr = correlations.get((b, a))
+            if corr is None:
+                continue
+            if best_corr is None or corr > best_corr:
+                best_corr, best_pair = corr, (a, b)
+
+    pair_weight_sum = (
+        category_weights.get(best_pair[0], _ZERO) + category_weights.get(best_pair[1], _ZERO)
+        if best_pair is not None
+        else _ZERO
+    )
+    hhi_low = float(herfindahl) <= settings.risk_cause_hhi_low_threshold
+    dr_condition = (
+        diversification_ratio is not None
+        and diversification_ratio < settings.risk_cause_dr_threshold
+        and hhi_low
+    )
+    corr_pair_condition = (
+        best_corr is not None
+        and best_corr >= settings.risk_cause_pairwise_correlation
+        and float(pair_weight_sum) >= settings.risk_cause_pairwise_weight_sum
+    )
+    correlation = CorrelationCause(
+        triggered=corr_pair_condition or dr_condition,
+        highest_correlated_pair=(
+            CategoryCorrelationPair(
+                category_a=best_pair[0],
+                category_b=best_pair[1],
+                correlation=_round4(Decimal(str(best_corr))),
+            )
+            if best_pair is not None and best_corr is not None
+            else None
+        ),
+        diversification_ratio=(
+            _round2(Decimal(str(diversification_ratio)))
+            if diversification_ratio is not None
+            else None
+        ),
+        herfindahl_index=_round4(herfindahl),
+    )
+
+    return RiskCauseDiagnosis(
+        concentration=concentration,
+        high_volatility_asset=high_volatility_asset,
+        correlation=correlation,
+    )
+
+
+# --------------------------------------------------------------------------
+# Yeniden dengeleme senaryo motoru (Aksiyon A/B/C)
+# --------------------------------------------------------------------------
+
+
+def _average_correlation(
+    category: AssetClass,
+    weights: dict[AssetClass, Decimal],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+) -> float:
+    others = [ac for ac in weights if ac != category and weights[ac] > 0]
+    if not others:
         return 0.0
-    return sum(weight * score for weight, score in components) / total_weight
+    return sum(_correlation_between(category, other, correlations) for other in others) / len(
+        others
+    )
 
 
-def _rebalance_actions(
-    profile: RiskProfile, class_values: dict[AssetClass, Decimal], total_value: Decimal
-) -> list[RebalanceAction]:
-    """Hedef dağılımla mevcut dağılımı karşılaştırır.
+def _select_receiver(
+    profile: RiskProfile,
+    donor: AssetClass,
+    weights: dict[AssetClass, Decimal],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+) -> AssetClass | None:
+    """AK-1..AK-4/AK-7: donor'un ortalama korelasyonu en düşük olan, kendi
+    profil limitine henüz ulaşmamış, ZATEN ELDE TUTULAN (ağırlık>0)
+    kategoriyi seçer. Korelasyon farkı eşiğin altındaki adaylar arasında
+    profilin alıcı tercih sırası (AK-4) belirleyicidir.
 
-    Portföyde hiç bulunmayan varlık sınıfları da (mevcut %0 ile) listelenir —
-    eksik bir sınıf, fazla olan bir sınıf kadar anlamlı bir dengesizliktir."""
-    targets = RISK_PROFILE_TARGET_ALLOCATION[profile]
-    tolerance = Decimal(str(settings.risk_rebalance_tolerance_percent))
+    AK-5/AK-6 (sıfır ağırlıklı yeni bir kategori açma) kasıtlı olarak
+    uygulanmadı — bkz. modül docstring'i."""
+    limits = RISK_MAX_CATEGORY_WEIGHT[profile]
+    candidates = [
+        (ac, _average_correlation(ac, weights, correlations))
+        for ac, weight in weights.items()
+        if ac != donor and weight > 0 and weight < limits[ac]
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[1])
+    lowest_corr = candidates[0][1]
+    tied = [
+        ac
+        for ac, corr in candidates
+        if corr - lowest_corr < settings.risk_scenario_correlation_tie_threshold
+    ]
+    if len(tied) == 1:
+        return tied[0]
+    for ac in RISK_RECEIVER_PREFERENCE_ORDER[profile]:
+        if ac in tied:
+            return ac
+    return tied[0]
 
-    actions: list[RebalanceAction] = []
-    for asset_class in settings.supported_asset_classes:
-        current_percent = (
-            class_values.get(asset_class, _ZERO) / total_value * 100 if total_value > 0 else _ZERO
-        )
-        target_percent = targets.get(asset_class, _ZERO)
-        delta_percent = target_percent - current_percent
 
-        if abs(delta_percent) <= tolerance:
-            action = RebalanceActionType.HOLD
-        elif delta_percent > 0:
-            action = RebalanceActionType.BUY
+def _run_transfer_loop(
+    profile: RiskProfile,
+    weights: dict[AssetClass, Decimal],
+    donor: AssetClass,
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    should_stop,
+    used_turnover: Decimal,
+    max_turnover: Decimal,
+) -> tuple[dict[AssetClass, Decimal], Decimal]:
+    """STEP büyüklüğünde ardışık transferler (KS-1/KS-2: kural tabanlı,
+    deterministik). Her adımda: savunma tabanı (Tahvil+Nakit), alıcının
+    kategori üst sınırı ve KK-2'nin paylaşılan turnover bütçesi kontrol
+    edilir. MAX_ITER, sonsuz döngü emniyet supabıdır."""
+    step = Decimal(str(settings.risk_scenario_step_percent)) / 100
+    defense_floor = RISK_DEFENSE_FLOOR[profile]
+    limits = RISK_MAX_CATEGORY_WEIGHT[profile]
+    current = dict(weights)
+
+    for _ in range(settings.risk_scenario_max_iterations):
+        if should_stop(current) or used_turnover >= max_turnover:
+            break
+        if current[donor] <= 0:
+            break
+
+        remaining_budget = max_turnover - used_turnover
+        if donor in (AssetClass.BOND, AssetClass.CASH):
+            defense_total = current.get(AssetClass.BOND, _ZERO) + current.get(
+                AssetClass.CASH, _ZERO
+            )
+            donor_available = max(_ZERO, defense_total - defense_floor)
         else:
-            action = RebalanceActionType.SELL
+            donor_available = current[donor]
+        transfer_amount = min(step, current[donor], donor_available, remaining_budget)
+        if transfer_amount <= 0:
+            break
 
-        actions.append(
-            RebalanceAction(
-                asset_class=asset_class,
-                current_percent=_round2(current_percent),
-                target_percent=_round2(target_percent),
-                delta_percent=_round2(delta_percent),
-                delta_amount=_round2(delta_percent / 100 * total_value),
-                action=action,
+        receiver = _select_receiver(profile, donor, current, correlations)
+        if receiver is None:
+            break
+        room = limits[receiver] - current.get(receiver, _ZERO)
+        if room <= 0:
+            break
+        transfer_amount = min(transfer_amount, room)
+        if transfer_amount <= 0:
+            break
+
+        current[donor] -= transfer_amount
+        current[receiver] = current.get(receiver, _ZERO) + transfer_amount
+        used_turnover += transfer_amount
+
+    return current, used_turnover
+
+
+def _target_volatility(profile: RiskProfile, current_vol: float) -> float:
+    """Aksiyon B'nin durma koşulu: mevcut volatilite profilin hedef bandının
+    üst sınırını <=5 puan aşıyorsa hedef=üst sınır, >5 puan aşıyorsa
+    hedef=bandın orta noktası."""
+    lower, upper = RISK_TARGET_VOLATILITY_BAND[profile]
+    upper_f, lower_f = float(upper), float(lower)
+    if current_vol - upper_f <= 0.05:
+        return upper_f
+    return (lower_f + upper_f) / 2
+
+
+def _highest_correlated_pair(
+    weights: dict[AssetClass, Decimal], correlations: dict[tuple[AssetClass, AssetClass], float]
+) -> tuple[AssetClass, AssetClass] | None:
+    classes = [ac for ac in AssetClass if weights.get(ac, _ZERO) > 0]
+    best: tuple[AssetClass, AssetClass] | None = None
+    best_corr: float | None = None
+    for i, a in enumerate(classes):
+        for b in classes[i + 1 :]:
+            corr = correlations.get((a, b))
+            if corr is None:
+                corr = correlations.get((b, a))
+            if corr is None:
+                continue
+            if best_corr is None or corr > best_corr:
+                best_corr, best = corr, (a, b)
+    return best
+
+
+def _apply_action_a(
+    profile: RiskProfile,
+    weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    used_turnover: Decimal,
+    max_turnover: Decimal,
+) -> tuple[dict[AssetClass, Decimal], Decimal] | None:
+    """Aksiyon A — Yoğunlaşmayı kır: kategori üst sınırını en çok aşan
+    kategoriden, limitin altına inene kadar transfer eder. Hiçbir kategori
+    limitini aşmıyorsa uygulanamaz (None)."""
+    limits = RISK_MAX_CATEGORY_WEIGHT[profile]
+    donor = max(weights, key=lambda ac: weights[ac] - limits[ac])
+    if weights[donor] <= limits[donor]:
+        return None
+    return _run_transfer_loop(
+        profile,
+        weights,
+        donor,
+        correlations,
+        should_stop=lambda w: w[donor] <= limits[donor],
+        used_turnover=used_turnover,
+        max_turnover=max_turnover,
+    )
+
+
+def _apply_action_b(
+    profile: RiskProfile,
+    weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    current_vol: float,
+    used_turnover: Decimal,
+    max_turnover: Decimal,
+) -> tuple[dict[AssetClass, Decimal], Decimal] | None:
+    """Aksiyon B — Yüksek risk katkısını azalt: en yüksek RC%'li
+    kategoriden, portföy volatilitesi profilin Hedef bandına inene kadar
+    transfer eder."""
+    rc = _risk_contributions(weights, category_vols, correlations, current_vol)
+    if not rc:
+        return None
+    donor = max(rc, key=lambda ac: rc[ac])
+    target_vol = _target_volatility(profile, current_vol)
+    if current_vol <= target_vol:
+        return None
+
+    def should_stop(w: dict[AssetClass, Decimal]) -> bool:
+        vol = _portfolio_volatility_from_categories(w, category_vols, correlations)
+        return vol is None or vol <= target_vol
+
+    return _run_transfer_loop(
+        profile, weights, donor, correlations, should_stop, used_turnover, max_turnover
+    )
+
+
+def _apply_action_c(
+    profile: RiskProfile,
+    weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    used_turnover: Decimal,
+    max_turnover: Decimal,
+) -> tuple[dict[AssetClass, Decimal], Decimal] | None:
+    """Aksiyon C — Çeşitlendirmeyi güçlendir: en yüksek ikili korelasyonlu
+    çiftin RC%'si daha yüksek olan tarafından, DR hedefe (RISK_SCENARIO_DR_
+    TARGET) ulaşana kadar transfer eder. Alıcı, `_select_receiver`'ın
+    "en düşük ortalama korelasyonlu" kuralıyla zaten doğal olarak seçilir."""
+    pair = _highest_correlated_pair(weights, correlations)
+    if pair is None:
+        return None
+    vol_now = _portfolio_volatility_from_categories(weights, category_vols, correlations)
+    if vol_now is None or vol_now <= 0:
+        return None
+    rc = _risk_contributions(weights, category_vols, correlations, vol_now)
+    a, b = pair
+    donor = a if rc.get(a, 0.0) >= rc.get(b, 0.0) else b
+
+    def should_stop(w: dict[AssetClass, Decimal]) -> bool:
+        vol = _portfolio_volatility_from_categories(w, category_vols, correlations)
+        if vol is None or vol <= 0:
+            return True
+        dr = _diversification_ratio(w, category_vols, vol)
+        return dr is not None and dr >= settings.risk_scenario_dr_target
+
+    if should_stop(weights):
+        return None
+    return _run_transfer_loop(
+        profile, weights, donor, correlations, should_stop, used_turnover, max_turnover
+    )
+
+
+def _generate_combinations() -> list[list[str]]:
+    """KK-1: aksiyonlar her zaman A→B→C sırasıyla uygulanır; kombinasyonlar
+    bu sırayı korur ([A],[B],[C],[A,B],[A,C],[B,C],[A,B,C])."""
+    combos: list[list[str]] = []
+    for size in range(1, len(_ACTION_KEYS) + 1):
+        combos.extend(list(c) for c in combinations(_ACTION_KEYS, size))
+    return combos
+
+
+def _run_scenario(
+    profile: RiskProfile,
+    action_keys: list[str],
+    initial_weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+) -> dict:
+    """Bir aksiyon kombinasyonunu sırasıyla uygular (KK-1). KK-2: kombinasyon
+    içindeki tüm aksiyonlar TEK bir 30 puanlık turnover bütçesini paylaşır."""
+    max_turnover = Decimal(str(settings.risk_scenario_max_turnover_percent)) / 100
+    used_turnover = _ZERO
+    current = dict(initial_weights)
+    applied: list[str] = []
+    vol_before = _portfolio_volatility_from_categories(current, category_vols, correlations)
+
+    for key in action_keys:
+        if used_turnover >= max_turnover:
+            break
+        vol_now = _portfolio_volatility_from_categories(current, category_vols, correlations)
+        if vol_now is None:
+            break
+
+        if key == "A":
+            result = _apply_action_a(
+                profile, current, category_vols, correlations, used_turnover, max_turnover
+            )
+        elif key == "B":
+            result = _apply_action_b(
+                profile, current, category_vols, correlations, vol_now, used_turnover, max_turnover
+            )
+        else:
+            result = _apply_action_c(
+                profile, current, category_vols, correlations, used_turnover, max_turnover
+            )
+
+        if result is None:
+            continue
+        new_weights, new_used = result
+        if new_used > used_turnover:
+            current, used_turnover = new_weights, new_used
+            applied.append(key)
+
+    vol_after = _portfolio_volatility_from_categories(current, category_vols, correlations)
+    return {
+        "weights": current,
+        "actions_applied": applied,
+        "turnover": used_turnover,
+        "volatility_before": vol_before,
+        "volatility_after": vol_after,
+    }
+
+
+def _evaluate_scenario(initial_vol: float, result: dict, target_vol: float) -> tuple[bool, float]:
+    """Eleme: turnover eşik altındaysa VEYA (hedef bandın içine girmemişse
+    VE göreli risk azalması eşik altındaysa) senaryo elenir."""
+    turnover_percent = float(result["turnover"] * 100)
+    if turnover_percent < settings.risk_scenario_min_turnover_percent:
+        return False, 0.0
+
+    vol_after = result["volatility_after"]
+    if vol_after is None or initial_vol is None or initial_vol <= 0:
+        return False, 0.0
+
+    within_band = vol_after <= target_vol
+    relative_reduction = (initial_vol - vol_after) / initial_vol
+    if not within_band and relative_reduction < settings.risk_scenario_min_relative_risk_reduction:
+        return False, 0.0
+
+    risk_reduction_ratio = max(0.0, relative_reduction)
+    turnover_component = 1.0 - min(
+        1.0, turnover_percent / settings.risk_scenario_max_turnover_percent
+    )
+    score = (
+        settings.risk_scenario_score_risk_weight * risk_reduction_ratio
+        + settings.risk_scenario_score_turnover_weight * turnover_component
+    )
+    return True, score
+
+
+def _scenario_label(turnover_percent: float) -> str:
+    if turnover_percent <= settings.risk_scenario_label_small_max_turnover:
+        return "Küçük Düzeltme"
+    if turnover_percent <= settings.risk_scenario_label_balanced_max_turnover:
+        return "Dengeli Düzeltme"
+    return "Belirgin Düzeltme"
+
+
+def _dedup_scenarios(scenarios: list[dict]) -> list[dict]:
+    """±1 puan turnover içindeki senaryoları tekilleştirir, yüksek skorlu
+    olanı tutar."""
+    ordered = sorted(scenarios, key=lambda s: s["score"], reverse=True)
+    kept: list[dict] = []
+    for candidate in ordered:
+        if any(abs(candidate["turnover_percent"] - k["turnover_percent"]) <= 1.0 for k in kept):
+            continue
+        kept.append(candidate)
+    return kept
+
+
+def _asset_breakdown(
+    profile: RiskProfile,
+    category_before: dict[AssetClass, Decimal],
+    category_after: dict[AssetClass, Decimal],
+    asset_ids_by_class: dict[AssetClass, list[UUID]],
+    market_values: dict[UUID, Decimal],
+    symbol_by_asset_id: dict[UUID, str],
+    total_value: Decimal,
+) -> list[ScenarioAssetWeight]:
+    """Kategori ağırlığı değiştiğinde, kategorideki her varlık kendi payı
+    oranında ölçeklenir (belge §6.5). Varlık bazlı üst sınır
+    (RISK_MAX_ASSET_WEIGHT) burada uygulanır; kırpılan fazla diğer varlıklara
+    yeniden dağıtılmaz — belge bu durumu tanımlamıyor, basit bir tasarım
+    tercihi."""
+    max_asset_weight = RISK_MAX_ASSET_WEIGHT[profile]
+    result: list[ScenarioAssetWeight] = []
+    for asset_class, asset_ids in asset_ids_by_class.items():
+        before_cat = category_before.get(asset_class, _ZERO)
+        after_cat = category_after.get(asset_class, _ZERO)
+        scale = (after_cat / before_cat) if before_cat > 0 else _ZERO
+        for asset_id in asset_ids:
+            current_value = market_values[asset_id]
+            current_percent = current_value / total_value if total_value > 0 else _ZERO
+            proposed_percent = min(current_percent * scale, max_asset_weight)
+            proposed_value = proposed_percent * total_value
+            result.append(
+                ScenarioAssetWeight(
+                    asset_symbol=symbol_by_asset_id[asset_id],
+                    asset_class=asset_class,
+                    current_percent=_round2(current_percent * 100),
+                    proposed_percent=_round2(proposed_percent * 100),
+                    current_value=_round2(current_value),
+                    proposed_value=_round2(proposed_value),
+                )
+            )
+    return result
+
+
+def _generate_rebalance_scenarios(
+    profile: RiskProfile,
+    category_weights: dict[AssetClass, Decimal],
+    category_vols: dict[AssetClass, float],
+    correlations: dict[tuple[AssetClass, AssetClass], float],
+    current_vol: float,
+    asset_ids_by_class: dict[AssetClass, list[UUID]],
+    market_values: dict[UUID, Decimal],
+    symbol_by_asset_id: dict[UUID, str],
+    total_value: Decimal,
+) -> list[RebalanceScenario]:
+    """7 kombinasyonu (A,B,C,AB,AC,BC,ABC) dener, eler, tekilleştirir ve en
+    iyi RISK_SCENARIO_TOP_N tanesini döner (yüksek skor önce)."""
+    target_vol = _target_volatility(profile, current_vol)
+    evaluated: list[dict] = []
+
+    for action_keys in _generate_combinations():
+        result = _run_scenario(profile, action_keys, category_weights, category_vols, correlations)
+        if not result["actions_applied"]:
+            continue
+        is_valid, score = _evaluate_scenario(current_vol, result, target_vol)
+        if not is_valid:
+            continue
+        evaluated.append(
+            {
+                "actions_applied": result["actions_applied"],
+                "weights_before": category_weights,
+                "weights_after": result["weights"],
+                "volatility_before": result["volatility_before"],
+                "volatility_after": result["volatility_after"],
+                "turnover_percent": float(result["turnover"] * 100),
+                "score": score,
+            }
+        )
+
+    top = _dedup_scenarios(evaluated)[: settings.risk_scenario_top_n]
+
+    scenarios: list[RebalanceScenario] = []
+    for item in top:
+        asset_weights = _asset_breakdown(
+            profile,
+            item["weights_before"],
+            item["weights_after"],
+            asset_ids_by_class,
+            market_values,
+            symbol_by_asset_id,
+            total_value,
+        )
+        category_weight_schemas = [
+            ScenarioCategoryWeight(
+                asset_class=ac,
+                current_percent=_round2(item["weights_before"].get(ac, _ZERO) * 100),
+                proposed_percent=_round2(item["weights_after"].get(ac, _ZERO) * 100),
+            )
+            for ac in AssetClass
+        ]
+        scenarios.append(
+            RebalanceScenario(
+                actions_applied=item["actions_applied"],
+                label=_scenario_label(item["turnover_percent"]),
+                category_weights=category_weight_schemas,
+                asset_weights=asset_weights,
+                volatility_before_percent=_round2(Decimal(str(item["volatility_before"] * 100))),
+                volatility_after_percent=_round2(Decimal(str(item["volatility_after"] * 100))),
+                risk_level_before=_risk_level_from_volatility(item["volatility_before"]),
+                risk_level_after=_risk_level_from_volatility(item["volatility_after"]),
+                turnover_percent=_round2(Decimal(str(item["turnover_percent"]))),
+                score=_round4(Decimal(str(item["score"]))),
             )
         )
-    return actions
+    return scenarios
+
+
+# --------------------------------------------------------------------------
+# Ana giriş noktası
+# --------------------------------------------------------------------------
 
 
 def _empty_assessment(
@@ -356,13 +1035,14 @@ def _empty_assessment(
         risk_profile=profile,
         risk_profile_source=source,
         total_value=_ZERO,
-        risk_score=None,
         risk_level=None,
+        is_within_profile=None,
         metrics=RiskMetrics(
             annualized_volatility_percent=None,
             max_drawdown_percent=None,
-            covariance_volatility_percent=None,
-            correlation_matrix=[],
+            category_metrics=[],
+            category_correlation_matrix=[],
+            diversification_ratio=None,
             value_at_risk_try=None,
             value_at_risk_percent=None,
             value_at_risk_confidence=_round2(Decimal(str(settings.risk_var_confidence * 100))),
@@ -375,26 +1055,35 @@ def _empty_assessment(
             max_class_weight_percent=_ZERO,
             max_class=None,
             herfindahl_index=_ZERO,
-            effective_holdings_count=_ZERO,
-            asset_class_base_risk_score=_ZERO,
             holdings_count=0,
             asset_class_count=0,
             price_points_used=0,
         ),
-        rebalance_actions=[],
-        is_balanced=False,
+        causes=None,
+        scenarios=[],
         warnings=[_EMPTY_PORTFOLIO_WARNING],
     )
 
 
 def get_risk_assessment(
-    db: Session, user_id: UUID, profile_override: RiskProfile | None = None
+    db: Session,
+    user_id: UUID,
+    profile_override: RiskProfile | None = None,
+    include_scenarios: bool = False,
 ) -> RiskAssessment:
-    """Kullanıcının portföy riskini değerlendirir ve yeniden dengeleme önerir.
+    """Kullanıcının portföy riskini v2 metodolojisiyle değerlendirir.
 
     `profile_override` verilirse hesaplama o profile göre yapılır ama
     kullanıcının DB'deki kalıcı profili değişmez — "ya agresif olsaydım?"
-    senaryosu için."""
+    senaryosu için.
+
+    `include_scenarios`: ÜRÜN SAHİBİ KARARIYLA (2026-08) devre dışı — bu
+    parametre True verilse bile `settings.risk_scenarios_enabled=False`
+    olduğu sürece `scenarios` her zaman boş liste döner. Risk artık yalnızca
+    tespit/uyarı içindir ("profilinize göre riskiniz yüksek"); ne yapılması
+    gerektiğini önermek kapsam dışı bırakıldı — kullanıcının kendi yatırım
+    kararı. Motor kod olarak duruyor, ileride ürün kararı değişirse
+    `risk_scenarios_enabled=True` yapmak yeterli."""
     user = db.get(User, user_id)
     if user is None:
         raise NotFoundError(f"User not found for user_id {user_id}")
@@ -468,7 +1157,7 @@ def get_risk_assessment(
     symbol_by_asset_id = {h.asset_id: h.asset.symbol for h in holdings}
     market_values: dict[UUID, Decimal] = {}
     class_values: dict[AssetClass, Decimal] = {}
-    class_by_asset_id: dict[UUID, AssetClass] = {}
+    asset_ids_by_class: dict[AssetClass, list[UUID]] = {}
     as_of_dates: list[date] = []
 
     for holding in holdings:
@@ -484,14 +1173,12 @@ def get_risk_assessment(
 
         value = holding.quantity * price
         market_values[holding.asset_id] = value
-        class_by_asset_id[holding.asset_id] = holding.asset.asset_class
-        class_values[holding.asset.asset_class] = (
-            class_values.get(holding.asset.asset_class, _ZERO) + value
-        )
+        asset_class = holding.asset.asset_class
+        class_values[asset_class] = class_values.get(asset_class, _ZERO) + value
+        asset_ids_by_class.setdefault(asset_class, []).append(holding.asset_id)
 
     # Serbest nakit (defterden): toplam değere ve CASH dilimine eklenir —
-    # portfolio_service ile aynı ilke, aksi halde yeniden dengeleme önerisi
-    # nakdi hiç görmez ve CASH hedefini her zaman "tamamen eksik" sanır.
+    # portfolio_service ile aynı ilke.
     asset_only_total = sum(market_values.values(), start=_ZERO)
     cash_balance = cash_balance_as_of(db, portfolio.id)
     total_value = asset_only_total + cash_balance
@@ -501,32 +1188,26 @@ def get_risk_assessment(
     if total_value <= 0:
         return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live)
 
-    # Yoğunlaşma/çeşitlendirme ağırlıkları yalnızca yatırılan varlıklar
-    # üzerinden hesaplanır (nakit kasıtlı olarak dışarıda tutulur — sabit,
-    # risksiz bir pozisyonun "çeşitlendirme" gibi görünmesi yanıltıcı olur).
-    weights = (
-        {asset_id: value / asset_only_total for asset_id, value in market_values.items()}
-        if asset_only_total > 0
-        else {asset_id: _ZERO for asset_id in market_values}
-    )
+    # v2: ağırlıklar TOPLAM portföy üzerinden (nakit dahil) — nakit de bir
+    # kategoridir (RISK_MAX_CATEGORY_WEIGHT[CASH], RISK_DEFENSE_FLOOR), v1'in
+    # aksine hesap dışı bırakılmıyor.
+    weights = {aid: value / total_value for aid, value in market_values.items()}
+    category_weights = {ac: class_values.get(ac, _ZERO) / total_value for ac in AssetClass}
 
-    # --- Yoğunlaşma ve çeşitlendirme ---
     top_asset_id = max(weights, key=lambda aid: weights[aid])
     max_asset_weight = weights[top_asset_id]
-
     top_class = max(class_values, key=lambda ac: class_values[ac])
     max_class_weight = class_values[top_class] / total_value
 
-    herfindahl = sum((w * w for w in weights.values()), start=_ZERO)
-    effective_holdings = Decimal(1) / herfindahl if herfindahl > 0 else _ZERO
-
-    # --- Varlık sınıfı bazlı temel risk (BR: hisse=yüksek, tahvil=düşük vb.) ---
-    asset_class_risk_score = float(
-        sum(
-            (weights[aid] * ASSET_CLASS_BASE_RISK_SCORE.get(class_by_asset_id[aid], _ZERO))
-            for aid in weights
-        )
+    # HHI: yalnızca yatırılan varlıklar üzerinden (nakit hariç) — sabit,
+    # risksiz bir pozisyonun "çeşitlendirme sorunu" gibi görünmesi yanıltıcı
+    # olur; nakidin kendi yoğunlaşması zaten max_category_weight ile yakalanır.
+    hhi_weights = (
+        {aid: value / asset_only_total for aid, value in market_values.items()}
+        if asset_only_total > 0
+        else {}
     )
+    herfindahl = sum((w * w for w in hhi_weights.values()), start=_ZERO)
 
     # --- Ortak fiyat günleri (tüm elde tutulan varlıkların TRY fiyatının
     # bilindiği günler) ---
@@ -541,90 +1222,123 @@ def get_risk_assessment(
     price_points = len(sorted_dates)
 
     warnings: list[str] = []
-    volatility = drawdown = covariance_vol = portfolio_return = None
-    sharpe = var_try = var_percent = None
-    correlation_pairs: list[CorrelationPair] = []
+    volatility = drawdown = portfolio_return = sharpe = None
+    var_try = var_percent = diversification_ratio_value = None
+    category_metrics: list[CategoryMetrics] = []
+    correlation_pairs: list[CategoryCorrelationPair] = []
+    causes: RiskCauseDiagnosis | None = None
+    scenarios: list[RebalanceScenario] = []
+    risk_level: RiskLevel | None = None
+    is_within_profile: bool | None = None
 
     if price_points >= settings.risk_min_price_points:
-        # Portföy değer serisi (bugünkü miktarlarla).
         value_series = [
             sum((h.quantity * try_series[h.asset_id][day] for h in holdings), start=_ZERO)
             for day in sorted_dates
         ]
-        portfolio_returns = _daily_returns(value_series)
-        volatility = _annualized_volatility(portfolio_returns)
+        portfolio_value_returns = _daily_returns(value_series)
         drawdown = _max_drawdown(value_series)
+        portfolio_return = _annualized_mean_return(portfolio_value_returns)
 
-        # Varlık başına günlük getiri serileri (ortak günler üzerinden).
-        returns_by_asset: dict[UUID, list[float]] = {
-            asset_id: _daily_returns([try_series[asset_id][day] for day in sorted_dates])
-            for asset_id in asset_ids
+        category_returns = _category_returns(
+            class_values, asset_ids_by_class, try_series, market_values, sorted_dates
+        )
+        category_vols = {
+            ac: _annualized_volatility(returns) for ac, returns in category_returns.items()
         }
+        correlations = _category_correlation_matrix(category_returns)
 
-        # Korelasyon matrisi (yalnızca farklı varlık çiftleri, tek yönlü).
-        ordered_ids = list(asset_ids)
-        for i, a_id in enumerate(ordered_ids):
-            for b_id in ordered_ids[i + 1 :]:
-                corr = _pearson_correlation(returns_by_asset[a_id], returns_by_asset[b_id])
-                if corr is not None:
-                    correlation_pairs.append(
-                        CorrelationPair(
-                            asset_symbol_a=symbol_by_asset_id[a_id],
-                            asset_symbol_b=symbol_by_asset_id[b_id],
-                            correlation=_round4(Decimal(str(corr))),
-                        )
+        volatility = _portfolio_volatility_from_categories(
+            category_weights, category_vols, correlations
+        )
+
+        if volatility is not None:
+            risk_level = _risk_level_from_volatility(volatility)
+            band_upper = float(RISK_TARGET_VOLATILITY_BAND[profile][1])
+            is_within_profile = volatility <= band_upper
+
+            diversification_ratio_value = _diversification_ratio(
+                category_weights, category_vols, volatility
+            )
+            risk_contributions = _risk_contributions(
+                category_weights, category_vols, correlations, volatility
+            )
+
+            for ac in AssetClass:
+                cat_vol = category_vols.get(ac)
+                category_metrics.append(
+                    CategoryMetrics(
+                        asset_class=ac,
+                        weight_percent=_round2(category_weights.get(ac, _ZERO) * 100),
+                        annualized_volatility_percent=(
+                            _round2(Decimal(str(cat_vol * 100))) if cat_vol is not None else None
+                        ),
+                        risk_contribution_percent=(
+                            _round2(Decimal(str(risk_contributions[ac] * 100)))
+                            if ac in risk_contributions
+                            else None
+                        ),
                     )
-
-        # Kovaryans tabanlı yıllık portföy volatilitesi (AK 2.3): w^T * Sigma * w.
-        vols_by_asset = {aid: _annualized_volatility(returns_by_asset[aid]) for aid in ordered_ids}
-        if all(v is not None for v in vols_by_asset.values()):
-            variance = 0.0
-            for a_id in ordered_ids:
-                for b_id in ordered_ids:
-                    if a_id == b_id:
-                        corr_ab = 1.0
-                    else:
-                        corr_ab = _pearson_correlation(
-                            returns_by_asset[a_id], returns_by_asset[b_id]
-                        )
-                        if corr_ab is None:
-                            corr_ab = 0.0
-                    variance += (
-                        float(weights[a_id])
-                        * float(weights[b_id])
-                        * vols_by_asset[a_id]
-                        * vols_by_asset[b_id]
-                        * corr_ab
+                )
+            for (a, b), corr in correlations.items():
+                correlation_pairs.append(
+                    CategoryCorrelationPair(
+                        category_a=a, category_b=b, correlation=_round4(Decimal(str(corr)))
                     )
-            covariance_vol = math.sqrt(max(0.0, variance))
+                )
 
-        # Portföy beklenen getirisi (yıllık) — aynı veri setinden, Sharpe için.
-        mean_returns = {aid: _annualized_mean_return(returns_by_asset[aid]) for aid in ordered_ids}
-        if all(v is not None for v in mean_returns.values()):
-            portfolio_return = sum(float(weights[aid]) * mean_returns[aid] for aid in ordered_ids)
+            if not is_within_profile:
+                asset_vols = {
+                    aid: _annualized_volatility(
+                        _returns_aligned([try_series[aid][day] for day in sorted_dates])
+                    )
+                    for aid in asset_ids
+                }
+                causes = _diagnose_causes(
+                    max_asset_weight=max_asset_weight,
+                    max_asset_symbol=symbol_by_asset_id[top_asset_id],
+                    category_weights=category_weights,
+                    herfindahl=herfindahl,
+                    asset_vols=asset_vols,
+                    asset_weights=weights,
+                    risk_contributions=risk_contributions,
+                    correlations=correlations,
+                    diversification_ratio=diversification_ratio_value,
+                )
+                # ÜRÜN SAHİBİ KARARI (2026-08): senaryo önerisi ürün
+                # kapsamından çıkarıldı (bkz. Settings.risk_scenarios_enabled
+                # yanındaki not). Motor kod olarak duruyor ama bu bayrak
+                # False olduğu sürece hiçbir zaman tetiklenmez — çağıran
+                # include_scenarios=True verse bile.
+                if include_scenarios and settings.risk_scenarios_enabled:
+                    scenarios = _generate_rebalance_scenarios(
+                        profile,
+                        category_weights,
+                        category_vols,
+                        correlations,
+                        volatility,
+                        asset_ids_by_class,
+                        market_values,
+                        symbol_by_asset_id,
+                        total_value,
+                    )
+        else:
+            warnings.append(_missing_category_data_warning())
 
-        # VaR (parametrik, AK 2.4): kovaryans tabanlı volatilite varsa onu,
-        # yoksa doğrudan portföy değer serisinden hesaplanan volatiliteyi kullanır.
-        var_source_vol = covariance_vol if covariance_vol is not None else volatility
-        if var_source_vol is not None:
+        # VaR (parametrik, AK 2.4).
+        if volatility is not None:
             z = _inverse_normal_cdf(settings.risk_var_confidence)
-            daily_vol = var_source_vol / math.sqrt(settings.risk_trading_days_per_year)
+            daily_vol = volatility / math.sqrt(settings.risk_trading_days_per_year)
             horizon_vol = daily_vol * math.sqrt(settings.risk_var_horizon_days)
             var_ratio = z * horizon_vol
             var_percent = Decimal(str(var_ratio * 100))
             var_try = Decimal(str(var_ratio)) * total_value
 
         # Sharpe oranı (AK 2.5).
-        sharpe_source_vol = covariance_vol if covariance_vol is not None else volatility
-        if portfolio_return is not None and sharpe_source_vol not in (None, 0):
-            sharpe = (portfolio_return - risk_free_rate) / sharpe_source_vol
+        if portfolio_return is not None and volatility not in (None, 0):
+            sharpe = (portfolio_return - risk_free_rate) / volatility
     else:
         warnings.append(_insufficient_history_warning(price_points))
-
-    score = _composite_score(
-        volatility, float(max_asset_weight), float(effective_holdings), asset_class_risk_score
-    )
-    actions = _rebalance_actions(profile, class_values, total_value)
 
     return RiskAssessment(
         user_id=user_id,
@@ -632,8 +1346,8 @@ def get_risk_assessment(
         risk_profile=profile,
         risk_profile_source=source,
         total_value=_round2(total_value),
-        risk_score=_round2(Decimal(str(score))),
-        risk_level=_risk_level(score),
+        risk_level=risk_level,
+        is_within_profile=is_within_profile,
         metrics=RiskMetrics(
             annualized_volatility_percent=(
                 _round2(Decimal(str(volatility * 100))) if volatility is not None else None
@@ -641,10 +1355,13 @@ def get_risk_assessment(
             max_drawdown_percent=(
                 _round2(Decimal(str(drawdown * 100))) if drawdown is not None else None
             ),
-            covariance_volatility_percent=(
-                _round2(Decimal(str(covariance_vol * 100))) if covariance_vol is not None else None
+            category_metrics=category_metrics,
+            category_correlation_matrix=correlation_pairs,
+            diversification_ratio=(
+                _round2(Decimal(str(diversification_ratio_value)))
+                if diversification_ratio_value is not None
+                else None
             ),
-            correlation_matrix=correlation_pairs,
             value_at_risk_try=_round2(var_try) if var_try is not None else None,
             value_at_risk_percent=_round2(var_percent) if var_percent is not None else None,
             value_at_risk_confidence=_round2(Decimal(str(settings.risk_var_confidence * 100))),
@@ -657,13 +1374,11 @@ def get_risk_assessment(
             max_class_weight_percent=_round2(max_class_weight * 100),
             max_class=top_class,
             herfindahl_index=_round4(herfindahl),
-            effective_holdings_count=_round2(effective_holdings),
-            asset_class_base_risk_score=_round2(Decimal(str(asset_class_risk_score))),
             holdings_count=len(holdings),
             asset_class_count=len(class_values),
             price_points_used=price_points,
         ),
-        rebalance_actions=actions,
-        is_balanced=all(a.action == RebalanceActionType.HOLD for a in actions),
+        causes=causes,
+        scenarios=scenarios,
         warnings=warnings,
     )

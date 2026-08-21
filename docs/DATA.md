@@ -33,6 +33,14 @@ services/price_ingest.py  ──► price_history      ledger_service.record_tra
 3. **`price_history`'ye yalnızca `price_ingest.upsert_prices` yazar.** Upsert
    önceliği: `synthetic(0) < derived(1) < yfinance(2) < tefas/isportfoy(3) <
    tcmb(4)`. Gerçek veri sentetiği ezer; sentetik gerçeği **asla** ezemez.
+3b. **Sentetik satır gerçek serinin içine karışamaz.** Öncelik kuralı yalnızca
+   AYNI güne iki kayıt geldiğinde çalışır; gerçek kaynağın hiç yayın yapmadığı
+   günde (resmî tatil — `trading_days()` tatilleri bilmez) sentetik satır
+   üzerine yazılmadan kalır. `seed_prices_synthetic` sonunda
+   `drop_synthetic_where_real_exists` bunları siler: gerçek kapsaması
+   `MIN_REAL_ROWS_FOR_PURE_REAL`'i aşan varlıkta sentetik hiç kalmaz, altında
+   kalan varlıkta yalnızca gerçek aralığın içindeki delikler temizlenir.
+   Tatilde fiyatın hiç olmaması doğrudur — piyasa kapalıydı.
 4. **Fiyat/para her zaman `Decimal`**; float yasak.
 5. **Sağlayıcılar (providers/) saftır:** DB'ye dokunmaz, `except: pass` yapmaz,
    hata durumunda `ProviderError` fırlatır.
@@ -66,15 +74,70 @@ Docker yoksa: `.venv` ile `alembic upgrade head && python -m data.generate_dummy
 ### Gerçek fiyat verisi çekmek
 ```bash
 make backfill              # bir kerelik: 365 günlük gerçek geçmiş
-make daily-update          # her gün: günün fiyatları (cron'a bağlanacak iş)
+make daily-update          # her gün: günün fiyatları (test sunucusunda cron'da)
+make seed                  # ZORUNLU son adım — aşağıya bakın
 ```
+
+**Backfill'den sonra `make seed` çalıştırılmalı.** İki sebeple:
+
+1. Gerçek veri tatil günlerinde boşluk bırakır; temizlik
+   (`drop_synthetic_where_real_exists`) seed içinde koşar (altın kural 3b).
+2. `seed_ledger` işlem fiyatlarını `price_history`'den okur. Backfill sentetik
+   fiyatları gerçekle değiştirdiğinde eski defter, artık var olmayan
+   fiyatlardan alınmış görünür: maliyet bir evrenden, değerleme başka
+   evrenden gelir. Ölçülen sonuç 20 Ağustos 2026'da 151 işlem / 48 portföyde
+   sahte kâr-zarardı (bir varlıkta +%292).
 Sonuçlar `data_ingest_log`'a yazılır. Başarısız kaynak DB'deki son veriyi
 bozmaz; `make seed` de birikmiş gerçek veriyi silemez (öncelik kuralı).
+
+### Varlık evreni (37 varlık)
+
+| Sınıf | Adet | Kaynak |
+|---|---|---|
+| Hisse | 18 | yfinance (15 BIST) + TEFAS (3 hisse fonu) |
+| Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
+| Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
+| Tahvil | 4 | TEFAS borçlanma araçları fonları |
+| Nakit | 3 | TEFAS (para piyasası fonu) + 2 mevduat (**sentetik**) |
+
+Sentetik kalan tek grup mevduattır ve bu kasıtlıdır: birim fiyatı sabit
+1,00 TL'dir (`ASSET_CLASS_DAILY_DRIFT_VOLATILITY[CASH] = (0.0, 0.0)`),
+getirisi fiyattan değil `INTEREST` işlemlerinden gelir.
+
+Tahvil tarafı fonlarla temsil edilir: Türk tahvillerinin ücretsiz güvenilir
+bir fiyat kaynağı yok, uydurma ISIN'ler ise hiçbir sağlayıcıdan çekilemediği
+için sonsuza kadar bayat kalıyordu. Fon tahvil değildir (vade/kupon yok) ama
+tahvil riski taşır ve gerçek fiyatlanır.
+
+`AKE` evrendeki **tek TRY dışı varlıktır** (USD); AK 5.7 kur dönüşümünü
+egzersiz eden tek enstrüman odur (`test_ak_5_7_fx_conversion`). Kaldırılırsa
+o kod yolu seed'li evrende test edilmez hale gelir.
 
 ### Yeni varlık eklemek
 `backend/app/providers/universe.py` → `ASSET_UNIVERSE`'e bir `AssetSpec`
 satırı ekleyin, `make seed` çalıştırın. **Başka hiçbir kod değişmez.**
 Sağlayıcı eşlemesi (`data_source`, `provider_symbol`) spec'in içindedir.
+
+**`base_price` uydurulmaz, ölçülür.** Sentetik serinin başlangıç değeridir;
+gerçek fiyattan kat kat saparsa çevrimdışı kurulum gerçekle alakasız bir
+evren üretir. Varlığın gerçek verisi varsa serinin İLK gerçek fiyatı okunur
+(bugünkü değil — `base_price` serinin başıdır); sorgu `universe.py`'nin
+başındaki not içinde. `test_fon_base_price_gercek_fiyatla_ayni_mertebede`
+ölçülen değerleri kilitler.
+
+**Varlık sınıfının tipik davranışından ayrılıyorsa** `synthetic_daily_drift`
+ve `synthetic_daily_volatility` ile sınıf varsayılanı ezilir. Tek örneği
+`PPF`: `CASH` sınıfındadır ama sınıfın parametreleri mevduat için yazılmış
+(drift 0, volatilite 0), oysa para piyasası fonu getirisini fiyatı üzerinden
+biriktirir.
+
+**Fon eklerken sınıfı elle vermeyin:** `_fund()` varlık sınıfını alt türden
+türetir (`_FUND_ASSET_CLASS`). Fonun ekonomik riski neyse sınıfı odur — para
+piyasası fonu `CASH`, altın fonu `PRECIOUS_METAL`, borçlanma araçları fonu
+`BOND`. Eskiden tüm fonlar `STOCK` idi; altın fonu ve para piyasası fonu
+FR-4'ün "Hisse → Yüksek" risk etiketini alıyor, risk motorunda savunma
+tarafında (`BOND`+`CASH`) sayılması gereken enstrüman hisse riski taşıyor
+görünüyordu.
 
 ### Yeni veri sağlayıcısı eklemek
 1. `backend/app/providers/` altına yeni dosya: `fetch_series`/`fetch_latest`
@@ -104,6 +167,28 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 
 - `SEED=42`, `ANCHOR_DATE` (.env, varsayılan 2026-08-01) — `date.today()`
   kullanılmaz; her çalıştırma aynı evreni üretir.
+- **Kullanıcı kimlikleri de tohuma bağlıdır.** Model varsayılanı `uuid.uuid4`
+  işletim sisteminin rastgeleliğini kullanır ve SEED'den etkilenmez; isimler
+  ve portföyler aynı üretilirken kimlikler her seed'de değişiyordu.
+  `seed_ledger._user_id` bunu `uuid5(USER_UUID_NAMESPACE, f"user-{i}")` ile
+  sabitler. **`USER_UUID_NAMESPACE` değiştirilmemeli** — değişirse tüm
+  kullanıcı UUID'leri değişir ve elde tutulan bağlantılar ölür.
+- **Risk profili, arketipten TÜRETİLİR** (`ARCHETYPE_RISK_PROFILE`,
+  `seed_ledger._build_archetype_risk_profiles`). ÜRÜN SAHİBİ KARARI (Not 5,
+  2026-08): dört arketip, hisse ağırlığına göre artan sırada, dört risk
+  profiliyle (yine artan risk sırasında) birebir eşlenir — `cash_heavy`→
+  conservative, `diversified`→balanced, `mixed`→growth,
+  `concentrated_equity`→aggressive. Böylece GROWTH dahil dört profilin
+  tamamı üretilir ve hiçbir kullanıcının portföyü kendi profilinin Hisse
+  üst sınırını (`RISK_MAX_CATEGORY_WEIGHT`) aşmaz — dummy veri artık gerçek
+  kullanıcı akışıyla aynı ilkeye (Not 3/4: "profil önce, portföy ona göre")
+  uyar.
+  Önceki tasarım (`_profile_and_archetype`, AK-2.6) profili arketipten
+  BAĞIMSIZ, farklı hızda bir sayaçla döndürüyordu ve kasıtlı olarak
+  uyumsuz kombinasyonlar da üretiyordu (risk motorunun uyumsuzluk-uyarısı
+  yolunu dummy veriyle sergileyebilmek için). PO bu kararı geri aldı;
+  uyumsuzluk-uyarısı yolu artık kendi birim testleriyle
+  (`tests/test_risk_service.py`) doğrulanıyor.
 - Fiyatlar yalnızca **işlem günlerinde** (hafta içi) üretilir; gerçek
   kaynaklarla takvim uyumu için.
 - Sentetik fiyatlar üç bileşenli **faktör modeli** kullanır (piyasa + sınıf +

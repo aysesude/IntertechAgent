@@ -1,19 +1,14 @@
-"""Orchestrator: kullanıcı isteğini alır, niyeti tespit eder, ilgili ajanlara
-dağıtır, sonuçları birleştirip tek bir cevap üretir (LangGraph).
+"""Orkestratör (Orchestrator) Modülü
 
-Graf yapısı:
+Bu modül, LangGraph kullanarak uygulamanın kalbini oluşturur.
+Gelen isteği alır, niyetine göre uygun ajan(lar)a PARALEL olarak (fan-out) dağıtır ve
+ajanlardan gelen yanıtları tek bir LLM çağrısıyla harmanlayarak (merge) son kullanıcıya sunar.
 
-    detect_intent ─┬─> portfolio_agent ─┬─> market_agent ─> merge ─> END
-                   │                    └─> merge
-                   └─> market_agent ────────> merge
-
-Yani niyet "portfolio" ise yalnızca Portföy Ajanı, "market" ise yalnızca Piyasa
-Ajanı, "both" ise ikisi **sırayla** çalışır.
-
-Neden paralel değil de sıralı: her iki ajan da token akışı üretiyor. Paralel
-çalıştırıldıklarında token'lar iç içe geçip okunamaz bir metin oluşuyor.
-Sıralı çalıştırmak akışı bozmuyor; paralellik ancak akış birleştirme mantığı
-yazılırsa anlamlı olur (TODO).
+Özellikler:
+- Kural tabanlı kapsam kontrolü (Scope Guard) ile kapsam dışı soruları anında reddeder.
+- Ajanlar eşzamanlı olarak çalışır; böylece gecikme (latency) düşer.
+- Sadece yapısal verileri (JSON/Dictionary) toplayıp tek bir birleştirme (merge) adımında son yanıtı üretir.
+- Hata durumunda (örn. ajanlardan biri çökerse) çalışan diğer ajanın verilerini kurtarır.
 
 `run_portfolio_agent` ve `run_market_agent` node'ları `writer: StreamWriter`
 parametresi alır: LangGraph tarafından otomatik enjekte edilir,
@@ -23,7 +18,6 @@ parametresi alır: LangGraph tarafından otomatik enjekte edilir,
 
 import logging
 import operator
-import re
 from collections.abc import AsyncIterator
 from typing import Annotated, Any, TypedDict
 
@@ -33,68 +27,12 @@ from langgraph.types import StreamWriter
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
+from agents.risk_agent import RiskAgent
+from agents.scope_checker import check_scope
 from app.core.config import settings
+from app.core.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
-
-# Niyet tespiti şimdilik anahtar kelime tabanlı. LLM ile yapmak her soruya
-# 2-5 saniye ek gecikme bindirirdi ve bu aşamada ayırt edilmesi gereken yalnızca
-# iki alan var. Ajan sayısı arttığında LLM tabanlı sınıflandırmaya geçilmeli.
-_PORTFOLIO_KEYWORDS = {
-    "portföy",
-    "portfoy",
-    "varlık",
-    "varlik",
-    "dağılım",
-    "dagilim",
-    "getiri",
-    "kazanç",
-    "kazanc",
-    "zarar",
-    "bakiye",
-    "hesabım",
-    "hesabim",
-    "yatırımım",
-    "yatirimim",
-    "toplam değer",
-    "kar zarar",
-    "kâr zarar",
-    "ne kadar param",
-    "birikim",
-}
-
-_MARKET_KEYWORDS = {
-    "haber",
-    "piyasa",
-    "bilanço",
-    "bilanco",
-    "çeyrek",
-    "ceyrek",
-    "borsa",
-    "analiz",
-    "rapor",
-    "faiz",
-    "enflasyon",
-    "tcmb",
-    "gelişme",
-    "gelisme",
-    "açıkla",
-    "acikla",
-    "sonuç",
-    "sonuc",
-    "beklenti",
-    "sektör",
-    "sektor",
-    "endeks",
-    "dolar kuru",
-    "kur",
-    "temettü",
-    "temettu",
-}
-
-
-def _normalize(text: str) -> str:
-    return re.sub(r"\s+", " ", text.lower().strip())
 
 
 class OrchestratorState(TypedDict):
@@ -106,37 +44,103 @@ class OrchestratorState(TypedDict):
     # çalışıyorlar); alan, çok turlu bağlam gereken ajanlar için hazır tutuluyor.
     history: list[dict[str, str]]
     intent: str
+    flags: list[str]
     agent_responses: Annotated[list[AgentResponse], operator.add]
     final_answer: str
 
 
-def detect_intent(state: OrchestratorState) -> dict:
-    """Sorguyu 'portfolio', 'market' veya 'both' olarak sınıflandırır.
+# Ajana yönlendiren niyet etiketleri. `intent` alanı ya bir erken çıkış kodu
+# (OUT_OF_SCOPE, AMBIGUOUS vb.) ya da bunlardan bir veya birkaçının "+" ile
+# birleşmiş hâlidir ("risk", "portfolio+risk"). Alan orchestrator dışına
+# çıkmıyor; tek tüketicisi _route_after_intent.
+AGENT_INTENTS = ("portfolio", "market", "risk")
 
-    Hiçbir anahtar kelime eşleşmezse 'portfolio' varsayılır: kullanıcıların
-    çoğu sorusu kendi verisiyle ilgili ve Portföy Ajanı her zaman anlamlı bir
-    cevap üretebiliyor, Piyasa Ajanı ise doküman yoksa boş dönüyor.
-    """
-    query = _normalize(state["message"])
+AGENT_NODES = {
+    "portfolio": "portfolio_agent",
+    "market": "market_agent",
+    "risk": "risk_agent",
+}
 
-    has_portfolio = any(k in query for k in _PORTFOLIO_KEYWORDS)
-    has_market = any(k in query for k in _MARKET_KEYWORDS)
+# Merge prompt'u bu metni istiyor; LLM düşerse kod tarafından garanti edilir
+# (CLAUDE.md §4). Kısa biçim, prompt'takiyle birebir aynı.
+_DISCLAIMER = "Bu bir yatırım tavsiyesi değildir."
 
-    if has_portfolio and has_market:
-        intent = "both"
-    elif has_market:
-        intent = "market"
-    else:
-        intent = "portfolio"
+_AMBIGUOUS_MESSAGE = (
+    "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen "
+    "'Portföyüm ne durumda?', 'Riskim nedir?' veya 'Son piyasa haberleri neler?' "
+    "şeklinde daha açık bir soru sorar mısınız?"
+)
+
+
+async def detect_intent(state: OrchestratorState) -> dict:
+    """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
+    query = state["message"].strip()
+
+    # 1. Kural Tabanlı Kapsam Kontrolü (Scope Guard)
+    scope_result = check_scope(query)
+    if scope_result["intent"] != "pass_to_llm":
+        logger.info("[ORCHESTRATOR] Kapsam kontrolü yakaladı: %s", scope_result["intent"])
+        return {
+            "intent": scope_result["intent"],
+            "flags": scope_result.get("flags", []),
+            "final_answer": scope_result.get(
+                "message",
+                "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
+            ),
+        }
+
+    # 2. LLM Tabanlı Niyet Tespiti
+    llm = get_llm_client()
+    system_prompt = (
+        "Sen bir niyet sınıflandırma motorusun. Kullanıcının sorusunu aşağıdaki "
+        "etiketlerden BİR VEYA BİRKAÇINA ata. SADECE etiketleri virgülle ayırarak "
+        "yaz; açıklama, cümle, noktalama ekleme.\n\n"
+        "PORTFOLIO — kullanıcının kendi varlıkları: değeri, dağılımı, getirisi, "
+        "işlem geçmişi, tek tek pozisyonları.\n"
+        "  Örnek: 'portföyüm ne durumda', 'geçen ay ne aldım', 'varlıklarımı listele'\n"
+        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz.\n"
+        "  Örnek: 'Aselsan haberleri', 'dolar kuru ne durumda', 'BIST bugün nasıl'\n"
+        "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
+        "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
+        "etiket kullanılır.\n"
+        "  Örnek: 'riskim nedir', 'portföyümde çok fazla hisse mi var', "
+        "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
+        "'çok mu riskli yatırım yapıyorum'\n\n"
+        "Birden fazla konu varsa hepsini yaz: 'portföyüm ve riskim nasıl' → PORTFOLIO, RISK\n"
+        "Sorulmayan konuyu EKLEME. Soru yalnızca değer/dağılım soruyorsa RISK "
+        "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
+        "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
+        "'riskim nedir' → sadece RISK."
+    )
+
+    try:
+        response = await llm.generate(query, system=system_prompt)
+        response_text = response.strip().upper()
+        labels = [label for label in AGENT_INTENTS if label.upper() in response_text]
+
+        # Geriye dönük uyum: eski prompt tek kelimelik BOTH/RAG döndürüyordu.
+        if not labels and "BOTH" in response_text:
+            labels = ["portfolio", "market"]
+        elif not labels and "RAG" in response_text:
+            labels = ["market"]
+
+        intent = "+".join(labels) if labels else "AMBIGUOUS"
+
+    except Exception as e:
+        logger.error(f"[ORCHESTRATOR] Niyet tespiti LLM hatası: {e}")
+        intent = "AMBIGUOUS"
 
     logger.info(
-        "[ORCHESTRATOR] niyet=%s | portfoy_eslesme=%s market_eslesme=%s | sorgu=%r",
+        "[ORCHESTRATOR] LLM niyet tespiti: %s | sorgu=%r",
         intent,
-        has_portfolio,
-        has_market,
         state["message"][:80],
     )
-    return {"intent": intent}
+
+    result = {"intent": intent, "flags": scope_result.get("flags", [])}
+    if intent == "AMBIGUOUS":
+        result["final_answer"] = _AMBIGUOUS_MESSAGE
+
+    return result
 
 
 def _build_request(state: OrchestratorState) -> AgentRequest:
@@ -148,67 +152,163 @@ def _build_request(state: OrchestratorState) -> AgentRequest:
     )
 
 
-async def run_portfolio_agent(state: OrchestratorState, writer: StreamWriter) -> dict:
+async def run_portfolio_agent(state: OrchestratorState) -> dict:
     agent = PortfolioAgent(mcp_server_url=settings.mcp_server_url)
-    response = await agent.execute(
-        _build_request(state), on_token=lambda token: writer({"delta": token})
-    )
+    response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
 
-async def run_market_agent(state: OrchestratorState, writer: StreamWriter) -> dict:
-    # İki ajan da çalışıyorsa cevapları görsel olarak ayır.
-    if state["intent"] == "both":
-        writer({"delta": "\n\n"})
-
+async def run_market_agent(state: OrchestratorState) -> dict:
     agent = MarketAgent(mcp_server_url=settings.mcp_server_url)
-    response = await agent.execute(
-        _build_request(state), on_token=lambda token: writer({"delta": token})
-    )
+    response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
 
-def merge_responses(state: OrchestratorState) -> dict:
+async def run_risk_agent(state: OrchestratorState) -> dict:
+    agent = RiskAgent(mcp_server_url=settings.mcp_server_url)
+    response = await agent.execute(_build_request(state), on_token=None)
+    return {"agent_responses": [response]}
+
+
+async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) -> dict:
+    """Kapsam dışı durumlarda LLM'e gitmeden doğrudan uyarı mesajını akıtır."""
+    # Metni kelime kelime akıtarak animasyonlu hissi ver
+    words = state["final_answer"].split(" ")
+    for i, word in enumerate(words):
+        writer({"delta": word + (" " if i < len(words) - 1 else "")})
+    return {}
+
+
+async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dict:
     successful = [r.summary_text for r in state["agent_responses"] if r.success]
+    errors = [r.error for r in state["agent_responses"] if r.error]
+
+    # Hiçbir ajan başarılı olmadı. Ajanların KENDİ hata mesajları gösterilir:
+    # bunlar kullanıcıya gösterilmek üzere yazılmış metinlerdir
+    # (mcp_server/tools/_base.py DEFAULT_MESSAGES) ve durumları ayırt eder —
+    # "İstenen kayıt bulunamadı." ile "Veri kaynağına şu anda ulaşılamıyor."
+    # aynı şey değildir.
+    #
+    # Eskiden ikisi de tek bir "sistemlerimize ulaşılamıyor" metnine düşüyordu;
+    # RAG'de doküman bulunamaması (NOT_FOUND) sistem arızası gibi görünüyor,
+    # kullanıcıya ayakta olan bir sistem çökmüş gibi sunuluyordu. İç hata
+    # gizliliği korunuyor: bu metinler kod/istisna detayı içermez.
+    if not successful:
+        final_answer = (
+            "\n\n".join(dict.fromkeys(errors))
+            if errors
+            else "Şu an sistemlerimize ulaşılamıyor, lütfen daha sonra tekrar deneyin."
+        )
+        writer({"delta": final_answer})
+        return {"final_answer": final_answer}
+
+    llm = get_llm_client()
+
+    # Kısmi veya tam başarı durumu
+    combined_texts = []
     if successful:
+        combined_texts.append("BAŞARILI BİLGİLER:\n" + "\n\n---\n\n".join(successful))
+    if errors:
+        combined_texts.append("ALINAMAYAN BİLGİLER (KULLANICIYA BELİRT):\n" + "\n".join(errors))
+
+    combined_text = "\n\n".join(combined_texts)
+
+    system_prompt = (
+        "Aşağıda bir veya daha fazla veri kaynağından/uzman ajandan gelen ham yanıtlar ve varsa eksik bilgiler bulunmaktadır.\n"
+        "Görev: Bu verileri alıp, objektif, pürüzsüz, tekil ve anlaşılır bir Türkçe yanıt oluşturarak son kullanıcıya sun.\n"
+        "Verilerin hangi ajan veya RAG'den geldiğini söyleme, doğrudan bilgiyi harmanlayıp ver.\n"
+        "Eğer bazı bilgiler eksikse ('ALINAMAYAN BİLGİLER' kısmı varsa), bunu kullanıcıya doğal bir dille ('Şu an piyasa verilerine ulaşamıyorum ancak portföyünüz...' gibi) belirt.\n"
+        "Hiçbir bilgiyi silme veya uydurma yapma, sadece metinleri iyi bir düzene sok.\n"
+        "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver.\n"
+        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle.\n"
+        "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', 'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca veriyi nesnel bir şekilde ilet."
+    )
+
+    flags = state.get("flags", [])
+    if "advice_seeking" in flags:
+        system_prompt += "\nKULLANICI TAVSİYE İSTİYOR: Kesinlikle yönlendirici bir dil kullanma, sadece verileri objektif olarak sun."
+    if "kismi_kapsam" in flags:
+        system_prompt += "\nKISMİ KAPSAM: Kullanıcı kapsam dışı bir varlığı da sordu. Karşılaştırma yapmaktan kaçın."
+
+    final_answer = ""
+    try:
+        async for chunk in llm.stream(combined_text, system=system_prompt):
+            final_answer += chunk
+            writer({"delta": chunk})
+    except Exception as e:
+        logger.error(f"[ORCHESTRATOR] Merge LLM hatası: {e}")
+
+    # `stream` istisna atmadan HİÇ parça üretmezse final_answer boş kalır ve
+    # writer hiç çağrılmazdı: SSE'de ne token ne error olayı gider, arayüzde
+    # boş balon durur. Yukarıdaki `except` yalnızca istisnayı yakalıyordu,
+    # boş çıktıyı değil — iki durumu da aynı düşüş kapatıyor.
+    if not final_answer.strip():
         final_answer = "\n\n".join(successful)
-    else:
-        errors = [r.error for r in state["agent_responses"] if r.error]
-        final_answer = errors[0] if errors else "Üzgünüm, isteğinizi işlerken bir sorun oluştu."
+        if _DISCLAIMER not in final_answer:
+            final_answer += f"\n\n{_DISCLAIMER}"
+        writer({"delta": final_answer})
+
     return {"final_answer": final_answer}
 
 
-def _route_after_intent(state: OrchestratorState) -> str:
-    """Niyet 'market' ise doğrudan Piyasa Ajanı'na, diğer durumlarda önce
-    Portföy Ajanı'na gider."""
-    return "market_agent" if state["intent"] == "market" else "portfolio_agent"
+def _route_after_intent(state: OrchestratorState) -> list[str]:
+    """Niyete göre ilgili ajanlara paralel dağıtım yapar veya kapsam dışı akışına yönlendirir."""
+    early_exit_intents = {
+        "OUT_OF_SCOPE",
+        "UNAUTHORIZED_ACTION",
+        "SYSTEM_INFO",
+        "UNSUPPORTED_LANGUAGE",
+        "INJECTION_ATTEMPT",
+        "AMBIGUOUS",
+    }
 
+    if state["intent"] in early_exit_intents:
+        return ["handle_out_of_scope"]
 
-def _route_after_portfolio(state: OrchestratorState) -> str:
-    """Niyet 'both' ise Portföy Ajanı'ndan sonra Piyasa Ajanı da çalışır."""
-    return "market_agent" if state["intent"] == "both" else "merge"
+    # Eski sürümde "both" tek etiketti; artık "portfolio+market" üretiliyor.
+    intent = "portfolio+market" if state["intent"] == "both" else state["intent"]
+    nodes = [AGENT_NODES[label] for label in intent.split("+") if label in AGENT_NODES]
+
+    if not nodes:
+        # Tanınmayan etiket. Eskiden burada koşulsuz ["portfolio_agent"] vardı;
+        # niyet tespiti RISK üretemediği için risk soruları buraya düşüp
+        # sessizce portföy özetiyle cevaplanıyordu — kullanıcı cevap aldığını
+        # sanıyordu. Anlaşılmayan soru artık açıkça soruluyor (CLAUDE.md §4).
+        logger.warning("[ORCHESTRATOR] Tanınmayan niyet etiketi: %r", state["intent"])
+        state["final_answer"] = _AMBIGUOUS_MESSAGE
+        return ["handle_out_of_scope"]
+
+    return nodes
 
 
 def _build_graph():
     graph = StateGraph(OrchestratorState)
     graph.add_node("detect_intent", detect_intent)
+    graph.add_node("handle_out_of_scope", handle_out_of_scope)
     graph.add_node("portfolio_agent", run_portfolio_agent)
     graph.add_node("market_agent", run_market_agent)
+    graph.add_node("risk_agent", run_risk_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
+
     graph.add_conditional_edges(
         "detect_intent",
         _route_after_intent,
-        {"portfolio_agent": "portfolio_agent", "market_agent": "market_agent"},
+        {
+            "handle_out_of_scope": "handle_out_of_scope",
+            "portfolio_agent": "portfolio_agent",
+            "market_agent": "market_agent",
+            "risk_agent": "risk_agent",
+        },
     )
-    graph.add_conditional_edges(
-        "portfolio_agent",
-        _route_after_portfolio,
-        {"market_agent": "market_agent", "merge": "merge"},
-    )
+
+    graph.add_edge("handle_out_of_scope", END)
+    graph.add_edge("portfolio_agent", "merge")
     graph.add_edge("market_agent", "merge")
+    graph.add_edge("risk_agent", "merge")
     graph.add_edge("merge", END)
+
     return graph.compile()
 
 
@@ -224,6 +324,7 @@ def _initial_state(
         "message": message,
         "history": history,
         "intent": "",
+        "flags": [],
         "agent_responses": [],
         "final_answer": "",
     }

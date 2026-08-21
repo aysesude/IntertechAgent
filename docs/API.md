@@ -10,25 +10,237 @@
 ```json
 {
   "user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "as_of": "2026-08-10",
-  "total_value": 1497558.96,
-  "total_cost_basis": 1570215.80,
-  "total_gain_loss": { "amount": -72656.84, "percent": -4.63 },
+  "as_of": "2026-08-20",
+  "oldest_price_date": "2026-08-20",
+  "total_value": 2681069.66,
+  "total_cost_basis": 1682346.32,
+  "net_invested": 1870000.00,
+  "total_gain_loss": { "amount": 811069.66, "percent": 43.37 },
   "allocation": [
-    { "asset_class": "stock", "value": 167808.53, "percent": 11.21 },
-    { "asset_class": "precious_metal", "value": 555795.65, "percent": 37.11 },
-    { "asset_class": "currency", "value": 471330.61, "percent": 31.47 },
-    { "asset_class": "bond", "value": 302624.17, "percent": 20.21 }
+    { "asset_class": "stock", "value": 1194764.65, "percent": 44.56 },
+    { "asset_class": "precious_metal", "value": 452028.34, "percent": 16.86 },
+    { "asset_class": "currency", "value": 356314.16, "percent": 13.29 },
+    { "asset_class": "bond", "value": 279635.57, "percent": 10.43 },
+    { "asset_class": "cash", "value": 398326.94, "percent": 14.87 }
   ],
-  "holdings_count": 14
+  "holdings_count": 10
 }
 ```
 
 404 → `{"detail": "Portfolio not found for user_id ..."}`
 
+**`as_of` ile `oldest_price_date`:** özet her varlığı KENDİ son fiyatıyla
+değerler, dolayısıyla tek bir tarih tüm portföyü tarif etmez. `as_of` en
+yenisini, `oldest_price_date` en eskisini verir. **İkisi farklıysa arayüz
+bunu belirtmelidir** — yalnızca `as_of` gösterilirse özet olduğundan taze
+görünür. Hiç fiyatlı varlık yoksa `oldest_price_date` `null` döner.
+
+**İki taban vardır, karıştırılmamalıdır:**
+
+| Alan | Ne | Serbest nakit |
+|---|---|---|
+| `total_cost_basis` | Elde tutulan varlıkların maliyeti | **hariç** |
+| `net_invested` | Dışarıdan konan net sermaye (yatırma − çekme) | **dahil** |
+
+`total_gain_loss.amount` = `total_value - net_invested`. Arayüz kullanıcıya
+taban olarak `net_invested`'ı ("Yatırılan tutar") göstermelidir;
+`total_cost_basis` gösterilirse üç rakam birbirini tutmaz ve aradaki fark
+(yatırıma dönüşmemiş nakit) açıklamasız kalır.
+
+**`total_gain_loss.percent`'in paydası farklıdır: toplam YATIRILAN tutar**
+(yalnızca yatırmalar, çekimler düşülmeden). Çekim yapılmamış portföyde ikisi
+eşittir, ayrıştığında net sermaye yanlış cevap verir:
+
+```
+1.000 yatır → 1.500'e çıkar → 500 çek → değer 1.000
+kazanç              = 500        (doğru)
+net sermayeye göre  = %100       (yanlış: para %50 büyüdü)
+toplam yatırılana   = %50        (doğru)
+```
+
+Ayrıca payda hiçbir zaman negatif olamaz; çekim yatırımı aşarsa
+`net_invested` negatife düşüyor ve oran anlamsızlaşıyordu.
+
+Taban neden maliyet değil: hesapta duran para da kullanıcının koyduğu paradır,
+kazanç değildir. Maliyet taban alındığında serbest nakdin tamamı kâr olarak
+raporlanıyordu (ölçüldü: 1.87M yatırmış bir portföyde 187.654 TL nakit,
+getiriyi %43,37 yerine %59,36 gösteriyordu). Temettü ve mevduat faizi ise dış
+akış olmadığı için bu farkta doğru biçimde kazanç tarafında kalır.
+
 Not: sayısal alanlar hesaplamada `Decimal` ile tutulur, JSON'a `float` olarak
 serialize edilir (bkz. `app/schemas/portfolio.py`'deki `Money` tipi) — string
 değil, frontend doğrudan `number` olarak tüketir.
+
+### Dashboard uçları
+
+Aşağıdaki uçların hiçbiri **ajan çağırmaz**, servisleri doğrudan okur (Diyagram
+01/03). Dashboard açılışında sorulmuş bir soru ve anlatılacak bir şey yok; araya
+LLM koymak ekranı model hızına bağlar ve halüsinasyon yüzeyi açar. Ajanlar
+yalnızca `POST /api/chat` yolunda devrededir.
+
+Ortak hata kodları — üçü farklı şeydir, arayüz üçünü ayrı göstermelidir:
+
+| Kod | Anlamı |
+|---|---|
+| `404` | Kullanıcı ya da portföy yok |
+| `422` | İstek hatalı (ör. `start_date > end_date`, geçersiz tarih biçimi) |
+| `409` | Kaynak var, hesaplanacak veri yok (hiç işlem yok, pencerede fiyat yok) |
+
+#### `GET /api/portfolio/{user_id}/holdings`
+
+Varlık tablosu: TRY değer, ağırlık, ortalama maliyet, gerçekleşmiş/gerçekleşmemiş K/Z.
+
+```json
+{
+  "user_id": "3fa85f64-...",
+  "as_of": "2026-08-20",
+  "holdings": [
+    {
+      "symbol": "TUPRS", "name": "Tüpraş", "asset_class": "stock", "currency": "TRY",
+      "quantity": 1428.0, "current_price_try": 391.75, "market_value_try": 559419.0,
+      "weight_percent": 33.84, "avg_cost_try": 172.63, "cost_basis_try": 246515.64,
+      "unrealized_pnl_try": 312903.36, "unrealized_pnl_percent": 126.91,
+      "realized_pnl_try": 0.0, "price_missing": false
+    }
+  ],
+  "best_performer": { "symbol": "CUMHUR", "name": "Cumhuriyet Altını", "unrealized_pnl_percent": 201.46 },
+  "worst_performer": { "symbol": "SASA", "name": "Sasa Polyester", "unrealized_pnl_percent": -82.67 },
+  "excluded_symbols": []
+}
+```
+
+- Fiyatı ya da kuru bulunamayan varlık **listeden düşmez**: `price_missing: true`
+  ile döner, değer alanları `null` kalır ve ağırlık paydasına girmez. Eksik veriyi
+  `0` ile doldurmak sessizce yanlış sayı üretmek olurdu.
+- `weight_percent` paydası **nakit dahil** toplam portföy değeridir —
+  `get_portfolio_summary.total_value` ile aynı payda, böylece pasta grafiğindeki
+  sınıf ağırlıklarıyla tutarlı. Sonuç: satırlar `100`'e değil, `100 − nakit%`
+  değerine toplanır.
+- `best_performer` / `worst_performer` **kodda** seçilir. Dil modelinin iki satırı
+  karşılaştırıp "en çok kazandıran bu" demesi hesaplama sayılır ve yasaktır.
+
+#### `GET /api/portfolio/{user_id}/performance?window=1m`
+
+Değer serisi + kümülatif yatırılan para. `window`: `1m` | `3m` | `6m` | `12m`.
+
+```json
+{
+  "user_id": "3fa85f64-...", "as_of": "2026-08-20", "window": "3m",
+  "granularity": "daily", "inception": "2025-08-05", "truncated_to_inception": false,
+  "series": [{ "date": "2026-05-22", "value_try": 1410924.92, "invested_try": 1460000.0 }],
+  "summary": {
+    "start_value": 1410924.92, "end_value": 1653329.29,
+    "change_amount": 242404.37, "change_percent": 17.18,
+    "realized_pnl": 0.0, "unrealized_pnl": 179532.29,
+    "changes": { "daily": 2.21, "weekly": 4.88, "monthly": 10.05 }
+  }
+}
+```
+
+- `change_amount` ve `change_percent` **dış akıştan arındırılmıştır**:
+  `change_amount = (son değer − ilk değer) − dönem içi net para giriş/çıkışı`,
+  `change_percent = TWR`. Ham değer farkı kullanılsaydı 100.000 TL yatıran
+  kullanıcı hiçbir şey kazanmadan "kâr ettim" görürdü.
+- Grafikteki `value_try` ↔ `invested_try` boşluğu ham hâliyle durur; toplam kâr
+  oradan okunur. `invested_try` portföyün başından beri sayılır, pencere başında
+  sıfırlanmaz.
+- Seri **son fiyat gününde** biter, bugünde değil. Fiyat hattı geride kalmışsa
+  bugüne uzatmak, son bilinen fiyatı tekrar çizip "değer değişmedi" yanılsaması
+  üretirdi.
+- Hafta sonları seride yer almaz. Akış birikimi tüm günler üzerinden yapıldığı
+  için cumartesi yatırılan para kaybolmaz.
+- `granularity` AUTO çözülür: `1m/3m/6m` → `daily`, `12m` → `weekly`. Kova
+  indirgemesinde o kovanın **son** günü alınır, ortalama alınmaz — ortalama hiç
+  var olmamış bir değer üretir.
+- `changes.daily/weekly/monthly` için yeterli geçmiş yoksa `null` döner, `0` değil.
+
+#### `GET /api/portfolio/{user_id}/transactions?start_date=&end_date=&symbols=`
+
+Alım/satım işaretçileri ve nakit hareketleri, eskiden yeniye sıralı.
+
+```json
+{
+  "user_id": "3fa85f64-...", "start_date": null, "end_date": null,
+  "transactions": [
+    {
+      "transaction_date": "2025-09-08T10:00:00Z", "type": "buy", "symbol": "TUPRS",
+      "quantity": 467.0, "price": 175.88, "currency": "TRY", "fx_rate_to_try": 1.0,
+      "fee_try": 82.13, "cash_amount_try": -82134.81, "position_after": 467.0
+    }
+  ]
+}
+```
+
+- `position_after` işlemden sonraki toplam pozisyondur ve **defterin başından**
+  sayılır. Tarih süzgeci uygulansa bile pencere öncesindeki alımlar sayılır;
+  aksi halde pozisyon olduğundan küçük çıkardı.
+- `symbols` verilmezse nakit hareketleri (`deposit`/`withdraw`/`fee`/`interest`)
+  de listeye girer; verilirse yalnızca o sembollerin işlemleri döner.
+- `cash_amount_try` işaretlidir ve işlem anındaki kurla dondurulmuştur: o gün
+  hesaptan fiilen çıkan veya giren TL budur.
+
+#### `GET /api/portfolio/{user_id}/benchmark?window=3m`
+
+Portföy getirisi ↔ endeksler (bar grafiği).
+
+```json
+{
+  "user_id": "3fa85f64-...", "window": "3m",
+  "start_date": "2026-05-22", "end_date": "2026-08-20", "truncated_to_inception": false,
+  "portfolio_return_percent": 20.04,
+  "by_asset_class": [
+    { "asset_class": "stock", "return_percent": 32.47 },
+    { "asset_class": "precious_metal", "return_percent": 5.68 }
+  ],
+  "benchmarks": [
+    { "symbol": "XAUTRY", "name": "Gram Altın", "return_percent": 5.68 },
+    { "symbol": "USDTRY", "name": "Amerikan Doları", "return_percent": 4.90 }
+  ],
+  "excluded_symbols": []
+}
+```
+
+Metrik — pencere başındaki (`t0`) miktarlar **sabit tutulur**, yalnızca fiyat
+değişimi ölçülür:
+
+```
+C = Σ qᵢ(t0) × pᵢ(t0)      V = Σ qᵢ(t0) × pᵢ(t1)      getiri% = 100 × (V / C − 1)
+```
+
+- Pencere içindeki alım/satım, temettü ve komisyon hesaba **katılmaz**; endeksin
+  saf fiyat getirisiyle aynı ölçekte olması için. Aksi halde "portföyüm endeksi
+  yendi" cümlesi, aslında sadece yeni para yatırıldığı anlamına gelirdi.
+- Bu yüzden bu uçtaki getiri, `/performance`'taki TWR ile **kasıtlı olarak
+  farklıdır**. TWR nakit yükünü ve dönem içi işlemleri içerir, bu metrik içermez.
+- `t0` fiyatı bulunmayan varlık dışlanır ve `excluded_symbols` ile bildirilir.
+- Endeksler: `XU100`, `XAUTRY`, `USDTRY`. **`XU100` varlık evreninde henüz
+  tanımlı değil** (`app/providers/universe.py`), o yüzden listede görünmüyor;
+  eklendiği gün (`provider_symbol: "XU100.IS"`) kod değişmeden listeye girer.
+
+#### `GET /api/prices/history?symbols=TUPRS&symbols=XAUTRY&window=3m`
+
+Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
+`monthly`, `currency`: `try` | `native`.
+
+```json
+{
+  "as_of": "2026-08-20", "window": "3m", "granularity": "daily", "currency": "try",
+  "requested_start": "2026-05-22", "actual_start": "2026-05-22",
+  "series": { "TUPRS": [{ "date": "2026-05-22", "close": 243.10 }] },
+  "unknown_symbols": ["YOKBOYLE"],
+  "symbols_without_data": []
+}
+```
+
+- **Canlı fiyat değildir.** Veriler günlük toplama işiyle yazılır
+  (`app/services/price_ingest.py`, `make daily-update`); bu uç internete çıkmaz.
+  `as_of` verinin hangi güne ait olduğunu bildirir.
+- **Kısmi veri hata değildir.** Pencerenin tamamı veritabanında yoksa eldeki
+  kadarı döner, `actual_start` gerçek başlangıcı bildirir. Bir sembolün verisinin
+  olmaması diğerlerinin serisini engellemez; o sembol `symbols_without_data` ile
+  raporlanır. Hepsi birden boşsa `409`.
+- `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
+  çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
 
 ### `POST /api/chat` (SSE, `text/event-stream`)
 
@@ -118,6 +330,31 @@ yüklenir; sorguya `rag_distance_threshold` (bkz. `app/core/config.py`) altında
 kalan ya da anahtar kelime örtüşmesi olmayan sonuçlar elenir — hiç sonuç
 kalmazsa `NOT_FOUND` döner.
 
+### Portföy tool ailesi (çalışıyor)
+
+Dördü de yukarıdaki REST uçlarıyla **aynı servisleri** çağırır, dolayısıyla aynı
+şemayı ve aynı kuralları taşır. Fark yalnızca zarfta: MCP tarafında sonuç
+`{"success": ..., "data"|"error": ...}` içine sarılır (bkz.
+[`docs/MCP-TOOLS.md`](MCP-TOOLS.md)).
+
+| Tool | Girdi | Servis |
+|---|---|---|
+| `get_holdings` | `user_id` | `get_holdings_valuation` |
+| `get_portfolio_performance` | `user_id`, `window` | `get_portfolio_performance` |
+| `get_transactions` | `user_id`, `start_date?`, `end_date?`, `symbols?` | `get_transactions` |
+| `get_benchmark_comparison` | `user_id`, `window` | `get_benchmark_comparison` |
+| `get_asset_price_history` | `symbols`, `window`, `granularity`, `currency` | `price_service.get_asset_price_history` |
+
+`get_asset_price_history` ayrı bir modülde (`mcp_server/tools/price_tools.py`):
+portföyden bağımsızdır, `user_id` almaz ve aynı sembolün serisi tüm kullanıcılar
+için aynı olduğundan kullanıcı bazlı olmayan önbelleğe uygundur.
+
+**Güvenlik notu:** `user_id` argümanını dil modeli **üretmez**. Portföy Ajanı
+planı çalıştırırken bu alanı kendisi enjekte eder ve modelin yazdığı değeri ezer
+(`agents/portfolio_agent.py::_run_plan`, `_parse_plan`). Modelin başka bir
+kullanıcının verisini istemesi bu yüzden mümkün değildir.
+
 ### İskelet tool'lar (`NotImplementedError`)
 
 - `get_risk_assessment(user_id: str)` — `mcp_server/tools/risk_tools.py`
+\n

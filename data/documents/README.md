@@ -42,7 +42,7 @@ tablolar kullanılabilir.
 | `kaynak_url` | Hayır | Varsa orijinal bağlantı |
 | `tarih` | Evet | `YYYY-AA-GG` formatında. Ajan "son çeyrek" gibi soruları buna göre filtreler |
 | `sirket` | Hayır | Borsa kodu (`ASELS`, `THYAO`). Genel piyasa haberlerinde boş bırakılır |
-| `tur` | Evet | `haber` · `bilanco` · `analiz` · `duyuru` · `makro` |
+| `tur` | Evet | `haber` · `bilanco` · `analiz` · `duyuru` · `makro` · `sirket_profili` · `referans` |
 | `donem` | `tur: bilanco` ise Evet | `YYYY-Qn` formatında (ör. `2026-Q2`). Hangi çeyreğe ait olduğunu deterministik filtreler için işaretler — eksikse "yanlış çeyrek döndürme" riskine karşı korunamaz |
 | `konsolide_mi` | `tur: bilanco` ise Evet | `true`/`false`. Solo ile konsolide tablo aynı çeyrekte farklı rakamlar verir; hangisi olduğu belirsizse karıştırılabilir |
 | `dil` | Evet | `tr` veya `en` |
@@ -81,13 +81,30 @@ taşımıyor, çok uzunlar parçalara bölünürken bağlamı kaybediyor.
 kaynağı `kaynak_url` alanında belirt. Bu hem telif riskini azaltır hem de
 dokümanı daha odaklı hale getirir.
 
-**Çeşitlilik.** Hepsi aynı şirket ya da aynı tür olmasın. Demo sırasında
-farklı sorular sorulacak; dağılım şöyle olsun:
+**Çeşitlilik.** Hepsi aynı şirket ya da aynı tür olmasın.
 
-- ~15 şirket bilançosu / finansal sonuç
-- ~15 piyasa haberi
-- ~10 analist yorumu
-- ~10 makroekonomik gelişme (faiz, enflasyon, kur)
+**Kapsam güncellendi (2026-08-20): RAG artık yalnızca statik/uzun ömürlü
+veri tutuyor.** Fiyat, kur, faiz gibi anlık veriler ve haberler artık bu
+veritabanına girmiyor — bunları ihtiyaç anında canlı internetten çeken
+ayrı bir ajan karşılıyor. RAG'a eklenecek yeni dokümanlar için öncelik
+sırası:
+
+- **`bilanco`** — dönemsel finansal tablolar. Yayımlandıktan sonra
+  değişmez (yeniden düzenleme/restatement dışında), bu yüzden ideal RAG
+  içeriği. Her şirket için mevcut hedef: son 1-2 çeyrek.
+- **`sirket_profili`** — şirketin kimlik/yapısal bilgisi: faaliyet alanı,
+  sektör, kuruluş tarihi, ortaklık yapısı, ana iştirakler, yönetim
+  kurulu/üst yönetim, halka açıklık oranı. Yılda birkaç kez değişse de
+  "statik" sayılır, periyodik olarak yeniden ingest edilebilir. **Her
+  şirket için hedef: 1 doküman.**
+- **`referans`** — şirketten bağımsız, ansiklopedik/düzenleyici bilgi:
+  finansal oran tanımları (F/K, ROE, cari oran vb.), SPK/BDDK temel
+  çerçevesi, TFRS temel kavramları. Neredeyse hiç değişmez.
+
+`haber` (piyasa haberi) ve `analiz` (hedef fiyat) ile `makro` (faiz,
+enflasyon gibi periyodik göstergeler) türleri **artık yeni eklenmiyor**
+— bunlar hızlı bayatlayan veri sınıfına giriyor. Mevcut dokümanlar
+kaldırılmadı (henüz), ama bu türlerden yeni doküman EKLEMEYİN.
 
 ---
 

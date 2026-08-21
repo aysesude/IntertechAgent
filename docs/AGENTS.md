@@ -50,24 +50,70 @@ gelen doküman parçalarını olduğu gibi `summary_text`'e taşır. Sorguyla
 alakalı kayıt yoksa tool `NOT_FOUND` döner, ajan bunu diğer tool
 hatalarıyla aynı yoldan (`AgentResponse.error`) taşır.
 
-## Risk Ajanı — iskelet
+## Risk Ajanı
 
-`agents/risk_agent.py`: `BaseAgent`'i implement eder, `execute()` gövdesi
-`NotImplementedError`. Karşılık gelen `get_risk_assessment` tool'u da iskelet
-ve **kayıtlı değil** (`_TOOL_MODULES`'a eklenmedi): yarım bir tool'un kayıtlı
-olması, ajana "yok" yerine "bozuk" görünür.
+`agents/risk_agent.py`: `get_risk_assessment` tool'unu çağırır, dönen
+değerlendirmeyi `prompts/risk_agent.md` ile Türkçeleştirir. Portföy Ajanı'yla
+aynı kalıp — **sayısal hiçbir değer LLM tarafından üretilmez**; volatilite,
+VaR, Sharpe ve senaryoların tamamı `app/services/risk_service.py` hesabıdır.
 
-Risk eşikleri (volatilite, yoğunlaşma limitleri vb.) tanımları kullanıcıyla
-netleştirilmeden `app/core/config.py`'ye eklenmedi — bkz. oradaki TODO notu.
+İki tasarım kararı:
+
+- **Senaryolar isteğe bağlı.** Tool'da `include_scenarios` varsayılan kapalı
+  (ek hesap maliyeti). Ajan yalnızca sorguda "dengele / azalt / öneri /
+  strateji / ne yapmalı" köklerinden biri geçtiğinde açar (`_wants_scenarios`).
+- **Değerlendirme küçültülerek verilir** (`_compact`). Ham `RiskAssessment`
+  korelasyon matrisi, kategori metrikleri ve senaryo başına varlık kırılımı
+  taşır; küçük bir modele tamamını vermek hem yavaş hem dikkat dağıtıcı.
+  `None` alanlar **korunur** — risk hesaplanamadığında model bunu görüp
+  "hesaplanamadı" demeli (CLAUDE.md §4 uydurmama).
+
+### `profil_konumu` — bandın altında kalmak da bir uyumsuzluktur
+
+`risk_service` yalnızca **üst** sınırı kontrol ediyor:
+
+```python
+is_within_profile = volatility <= band_upper   # risk_service.py:1252
+```
+
+Bandın **altında** kalmak da "içinde" sayılıyor. Sonuç: Agresif profilli,
+%3,5 volatiliteli bir kullanıcıya "profilinizin içindesiniz" deniyordu.
+Ölçüldü: 50 kullanıcının 32'si bu durumda.
+
+`_compact` bu boşluğu `profil_konumu` alanıyla kapatıyor —
+`bandin_altinda` / `band_icinde` / `bandin_ustunde`. Üst sınır kararı
+**servisten alınır**, ajan yeniden hesaplamaz; iki katmanın çelişmesi mümkün
+olmasın diye. Karşılaştırma kodda yapılır, prompt'a bırakılmaz.
+
+`bandin_altinda` durumunda ajan yalnızca **tespit** yapar ("beyan ettiğiniz
+risk tercihinin altında kalıyor"); risk artırıcı yönlendirme prompt kural
+9'da açıkça yasaklı ve o durum için senaryo üretilmez. Yukarı yönlü öneri
+motorun kendisini değiştirmeyi gerektirir (`_target_volatility` hep üst
+sınırı hedefliyor, aksiyonlar riskli→savunma yönünde taşıyor) ve ayrıca bir
+ürün kararıdır — analist onayı bekliyor.
 
 ## Orchestrator (`agents/orchestrator.py`) — LangGraph
 
 ```
-detect_intent → portfolio_agent → merge
+                ┌─> portfolio_agent ─┐
+detect_intent ──┼─> market_agent ────┼─> merge → END
+                ├─> risk_agent ──────┘
+                └─> handle_out_of_scope → END
 ```
 
-- `detect_intent`: şu an niyet sabit `"portfolio"` (tek ajan bağlı olduğu
-  için gerçek niyet tespiti henüz yok).
+- `detect_intent`: önce kural tabanlı kapsam kontrolü (`scope_checker`), sonra
+  LLM ile sınıflandırma. `PORTFOLIO`, `MARKET`, `RISK` etiketlerinden **bir
+  veya birkaçı** seçilebilir; `intent` alanı bunları `"+"` ile birleştirir
+  (`"portfolio+risk"`). Eski tek kelimelik `BOTH` geriye dönük tanınır.
+  Etiket alanı orchestrator dışına çıkmaz.
+- **`RISK` etiketi "risk" kelimesi geçmeyen sorularda da seçilir**
+  ("portföyümde çok fazla hisse mi var", "nasıl dengelemeliyim"). Prompt bunu
+  örneklerle zorunlu tutuyor: kullanıcı riski sormak için "risk" demek zorunda
+  değil.
+- **Tanınmayan etiket portföye düşmez.** Eskiden `_route_after_intent`
+  koşulsuz `["portfolio_agent"]` dönüyordu; risk soruları buraya düşüp
+  sessizce portföy özetiyle cevaplanıyordu. Artık anlaşılmayan soru açıkça
+  sorulur.
 - `portfolio_agent` node'u `writer: StreamWriter` parametresi alır —
   LangGraph tarafından otomatik enjekte edilir, `stream_mode="custom"`
   kullanılmadığında no-op'tur. Bu sayede **tek bir graf** hem tek seferlik
@@ -80,8 +126,15 @@ detect_intent → portfolio_agent → merge
   (`AgentRequest.context["recent_messages"]`'a geçiyor). **PortfolioAgent şu
   an bunu prompt'una dahil etmiyor** (tek turluk çalışıyor) — çok turlu bağlam
   gereken ajanlar için altyapı hazır tutuluyor.
-- `merge`: başarılı ajan yanıtlarının `summary_text`'lerini birleştirir; hiçbiri
-  başarılı değilse ilk hatayı `final_answer` olarak döner.
+- `merge`: başarılı ajan yanıtlarını LLM ile tek metinde birleştirir.
+  Hiçbiri başarılı değilse **ajanların kendi hata mesajları** gösterilir —
+  bunlar kullanıcıya gösterilmek üzere yazılmıştır (`tools/_base.py`
+  `DEFAULT_MESSAGES`) ve durumları ayırt eder: "İstenen kayıt bulunamadı."
+  ile "Veri kaynağına şu anda ulaşılamıyor." aynı şey değildir. Eskiden ikisi
+  de tek bir "sistemlerimize ulaşılamıyor" metnine düşüyor, RAG'de doküman
+  bulunamaması ayakta olan sistemi çökmüş gibi gösteriyordu.
+  `stream` istisna atmadan hiç parça üretmezse ham metinlere düşülür —
+  aksi halde arayüzde boş balon kalıyordu.
 
 ## Yeni bir ajan eklerken
 

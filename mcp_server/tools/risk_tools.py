@@ -19,22 +19,34 @@ from app.services.risk_service import get_risk_assessment as fetch_risk_assessme
 def register(mcp: FastMCP) -> None:
     @mcp.tool(name="get_risk_assessment")
     def get_risk_assessment(
-        user_id: UUID, profile_override: RiskProfile | None = None
+        user_id: UUID,
+        profile_override: RiskProfile | None = None,
+        include_scenarios: bool = False,
     ) -> dict[str, Any]:
-        """Bir kullanıcının portföy riskini değerlendirir ve yeniden dengeleme
-        önerisi üretir. Risk skoru (0-100), risk etiketi (düşük/orta/yüksek),
-        yıllıklandırılmış volatilite, korelasyon matrisi, kovaryans tabanlı
-        portföy volatilitesi, VaR (Value at Risk), Sharpe oranı, yoğunlaşma
-        ve çeşitlendirme metrikleri ile varlık sınıfı bazlı alım/satım
-        önerisi döndürür. Tüm sayısal değerler veritabanından hesaplanır;
-        LLM tarafından üretilmez.
+        """Bir kullanıcının portföy riskini v2 metodolojisiyle değerlendirir:
+        kategori bazlı (Hisse/Altın/Döviz/Tahvil/Nakit) volatilite ve
+        korelasyon, yıllık portföy volatilitesinden gelen 7 kademeli risk
+        seviyesi, VaR (Value at Risk), Sharpe oranı, yoğunlaşma ve
+        çeşitlendirme metrikleri döndürür. Volatilite kullanıcının risk
+        profili için beklenen bandın üzerindeyse kök neden teşhisi
+        (`causes` — Yoğunlaşma/Yüksek volatiliteli varlık/Korelasyon) de
+        eklenir. Tüm sayısal değerler veritabanından hesaplanır; LLM
+        tarafından üretilmez.
 
         Args:
             user_id: Risk değerlendirmesi istenen kullanıcının UUID'si.
             profile_override: Verilirse hesaplama bu risk profiline göre
-                yapılır (conservative | balanced | aggressive). Kullanıcının
-                kayıtlı profili değişmez — "ya agresif olsaydım?" senaryosu
-                içindir. Verilmezse kullanıcının kayıtlı profili kullanılır.
+                yapılır (conservative | balanced | growth | aggressive).
+                Kullanıcının kayıtlı profili değişmez — "ya agresif olsaydım?"
+                senaryosu içindir. Verilmezse kullanıcının kayıtlı profili
+                kullanılır.
+            include_scenarios: True verilirse VE volatilite profilin hedef
+                bandının üzerindeyse, kural tabanlı (deterministik) yeniden
+                dengeleme senaryoları (`scenarios`) da üretilir — hangi
+                varlığın alınıp satılacağını, beklenen getiriyi veya fiyat
+                tahminini ASLA içermez, yalnızca alternatif bir ağırlık
+                dağılımı önerir. Ek hesaplama maliyeti nedeniyle varsayılan
+                olarak kapalıdır.
 
         Returns:
             Başarılıysa {"success": true, "data": {...risk değerlendirmesi...}}.
@@ -43,7 +55,9 @@ def register(mcp: FastMCP) -> None:
         """
         db = SessionLocal()
         try:
-            assessment = fetch_risk_assessment(db, user_id, profile_override)
+            assessment = fetch_risk_assessment(
+                db, user_id, profile_override, include_scenarios=include_scenarios
+            )
             return {"success": True, "data": assessment.model_dump(mode="json")}
         except NotFoundError as exc:
             return {

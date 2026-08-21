@@ -17,7 +17,7 @@ from fastmcp import FastMCP
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from mcp_server.tools import market_tools, portfolio_tools, risk_tools
+from mcp_server.tools import market_tools, portfolio_tools, price_tools, risk_tools
 
 # API süreci bunu app/main.py'de yapıyor; MCP sunucusu ayrı bir süreç olduğu
 # için kendi logging kurulumunu kendi yapmalı, yoksa tool logları görünmez.
@@ -25,7 +25,7 @@ setup_logging()
 
 logger = logging.getLogger(__name__)
 
-_TOOL_MODULES = [portfolio_tools, market_tools, risk_tools]
+_TOOL_MODULES = [portfolio_tools, price_tools, market_tools, risk_tools]
 
 
 def register_all(mcp: FastMCP) -> list[str]:

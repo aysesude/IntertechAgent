@@ -43,3 +43,4 @@ pytest-asyncio>=0.24.0
 
 ruff>=0.6.9
 black>=24.8.0
+PyYAML>=6.0.1
