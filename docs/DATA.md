@@ -154,6 +154,18 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 
 - `SEED=42`, `ANCHOR_DATE` (.env, varsayılan 2026-08-01) — `date.today()`
   kullanılmaz; her çalıştırma aynı evreni üretir.
+- **Kullanıcı kimlikleri de tohuma bağlıdır.** Model varsayılanı `uuid.uuid4`
+  işletim sisteminin rastgeleliğini kullanır ve SEED'den etkilenmez; isimler
+  ve portföyler aynı üretilirken kimlikler her seed'de değişiyordu.
+  `seed_ledger._user_id` bunu `uuid5(USER_UUID_NAMESPACE, f"user-{i}")` ile
+  sabitler. **`USER_UUID_NAMESPACE` değiştirilmemeli** — değişirse tüm
+  kullanıcı UUID'leri değişir ve elde tutulan bağlantılar ölür.
+- **Profil ve arketip AYRI sayaçlarla dağıtılır** (`_profile_and_archetype`).
+  Aynı sayaç kullanılsaydı bileşim sayısı iki liste uzunluğunun ekok'uyla
+  sınırlanırdı: ikisi de 4 uzunlukta olduğu için 16 bileşimden yalnızca 4'ü
+  üretilir, agresif profil yalnızca nakit ağırlıklı portföyle görülürdü
+  (AK-2.6 ihlali). Arketip her kullanıcıda, profil her dört kullanıcıda bir
+  döner.
 - Fiyatlar yalnızca **işlem günlerinde** (hafta içi) üretilir; gerçek
   kaynaklarla takvim uyumu için.
 - Sentetik fiyatlar üç bileşenli **faktör modeli** kullanır (piyasa + sınıf +

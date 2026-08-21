@@ -24,7 +24,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import AssetClass, PriceSource, settings
+from app.core.config import AssetClass, PriceSource, RiskProfile, settings
 from app.models import (
     Asset,
     Holding,
@@ -46,6 +46,7 @@ from app.services.portfolio_service import get_portfolio_summary
 from app.services.price_ingest import upsert_prices
 from app.services.valuation_service import twr, unrealized_pnl
 from data.generate_dummy import main as generate_dummy_main
+from data.seed_ledger import NUM_USERS, _user_id
 
 
 @pytest.fixture(scope="module")
@@ -113,6 +114,26 @@ def test_ledger_reconciliation(seeded):
             }
             assert before == after, f"holdings defterle mutabık değil: {portfolio.id}"
         session.rollback()
+
+
+def test_seed_produces_every_risk_profile(seeded):
+    """Dört risk profilinin de veritabanına yazıldığını doğrular.
+
+    'growth' config'de tanımlıydı ve risk_service onun için ayrı sabitler
+    taşıyordu, ama seed hiç üretmiyordu: o kod yolunun tamamı (risk hesabı,
+    senaryo üretimi, arayüz gösterimi) çalışmıyor ve demoda gösterilemiyordu.
+    """
+    with Session(seeded) as session:
+        found = set(session.execute(select(User.risk_profile)).scalars().all())
+        assert found == set(RiskProfile), f"üretilmeyen profil: {set(RiskProfile) - found}"
+
+
+def test_seeded_user_ids_are_stable(seeded):
+    """DB'ye yazılan kimlikler _user_id ile birebir eşleşmeli."""
+    with Session(seeded) as session:
+        stored = set(session.execute(select(User.id)).scalars().all())
+    expected = {_user_id(i) for i in range(NUM_USERS)}
+    assert expected <= stored, "seed farklı kimlikler yazdı"
 
 
 # --------------------------------------------------------------------------
