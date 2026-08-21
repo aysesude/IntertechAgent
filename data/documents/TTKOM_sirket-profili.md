@@ -31,9 +31,6 @@ hizmetleri sunan bir telekomünikasyon şirketidir.
 ## Ortaklık yapısı
 
 Güncel ortaklık yapısında Türkiye Varlık Fonu, T.C. Hazine ve Maliye
-Bakanlığı ve halka açık hisseler yer almaktadır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Bakanlığı ve halka açık hisseler yer almaktadır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar
+ayrı `bilanco` türü dokümanlarda yer alır.

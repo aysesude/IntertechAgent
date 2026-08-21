@@ -33,11 +33,7 @@ kredi kullandırma yetkisiyle çalışmaya başlamıştır.
 ## Ortaklık yapısı
 
 Hisseleri Borsa İstanbul'da "HALKB" koduyla işlem görmektedir; banka
-kamu bankası statüsündedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık
-yapısına ilişkin ayrıntılı pay dağılımı için bankanın resmi yatırımcı
-ilişkileri sayfasına başvurulmalıdır.
+kamu bankası statüsündedir. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır, ayrıntılı pay dağılımı için bankanın resmi
+yatırımcı ilişkileri sayfasına başvurulmalıdır.

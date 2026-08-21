@@ -30,9 +30,6 @@ bünyesinde global projelere katkı sağlamaktadır.
 Şirketin sermayesinde Koç Holding ile Stellantis (eski adıyla Fiat
 Chrysler Automobiles) eşit hissedar konumundadır. Hisselerin yüzde
 24,3'ü halka açık olup Borsa İstanbul'da BIST 30 ve BIST 100
-endekslerinde işlem görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+endekslerinde işlem görmektedir. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

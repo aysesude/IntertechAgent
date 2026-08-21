@@ -21,12 +21,9 @@ işlem görmeye başlamıştır.
 Şirket, elektrik transformatörleri ile elektrik enerjisi üretim,
 iletim ve dağıtım sistemlerine yönelik ekipmanların üretimi ve
 satışı; bunun yanında ilgili mühendislik, montaj ve teknik hizmetlerin
-sunulması alanında faaliyet göstermektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık
-yapısına ilişkin ayrıntılı pay dağılımı bilgisi mevcut kaynaklarda
-netleştirilemediği için burada belirtilmemiştir; kesin bilgi için
-şirketin KAP sayfası incelenmelidir.
+sunulması alanında faaliyet göstermektedir. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar
+ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık yapısına ilişkin
+ayrıntılı pay dağılımı bilgisi mevcut kaynaklarda netleştirilemediği
+için burada belirtilmemiştir; kesin bilgi için şirketin KAP sayfası
+incelenmelidir.

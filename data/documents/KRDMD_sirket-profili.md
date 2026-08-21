@@ -27,11 +27,8 @@ Kardemir, 58 yıl boyunca bir Kamu İktisadi Devlet Teşekkülü olarak
 faaliyet gösterdikten sonra 30 Mart 1995 tarihinde özelleştirilmiştir.
 Özelleştirme sonrasında Sabancı Grubu ile ortaklık kurulmuştur.
 Hisseleri Borsa İstanbul'da "KRDMD" (ve ayrıca A/B grup hisseler
-için farklı kodlarla) işlem görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır. Güncel
-ortaklık pay dağılımı için şirketin resmi ortaklık yapısı sayfasına
-başvurulmalıdır.
+için farklı kodlarla) işlem görmektedir. Güncel ortaklık pay dağılımına
+ilişkin ayrıntı için şirketin resmi ortaklık yapısı sayfasına
+başvurulmalıdır; bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler, dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

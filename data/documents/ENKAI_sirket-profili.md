@@ -29,9 +29,6 @@ ailelerinin ortak kontrolündeki halka açık iştirak şirketi ENKA
 Holding Yatırım A.Ş. ile yasal olarak birleşmiştir. Şirketin
 çoğunluk hissesi Tara Holding A.Ş.'ye ait olup, hisselerin bir kısmı
 halka açıktır. Hisseleri Borsa İstanbul'da "ENKAI" koduyla işlem
-görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+görmektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.
