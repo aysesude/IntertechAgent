@@ -45,10 +45,27 @@ class AgentResponse(BaseModel):
 ## Piyasa Araştırma Ajanı (`agents/market_agent.py`) — çalışıyor
 
 `search_market_news` MCP tool'unu çağırır. Tool saf DB tabanlı RAG'dır (LLM
-yok, internetten canlı veri çekmez); ajan da üstüne LLM'e gitmez, tool'dan
-gelen doküman parçalarını olduğu gibi `summary_text`'e taşır. Sorguyla
-alakalı kayıt yoksa tool `NOT_FOUND` döner, ajan bunu diğer tool
-hatalarıyla aynı yoldan (`AgentResponse.error`) taşır.
+yok, internetten canlı veri çekmez). Sorguyla alakalı kayıt yoksa tool
+`NOT_FOUND` döner, ajan bunu diğer tool hatalarıyla aynı yoldan
+(`AgentResponse.error`) taşır.
+
+Ajan üç adım uygular:
+
+1. **Deterministik filtre** — `agents/market_query.py` sorgudan şirket kodunu
+   (`data/company_mappings.json`) ve dönemi (`2026-Q2`) çıkarır, tool'a
+   `sirket`/`donem` olarak geçirir. Arama uzayı vektör benzerliği
+   hesaplanmadan ÖNCE daralır. Kural tabanlıdır, LLM kullanmaz. Yıl açıkça
+   yazılmamışsa dönem üretilmez — yanlış filtre, doğru doküman veritabanında
+   dururken "bulunamadı" dedirtir.
+2. **Yedek deneme** — filtreli arama boş dönerse bir kez de filtresiz denenir.
+   Filtre bir doğruluk aracıdır, cevabı büsbütün engellememeli.
+3. **Etiketli özet** — her parça `[n] Başlık (Kaynak, tarih)` başlığıyla LLM'e
+   verilir, LLM yalnızca bu metinden Türkçe özet yazar (sayı üretmesi
+   `agents/prompts/market_agent.md`'de yasaklı). Kaynak listesi LLM'e
+   bırakılmaz, metadata'dan üretilip akışın sonuna eklenir.
+
+Etiketleme kritik: parçalar eskiden etiketsiz birleştiriliyordu ve model iki
+ayrı şirketin rakamlarını tek cümlede harmanlayabiliyordu.
 
 ## Risk Ajanı
 
