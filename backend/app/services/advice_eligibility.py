@@ -4,17 +4,24 @@ Kural aynen şöyle tanımlı: "Kullanıcıların çözdüğü anket sonucu 1-7 
 risk puanı olur. Aşağıdaki risk seviyesi kullanıcının risk seviyesinden
 büyükse kişi o varlık türünden satın alım ya da yatırım TAVSİYESİ alamaz."
 
-KAPSAM — dikkatle okunmalı. Kural TAVSİYEYİ kısıtlar, SAHİPLİĞİ değil.
-Puanı 3 olan bir kullanıcının portföyünde hisse BULUNABİLİR (geçmişten
-kalmış olabilir, sistem dışında alınmış olabilir); sistem o kullanıcıya
-hisse yönünde bir tavsiye ÜRETMEZ, ama var olan hissesini gizlemez,
-raporlamadan düşürmez ve sahipliği "hata" olarak işaretlemez.
+KAPSAM (iş analistiyle netleştirildi, 2026-08-21): kural HEM SAHİPLİĞİ HEM
+TAVSİYEYİ kapsar — "hem sahip olamaz hem tavsiye de alamaz, hiçbir şekilde
+önermez". Yani izinli olmayan bir sınıf:
+  - hiçbir öneride/senaryoda yer ALMAZ,
+  - portföyde fiilen bulunuyorsa profil UYUMSUZLUĞU sayılır.
 
-Bu, Ürün Sahibi'nin 3. notundan ("kişinin risk profili uymuyorsa zaten
-hissesi olmamalı") daha yumuşak bir yorumdur ve bilinçli tercih değildir —
-iki metin farklı sertlikte ve çelişki HENÜZ ÇÖZÜLMEDİ. Şartname yazılı
-kaynak olduğu için burada şartnamenin lafzı uygulanmıştır. Karar
-netleştiğinde değişmesi gereken tek yer bu modüldür.
+Uyumsuzluk bulunduğunda sistem zorla satış yapmaz, yapamaz; Ürün Sahibi'nin
+2. notu gereği yalnızca UYARIR. Yani "sahip olamaz" pratikte "sahipse bu
+durum kullanıcıya açıkça bildirilir" demektir — sessizce gizlemek de,
+portföyden düşmek de yanlış olur.
+
+Bu yorum Ürün Sahibi'nin 3. notuyla ("kişinin risk profili uymuyorsa zaten
+hissesi olmamalı") aynı yöndedir; daha önce şartnamenin lafzı ("tavsiye
+alamaz") ile arasında görülen fark böylece kapanmıştır.
+
+Ayrıca: profil YALNIZCA hangi kategorilere izin verildiğini söyler; kategori
+ağırlıklarıyla (yüzdelerle) hiçbir ilişkisi yoktur (iş analisti,
+2026-08-21). Bu yüzden burada hiçbir ağırlık/yüzde eşiği yer almaz.
 
 Neden ayrı bir modül: bu kural risk ölçümünden (volatilite, korelasyon, VaR)
 tamamen bağımsızdır — girdisi yalnızca anket puanı ve varlık sınıfıdır,
