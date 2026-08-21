@@ -26,6 +26,24 @@ def _doc(content: str, distance: float = 0.1, **metadata) -> dict:
     return {"content": content, "metadata": metadata, "distance": distance}
 
 
+class _TopKAwareFakeVectorStore(VectorStore):
+    """Gercek Chroma gibi, mesafeye gore sirali dokumanlari yalnizca ilk
+    top_k tanesini dondurur — aday havuzu buyuklugunun (_MIN_CANDIDATE_POOL)
+    dogru dokumani havuzun disinda birakip birakmadigini test etmek icin."""
+
+    def __init__(self, documents: list[dict]) -> None:
+        self._documents = sorted(documents, key=lambda d: d["distance"])
+
+    def add_documents(self, documents, metadatas) -> None:
+        raise NotImplementedError
+
+    def clear(self) -> None:
+        raise NotImplementedError
+
+    def similarity_search(self, query: str, top_k: int = 5, where: dict | None = None):
+        return self._documents[:top_k]
+
+
 def test_retrieve_sirket_filtresi_where_olarak_gecirilir():
     store = _FakeVectorStore([_doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS")])
     retriever = Retriever(store=store)
@@ -379,3 +397,60 @@ def test_retrieve_is_bankasi_diger_bankalarla_karismaz():
 
     sirketler = {r["metadata"]["sirket"] for r in results}
     assert sirketler == {"ISCTR"}
+
+
+def test_retrieve_dar_aday_havuzunda_disarida_kalan_sirket_bulunur():
+    """31 `sirket_profili` dokumaninin "Ortaklık yapısı" bolumleri birbirine
+    cok benzer bir kaliptla yazildigi icin (hissedar/pay/yuzde gibi ortak
+    kelimeler), sorgulanan sirketin kendi dokumani vektor mesafesine gore
+    havuzun hemen disinda kalabiliyor (olcumle dogrulandi: "Kardemir'in
+    ortaklik yapisi nasil" sorgusunda KRDMD 21. sirada kalip eski havuz
+    boyutu 20 iken elenmis, sirket-eleme guvenlik agi hic devreye girmeden
+    5 alakasiz sirketin profili donmustu). _MIN_CANDIDATE_POOL'un 30'a
+    cikarilmasi, KRDMD'nin kendi dokumaninin havuza girip guvenlik agini
+    tetikleyebilmesini sagliyor."""
+    diger_sirketler = [
+        _doc(
+            f"{ticker} ortaklık yapısı hissedar pay yüzde",
+            baslik=f"{ticker} Şirket Profili",
+            sirket=ticker,
+            distance=0.30 + i * 0.01,
+        )
+        for i, ticker in enumerate(
+            [
+                "SAHOL",
+                "KCHOL",
+                "SISE",
+                "YKBNK",
+                "ARCLK",
+                "AKBNK",
+                "TUPRS",
+                "GARAN",
+                "CCOLA",
+                "ULKER",
+                "TCELL",
+                "TOASO",
+                "VAKBN",
+                "THYAO",
+                "HALKB",
+                "MGROS",
+                "ASELS",
+                "ISCTR",
+                "PETKM",
+                "EKGYO",
+            ]
+        )
+    ]
+    kardemir_dokumani = _doc(
+        "Kardemir ortaklık yapısı hissedar pay yüzde",
+        baslik="Kardemir Şirket Profili",
+        sirket="KRDMD",
+        distance=0.6911,
+    )
+    store = _TopKAwareFakeVectorStore([*diger_sirketler, kardemir_dokumani])
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("Kardemir'in ortaklık yapısı nasıl")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert sirketler == {"KRDMD"}
