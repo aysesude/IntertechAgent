@@ -114,9 +114,23 @@ def _normalize(text: str) -> str:
 # geçmesini şart koşuyor, tek başına bir şeyi tetiklemiyor.
 _SHORT_KEYWORD_ALLOWLIST = {"is"}
 
+# Türkçe kesme işaretinden sonraki ek ("Kardemir'in", "XYZ Teknoloji'nin"),
+# \w+ regex'i kesme işaretini kelime sınırı saydığı için kendi başına ayrı
+# bir "kelime" haline geliyor. Kısa ekler (2 harf: "in", "de") zaten
+# _MIN_KEYWORD_LEN altında kalıp elenir, ama 3+ harfli ekler ("nin", "nın",
+# "yle", "ndan") uzunluk barajını geçip anlamsız birer "ayırt edici kelime"
+# gibi davranıyordu (ölçümle doğrulandı: "XYZ Teknoloji'nin hisse fiyatı ne
+# kadar" sorgusunda "nin" jenerik olmayan bir eşleşme sayılıp THYAO/YKBNK/
+# ISCTR/GARAN'ın hedef fiyat raporlarını "bulundu" saydırdı — hiçbir gerçek
+# şirket adı hiç eşleşmemesine rağmen). Kesme işareti + sonrasındaki ek,
+# kelimeleştirmeden ÖNCE tamamen atılır; böylece "kardemir'in" yalnızca
+# "kardemir" kelimesini üretir, hiçbir ek kelime türetmez.
+_APOSTROPHE_SUFFIX_RE = re.compile(r"'\w+")
+
 
 def _keywords(text: str) -> set[str]:
-    tokens = _WORD_RE.findall(_normalize(text))
+    normalized = _APOSTROPHE_SUFFIX_RE.sub("", _normalize(text))
+    tokens = _WORD_RE.findall(normalized)
     return {
         t
         for t in tokens

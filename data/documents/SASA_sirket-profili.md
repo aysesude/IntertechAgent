@@ -29,9 +29,6 @@ kurarak "DupontSA" adını almıştır.
 şirketin yüzde 51 oranındaki hisseleri Erdemoğlu Holding A.Ş.
 tarafından satın alınmıştır. Ağustos 2015'te tamamlanan zorunlu pay
 alım süreci sonunda Erdemoğlu Holding'in şirketteki payı yüzde
-84,80'e ulaşmıştır; kalan pay halka açıktır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+84,80'e ulaşmıştır; kalan pay halka açıktır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar
+ayrı `bilanco` türü dokümanlarda yer alır.

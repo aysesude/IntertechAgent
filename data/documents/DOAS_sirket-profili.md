@@ -24,11 +24,7 @@ araçların satış sonrası servis ve destek hizmetlerini yürütmektedir.
 
 Doğuş Otomotiv, Doğuş Holding grubuna bağlı bir şirkettir. Hisseleri
 17 Haziran 2004 tarihinde halka arz edilmiş olup Borsa İstanbul'da
-"DOAS" koduyla işlem görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık
-yapısına ilişkin ayrıntılı pay dağılımı için şirketin resmi yatırımcı
-ilişkileri sayfasına başvurulmalıdır.
+"DOAS" koduyla işlem görmektedir. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır, ayrıntılı pay dağılımı için
+şirketin resmi yatırımcı ilişkileri sayfasına başvurulmalıdır.

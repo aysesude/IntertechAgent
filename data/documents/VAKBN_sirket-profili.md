@@ -27,11 +27,7 @@ kadar geniş bir yelpazede finansal ürün sunmaktadır.
 
 Banka, vakıfların bir araya gelmesiyle kurulmuş özel hukuk
 hükümlerine tabi bir kuruluş olarak faaliyet göstermektedir. Hisseleri
-Borsa İstanbul'da "VAKBN" koduyla işlem görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık
-yapısına ilişkin daha ayrıntılı pay dağılımı için bankanın resmi
-faaliyet raporlarına başvurulmalıdır.
+Borsa İstanbul'da "VAKBN" koduyla işlem görmektedir. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır, daha ayrıntılı pay
+dağılımı için bankanın resmi faaliyet raporlarına başvurulmalıdır.

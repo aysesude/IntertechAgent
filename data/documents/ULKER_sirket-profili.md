@@ -28,9 +28,6 @@ yapmaktadır.
 Ülker'in ana ortağı, 1989 yılında kurulan Yıldız Holding'dir.
 Ortaklık yapısında pladis Foods Limited (Yıldız Holding'in küresel
 gıda iştiraki) ve Yıldız Holding'in diğer iştirakleri ile birlikte
-Ülker ailesi yaklaşık yüzde 7,5 pay ile yer almaktadır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Ülker ailesi yaklaşık yüzde 7,5 pay ile yer almaktadır. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

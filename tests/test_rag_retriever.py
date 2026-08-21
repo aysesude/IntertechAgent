@@ -454,3 +454,30 @@ def test_retrieve_dar_aday_havuzunda_disarida_kalan_sirket_bulunur():
 
     sirketler = {r["metadata"]["sirket"] for r in results}
     assert sirketler == {"KRDMD"}
+
+
+def test_retrieve_kesme_isareti_eki_sahte_kelime_uretmez():
+    """\\w+ regex'i kesme isaretini kelime siniri saydigi icin ("XYZ
+    Teknoloji'nin" -> "xyz" + "teknoloji" + "nin"), 2 harften uzun ekler
+    ("nin", "nın", "yle"...) uzunluk barajini gecip jenerik olmayan birer
+    "ayirt edici kelime" gibi davranabiliyordu (olcumle dogrulandi: "XYZ
+    Teknoloji'nin hisse fiyati ne kadar" sorgusunda "nin" bu sekilde
+    THYAO/YKBNK/ISCTR/GARAN'in hedef fiyat raporlarini "bulundu" saydirdi
+    — hicbir gercek sirket adi hic eslesmemesine ragmen). Kesme isareti +
+    eki tokenlestirmeden once tamamen atmak, uydurma bir sirket sorgusunun
+    dogru sekilde "bulunamadi" donmesini sagliyor."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "THY'nin ikinci çeyrek bilançosu sonrası hedef fiyat açıklandı",
+                baslik="THYAO Hedef Fiyat Raporu",
+                sirket="THYAO",
+                distance=0.4,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("XYZ Teknoloji'nin hisse fiyatı ne kadar")
+
+    assert results == []

@@ -36,9 +36,6 @@ Market'i satın almıştır.
 
 Güncel ana ortak AG Anadolu Grubu Holding A.Ş. olup payı yaklaşık
 yüzde 36,19'dur. Kalan hisseler Borsa İstanbul'da halka açık olarak
-işlem görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+işlem görmektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.
