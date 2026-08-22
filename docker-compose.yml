@@ -109,6 +109,24 @@ services:
       - api
     command: npm run dev -- --host 0.0.0.0
 
+  # VİRA arayüzü (frontend-v2). `frontend` ile YAN YANA koşar, onun yerine
+  # geçmez: mevcut arayüz çalışır durumda kalsın diye ayrı klasör, ayrı port.
+  # Parite sağlandığında `frontend` emekliye ayrılıp isimler takas edilecek.
+  frontend-v2:
+    build:
+      context: ./frontend-v2
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${FRONTEND_V2_PORT_HOST:-5174}:5174"
+    volumes:
+      - ./frontend-v2:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    command: npm run dev -- --host 0.0.0.0
+
 volumes:
   pgdata:
   chroma_data:
