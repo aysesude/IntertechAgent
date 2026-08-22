@@ -3,7 +3,14 @@ app.services.risk_service üzerinden okur. Sayısal hiçbir değer burada
 hesaplanmaz, servis katmanından geldiği gibi döner.
 
 Risk eşikleri, ağırlıklar ve hedef dağılımlar app/core/config.py'de
-tanımlıdır."""
+tanımlıdır.
+
+Diğer tool ailelerinin (portfolio_tools, market_tools) izlediği ortak
+sözleşme: docs/MCP-TOOLS.md. Zarf ve hata taksonomisi `@tool_handler` ile
+kurulur; gövde yalnızca veriyi döndürür — `NotFoundError` (app.core.
+exceptions.AppError alt sınıfı, code="NOT_FOUND") `_base.py`'deki
+`APP_ERROR_CODE_MAP` üzerinden otomatik `ToolErrorCode.NOT_FOUND`'a
+eşlenir, burada ayrıca yakalanmasına gerek yok."""
 
 from typing import Any
 from uuid import UUID
@@ -11,13 +18,13 @@ from uuid import UUID
 from fastmcp import FastMCP
 
 from app.core.config import RiskProfile
-from app.core.db import SessionLocal
-from app.core.exceptions import NotFoundError
 from app.services.risk_service import get_risk_assessment as fetch_risk_assessment
+from mcp_server.tools._base import db_session, tool_handler
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: FastMCP) -> list[str]:
     @mcp.tool(name="get_risk_assessment")
+    @tool_handler()
     def get_risk_assessment(
         user_id: UUID,
         profile_override: RiskProfile | None = None,
@@ -49,20 +56,14 @@ def register(mcp: FastMCP) -> None:
                 olarak kapalıdır.
 
         Returns:
-            Başarılıysa {"success": true, "data": {...risk değerlendirmesi...}}.
-            Kullanıcı ya da portföy bulunamazsa
-            {"success": false, "error": {"code": ..., "message": ...}}.
+            Başarılı: {"success": true, "data": {...risk değerlendirmesi...}}.
+            Hata: {"success": false, "error": {"code": "NOT_FOUND",
+            "message": "..."}} — kullanıcı ya da portföyü bulunamazsa.
         """
-        db = SessionLocal()
-        try:
+        with db_session() as db:
             assessment = fetch_risk_assessment(
                 db, user_id, profile_override, include_scenarios=include_scenarios
             )
-            return {"success": True, "data": assessment.model_dump(mode="json")}
-        except NotFoundError as exc:
-            return {
-                "success": False,
-                "error": {"code": "RISK_TARGET_NOT_FOUND", "message": exc.message},
-            }
-        finally:
-            db.close()
+            return assessment.model_dump(mode="json")
+
+    return ["get_risk_assessment"]
