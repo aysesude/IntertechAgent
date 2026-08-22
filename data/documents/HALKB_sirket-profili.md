@@ -22,7 +22,8 @@ Banka, 1938'den bu yana esnaf ve sanatkârları desteklemek ve
 ekonomik kalkınmayı hızlandırmak amacıyla faaliyet göstermektedir.
 Başta esnaf, sanatkâr, KOBİ, kadın ve genç girişimciler olmak üzere
 ekonomik aktörlere ve kalkınmayı teşvik eden öncü projelere kredi
-desteği sağlamaktadır.
+desteği sağlamaktadır. Şirket, BIST'te Bankacılık sektöründe
+sınıflandırılmaktadır.
 
 ## Tarihçe
 

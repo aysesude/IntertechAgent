@@ -19,6 +19,7 @@ kurulmuştur.
 
 Şirket, binek araç, hafif ve ağır ticari araç distribütörlüğü ile bu
 araçların satış sonrası servis ve destek hizmetlerini yürütmektedir.
+Şirket, BIST'te Otomotiv sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

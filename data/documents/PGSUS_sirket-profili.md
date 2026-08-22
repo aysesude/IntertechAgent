@@ -22,7 +22,8 @@ havayolu olmuştur.
 ## Faaliyet alanı
 
 İstanbul merkezli, düşük maliyetli havayolu taşımacılığı modeliyle iç
-ve dış hat yolcu taşımacılığı yapmaktadır.
+ve dış hat yolcu taşımacılığı yapmaktadır. Şirket, BIST'te Ulaştırma
+sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -30,9 +31,6 @@ ve dış hat yolcu taşımacılığı yapmaktadır.
 Holding, 2000 yılında kurulmuş bir yatırım şirketi olup Sabancı
 ailesinden Ali Sabancı'nın yönetiminde faaliyet göstermektedir.
 Pegasus'un hisseleri Borsa İstanbul'da "PGSUS" koduyla işlem
-görmektedir; şirketin halka açık payları bulunmaktadır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+görmektedir; şirketin halka açık payları bulunmaktadır. Bu doküman şirketin kimlik
+ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

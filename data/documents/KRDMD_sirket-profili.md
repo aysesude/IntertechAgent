@@ -19,7 +19,8 @@ temelleri 3 Nisan 1937 tarihinde atılmıştır. İlk yüksek fırın 9 Eylül
 ## Faaliyet alanı
 
 Şirketin faaliyet alanı, her çeşit ham demir ve çelik mamullerinin
-ile kok ve kok yan ürünlerinin imalatı ve satışıdır.
+ile kok ve kok yan ürünlerinin imalatı ve satışıdır. Şirket, BIST'te
+Metal Ana Sanayi sektöründe sınıflandırılmaktadır.
 
 ## Özelleştirme ve ortaklık yapısı
 

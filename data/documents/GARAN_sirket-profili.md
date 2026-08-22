@@ -19,7 +19,8 @@ anonim şirket olarak kurulmuştur.
 
 Türkiye'nin önde gelen özel bankalarından biri olarak bireysel,
 kurumsal ve ticari bankacılık, yatırım bankacılığı ve sigorta/emeklilik
-alanlarında hizmet vermektedir.
+alanlarında hizmet vermektedir. Şirket, BIST'te Bankacılık sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -32,9 +33,6 @@ markasıyla faaliyet göstermektedir.
 
 Garanti BBVA hisseleri ilk kez 1990 yılında Borsa İstanbul'da halka arz
 edildi. Şirket, 1993 yılında hisselerini uluslararası piyasalara arz
-eden ilk Türk şirketi oldu.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+eden ilk Türk şirketi oldu. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır.

@@ -23,7 +23,8 @@ grubuna yönelik gayrimenkul (çoğunlukla konut, ayrıca ticari ve
 eğitim bölümleri ile sosyal tesisler) geliştirme, pazarlama ve satış
 faaliyetlerini yürütmektedir. Gayrimenkul portföyü, arsa stoku ve
 piyasa değeri açısından Türkiye'nin en büyük gayrimenkul yatırım
-ortaklığıdır.
+ortaklığıdır. Şirket, BIST'te Gayrimenkul Yatırım Ortaklığı (GYO)
+sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

@@ -26,7 +26,8 @@ dolara satın almıştır.
 ## Faaliyet alanı
 
 Türkiye'de sabit hat, mobil iletişim, internet ve dijital televizyon
-hizmetleri sunan bir telekomünikasyon şirketidir.
+hizmetleri sunan bir telekomünikasyon şirketidir. Şirket, BIST'te
+Telekomünikasyon sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

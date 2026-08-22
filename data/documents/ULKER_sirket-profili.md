@@ -21,7 +21,8 @@ olarak) kurulmuştur.
 Şirket bisküvi, çikolata, gofret, kraker, kek ve sakız kategorilerinde
 faaliyet göstermektedir. pladis ortaklık yapısı çerçevesinde Türkiye,
 Suudi Arabistan, Mısır ve Kazakistan'da toplam 13 fabrikada üretim
-yapmaktadır.
+yapmaktadır. Şirket, BIST'te Gıda, İçecek sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
