@@ -94,6 +94,65 @@ def _parse_document(path: Path) -> Document | None:
     return Document(page_content=content, metadata=temiz_metadata)
 
 
+def _bilanco_revizyonlarini_coz(documents: list[Document]) -> list[Document] | None:
+    """Aynı (şirket, dönem) için birden fazla `bilanco` dokümanı olabilir —
+    şirket düzeltilmiş rakamlarla yeniden yayımlarsa (restatement). `revize_no`
+    (belirtilmezse 1 varsayılır) hangisinin güncel olduğunu belirler; yalnızca
+    en yüksek revize_no'ya sahip doküman(lar) vektör veritabanına işlenir,
+    eskisi sessizce dışlanır.
+
+    Bu kontrol olmadan iki dokümanın parçaları Chroma'da kalıcı olarak yan
+    yana durur (`ChromaVectorStore._make_id` metadata+içerik hash'lediği için
+    ikisi de benzersiz kabul edilir, biri diğerinin üzerine yazmaz) ve sorgu
+    anında hangisinin döneceği belirsiz kalır — çelişkili rakamlar sessizce
+    karışabilir.
+
+    Aynı revize_no ile çelişen birden fazla doküman bulunursa (kazara
+    eklenmiş bir kopya olabilir, hangisinin doğru olduğu belirsiz) None
+    döner; çağıran taraf bunu hata sayıp ingest'i durdurmalı."""
+    gruplar: dict[tuple[str, str], list[Document]] = {}
+    for doc in documents:
+        if doc.metadata.get("tur") != "bilanco":
+            continue
+        anahtar = (doc.metadata.get("sirket", ""), doc.metadata.get("donem", ""))
+        gruplar.setdefault(anahtar, []).append(doc)
+
+    disarida_birakilan_dosyalar: set[str] = set()
+    for (sirket, donem), grup in gruplar.items():
+        if len(grup) < 2:
+            continue
+        revizeli = [(int(d.metadata.get("revize_no") or 1), d) for d in grup]
+        max_revize = max(r for r, _ in revizeli)
+        guncel_olanlar = [d for r, d in revizeli if r == max_revize]
+        if len(guncel_olanlar) > 1:
+            logger.error(
+                "%s / %s için birden fazla bilanco dokümanı aynı revize_no (%d) "
+                "ile bulundu: %s. Hangisinin güncel olduğu belirsiz — "
+                "düzeltilmiş dokümana `revize_no` alanını bir üst değerle ekleyin.",
+                sirket,
+                donem,
+                max_revize,
+                ", ".join(d.metadata["dosya"] for d in guncel_olanlar),
+            )
+            return None
+        for revize_no, d in revizeli:
+            if revize_no < max_revize:
+                disarida_birakilan_dosyalar.add(d.metadata["dosya"])
+                logger.info(
+                    "%s: %s / %s için daha eski revizyon (revize_no=%d < %d), "
+                    "vektör veritabanına işlenmiyor.",
+                    d.metadata["dosya"],
+                    sirket,
+                    donem,
+                    revize_no,
+                    max_revize,
+                )
+
+    if not disarida_birakilan_dosyalar:
+        return documents
+    return [d for d in documents if d.metadata["dosya"] not in disarida_birakilan_dosyalar]
+
+
 def main() -> int:
     if not DOCUMENTS_DIR.exists():
         logger.error("Doküman klasörü bulunamadı: %s", DOCUMENTS_DIR)
@@ -119,6 +178,11 @@ def main() -> int:
     if not documents:
         logger.error("Hiçbir dosya ayrıştırılamadı.")
         return 1
+
+    cozulmus_documents = _bilanco_revizyonlarini_coz(documents)
+    if cozulmus_documents is None:
+        return 1
+    documents = cozulmus_documents
 
     # chunk_overlap=0: parçalar arası üst üste binme, sınırdaki bir başlığın
     # (ör. "## Not") hem bir önceki hem bir sonraki parçada aynen tekrar
