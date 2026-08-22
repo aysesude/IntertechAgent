@@ -101,10 +101,11 @@ sırası:
   finansal oran tanımları (F/K, ROE, cari oran vb.), SPK/BDDK temel
   çerçevesi, TFRS temel kavramları. Neredeyse hiç değişmez.
 
-`haber` (piyasa haberi) ve `analiz` (hedef fiyat) ile `makro` (faiz,
-enflasyon gibi periyodik göstergeler) türleri **artık yeni eklenmiyor**
-— bunlar hızlı bayatlayan veri sınıfına giriyor. Mevcut dokümanlar
-kaldırılmadı (henüz), ama bu türlerden yeni doküman EKLEMEYİN.
+`haber` (piyasa haberi), `analiz` (hedef fiyat) ve `makro` (faiz,
+enflasyon gibi periyodik göstergeler) türleri **artık RAG'da tutulmuyor**
+— bunlar hızlı bayatlayan veri sınıfına girdiği için 2026-08-22'de
+kaldırıldı (31 doküman). Bu tür sorular artık canlı-internet ajanının
+kapsamında; bu türlerden yeni doküman EKLEMEYİN.
 
 ---
 
