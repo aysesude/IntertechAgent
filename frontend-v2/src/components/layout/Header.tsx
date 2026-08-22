@@ -18,9 +18,11 @@ interface HeaderProps {
   user: User;
   activeScreen: ScreenId;
   onNavigate: (screen: ScreenId) => void;
+  /** Oturumu kapatır (AuthContext.logout). */
+  onLogout?: () => void;
 }
 
-export function Header({ user, activeScreen, onNavigate }: HeaderProps) {
+export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -186,9 +188,19 @@ export function Header({ user, activeScreen, onNavigate }: HeaderProps) {
                 </div>
                 <div className="mx-1.5 h-px bg-line2" />
                 <div className="p-1.5">
-                  <a href="#" className="flex min-h-[44px] items-center rounded-lg px-2.5 text-[13px] font-semibold text-danger hover:bg-danger-tint">
+                  {/* <a href="#"> değil <button>: bu bir gezinme değil bir
+                      eylem. Bağlantı olarak bırakılsaydı orta tıkla yeni
+                      sekmede açılabilir ve hiçbir şey yapmazdı. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onLogout?.();
+                    }}
+                    className="flex min-h-[44px] w-full items-center rounded-lg px-2.5 text-left text-[13px] font-semibold text-danger transition-colors hover:bg-danger-tint"
+                  >
                     Çıkış Yap
-                  </a>
+                  </button>
                 </div>
               </div>
             )}

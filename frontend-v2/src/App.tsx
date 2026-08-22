@@ -18,7 +18,7 @@ import {
 } from "@/components/PageTransition";
 import { INTRO_TIMING } from "@/components/LoginScreen";
 import { ThemeProvider } from "@/context/ThemeContext";
-import { mockUser } from "@/data/mockData";
+import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import type { ScreenId } from "@/types/finance";
 
 // Faz 5'in (Dashboard'un giriş sonrası kart/grafik stagger'ı) görsel olarak
@@ -50,11 +50,22 @@ function screenFromPath(pathname: string): ScreenId {
 }
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(false);
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppShell() {
+  const { status, user, login, logout } = useAuth();
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const screen = screenFromPath(location.pathname);
+  const authenticated = status === "authenticated";
 
   useEffect(() => {
     if (!justLoggedIn) return;
@@ -62,24 +73,32 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [justLoggedIn]);
 
-  const handleLogin = () => {
+  const handleLogin = async ({ tckn, password }: { tckn: string; password: string }) => {
+    // Hata YAKALANMIYOR, bilerek: LoginScreen bunu bekliyor ve mesajı
+    // formda gösteriyor. Burada yutulsaydı kullanıcı hiçbir şey olmamış
+    // gibi giriş ekranında kalırdı.
+    await login(tckn, password);
     setJustLoggedIn(true);
-    setAuthenticated(true);
   };
 
   const handleNavigate = (next: ScreenId) => navigate(SCREEN_PATHS[next]);
 
+  // Saklanan token sunucuya doğrulanana kadar ne giriş ekranı ne dashboard
+  // gösterilir: token geçerliyse giriş ekranını bir an için gösterip hemen
+  // kapatmak (ya da tersi) göz alıcı bir titreme yaratırdı.
+  if (status === "checking") {
+    return <div className="min-h-screen bg-surface" />;
+  }
+
   return (
-    <ThemeProvider>
+    <>
       {/* GİRİŞ NEDEN AYRI BİR ROUTE ("/login") DEĞİL:
           LoginScreen→Dashboard geçişi tasarlanmış bir crossfade
           (LoginExitOverlay + DashboardEnterFade, bkz. PageTransition.tsx);
           route değişimiyle kurulsaydı iki ağaç aynı anda mount kalamaz ve
           arada boş kare görünürdü. Ayrıca perde olarak durması sayesinde
           kullanıcı /risk adresini doğrudan açtığında giriş sonrası oraya
-          düşer — /login'e yönlendirip hedefi kaybetmez.
-          Faz 2'de `authenticated` state'inin yerini AuthContext alacak;
-          bu yapı değişmeyecek. */}
+          düşer — /login'e yönlendirip hedefi kaybetmez. */}
       <AnimatePresence>
         {!authenticated && (
           <LoginExitOverlay key="login">
@@ -96,7 +115,12 @@ export default function App() {
                 iki main içeriğinden ayrı, burada TEK örnek olarak render
                 edilir ki sayfa değişse de katman hiç unmount olmasın. */}
             <BackgroundLayer variant={screen === "dashboard" ? "prominent" : "subtle"} />
-            <Header user={mockUser} activeScreen={screen} onNavigate={handleNavigate} />
+            <Header
+              user={user}
+              activeScreen={screen}
+              onNavigate={handleNavigate}
+              onLogout={logout}
+            />
 
             <main className="relative z-[1] mx-auto max-w-[1440px] px-4 py-6 pb-24 sm:px-6 sm:py-9 md:px-10">
               <AnimatePresence mode="wait">
@@ -153,6 +177,6 @@ export default function App() {
           </div>
         </DashboardEnterFade>
       )}
-    </ThemeProvider>
+    </>
   );
 }

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { endpoints } from "@/api/endpoints";
-import { isApiConfigured } from "@/api/client";
 import { buildAssistantReply, mockChatPage } from "@/data/mockData";
 import type { ChatMessage } from "@/types/finance";
 import { useApiResource } from "./useApiResource";
 
 export function useChatData() {
-  const resource = useApiResource(endpoints.getChat, mockChatPage);
+  // Faz 3'te SSE'ye bağlanacak: backend sohbeti `POST /api/chat` üzerinden
+  // AKITARAK (streaming) döndürüyor, tek parça bir mesaj olarak değil.
+  // O yüzden burada tek bir `fetch` yerine `frontend/src/api/chat.ts`'teki
+  // çözülmüş SSE okuyucusu taşınacak.
+  const resource = useApiResource(null, mockChatPage);
   const [messages, setMessages] = useState<ChatMessage[]>(resource.data.messages);
   const [sending, setSending] = useState(false);
   const syncedLiveData = useRef(false);
@@ -32,9 +34,8 @@ export function useChatData() {
     setSending(true);
 
     try {
-      const reply = isApiConfigured ? await endpoints.postChatMessage(trimmed) : await simulateReply(trimmed);
-      setMessages((prev) => [...prev, reply]);
-    } catch {
+      // Faz 3'e kadar tasarım yanıtı. Gerçek akış bağlandığında burası
+      // streamChat(...) çağrısıyla değişecek.
       const reply = await simulateReply(trimmed);
       setMessages((prev) => [...prev, reply]);
     } finally {

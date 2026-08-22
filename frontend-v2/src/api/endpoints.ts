@@ -1,23 +1,20 @@
-import { apiGet, apiPost } from "./client";
-import type {
-  ChatMessage,
-  ChatPageData,
-  DashboardData,
-  MarketPageData,
-  PortfolioPageData,
-  RiskPageData,
-} from "@/types/finance";
-
 /**
- * Gerçek backend uçları. VITE_API_BASE_URL tanımlandığında bu fonksiyonlar
- * canlı sunucuya istek atar; sunucu yoksa veya istek başarısız olursa
- * çağıran hook'lar mock veriye düşer (bkz. src/hooks).
+ * Ekran verisi uçları.
+ *
+ * BURASI ŞU AN BİLEREK BOŞ. Tasarım deposundan gelen ilk hâli `GET /dashboard`,
+ * `GET /portfolio`, `GET /risk`, `GET /market`, `GET /chat` uçlarını çağırıyordu
+ * — bu projenin backend'inde böyle uçlar YOK. Uçlar `/api/portfolio/{user_id}`,
+ * `/api/portfolio/{user_id}/holdings`, `/api/chat` (SSE) gibi ve **ham veri**
+ * döndürüyor; ekranlar ise `src/types/finance.ts`'teki görünüm modelini
+ * bekliyor (camelCase, önceden biçimlendirilmiş metinler).
+ *
+ * Aradaki dönüşüm `src/adapters/` altında saf fonksiyonlarla yapılacak ve her
+ * ekran sırayla bağlanacak (bkz. frontend-v2/README.md). Bağlanmamış ekranlar
+ * `useApiResource(null, mock)` ile çağrılır: boşa HTTP isteği atılmaz ve durum
+ * `isDemoData: true` ile açıkça işaretlenir — "sunucudan geldi" ile "tasarım
+ * verisi" birbirine karışmasın.
+ *
+ * Kimlik doğrulama uçları ayrı dosyada: `src/api/auth.ts`.
  */
-export const endpoints = {
-  getDashboard: () => apiGet<DashboardData>("/dashboard"),
-  getPortfolio: () => apiGet<PortfolioPageData>("/portfolio"),
-  getMarket: () => apiGet<MarketPageData>("/market"),
-  getRisk: () => apiGet<RiskPageData>("/risk"),
-  getChat: () => apiGet<ChatPageData>("/chat"),
-  postChatMessage: (text: string) => apiPost<ChatMessage>("/chat/messages", { text }),
-};
+
+export {};

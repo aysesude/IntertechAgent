@@ -210,8 +210,14 @@ function FeatureCards() {
 /* ------------------------------------------------------------------ */
 
 export type LoginScreenProps = {
-  /** Giriş başarılıysa çağrılır. */
-  onSubmit?: (credentials: { tckn: string; password: string }) => void;
+  /**
+   * Kimlik bilgilerini doğrular. Reddedilirse (sunucu 401 verirse) hata
+   * mesajı formda gösterilir ve alanlar tekrar denenebilir hale gelir.
+   *
+   * `void` DEĞİL `Promise<void>`: giriş artık ağa çıkıyor ve butonun ne
+   * zaman "çözüleceğini" yalnızca sonucu bekleyerek bilebiliriz.
+   */
+  onSubmit?: (credentials: { tckn: string; password: string }) => Promise<void> | void;
   onForgotPassword?: () => void;
 };
 
@@ -228,9 +234,11 @@ export function LoginScreen({
   const isDark = resolvedTheme === "dark";
   const navyColor = isDark ? NAVY_DARK : NAVY;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (submitted) return;
+    // İstemci doğrulaması yalnızca kullanıcı konforu içindir; asıl kapı
+    // sunucudadır (backend/app/schemas/auth.py).
     if (tckn.length !== 11) {
       setError("T.C. kimlik numarası 11 haneli olmalı.");
       return;
@@ -241,7 +249,17 @@ export function LoginScreen({
     }
     setError(null);
     setSubmitted(true);
-    onSubmit?.({ tckn, password });
+    try {
+      await onSubmit?.({ tckn, password });
+      // Başarılıysa `submitted` true kalır: bu bileşen birazdan unmount
+      // olacak (App'teki crossfade) ve bu arada ikinci gönderim olmamalı.
+    } catch (err) {
+      // Sunucunun Türkçe mesajı doğrudan gösterilir ("T.C. kimlik numarası
+      // veya şifre hatalı." gibi) — bu metinler kullanıcıya gösterilmek
+      // üzere yazılmıştır.
+      setError(err instanceof Error ? err.message : "Giriş yapılamadı.");
+      setSubmitted(false);
+    }
   };
 
   return (
@@ -479,7 +497,7 @@ export function LoginScreen({
                   } as CSSProperties
                 }
               >
-                Vira Et
+                {submitted ? "Giriş yapılıyor…" : "Vira Et"}
                 <ArrowIcon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
               </button>
             </form>
