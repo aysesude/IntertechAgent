@@ -31,6 +31,7 @@ Kimya, Petrol, Plastik sektöründe sınıflandırılmaktadır.
 yüzde 51'i satılarak özelleştirilmiştir. Bugün Petkim'in yönetim
 kontrolünü elinde bulunduran ana ortağı, Azerbaycan Cumhuriyeti
 Devleti'nin resmi petrol şirketi SOCAR'ın Türkiye iştiraki SOCAR
-Türkiye Enerji A.Ş.'dir. Bu doküman şirketin kimlik ve yapısal
+Türkiye Enerji A.Ş.'dir. Yönetim kurulu başkanı Anar Mammadov, başkan
+vekili Kanan Najafov'dur. Bu doküman şirketin kimlik ve yapısal
 bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
 dokümanlarda yer alır.

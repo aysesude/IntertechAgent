@@ -38,6 +38,7 @@ THY, 11 farklı sektörde faaliyet gösteren, 50 binden fazla çalışana
 sahip çok sayıda iştirake sahiptir. Öne çıkan bir örnek: SunExpress,
 Türk Hava Yolları ile Lufthansa'nın eşit ortaklığında 1989 yılında
 Antalya'da kurulmuş olup Türkiye-Avrupa turizm hattında faaliyet
-göstermektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+göstermektedir. Yönetim kurulu başkanı, 9 Nisan 2026 itibarıyla Prof.
+Dr. Murat Şeker'dir. Bu doküman şirketin kimlik ve yapısal bilgilerini
 özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
 yer alır.

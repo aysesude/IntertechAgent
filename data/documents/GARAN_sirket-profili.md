@@ -33,6 +33,7 @@ markasıyla faaliyet göstermektedir.
 
 Garanti BBVA hisseleri ilk kez 1990 yılında Borsa İstanbul'da halka arz
 edildi. Şirket, 1993 yılında hisselerini uluslararası piyasalara arz
-eden ilk Türk şirketi oldu. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+eden ilk Türk şirketi oldu. Yönetim kurulu başkanı Mahmut Akten'dir;
+Akten aynı zamanda Ağustos 2024'ten bu yana bankanın genel müdürüdür.
+Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

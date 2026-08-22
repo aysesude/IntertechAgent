@@ -23,7 +23,8 @@ iletim ve dağıtım sistemlerine yönelik ekipmanların üretimi ve
 satışı; bunun yanında ilgili mühendislik, montaj ve teknik hizmetlerin
 sunulması alanında faaliyet göstermektedir. Şirket, BIST'te İmalat
 (Metal Eşya, Makine, Elektrikli Cihazlar ve Ulaşım Araçları)
-sektöründe sınıflandırılmaktadır. Bu doküman şirketin
+sektöründe sınıflandırılmaktadır. Yönetim kurulu başkanı ve aynı
+zamanda genel müdürü Feridun Geçgel'dir. Bu doküman şirketin
 kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar
 ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık yapısına ilişkin
 ayrıntılı pay dağılımı bilgisi mevcut kaynaklarda netleştirilemediği

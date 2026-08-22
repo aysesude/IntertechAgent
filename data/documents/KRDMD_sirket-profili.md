@@ -30,6 +30,7 @@ faaliyet gösterdikten sonra 30 Mart 1995 tarihinde özelleştirilmiştir.
 Hisseleri Borsa İstanbul'da "KRDMD" (ve ayrıca A/B grup hisseler
 için farklı kodlarla) işlem görmektedir. Güncel ortaklık pay dağılımına
 ilişkin ayrıntı için şirketin resmi ortaklık yapısı sayfasına
-başvurulmalıdır; bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler, dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+başvurulmalıdır. Yönetim kurulu başkanı, Eylül 2025'te İsmail Demir'in
+yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler, dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

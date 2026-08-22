@@ -29,6 +29,7 @@ halka açık bir şirkettir. Şirket, ABD'li Whirlpool'un Avrupa'daki
 iştirakleriyle "Beko Europe" adlı ortak bir şirket çatısında
 birleşmiştir; bu yeni yapıda sermayenin yüzde 75'i Arçelik'in Beko
 markasına, yüzde 25'i Whirlpool'a aittir. Arçelik ayrıca kendi
-hisselerinin yüzde 2,9'unu Whirlpool'a satmıştır. Bu doküman şirketin
-kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
-`bilanco` türü dokümanlarda yer alır.
+hisselerinin yüzde 2,9'unu Whirlpool'a satmıştır. Yönetim kurulu
+başkanı Rahmi M. Koç, başkan vekili Ömer M. Koç'tur. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

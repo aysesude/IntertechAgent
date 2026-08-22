@@ -31,6 +31,8 @@ sektöründe sınıflandırılmaktadır.
 (yaklaşık yüzde 43 pay) ve The Coca-Cola Company'nin bir iştiraki olan
 TCCEC'dir (yaklaşık yüzde 1 doğrudan pay; The Coca-Cola Company'nin
 toplam etkin payı daha yüksektir). İki ana ortak, şirketin yönetimi
-konusunda bir Ortaklık Anlaşması imzalamıştır. Bu doküman şirketin kimlik ve
-yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
-türü dokümanlarda yer alır.
+konusunda bir Ortaklık Anlaşması imzalamıştır. Yönetim kurulu başkanı,
+4 Mayıs 2026 tarihli yönetim kurulu kararıyla atanan Kamilhan Süleyman
+Yazıcı'dır; İlhan Murat Özgel başkan vekilidir. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.
