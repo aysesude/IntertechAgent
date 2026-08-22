@@ -28,6 +28,8 @@ sınıflandırılmaktadır.
 Şirketin kamu hisseleri 27 Şubat 2006 tarihinde OYAK Grubu'na (OYAK
 Maden Metalürji) devredilmiştir. Güncel ortaklık yapısında Ataer
 Holding A.Ş. yaklaşık yüzde 49,54 paya sahiptir; kalan pay dağınık
-diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır. Bu doküman şirketin
-kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
-`bilanco` türü dokümanlarda yer alır.
+diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır.
+Yönetim kurulu başkanı, OYTAŞ İç ve Dış Ticaret A.Ş.'yi temsilen Murat
+Yalçıntaş'tır. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

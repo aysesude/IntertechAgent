@@ -29,6 +29,6 @@ sınıflandırılmaktadır.
 
 Banka halka açıktır; Atatürk'e ait hisselerin (yaklaşık yüzde 28,09)
 temettü hakları, Atatürk'ün vasiyeti gereği Cumhuriyet Halk Partisi'ne
-(CHP) tahsis edilmiştir. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+(CHP) tahsis edilmiştir. Yönetim kurulu başkanı Adnan Bali'dir. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

@@ -28,6 +28,7 @@ Ford Otosan, Ford Motor Company ile Koç Holding'in eşit ortaklığında
 halka açık bir şirkettir: Ford Motor Company yüzde 41, Koç Holding
 yüzde 41, halka açık kısım ise yüzde 18 paya sahiptir. Şirket 13 Ocak
 1986 tarihinde halka açılmış olup hisseleri Borsa İstanbul'da "FROTO"
-koduyla işlem görmektedir. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+koduyla işlem görmektedir. Yönetim kurulu başkanı Yıldırım Ali Koç,
+başkan vekili James Michael Baumbick'tir. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
+türü dokümanlarda yer alır.

@@ -32,6 +32,7 @@ olarak işlem görmektedir.
 ## Halka arz geçmişi
 
 Şirket 2005 yılında halka açılmış, o tarihten bu yana Borsa İstanbul'da
-işlem görmektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+işlem görmektedir. Yönetim kurulu başkanı, 5 Mayıs 2026 tarihli olağan
+genel kurul toplantısı sonrası atanan Mahmud Muhammed Topbaş'tır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

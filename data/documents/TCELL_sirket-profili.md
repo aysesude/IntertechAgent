@@ -29,6 +29,6 @@ Güncel ortaklık yapısı şu şekildedir: Türkiye Varlık Fonu (TVF) yüzde
 yüzde 24,8, halka açık kısım yüzde 48,95, Çukurova Holding yüzde 0,05.
 TVF, imtiyazlı hisseleri sayesinde 9 kişilik yönetim kurulunun 5
 üyesini belirleyebilme hakkına sahip olup şirketin yönetim kontrolünü
-elinde bulundurmaktadır. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+elinde bulundurmaktadır. Yönetim kurulu başkanı Şenol Kazancı'dır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

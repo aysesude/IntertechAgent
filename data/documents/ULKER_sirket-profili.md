@@ -29,6 +29,7 @@ sınıflandırılmaktadır.
 Ülker'in ana ortağı, 1989 yılında kurulan Yıldız Holding'dir.
 Ortaklık yapısında pladis Foods Limited (Yıldız Holding'in küresel
 gıda iştiraki) ve Yıldız Holding'in diğer iştirakleri ile birlikte
-Ülker ailesi yaklaşık yüzde 7,5 pay ile yer almaktadır. Bu doküman
+Ülker ailesi yaklaşık yüzde 7,5 pay ile yer almaktadır. Yönetim kurulu
+başkanı Ahmet Bal'dır (görev süresi 14.6.2023-14.6.2026). Bu doküman
 şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
 sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

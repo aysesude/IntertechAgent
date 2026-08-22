@@ -31,6 +31,7 @@ sektöründe sınıflandırılmaktadır.
 Holding, 2000 yılında kurulmuş bir yatırım şirketi olup Sabancı
 ailesinden Ali Sabancı'nın yönetiminde faaliyet göstermektedir.
 Pegasus'un hisseleri Borsa İstanbul'da "PGSUS" koduyla işlem
-görmektedir; şirketin halka açık payları bulunmaktadır. Bu doküman şirketin kimlik
-ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+görmektedir; şirketin halka açık payları bulunmaktadır. Yönetim kurulu
+başkanı, Mart 2023'ten bu yana Mehmet T. Nane'dir. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
 `bilanco` türü dokümanlarda yer alır.

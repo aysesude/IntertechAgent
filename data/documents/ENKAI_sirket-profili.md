@@ -30,6 +30,7 @@ ailelerinin ortak kontrolündeki halka açık iştirak şirketi ENKA
 Holding Yatırım A.Ş. ile yasal olarak birleşmiştir. Şirketin
 çoğunluk hissesi Tara Holding A.Ş.'ye ait olup, hisselerin bir kısmı
 halka açıktır. Hisseleri Borsa İstanbul'da "ENKAI" koduyla işlem
-görmektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+görmektedir. Yönetim kurulu başkanlığını, kurucu Şarık Tara'nın
+1994'te görevi devrettiği oğlu Mehmet Sinan Tara yürütmektedir. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

@@ -44,5 +44,7 @@ yaklaşık yüzde 2,3 pay sahibidir. Kalan kısım halka açık olup kaynağa
 göre yaklaşık yüzde 26,3 ile yüzde 26,9 arasında değişmektedir (iki
 kaynak farklı hesaplama yöntemi kullanmaktadır, kesin ve güncel tarihli
 bir oran için KAP'taki resmi ortaklık yapısı bildirimine bakılmalıdır).
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Yönetim kurulu başkanı, 18 Mart 2026 tarihli 62. Olağan Genel Kurul
+Toplantısı'nda onaylanan Ömer M. Koç'tur. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
+türü dokümanlarda yer alır.
