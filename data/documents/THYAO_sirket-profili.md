@@ -22,6 +22,7 @@ TL idi.
 
 Türkiye'nin bayrak taşıyıcı havayolu şirketi olarak yolcu ve kargo
 taşımacılığı yapmaktadır; hem iç hem dış hat uçuş ağına sahiptir.
+Şirket, BIST'te Ulaştırma sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -37,9 +38,6 @@ THY, 11 farklı sektörde faaliyet gösteren, 50 binden fazla çalışana
 sahip çok sayıda iştirake sahiptir. Öne çıkan bir örnek: SunExpress,
 Türk Hava Yolları ile Lufthansa'nın eşit ortaklığında 1989 yılında
 Antalya'da kurulmuş olup Türkiye-Avrupa turizm hattında faaliyet
-göstermektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+göstermektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

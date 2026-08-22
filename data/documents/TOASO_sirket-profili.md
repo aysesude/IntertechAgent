@@ -23,7 +23,8 @@ Fiat Egea ailesinin Sedan ve Cross modellerinin yanı sıra, 2025
 yılında 386 milyon avroluk yatırımla Citroën, Fiat, Opel ve Peugeot
 markaları için K0 hafif ticari araç ürün grubunun üretimi
 yapılmaktadır. 2008 yılında kurulan Ar-Ge Merkezi, Stellantis
-bünyesinde global projelere katkı sağlamaktadır.
+bünyesinde global projelere katkı sağlamaktadır. Şirket, BIST'te
+Otomotiv sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

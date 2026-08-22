@@ -22,7 +22,8 @@ Migros, Türkiye'nin 81 ilinde faaliyet gösteren bir gıda perakende
 zinciridir; yurt dışında Kuzey Makedonya ve Kazakistan'da da
 operasyonları bulunmaktadır. Şirket, geleneksel perakendeciliğin
 ötesinde entegre bir hizmet ekosistemi (dijital/teknoloji platformu)
-sunmayı hedeflemektedir.
+sunmayı hedeflemektedir. Şirket, BIST'te Perakende Ticaret sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı geçmişi
 

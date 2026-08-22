@@ -21,7 +21,8 @@ kurulmuştur.
 ve ara/özellikli ürünlerin üretimi ve pazarlaması alanında faaliyet
 göstermektedir; sektöründe dünyanın önde gelen üreticilerinden
 biridir. 2000 yılında dünya kimya devi DuPont ile ortak girişim
-kurarak "DupontSA" adını almıştır.
+kurarak "DupontSA" adını almıştır. Şirket, BIST'te Kimya, Petrol,
+Plastik sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

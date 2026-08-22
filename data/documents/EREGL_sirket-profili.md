@@ -20,16 +20,14 @@ Mayıs 1960 tarihinde resmen tescil edilmiştir.
 
 Erdemir, yassı haddelenmiş çelik ürünleri üretimi ve satışı
 yapmaktadır. Ürün yelpazesi levha, sıcak ve soğuk haddelenmiş sac ile
-tenekeyi kapsamaktadır.
+tenekeyi kapsamaktadır. Şirket, BIST'te Metal Ana Sanayi sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Şirketin kamu hisseleri 27 Şubat 2006 tarihinde OYAK Grubu'na (OYAK
 Maden Metalürji) devredilmiştir. Güncel ortaklık yapısında Ataer
 Holding A.Ş. yaklaşık yüzde 49,54 paya sahiptir; kalan pay dağınık
-diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

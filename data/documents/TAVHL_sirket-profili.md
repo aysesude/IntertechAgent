@@ -24,7 +24,8 @@ mağazaları (ATÜ Duty Free) ve bilişim teknolojileri (TAV Technologies)
 alanlarında iştirakleriyle entegre bir havalimanı servis sağlayıcısı
 konumundadır. Yurt dışında Gürcistan, Kuzey Makedonya, Tunus, Suudi
 Arabistan ve Kazakistan gibi ülkelerde havalimanı yapım ve işletme
-projeleri yürütmektedir.
+projeleri yürütmektedir. Şirket, BIST'te Ulaştırma sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

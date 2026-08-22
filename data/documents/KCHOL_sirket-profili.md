@@ -26,6 +26,8 @@ teknoloji sektörlerinde faaliyet göstermektedir. Başlıca segmentleri:
 - **Finans:** Yapı Kredi
 - **Dayanıklı tüketim:** Arçelik
 
+Şirket, BIST'te Holding ve Yatırım sektöründe sınıflandırılmaktadır.
+
 ## Borsa bilgisi
 
 Hisse senetleri (KCHOL), Borsa İstanbul'da işlem görmekte olup BIST 30

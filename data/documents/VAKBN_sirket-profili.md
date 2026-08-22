@@ -21,7 +21,8 @@ geçmiştir. Kuruluş sermayesi 50 milyon TL idi.
 Temel bankacılık ürün ve hizmetlerinin yanı sıra yatırım bankacılığı
 ve sermaye piyasası faaliyetlerinde de bulunmaktadır. Finansal bağlı
 ortaklıkları aracılığıyla finansal kiralamadan faktoring hizmetlerine
-kadar geniş bir yelpazede finansal ürün sunmaktadır.
+kadar geniş bir yelpazede finansal ürün sunmaktadır. Şirket, BIST'te
+Bankacılık sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

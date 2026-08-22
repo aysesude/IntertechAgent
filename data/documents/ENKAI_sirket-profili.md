@@ -20,7 +20,8 @@ tarafından kurulmuştur.
 
 Şirketin faaliyet alanları mühendislik ve inşaat, enerji üretimi,
 gayrimenkul geliştirme ve yönetimi, uluslararası ticaret ve veri
-merkezi hizmetlerini kapsamaktadır.
+merkezi hizmetlerini kapsamaktadır. Şirket, BIST'te İnşaat sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 

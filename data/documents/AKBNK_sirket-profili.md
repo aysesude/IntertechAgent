@@ -21,7 +21,8 @@ Ahmet Sapmaz, Bekir Sapmaz ve Seyit Tekin yer almıştır.
 
 Türkiye'nin önde gelen özel bankalarından biri olarak bireysel,
 kurumsal ve ticari bankacılık, yatırım bankacılığı ve varlık yönetimi
-alanlarında hizmet vermektedir.
+alanlarında hizmet vermektedir. Şirket, BIST'te Bankacılık sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -29,9 +30,5 @@ Akbank'ın en büyük hissedarı Sabancı Holding'dir; Sakıp Sabancı
 Holding ve Hacı Ömer Sabancı Holding toplam olarak yaklaşık yüzde 49
 hisseye sahiptir. Kalan yaklaşık yüzde 51'i emeklilik fonları, küçük
 yatırımcılar ve yabancı yatırımcılar arasında halka açık olarak işlem
-görmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+görmektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
+dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
