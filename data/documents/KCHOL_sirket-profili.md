@@ -31,7 +31,16 @@ teknoloji sektörlerinde faaliyet göstermektedir. Başlıca segmentleri:
 Hisse senetleri (KCHOL), Borsa İstanbul'da işlem görmekte olup BIST 30
 ve BIST 100 endekslerinde yer almaktadır.
 
-## Not
+## Ortaklık yapısı
 
+Koç Holding yatırımcı ilişkileri sayfası ve KAP kayıtlarına göre
+şirketin en büyük pay sahibi Koç ailesidir; aile üyeleri ile ailenin
+holding aracı Family Danışmanlık Gayrimenkul ve Ticaret A.Ş. üzerinden
+toplam aile payı yaklaşık yüzde 63 civarındadır. Vehbi Koç Vakfı
+yaklaşık yüzde 7,3, Koç Holding Emekli ve Yardım Sandığı Vakfı
+yaklaşık yüzde 2,3 pay sahibidir. Kalan kısım halka açık olup kaynağa
+göre yaklaşık yüzde 26,3 ile yüzde 26,9 arasında değişmektedir (iki
+kaynak farklı hesaplama yöntemi kullanmaktadır, kesin ve güncel tarihli
+bir oran için KAP'taki resmi ortaklık yapısı bildirimine bakılmalıdır).
 Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
