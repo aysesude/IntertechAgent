@@ -6,23 +6,71 @@ volatilite, VaR, Sharpe ve yeniden dengeleme senaryolarının tamamı
 `app/services/risk_service.py`'de hesaplanır, LLM yalnızca özetler.
 
 Tool'un tam sözleşmesi: docs/MCP-TOOLS.md · metodoloji: gerek.md FR-4.
-"""
+
+2026-08-22 eki — Sinyal tabanlı risk değerlendirmesi (bkz. Google Drive
+"Intertech - Ekip 3", "riskk" bölümü, iş analisti güncellemesi). Bu YUKARIDAKİ
+volatilite tabanlı akışın YERİNE GEÇMEZ — iş analistiyle netleştirildi: ikisi
+ayrı, birbirinden bağımsız iki metrik seti. Aşağıdaki `_assess_signals` ve
+ilgili yardımcılar TAMAMEN AYRI bir yol izler: hiçbir sayı kod tarafında
+hesaplanmaz/sınıflandırılmaz, girdi yalnızca portföy ağırlıkları ve
+`get_portfolio_news`'ten gelen haber/bilanço/yorum parçalarıdır; risk
+seviyesini ve tüm metni LLM üretir (bkz. agents/prompts/risk_signals.md).
+
+Dummy anket puanı: 1-7 arası gerçek anket henüz yok (kapsamı ayrı, PO onayı
+bekleniyor — bu dosyaya dokunmadan önce mutlaka hatırlat). Bu yüzden
+`_DUMMY_SURVEY_SCORE_BY_PROFILE` mevcut 4'lü `RiskProfile`'dan GEÇİCİ bir 1-7
+değeri türetir; DB şemasına dokunmaz, gerçek anket geldiğinde bu eşleme
+tamamen silinip yerine gerçek alan okunmalı."""
 
 import json
+import logging
+import re
 from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from agents.base import AgentRequest, AgentResponse, BaseAgent
 from app.core.config import (
     RISK_MAX_CATEGORY_WEIGHT,
+    RISK_SURVEY_SCORE_MAX,
     RISK_TARGET_VOLATILITY_BAND,
     RiskProfile,
 )
 from app.core.llm_client import get_llm_client
+from app.schemas.risk_signals import RiskSignalAssessment
+from app.services.advice_eligibility import allowed_asset_classes
+
+logger = logging.getLogger(__name__)
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "risk_agent.md").read_text(encoding="utf-8")
+_SIGNAL_PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "risk_signals.md").read_text(
+    encoding="utf-8"
+)
+
+# GEÇİCİ eşleme — bkz. modül docstring'i. Puanlar bilinçli olarak
+# advice_eligibility.ASSET_CLASS_ADVICE_RISK_LEVEL'daki kırılım noktalarına
+# (1/3/4/6) denk düşecek şekilde seçildi ki dummy veriyle test ederken tüm
+# varlık sınıfı izinleri anlamlı şekilde temsil edilsin.
+_DUMMY_SURVEY_SCORE_BY_PROFILE: dict[RiskProfile, int] = {
+    RiskProfile.CONSERVATIVE: 2,
+    RiskProfile.BALANCED: 4,
+    RiskProfile.GROWTH: 5,
+    RiskProfile.AGGRESSIVE: RISK_SURVEY_SCORE_MAX,
+}
+
+_JSON_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+def _dummy_survey_score(profile: RiskProfile | None) -> int | None:
+    """Mevcut 4'lü profilden GEÇİCİ bir 1-7 puanı türetir. Gerçek anket
+    gelene kadar; bkz. modül docstring'i."""
+    if profile is None:
+        return None
+    return _DUMMY_SURVEY_SCORE_BY_PROFILE.get(profile)
+
 
 # Kök neden teşhisindeki alan adlarının kullanıcıya gösterilecek karşılıkları.
 _CAUSE_LABELS = {
@@ -182,15 +230,92 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def _extract_json_object(text: str) -> dict[str, Any]:
+    """LLM çıktısından JSON nesnesini çıkarır. Prompt "yalnızca JSON" istiyor
+    ama modeller sık sık ``` kod bloğuna sarar; bunu tolere ediyoruz, başka
+    hiçbir "onarımı" (eksik alan tahmini vb.) DENEMİYORUZ — bozuksa
+    `json.loads` zaten fırlatır, çağıran taraf bunu görünür bir hataya çevirir."""
+    stripped = _JSON_FENCE.sub("", text.strip()).strip()
+    return json.loads(stripped)
+
+
+def _build_signal_context(
+    holdings_data: dict[str, Any],
+    news_data: dict[str, Any],
+    profile: RiskProfile | None,
+    dummy_score: int | None,
+) -> dict[str, Any]:
+    """LLM'e verilecek ham veriyi toplar. HİÇBİR SINIFLANDIRMA/HESAPLAMA
+    yapmaz — yalnızca üç kaynaktan (holdings ağırlıkları, portföy haberleri,
+    profil→dummy puan eşlemesi) gelen veriyi tek bir sözlükte birleştirir.
+    Sektör verisi (Sinyal 2'nin ön koşulu) bilerek YOK — henüz üretilmedi
+    (ekipte Çağan'ın görevi); prompt bunun yokluğunu Sinyal 2'yi atlayarak
+    ele almalı, burada uydurulmaz."""
+    context: dict[str, Any] = {
+        "varliklar": [
+            {
+                "sembol": h.get("symbol"),
+                "sinif": h.get("asset_class"),
+                "agirlik_yuzde": h.get("weight_percent"),
+            }
+            for h in holdings_data.get("holdings", [])
+            if not h.get("price_missing")
+        ],
+    }
+
+    haberler: dict[str, list[dict[str, Any]]] = {}
+    for asset in news_data.get("assets", []):
+        haberler[asset["symbol"]] = [
+            {
+                "tur": doc.get("tur"),
+                "baslik": doc.get("baslik"),
+                "tarih": doc.get("tarih"),
+                "kaynak": doc.get("kaynak"),
+                "icerik": doc.get("content"),
+            }
+            for doc in asset.get("documents", [])
+        ]
+    context["haberler"] = haberler
+    context["haber_kapsami_olmayan_varliklar"] = news_data.get("assets_without_documents", [])
+    context["haber_guven_duzeyi"] = news_data.get("confidence")
+
+    if dummy_score is not None:
+        context["survey_puani_dummy"] = dummy_score
+        context["survey_puani_dummy_uyarisi"] = (
+            "Bu GERÇEK bir anket sonucu değildir; anket henüz yok, geçici bir "
+            "yer tutucudur (bkz. agents/risk_agent.py)."
+        )
+        context["bu_puanla_izinli_siniflar"] = sorted(
+            ac.value for ac in allowed_asset_classes(dummy_score)
+        )
+
+    return context
+
+
+def _render_signal_prompt(context: dict[str, Any]) -> str:
+    """`_SIGNAL_PROMPT_TEMPLATE`'i bağlamla doldurur.
+
+    DİKKAT: `.format()` DEĞİL, `.replace()` kullanılıyor. Bu prompt'un
+    (risk_agent.md'nin aksine) içinde bir JSON çıktı şeması ÖRNEĞİ var — o
+    örnekteki literal `{`/`}` karakterleri `.format()`'u KIRAR (ValueError:
+    unmatched '{' vb.). Tek yer tutucu olan "{context_json}" basit bir alt
+    dize değişimiyle doldurulabildiği için `.replace()` hem güvenli hem
+    yeterli."""
+    return _SIGNAL_PROMPT_TEMPLATE.replace(
+        "{context_json}", json.dumps(context, ensure_ascii=False, indent=2)
+    )
+
+
 class RiskAgent(BaseAgent):
     agent_name = "risk_agent"
 
     async def execute(
         self, request: AgentRequest, *, on_token: Callable[[str], None] | None = None
     ) -> AgentResponse:
+        wants_scenarios = _wants_scenarios(request.query)
         tool_result = await self.call_mcp_tool(
             "get_risk_assessment",
-            {"user_id": request.user_id, "include_scenarios": _wants_scenarios(request.query)},
+            {"user_id": request.user_id, "include_scenarios": wants_scenarios},
         )
 
         if not tool_result.get("success"):
@@ -199,9 +324,66 @@ class RiskAgent(BaseAgent):
 
         data = tool_result["data"]
         summary_text = await self._summarize(request.query, data, on_token=on_token)
+
+        response_data = data
+        if wants_scenarios:
+            # Sinyal tabanlı değerlendirme (bkz. modül docstring'i) yalnızca
+            # kullanıcı "ne yapmalıyım" tarzı bir soru sorduğunda üretilir —
+            # her sohbet turunda ek RAG (get_portfolio_news) + LLM çağrısı
+            # yapmamak için aynı `_wants_scenarios` tespiti yeniden kullanılır.
+            # Bu YARDIMCI bir veridir: üretilemezse (bkz. _assess_signals)
+            # mevcut hacimli/volatilite tabanlı yanıt HİÇ ETKİLENMEZ.
+            signal_assessment = await self._assess_signals(request.user_id, data)
+            if signal_assessment is not None:
+                response_data = {
+                    **data,
+                    "risk_signal_assessment": signal_assessment.model_dump(mode="json"),
+                }
+
         return AgentResponse(
-            agent_name=self.agent_name, success=True, summary_text=summary_text, data=data
+            agent_name=self.agent_name, success=True, summary_text=summary_text, data=response_data
         )
+
+    async def _assess_signals(
+        self, user_id: str, assessment_data: dict[str, Any]
+    ) -> RiskSignalAssessment | None:
+        """Sinyal tabanlı risk değerlendirmesini üretir (bkz. modül docstring'i
+        ve agents/prompts/risk_signals.md). Bu akış `execute()`'un ana
+        yanıtını ASLA BLOKE ETMEZ/BOZMAZ: gerekli tool'lardan biri başarısız
+        olursa, LLM çıktısı geçerli JSON değilse ya da beklenen şemaya
+        uymuyorsa None döner — çağıran taraf mevcut volatilite tabanlı yanıtı
+        olduğu gibi kullanıcıya döndürmeye devam eder."""
+        holdings_result = await self.call_mcp_tool("get_holdings", {"user_id": user_id})
+        if not holdings_result.get("success"):
+            logger.warning(
+                "[AJAN] risk: sinyal degerlendirmesi atlandi, get_holdings basarisiz — %s",
+                holdings_result.get("error"),
+            )
+            return None
+
+        news_result = await self.call_mcp_tool("get_portfolio_news", {"user_id": user_id})
+        if not news_result.get("success"):
+            logger.warning(
+                "[AJAN] risk: sinyal degerlendirmesi atlandi, get_portfolio_news basarisiz — %s",
+                news_result.get("error"),
+            )
+            return None
+
+        profile = _risk_profile(assessment_data.get("risk_profile"))
+        dummy_score = _dummy_survey_score(profile)
+        context = _build_signal_context(
+            holdings_result["data"], news_result["data"], profile, dummy_score
+        )
+        prompt = _render_signal_prompt(context)
+
+        llm = get_llm_client()
+        try:
+            raw = await llm.generate(prompt)
+            parsed = _extract_json_object(raw)
+            return RiskSignalAssessment(**parsed, survey_score_is_dummy=dummy_score is not None)
+        except (json.JSONDecodeError, ValidationError, TypeError) as exc:
+            logger.warning("[AJAN] risk: sinyal LLM ciktisi ayristirilamadi — %s", exc)
+            return None
 
     async def _summarize(
         self,
