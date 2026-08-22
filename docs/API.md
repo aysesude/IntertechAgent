@@ -3,6 +3,74 @@
 Şemaların tanımlı olduğu yer: `backend/app/schemas/`. Frontend tipleri
 (`frontend/src/types/`) bunlarla birebir eşleşmelidir.
 
+## Kimlik doğrulama (FR-0 / AK 5.4)
+
+`/health` ve `POST /api/auth/login` DIŞINDAKİ tüm uçlar `Authorization: Bearer
+<token>` başlığı ister. Kullanıcıya özel uçlar ayrıca yoldaki/gövdedeki
+`user_id`'nin token sahibiyle aynı olmasını şart koşar.
+
+| Kod | Anlamı | Arayüz ne yapmalı |
+|---|---|---|
+| `401` | Token yok, bozuk ya da süresi dolmuş | Giriş ekranına dön |
+| `403` | Token geçerli ama bu veri başkasının | "Erişim yetkiniz yok" göster |
+
+Kimlik, yol imzalarını değiştirmedi (`/api/portfolio/{user_id}` aynı kaldı):
+`/me` kalıbına geçmek MCP tool'larını, ajanları ve bu dokümanı topluca
+kırardı. Yoldaki değer artık yalnızca **doğrulanan bir iddiadır**.
+
+### `POST /api/auth/login`
+
+```json
+{ "national_id": "20433218148", "password": "460213" }
+```
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer",
+  "expires_in": 28800,
+  "user": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "full_name": "Elif Yıldırım",
+    "risk_profile": "balanced"
+  }
+}
+```
+
+- **Hatalı kimlik ile hatalı şifre AYNI 401'i döner** (`"T.C. kimlik numarası
+  veya şifre hatalı."`). Ayrıştırılsaydı hangi numaraların kayıtlı olduğu tek
+  tek denenerek çıkarılabilirdi. Kullanıcı bulunamadığında bile bir kukla
+  bcrypt doğrulaması yapılır — yanıt süresinden de bilgi sızmasın diye.
+- `expires_in` saniyedir ve sunucudan gelir; istemci kendi süre hesabını
+  yapmamalıdır.
+- `user` aynı yanıtta döner ki arayüz giriş sonrası ikinci bir istek atmasın.
+- Yanıt **e-posta ve T.C. kimlik numarası içermez**: arayüzün ikisine de
+  ihtiyacı yok.
+- 11 haneden farklı bir numara `422` ile reddedilir. Sağlama (checksum)
+  doğrulaması BİLEREK yapılmaz — geçersiz numara zaten eşleşmez ve ayrı bir
+  hata "bu numara kayıtlı mı" sorusuna dolaylı cevap verirdi.
+
+**Demo kullanıcıları:** T.C. kimlik numaraları `make seed` ile deterministik
+olarak üretilir (sağlaması geçerli), şifre `.env`'deki `DEMO_USER_PASSWORD`'dür
+ve hepsinde aynıdır. Listeyi görmek için: `make demo-users`.
+
+Kayıt, şifre değiştirme ve şifre sıfırlama uçları **yoktur**. Çıkış (logout)
+ucu da yoktur ve gerekmez: token durumsuzdur, çıkış istemcinin token'ı
+silmesidir.
+
+### `GET /api/auth/me`
+
+Token'ın hâlâ geçerli olup olmadığını ve kime ait olduğunu döner (`AuthUser`
+gövdesi, yukarıdaki `user` alanıyla aynı). Arayüz sayfa yenilendiğinde bunu
+çağırır. Token yoksa `401` + `WWW-Authenticate: Bearer`.
+
+### Geçiş bayrağı: `AUTH_ENFORCE`
+
+Varsayılanı `true` — unutulursa auth **açık** kalır. `false` iken token
+GÖNDERMEYEN istekler geçer (token gönderilirse yine doğrulanır); yalnızca
+token göndermeyen eski `frontend/` ile çalışmayı sürdürenler için. Bayrak,
+`frontend-v2`'nin sohbeti uçtan uca çalışır hale gelince silinecek.
+
 ## REST
 
 ### `GET /api/portfolio/{user_id}`

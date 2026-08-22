@@ -1,4 +1,4 @@
-.PHONY: up down seed backfill daily-update test lint
+.PHONY: up down seed demo-users backfill daily-update test lint
 
 up:
 	docker compose up --build
@@ -8,6 +8,11 @@ down:
 
 seed:
 	docker compose exec -w / api python -m data.generate_dummy
+
+# Demo kullanicilarinin giris bilgileri (T.C. kimlik no + ortak sifre).
+# Tumu icin: make demo-users ARGS="--limit 0"
+demo-users:
+	docker compose exec -w / api python -m scripts.demo_users $(ARGS)
 
 backfill:
 	docker compose exec -w / api python -m data.backfill --days 365
