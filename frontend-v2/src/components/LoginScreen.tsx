@@ -2,6 +2,19 @@ import { useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import {
+  ACCENT_DARK,
+  ACCENT_DARK_ICON,
+  ACCENT_DARK_LINK,
+  BRAND,
+  CTA_DARK,
+  CTA_DARK_HOVER,
+  INPUT_CLASS,
+  NAVY,
+  NAVY_DARK,
+} from "@/components/auth/loginPalette";
+import { PasswordResetCard } from "@/components/auth/PasswordResetCard";
+import { gecerliTcKimlikNo } from "@/utils/tckn";
 
 /**
  * LoginScreen — "Finansal rotanı birlikte çizelim."
@@ -23,50 +36,11 @@ import moonlitSeaArt from "../assets/login/ay-isigi-deniz.jpg";
 /*  Sabitler                                                           */
 /* ------------------------------------------------------------------ */
 
-const BRAND = "#2557E8";
-const NAVY = "#0B2653";
-// LoginScreen kendi kapalı renk sistemini kullanıyor (global utils/colors.ts
-// CSS var'larına bağlı değil) — dark modda bu ikisinin karşılığı, ThemeContext
-// üzerinden okunan resolvedTheme'e göre elle seçiliyor. Değerler src/index.css
-// .dark { --color-brand / --color-navy } ile birebir aynı.
-// FeatureCards ikonları artık ACCENT_DARK_ICON kullanıyor — BRAND_DARK bu
-// dosyada şu an başka bir yerde tüketilmiyor, ama silinmemesi istendiği için
-// export edildi (tsc'nin noUnusedLocals'ı aksi halde build'i kırar).
-export const BRAND_DARK = "#4A7EF0";
-const NAVY_DARK = "#DCE6FA";
-// Ay ışığında deniz tablosuna özgü, dark-mode-only bordo vurgu paleti —
-// marka mavisi ikonlarda yaşamaya devam ediyor, bordo sadece başlık/link/CTA'da.
-const ACCENT_DARK = "#96384A"; // başlık vurgusu
-const ACCENT_DARK_LINK = "#C4697A"; // bağlantı
-const CTA_DARK = "#6B2130"; // buton dolgusu
-const CTA_DARK_HOVER = "#7E2839"; // buton hover
-// #B04A5E, FeatureCards'taki 18px ince ikon çizgilerinde sönük kalıyor —
-// ikonlara özel bir tık daha parlak bir bordo.
-const ACCENT_DARK_ICON = "#C25668";
+// Palet ayrı dosyada: giriş kartı ile şifre yenileme kartı aynı renkleri
+// kullanıyor, iki yerde kopyalanırsa biri değiştiğinde diğeri sessizce ayrışır.
+// BRAND_DARK geriye dönük uyumluluk için buradan da dışa aktarılıyor.
+export { BRAND_DARK } from "@/components/auth/loginPalette";
 
-/* ------------------------------------------------------------------ */
-/*  GEÇİCİ: eski arayüze kaçış kapısı                                  */
-/* ------------------------------------------------------------------ */
-
-/**
- * Eski arayüzün (`frontend/`, geliştirmede port 5173) adresi.
- *
- * NEDEN VAR: yeni arayüz henüz ekran ekran bağlanıyor; bir şey tutmazsa
- * sunum/test sırasında çalıştığı bilinen arayüze dönebilmek gerekiyor.
- *
- * NEDEN .env'DEN: adres ortama göre değişiyor (yerelde localhost:5173,
- * sunucuda Caddy'nin verdiği alan adı) ve TANIMSIZSA BAĞLANTI HİÇ RENDER
- * EDİLMİYOR — canlıda istenmiyorsa değişkeni koymamak yeterli, kod
- * değişikliği gerekmiyor.
- *
- * DİKKAT: eski arayüz istek başlığına token koymuyor. Bu kapı yalnızca
- * sunucuda `AUTH_ENFORCE=false` iken işe yarar; `true` iken eski arayüz
- * 401 alır (bkz. backend/app/api/deps.py).
- *
- * SİLİNECEK: frontend-v2 tek arayüz olduğunda bu sabit, aşağıdaki blok ve
- * `VITE_LEGACY_UI_URL` birlikte kaldırılacak.
- */
-const LEGACY_UI_URL = import.meta.env.VITE_LEGACY_UI_URL ?? "";
 
 /**
  * object-position değerleri (0 = sol/üst, 0.5 = orta, 1 = sağ/alt).
@@ -235,6 +209,11 @@ function FeatureCards() {
 
 export type LoginScreenProps = {
   /**
+   * Giriş ekranına düşme sebebi (ör. oturum süresi doldu). Kullanıcı sessizce
+   * atılmasın diye gösteriliyor.
+   */
+  notice?: string | null;
+  /**
    * Kimlik bilgilerini doğrular. Reddedilirse (sunucu 401 verirse) hata
    * mesajı formda gösterilir ve alanlar tekrar denenebilir hale gelir.
    *
@@ -242,13 +221,16 @@ export type LoginScreenProps = {
    * zaman "çözüleceğini" yalnızca sonucu bekleyerek bilebiliriz.
    */
   onSubmit?: (credentials: { tckn: string; password: string }) => Promise<void> | void;
-  onForgotPassword?: () => void;
 };
 
 export function LoginScreen({
   onSubmit,
-  onForgotPassword,
+  notice = null,
 }: LoginScreenProps) {
+  // "login" | "reset" — şifre yenileme akışı aynı kartın içinde açılıyor;
+  // ayrı bir sayfaya gitmek arka plandaki eseri ve kart çerçevesini
+  // yeniden kurmak demek olurdu.
+  const [mod, setMod] = useState<"login" | "reset">("login");
   const [submitted, setSubmitted] = useState(false);
   const [tckn, setTckn] = useState("");
   const [password, setPassword] = useState("");
@@ -265,6 +247,12 @@ export function LoginScreen({
     // sunucudadır (backend/app/schemas/auth.py).
     if (tckn.length !== 11) {
       setError("T.C. kimlik numarası 11 haneli olmalı.");
+      return;
+    }
+    // Sağlama istemcide kontrol ediliyor: yanlış yazılan numara ağa
+    // çıkmadan yakalanıyor. Sunucu bunu bilerek yapmıyor (bkz. utils/tckn.ts).
+    if (!gecerliTcKimlikNo(tckn)) {
+      setError("T.C. kimlik numarası geçersiz.");
       return;
     }
     if (password.length !== 6) {
@@ -422,6 +410,13 @@ export function LoginScreen({
               draggable={false}
             />
 
+            {/* Şifre yenileme aynı kartın İÇİNDE açılıyor: ayrı bir sayfaya
+                gitmek arka plandaki eseri, kart çerçevesini ve logoyu yeniden
+                kurmak demek olurdu. Yalnızca kartın içeriği değişiyor. */}
+            {mod === "reset" ? (
+              <PasswordResetCard onBack={() => setMod("login")} />
+            ) : (
+            <>
             <h2
               className="mt-6 font-display text-[29px] font-semibold tracking-[-0.015em]"
               style={{ color: navyColor }}
@@ -431,6 +426,17 @@ export function LoginScreen({
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#5A7292] dark:text-[#B9C4DC]">
               Hesabına giriş yaparak finansal rotana devam et.
             </p>
+
+            {/* Oturum süresi dolduğunda kullanıcı sessizce buraya atılıyordu;
+                neden atıldığını söylemek zorundayız. */}
+            {notice && (
+              <p
+                role="status"
+                className="mt-4 rounded-xl border border-[#DCE3EC] bg-white/70 px-3.5 py-2.5 text-[12.5px] text-[#5A7292] dark:border-white/12 dark:bg-white/[0.06] dark:text-[#B9C4DC]"
+              >
+                {notice}
+              </p>
+            )}
 
             <form onSubmit={handleSubmit} className="mt-7 space-y-4" noValidate>
               <div>
@@ -446,13 +452,14 @@ export function LoginScreen({
                   name="tckn"
                   inputMode="numeric"
                   autoComplete="username"
+                  autoFocus
                   maxLength={11}
                   placeholder="11 haneli kimlik numaran"
                   value={tckn}
                   onChange={(e) =>
                     setTckn(e.target.value.replace(/\D/g, "").slice(0, 11))
                   }
-                  className="h-11 w-full rounded-xl border border-[#DCE3EC] bg-white px-3.5 text-[14px] tracking-[0.04em] text-[#0B2653] outline-none transition placeholder:tracking-normal placeholder:text-[#9AA9BC] focus:border-[#2557E8] focus:ring-4 focus:ring-[#2557E8]/12 dark:border-white/12 dark:bg-[rgba(250,240,230,0.05)] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#B04A5E] dark:focus:ring-[#B04A5E]/20"
+                  className={INPUT_CLASS}
                 />
               </div>
 
@@ -477,6 +484,9 @@ export function LoginScreen({
                     onChange={(e) =>
                       setPassword(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
+                    /* INPUT_CLASS ile aynı, tek farkı sağdaki göz butonuna yer
+                       açan `pr-11` dolgusu — Tailwind'de sınıf sırası çakışmayı
+                       çözmediği için burada tam sınıf yazılıyor. */
                     className="h-11 w-full rounded-xl border border-[#DCE3EC] bg-white pl-3.5 pr-11 text-[14px] tracking-[0.04em] text-[#0B2653] outline-none transition placeholder:tracking-normal placeholder:text-[#9AA9BC] focus:border-[#2557E8] focus:ring-4 focus:ring-[#2557E8]/12 dark:border-white/12 dark:bg-[rgba(250,240,230,0.05)] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#B04A5E] dark:focus:ring-[#B04A5E]/20"
                   />
                   <button
@@ -495,7 +505,10 @@ export function LoginScreen({
                 <div className="mt-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={onForgotPassword}
+                    onClick={() => {
+                      setError(null);
+                      setMod("reset");
+                    }}
                     style={{ "--accent-dark-link": ACCENT_DARK_LINK } as CSSProperties}
                     className="rounded text-[12.5px] font-medium text-[#5A7292] underline-offset-4 transition hover:text-[#2557E8] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2557E8]/40 dark:text-[var(--accent-dark-link)] dark:hover:text-[#D98A99]"
                   >
@@ -525,23 +538,9 @@ export function LoginScreen({
                 <ArrowIcon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
               </button>
             </form>
-
-            {/* GEÇİCİ kaçış kapısı — bkz. LEGACY_UI_URL. Formun DIŞINDA
-                duruyor ki Enter'a basınca yanlışlıkla tetiklenmesin.
-                Kasıtlı olarak sönük: bu bir ürün özelliği değil, geliştirme
-                aracı; giriş akışının önüne geçmemeli. */}
-            {LEGACY_UI_URL && (
-              <div className="mt-5 border-t border-[#DCE3EC] pt-4 text-center dark:border-white/10">
-                <a
-                  href={LEGACY_UI_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[12px] font-medium text-[#7A8CA4] underline-offset-4 transition-colors hover:text-[#5A7292] hover:underline dark:text-[#7C8AA6] dark:hover:text-[#B9C4DC]"
-                >
-                  Eski arayüzü aç (test)
-                </a>
-              </div>
+            </>
             )}
+
           </div>
         </div>
       </div>

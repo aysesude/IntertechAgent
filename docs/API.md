@@ -61,6 +61,52 @@ Kayıt, şifre değiştirme ve şifre sıfırlama uçları **yoktur**. Çıkış
 ucu da yoktur ve gerekmez: token durumsuzdur, çıkış istemcinin token'ı
 silmesidir.
 
+### Şifre yenileme (DEMO akışı)
+
+**TEMSİLİ olan:** e-posta gönderilmez, kod sunucuda üretilmez ve saklanmaz —
+`DEMO_RESET_CODE` ile eşleşen sabit kod kabul edilir.
+**GERÇEK olan:** şifre bcrypt ile özetlenip veritabanına yazılır; kullanıcı
+bundan sonra yeni şifresiyle giriş yapar, eskisiyle yapamaz.
+
+#### `POST /api/auth/password-reset/request`
+
+```json
+{ "national_id": "20433218148" }
+```
+
+```json
+{ "code_length": 6, "expires_in_seconds": 180 }
+```
+
+- Kimliğin **kayıtlı olup olmadığına bakmadan** aynı yanıtı döner; aksi halde
+  bu uç, hangi numaraların sistemde olduğunu tek tek denemeye açık bir araca
+  dönüşürdü (giriş ucundaki gerekçenin aynısı).
+- **Kodun kendisi dönmez.** Yanıt yalnızca arayüzün alan uzunluğunu ve geri
+  sayımı sabit yazmaması için bu iki değeri taşır.
+
+#### `POST /api/auth/password-reset/complete`
+
+```json
+{ "national_id": "20433218148", "code": "123456", "new_password": "778899" }
+```
+
+Başarıda `204` (gövde yok). Hatalı kimlik ile hatalı kod **aynı `401`'i** döner.
+
+- `new_password` **6 haneli ve yalnızca rakam** olmak zorunda: giriş ekranının
+  kabul ettiği biçim bu. Aksi halde kullanıcı, sonradan giriş yapamayacağı bir
+  şifre belirlerdi.
+- Kod karşılaştırması sabit zamanlı (`secrets.compare_digest`).
+
+**⚠️ GÜVENLİK SINIRI.** Bu uçlar kimlik doğrulaması İSTEMEZ: T.C. kimlik
+numarasını ve kodu bilen biri o hesabın şifresini değiştirebilir — kimlik
+doğrulamasının etrafından dolaşan bir kapıdır. Sentetik demo verisiyle çalışan,
+süreli bir gösterim için kabul edildi. Gerçek bir dağıtımda
+`DEMO_PASSWORD_RESET_ENABLED=false` yapılmalı (uçlar `404` döner).
+
+**Bilinen sınır:** yenileme sonrası eski token'lar geçersizleşmez. Bunun için
+token kara listesi ya da özete bağlı bir doğrulama gerekir; 8 saatlik demo
+token'ı için karşılığı olmayan bir karmaşıklık.
+
 ### `GET /api/auth/me`
 
 Token'ın hâlâ geçerli olup olmadığını ve kime ait olduğunu döner (`AuthUser`

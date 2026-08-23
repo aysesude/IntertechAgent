@@ -56,6 +56,7 @@ function Gosterge() {
       <span data-testid="name">{user.name}</span>
       <span data-testid="initials">{user.initials}</span>
       <span data-testid="account-id">{account?.id ?? "-"}</span>
+      <span data-testid="notice">{useAuth().notice ?? "-"}</span>
       <button onClick={() => void login("36542351188", "460213").catch(() => {})}>giris</button>
       <button onClick={logout}>cikis</button>
     </div>
@@ -231,5 +232,66 @@ describe("baş harfler", () => {
     renderProvider({ strict: false });
 
     await waitFor(() => expect(screen.getByTestId("initials")).toHaveTextContent(beklenen));
+  });
+});
+
+describe("oturum sona erdi bildirimi", () => {
+  it("401 işleyicisi tetiklenince kullanıcıya SEBEBİ söylenir", async () => {
+    // Eskiden oturum sessizce kapanıyordu: kullanıcı giriş ekranına
+    // düşüyor ama neden atıldığını göremiyordu.
+    renderProvider({ strict: false });
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("anonymous"));
+
+    const isleyici = [...setUnauthorizedHandler.mock.calls]
+      .reverse()
+      .map((cagri) => cagri[0] as unknown)
+      .find((fn): fn is () => void => typeof fn === "function");
+
+    await act(async () => {
+      isleyici!();
+    });
+    expect(screen.getByTestId("notice")).toHaveTextContent("Oturumunuz sona erdi");
+  });
+
+  it("saklanan token geçersizse de aynı bildirim gösterilir", async () => {
+    window.localStorage.setItem(STORAGE_KEY, "suresi-dolmus");
+    fetchCurrentUser.mockRejectedValue(new Error("401"));
+
+    renderProvider({ strict: false });
+
+    await waitFor(() => expect(screen.getByTestId("notice")).toHaveTextContent("Oturumunuz sona erdi"));
+  });
+
+  it("kullanıcı KENDİ çıkış yaptığında bildirim gösterilmez", async () => {
+    // Kendi yaptığı bir eylemi ona açıklamak gereksiz gürültü.
+    window.localStorage.setItem(STORAGE_KEY, "gecerli-token");
+    fetchCurrentUser.mockResolvedValue(HESAP);
+
+    renderProvider({ strict: false });
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("authenticated"));
+
+    await act(async () => {
+      screen.getByText("cikis").click();
+    });
+    expect(screen.getByTestId("notice")).toHaveTextContent("-");
+  });
+
+  it("başarılı giriş bildirimi temizler", async () => {
+    loginRequest.mockResolvedValue({
+      access_token: "yeni-token",
+      token_type: "bearer",
+      expires_in: 28800,
+      user: HESAP,
+    });
+    window.localStorage.setItem(STORAGE_KEY, "suresi-dolmus");
+    fetchCurrentUser.mockRejectedValue(new Error("401"));
+
+    renderProvider({ strict: false });
+    await waitFor(() => expect(screen.getByTestId("notice")).toHaveTextContent("Oturumunuz sona erdi"));
+
+    await act(async () => {
+      screen.getByText("giris").click();
+    });
+    await waitFor(() => expect(screen.getByTestId("notice")).toHaveTextContent("-"));
   });
 });

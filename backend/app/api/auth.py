@@ -1,8 +1,11 @@
 """Giriş uçları (FR-0).
 
-Kayıt (register), şifre değiştirme ve şifre sıfırlama uçları BİLEREK YOK:
-demo kullanıcıları `make seed` ile üretilir. Arayüzdeki "Şifremi unuttum"
-bağlantısının şu an bir karşılığı yoktur.
+Kayıt (register) ucu BİLEREK YOK: demo kullanıcıları `make seed` ile üretilir.
+
+Şifre yenileme uçları DEMO akışıdır: e-posta gönderilmez, kod sunucuda
+üretilmez ve saklanmaz (yapılandırmadaki sabit kod kabul edilir), ama şifre
+GERÇEKTEN güncellenir. Güvenlik sınırı ve kapatma yolu için bkz.
+`Settings.demo_password_reset_enabled`.
 
 Çıkış (logout) ucu da yok ve gerekmiyor: token durumsuzdur (stateless),
 sunucuda saklanmaz; çıkış, istemcinin token'ı silmesidir. Sunucu tarafında
@@ -14,11 +17,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_current_user
+from app.core.config import settings
 from app.core.db import get_db
-from app.core.exceptions import AuthenticationError
+from app.core.exceptions import AuthenticationError, ValidationAppError
 from app.core.security import create_access_token
 from app.models import User
-from app.schemas.auth import AuthUser, LoginRequest, TokenResponse
+from app.schemas.auth import (
+    AuthUser,
+    LoginRequest,
+    PasswordResetComplete,
+    PasswordResetInfo,
+    PasswordResetRequest,
+    TokenResponse,
+)
 from app.services import auth_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -61,3 +72,37 @@ def read_current_user(current_user: User = Depends(require_current_user)) -> Aut
         full_name=current_user.full_name,
         risk_profile=current_user.risk_profile,
     )
+
+
+@router.post("/password-reset/request", response_model=PasswordResetInfo)
+def request_password_reset(payload: PasswordResetRequest) -> PasswordResetInfo:
+    """Yenileme akışını başlatır.
+
+    Kimliğin kayıtlı olup olmadığına BAKMADAN aynı yanıtı döner — aksi halde
+    bu uç, hangi T.C. kimlik numaralarının sistemde olduğunu tek tek denemeye
+    açık bir araca dönüşürdü.
+
+    E-posta GÖNDERİLMEZ (demo). Yanıt yalnızca arayüzün alan uzunluğunu ve
+    geri sayımı sabit yazmaması için bu iki değeri taşır.
+    """
+    if not settings.demo_password_reset_enabled:
+        raise HTTPException(status_code=404, detail="Şifre yenileme bu ortamda kapalı.")
+    return PasswordResetInfo(
+        code_length=len(settings.demo_reset_code),
+        expires_in_seconds=settings.password_reset_code_ttl_seconds,
+    )
+
+
+@router.post("/password-reset/complete", status_code=204)
+def complete_password_reset(payload: PasswordResetComplete, db: Session = Depends(get_db)) -> None:
+    """Doğrulama kodunu kontrol eder ve şifreyi günceller.
+
+    Hatalı kimlik ile hatalı kod AYNI 401'i döner. Başarıda gövde yok (204):
+    dönecek bir veri yok, arayüz kullanıcıyı giriş ekranına alır.
+    """
+    try:
+        auth_service.reset_password(db, payload.national_id, payload.code, payload.new_password)
+    except ValidationAppError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=exc.message) from exc
