@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -82,10 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // API adresi tanımlı değilse doğrulanacak bir şey yok; "checking" durumunda
   // sonsuza kadar beklemek yerine doğrudan anonim başlıyoruz.
   const [status, setStatus] = useState<AuthStatus>(isApiConfigured ? "checking" : "anonymous");
-  // React 18 StrictMode geliştirmede effect'leri iki kez çalıştırıyor; oturum
-  // doğrulaması iki kez /api/auth/me çağırmasın.
-  const restored = useRef(false);
-
   const logout = useCallback(() => {
     writeStoredToken(null);
     setAccessToken(null);
@@ -103,10 +98,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // içeriğini istemcide çözüp "süresi dolmuş mu" diye BAKMIYORUZ — istemcinin
   // saati yanlış olabilir ve kullanıcı silinmiş de olabilir; tek doğru cevap
   // sunucudan gelir.
+  //
+  // BURADA "YALNIZCA BİR KEZ ÇALIŞSIN" BAYRAĞI KULLANILMAZ. Bir `useRef`
+  // bayrağıyla effect'in ikinci çalışmasını engellemek, React 18
+  // StrictMode'da kalıcı BEYAZ EKRAN üretiyordu ve canlıda ölçüldü:
+  //
+  //   1. İlk takılışta bayrak set edilir, istek başlar, temizlik döndürülür.
+  //   2. StrictMode bileşeni söker → temizlik çalışır → `iptal = true`.
+  //   3. İkinci takılışta bayrak yüzünden effect HİÇ çalışmaz.
+  //   4. 1. adımdaki isteğin cevabı gelir ama `iptal` true olduğu için
+  //      durum güncellenmez → `status` sonsuza dek "checking" kalır → App
+  //      o durumda boş bir div render eder.
+  //
+  // Token geçerli olsa bile oluyordu: hata token'da değil, akıştaydı.
+  // Doğrusu, React'in belgelediği desen — bayrak yok, yalnızca iptal
+  // bayrağı. StrictMode'da istek iki kez gider; `/api/auth/me` salt okuma
+  // olduğu için bunun bir maliyeti yok, kalıcı beyaz ekranın ise var.
   useEffect(() => {
-    if (restored.current) return;
-    restored.current = true;
-
     const token = readStoredToken();
     if (!token || !isApiConfigured) {
       setStatus("anonymous");
