@@ -2,8 +2,6 @@ import { useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { dashboardStaggerItem } from "@/components/PageTransition";
 import { PageHeading } from "@/components/common/PageHeading";
-import { Button } from "@/components/common/Button";
-import { Card } from "@/components/common/Card";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
 import { AssetAllocationDonut } from "@/components/dashboard/AssetAllocationDonut";
@@ -11,11 +9,11 @@ import { PerformerHighlights } from "@/components/dashboard/PerformerHighlights"
 import { TransactionsList } from "@/components/dashboard/TransactionsList";
 import { ErrorBanner } from "@/components/common/ErrorBanner";
 import { InfoTooltip } from "@/components/common/InfoTooltip";
-import { RefreshIcon, FileTextIcon, TrendUpIcon, SparkleIcon } from "@/components/icons";
+import { TrendUpIcon } from "@/components/icons";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { useAuth } from "@/auth/AuthContext";
 import { formatTRY, formatSignedTRY, formatPct } from "@/utils/format";
 import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
-import { RISK_BAND } from "@/data/insightConfig";
 import type { RangeKey, ScreenId } from "@/types/finance";
 
 interface DashboardPageProps {
@@ -30,163 +28,165 @@ function StaggerItem({ active, children }: { active: boolean; children: ReactNod
   return <motion.div variants={dashboardStaggerItem}>{children}</motion.div>;
 }
 
-const ACTION_DELAY_MS = 1200;
-// Butonların hata senaryosunu göstermek için simüle edilen başarısızlık
-// oranı (AK-3.14, AK-1.12) — gerçek bir API çağrısında ağ/istemci hatası.
-const SIMULATED_FAILURE_RATE = 0.2;
-
-function simulateAction(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      if (Math.random() < SIMULATED_FAILURE_RATE) reject(new Error("simulated_failure"));
-      else resolve();
-    }, ACTION_DELAY_MS);
-  });
+/** "Ahmet Yılmaz" → "Ahmet". Selamlamada tam ad fazla resmi duruyor. */
+function ilkAd(tamAd: string): string {
+  return tamAd.trim().split(/\s+/)[0] ?? "";
 }
 
-export function DashboardPage({ onNavigate, introSequence = false }: DashboardPageProps) {
-  const { data } = useDashboardData();
+export function DashboardPage({ introSequence = false }: DashboardPageProps) {
+  const [range, setRange] = useState<RangeKey>("1Y");
+  const { data, loading, error, isDemoData, freshnessWarning, refetch } = useDashboardData(range);
+  const { user } = useAuth();
   const shouldReduceMotion = useReducedMotion();
   const stagger = introSequence && !shouldReduceMotion;
-  const [range, setRange] = useState<RangeKey>("1Y");
-  const [rebalancing, setRebalancing] = useState(false);
-  const [showRebalanceResult, setShowRebalanceResult] = useState(false);
-  const [rebalanceError, setRebalanceError] = useState<string | null>(null);
-  const [generatingReport, setGeneratingReport] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
   const { summary } = data;
 
-  const handleRebalance = async () => {
-    setRebalancing(true);
-    setRebalanceError(null);
-    setShowRebalanceResult(false);
-    try {
-      await simulateAction();
-      setShowRebalanceResult(true);
-    } catch {
-      setRebalanceError("Öneri oluşturulamadı, lütfen tekrar deneyin.");
-    } finally {
-      setRebalancing(false);
-    }
-  };
-
-  const handleGenerateReport = async () => {
-    setGeneratingReport(true);
-    setReportError(null);
-    try {
-      await simulateAction();
-    } catch {
-      setReportError("Rapor oluşturulamadı, lütfen tekrar deneyin.");
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
+  const ad = ilkAd(user.name);
 
   return (
     <div className="relative min-h-screen">
       <div className="relative z-10">
-      <PageHeading
-        kicker="Genel Bakış"
-        title="İyi günler, Elif"
-        description={`Son güncelleme ${data.lastUpdated}.`}
-        actions={
-          <>
-            <Button icon={<RefreshIcon size={17} />} loading={rebalancing} onClick={handleRebalance}>
-              Portföyü Yeniden Dengele
-            </Button>
-            <Button variant="secondary" icon={<FileTextIcon size={17} />} loading={generatingReport} onClick={handleGenerateReport}>
-              Detaylı Rapor Oluştur
-            </Button>
-          </>
-        }
-      />
+        <PageHeading
+          kicker="Genel Bakış"
+          title={ad ? `İyi günler, ${ad}` : "Genel Bakış"}
+          description={
+            loading ? "Portföy verisi yükleniyor…" : `Fiyatlar ${data.lastUpdated} itibarıyla.`
+          }
+        />
 
-      {rebalanceError && <ErrorBanner message={rebalanceError} onDismiss={() => setRebalanceError(null)} />}
-      {reportError && <ErrorBanner message={reportError} onDismiss={() => setReportError(null)} />}
+        {/* Backend'in üç hata kodu üç FARKLI durumdur ve arayüz üçünü ayrı
+            göstermeli (docs/API.md): 404 kullanıcı/portföy yok, 409 kaynak var
+            ama hesaplanacak veri yok, 403 başkasının verisi. Sunucunun
+            gönderdiği metin zaten Türkçe ve bu ayrımı taşıyor, olduğu gibi
+            gösteriliyor. */}
+        {error && <ErrorBanner message={error} onDismiss={refetch} />}
 
-      {showRebalanceResult && (
-        <Card className="animate-fadeUp mb-6 border-brand-border bg-brand-tint p-6">
-          <div className="mb-3 flex items-center gap-2.5">
-            <span className="text-brand">
-              <SparkleIcon size={18} />
-            </span>
-            <h2 className="font-display m-0 text-[16px] font-semibold">Yeniden Dengeleme Önerisi</h2>
+        {/* Özet her varlığı KENDİ son fiyatıyla değerliyor; tek bir tarih tüm
+            portföyü tarif etmiyor. Bir kısmı eskiyse söylenmesi zorunlu,
+            yoksa özet olduğundan taze görünür. */}
+        {freshnessWarning && (
+          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
+            {freshnessWarning}
           </div>
-          <div className="mb-1.5 text-sm font-semibold">{data.recommendations[0].title}</div>
-          <p className="m-0 text-[13px] leading-[1.55] text-ink-muted">{data.recommendations[0].description}</p>
-          <button
-            onClick={() => onNavigate("portfolio")}
-            className="mt-3.5 text-[13px] font-semibold text-brand hover:underline"
-          >
-            Portföyde görüntüle →
-          </button>
-          <p className="m-0 mt-3 text-[11px] italic text-ink-faint">{INVESTMENT_DISCLAIMER}</p>
-        </Card>
-      )}
+        )}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <StaggerItem active={stagger}>
-          <StatCard
-            label="Toplam Portföy"
-            value={formatTRY(summary.totalValue)}
-            footer={
-              <>
-                <TrendUpIcon size={15} className="text-positive" />
-                <span className="text-positive">{formatSignedTRY(summary.todayChange)}</span>
-                <span className="font-medium text-ink-faint">bugün</span>
-              </>
-            }
-          />
-        </StaggerItem>
-        <StaggerItem active={stagger}>
-          <StatCard
-            label="Toplam Kâr/Zarar"
-            value={formatSignedTRY(summary.totalPL)}
-            footer={
-              <span className={summary.totalPL >= 0 ? "text-positive" : "text-negative"}>
-                {formatPct(summary.totalPLPct)}
-              </span>
-            }
-          />
-        </StaggerItem>
-        <StaggerItem active={stagger}>
-          <StatCard
-            label="Reel Getiri (yıllık)"
-            value={formatPct(summary.realReturnPct)}
-            footer={
-              <>
-                <span className="font-medium text-ink-faint">enflasyon sonrası</span>
-                <InfoTooltip text="Nominal getiriden yıllık enflasyon varsayımı düşülerek hesaplanır." />
-              </>
-            }
-          />
-        </StaggerItem>
-        <StaggerItem active={stagger}>
-          <StatCard
-            label="Risk Skoru"
-            value={`${summary.riskScore}`}
-            footer={<span className="text-[16px] font-semibold text-ink-faint">/100 · hedef {RISK_BAND.low}–{RISK_BAND.high}</span>}
-            progress={summary.riskScore}
-          />
-        </StaggerItem>
-      </div>
+        {/* Gösterilen veri sunucudan gelmediyse bunu SÖYLEMEK zorundayız;
+            uydurma rakamı gerçek sanmak bir finans ürününde en kötü hata
+            modu (CLAUDE.md §4). */}
+        {isDemoData && !loading && !error && (
+          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
+            Bu ekranda <strong className="font-semibold">tasarım verisi</strong> gösteriliyor —
+            sunucuya bağlanılamadı.
+          </div>
+        )}
 
-      <StaggerItem active={stagger}>
-        <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.65fr_1fr]">
-          <PerformanceChart range={data.performance[range]} activeRange={range} onRangeChange={setRange} />
-          <AssetAllocationDonut
-            slices={data.allocation}
-            instrumentCount={data.instrumentCount}
-            assetClassCount={data.assetClassCount}
-          />
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <StaggerItem active={stagger}>
+            <StatCard
+              label="Toplam Portföy"
+              value={formatTRY(summary.totalValue)}
+              footer={
+                summary.todayChange === undefined ? (
+                  // Yeterli geçmiş yoksa backend null döndürüyor; 0 yazmak
+                  // "bugün hiç değişmedi" demek olurdu (AK 5.5).
+                  <span className="font-medium text-ink-faint">günlük değişim hesaplanamadı</span>
+                ) : (
+                  <>
+                    <TrendUpIcon
+                      size={15}
+                      className={summary.todayChange >= 0 ? "text-positive" : "text-negative"}
+                    />
+                    <span className={summary.todayChange >= 0 ? "text-positive" : "text-negative"}>
+                      {formatSignedTRY(summary.todayChange)}
+                    </span>
+                    <span className="font-medium text-ink-faint">bugün</span>
+                  </>
+                )
+              }
+            />
+          </StaggerItem>
+
+          <StaggerItem active={stagger}>
+            <StatCard
+              label="Toplam Kâr/Zarar"
+              value={formatSignedTRY(summary.totalPL)}
+              footer={
+                <span className={summary.totalPL >= 0 ? "text-positive" : "text-negative"}>
+                  {formatPct(summary.totalPLPct)}
+                </span>
+              }
+            />
+          </StaggerItem>
+
+          {/* Tasarımdaki "Reel Getiri" kartının yerine: sistemde enflasyon
+              kaynağı yok, bu rakamın ise var. Ayrıca docs/API.md yatırılan
+              tutarın gösterilmesini şart koşuyor — üç rakam (değer, kâr,
+              yatırılan) ancak birlikte tutarlı okunuyor. */}
+          <StaggerItem active={stagger}>
+            <StatCard
+              label="Yatırılan Tutar"
+              value={formatTRY(summary.netInvested)}
+              footer={
+                <>
+                  <span className="font-medium text-ink-faint">net sermaye</span>
+                  <InfoTooltip text="Dışarıdan koyduğunuz para (yatırma − çekme). Hesapta duran nakit de buna dahildir; kâr/zarar bu tabana göre hesaplanır." />
+                </>
+              }
+            />
+          </StaggerItem>
+
+          {/* Tasarımdaki "Risk Skoru 0-100" kartının yerine: risk metodolojisi
+              v2 bu kompozit skoru bilerek kaldırdı (yerine 7 kademeli etiket +
+              volatilite) ve REST ucu henüz yok. Risk kartı o uç açıldığında
+              gerçek haliyle geri gelecek. */}
+          <StaggerItem active={stagger}>
+            <StatCard
+              label="Dönem Getirisi"
+              value={
+                summary.periodReturnPct === undefined ? "—" : formatPct(summary.periodReturnPct)
+              }
+              footer={
+                <>
+                  <span className="font-medium text-ink-faint">{data.performance[range]?.subtitle ?? ""}</span>
+                  <InfoTooltip text="Zaman ağırlıklı getiri: dönem içinde yatırdığınız veya çektiğiniz para getiri gibi görünmez." />
+                </>
+              }
+            />
+          </StaggerItem>
         </div>
-      </StaggerItem>
 
-      <PerformerHighlights best={data.bestPerformer} worst={data.worstPerformer} />
+        <StaggerItem active={stagger}>
+          <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.65fr_1fr]">
+            {data.performance[range] && (
+              <PerformanceChart
+                range={data.performance[range]}
+                activeRange={range}
+                onRangeChange={setRange}
+              />
+            )}
+            <AssetAllocationDonut
+              slices={data.allocation}
+              instrumentCount={data.instrumentCount}
+              assetClassCount={data.assetClassCount}
+            />
+          </div>
+        </StaggerItem>
 
-      <div className="grid grid-cols-1 gap-6">
-        <TransactionsList transactions={data.transactions} />
-      </div>
+        <PerformerHighlights best={data.bestPerformer} worst={data.worstPerformer} />
+
+        <div className="grid grid-cols-1 gap-6">
+          <TransactionsList transactions={data.transactions} />
+        </div>
+
+        {/* "Portföyü Yeniden Dengele" ve "Detaylı Rapor Oluştur" butonları
+            KALDIRILDI. Mock öneri üretiyorlardı; finansal bir üründe kaynağı
+            olmayan tavsiye göstermek en riskli davranış (CLAUDE.md §4).
+            Yeniden dengeleme, risk servisinin kural tabanlı senaryo motoru
+            REST'e açıldığında gerçek haliyle geri gelecek. */}
+
+        <p className="m-0 mt-8 text-center text-xs italic text-ink-faint">
+          {INVESTMENT_DISCLAIMER}
+        </p>
       </div>
     </div>
   );

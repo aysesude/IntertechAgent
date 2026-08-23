@@ -119,6 +119,10 @@ function buildSingleHoldingConcentrationInsight(
 /** K4 — risk skoru hedef bandın dışındaysa, hangi yönde olduğunu bildir. */
 function buildRiskScoreBandInsight(dashboard: DashboardData): Insight | null {
   const score = dashboard.summary.riskScore;
+  // Risk skoru artık opsiyonel: risk v2 kompozit skoru kaldırdı ve adapter
+  // bu alanı doldurmuyor. Kaynağı yokken kural sessizce atlanır — uydurma
+  // bir eşikle içgörü üretmektense hiç üretmemek doğru (CLAUDE.md §4).
+  if (score === undefined) return null;
   if (score >= RISK_BAND.low && score <= RISK_BAND.high) return null;
 
   const below = score < RISK_BAND.low;

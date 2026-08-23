@@ -8,14 +8,35 @@ export interface User {
 
 export interface PortfolioSummary {
   totalValue: number;
-  todayChange: number;
-  dailyLoserPct: number;
-  dailyLoserNote: string;
-  riskScore: number;
-  costBasis: number; // toplam maliyet
+  /** Elde tutulan varlıkların maliyeti. Serbest nakit HARİÇ. */
+  costBasis: number;
+  /**
+   * Dışarıdan konan net sermaye (yatırma − çekme), serbest nakit DAHİL.
+   * Kâr/zararın tabanı budur; maliyet taban alınsaydı hesapta duran para
+   * kâr olarak raporlanırdı (bkz. docs/API.md).
+   */
+  netInvested: number;
   totalPL: number; // toplam kâr/zarar (TL)
   totalPLPct: number; // toplam kâr/zarar (%)
-  realReturnPct: number; // enflasyondan arındırılmış yıllık getiri
+
+  // --- Yeterli geçmiş yoksa backend `null` döndürüyor; o durumda bu alanlar
+  // hiç gelmez ve arayüz "—" gösterir. Sıfırla doldurmak sessizce yanlış
+  // sayı üretmek olurdu (AK 5.5).
+  /** Günlük değişim, TL. */
+  todayChange?: number;
+  /** Günlük değişim, yüzde. */
+  todayChangePct?: number;
+  /** Seçili dönemin zaman ağırlıklı getirisi (TWR). */
+  periodReturnPct?: number;
+
+  // --- Kaynağı olmayan alanlar. Backend karşılığı gelene kadar adapter
+  // bunları DOLDURMUYOR; yalnızca tasarım verisinde bulunurlar.
+  /** 0-100 kompozit risk skoru. Risk v2 bu skoru kaldırdı (7 kademe + volatilite). */
+  riskScore?: number;
+  /** Enflasyondan arındırılmış yıllık getiri. Sistemde enflasyon kaynağı yok. */
+  realReturnPct?: number;
+  dailyLoserPct?: number;
+  dailyLoserNote?: string;
 }
 
 export type ReturnPeriodKey = "gunluk" | "haftalik" | "aylik";
@@ -33,12 +54,23 @@ export interface AssetPerformer {
   returnPct: number;
 }
 
-export type RangeKey = "1H" | "1A" | "3A" | "6A" | "1Y";
+/**
+ * Grafik dönemleri. Backend pencereleriyle birebir eşleşir
+ * (`1m | 3m | 6m | 12m`); tasarımdaki "1H" (1 hafta) karşılığı olmadığı için
+ * çıkarıldı — var olmayan bir pencereyi göstermek boş grafik demek olurdu.
+ */
+export type RangeKey = "1A" | "3A" | "6A" | "1Y";
 
 export interface PerformancePoint {
   label: string;
+  /** O günkü portföy piyasa değeri (TL). */
   portfolio: number;
-  bist: number;
+  /**
+   * O güne kadar dışarıdan konan kümülatif net para (TL).
+   * İki çizgi arasındaki boşluk doğrudan toplam kârdır — ikinci çizgi
+   * olarak endeks yerine bunun seçilme sebebi bu (bkz. docs/API.md).
+   */
+  invested: number;
 }
 
 export interface PerformanceRange {
@@ -47,13 +79,19 @@ export interface PerformanceRange {
   points: PerformancePoint[];
   annotationIndex: number | null;
   annotationLabel?: string;
+  /** Pencere portföyün ömründen uzunsa başlangıç ilk işleme kırpıldı. */
+  truncatedToInception?: boolean;
+  /** Dönem TWR'si — seriden türetilmez, backend'den gelir. */
+  returnPct?: number | null;
 }
 
 export interface PerformanceStats {
   high: number;
   low: number;
-  avgReturnPct: number;
-  vsBenchmarkPct: number;
+  /** Dönemin zaman ağırlıklı getirisi (TWR) — dış para akışından arındırılmış. */
+  returnPct: number | null;
+  /** Dönem sonundaki değer − yatırılan (TL). */
+  profit: number;
 }
 
 export interface AssetAllocationSubcategory {
