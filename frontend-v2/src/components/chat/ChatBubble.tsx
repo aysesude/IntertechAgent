@@ -1,26 +1,32 @@
 import { MessageMarkdown } from "@/components/chat/MessageMarkdown";
+import { PaperBoatThinking } from "@/components/paper-boat/PaperBoat";
 import { useWordReveal } from "@/chat/useWordReveal";
 import type { ChatMessage } from "@/types/finance";
 
 /**
- * "VİRA düşünüyor…" — yanıt balonunun İÇİNDE.
+ * "VİRA düşünüyor" — yanıt balonunun İÇİNDE, markanın kendi kayığıyla.
  *
  * Önceden iki ayrı bekleme işareti vardı: akıştan önce mesaj listesinin
  * altında duran kayık, akış başlayınca balonun içinde yanıp sönen `▍`
  * imleci. İkisi ekranın iki ayrı yerinde, iki ayrı dille aynı şeyi
  * söylüyordu. Beklenen yanıtın yerinde tek bir işaret durması hem daha
  * sakin hem de nereye bakılacağını söylüyor.
+ *
+ * Nokta animasyonu KAPALI (`showDots={false}`): kayık zaten hareket ediyor
+ * ve iki farklı tempodaki animasyon yan yana iki ayrı olay gibi okunuyor.
+ * Göz hızlı olanı takip ediyor, o da söyleyecek şeyi olmayan yarısı.
+ *
+ * Bileşen kendi `role="status" aria-live="polite"` sarmalayıcısını
+ * getiriyor; buraya ikinci bir canlı bölge eklenmemeli.
  */
 function DusunuyorIsareti() {
   return (
-    <span className="flex items-center gap-2 text-ink-faint" aria-live="polite">
-      <span className="flex gap-1" aria-hidden="true">
-        <span className="h-1.5 w-1.5 animate-thinkingDot rounded-full bg-current" />
-        <span className="h-1.5 w-1.5 animate-thinkingDot rounded-full bg-current [animation-delay:150ms]" />
-        <span className="h-1.5 w-1.5 animate-thinkingDot rounded-full bg-current [animation-delay:300ms]" />
-      </span>
-      <span className="text-[13px] font-medium">VİRA düşünüyor…</span>
-    </span>
+    <PaperBoatThinking
+      size={30}
+      label="VİRA düşünüyor"
+      showDots={false}
+      className="text-[13px] font-medium text-ink-faint"
+    />
   );
 }
 

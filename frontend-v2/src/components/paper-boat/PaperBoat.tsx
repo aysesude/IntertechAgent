@@ -207,6 +207,15 @@ export interface PaperBoatThinkingProps extends Omit<SVGProps<SVGSVGElement>, Ma
   amplitude?: number;
   label?: string;
   showLabel?: boolean;
+  /**
+   * Animated ellipsis after the label. On by default.
+   *
+   * Turn it off where the sailing mark already carries the motion: two
+   * animations running at different tempos next to each other read as two
+   * separate things happening, and the eye follows the faster one — which is
+   * the ellipsis, the half with nothing to say.
+   */
+  showDots?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -217,6 +226,7 @@ export function PaperBoatThinking({
   amplitude = 0.85,
   label = 'Thinking',
   showLabel = true,
+  showDots = true,
   className,
   style,
   ...rest
@@ -240,11 +250,13 @@ export function PaperBoatThinking({
       {showLabel ? (
         <span className="pb-status__label">
           {label}
-          <span className="pb-dots" aria-hidden="true">
-            <i>.</i>
-            <i>.</i>
-            <i>.</i>
-          </span>
+          {showDots ? (
+            <span className="pb-dots" aria-hidden="true">
+              <i>.</i>
+              <i>.</i>
+              <i>.</i>
+            </span>
+          ) : null}
         </span>
       ) : (
         <span className="pb-sr">{label}</span>
