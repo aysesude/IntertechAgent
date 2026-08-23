@@ -96,8 +96,14 @@ jobs:
 
       - name: Tip kontrolü (tsc)
         # frontend/'te eslint var, burada yok: taşınan proje eslint
-        # yapılandırmasıyla gelmedi. `tsc --noEmit` şimdilik tek kapı.
+        # yapılandırmasıyla gelmedi. Test dosyaları da bu kapsamda.
         run: npm run lint
+
+      - name: Testler (vitest)
+        # AuthContext ve useApiResource testleri burada koşar. İkisi de
+        # tarayıcıda fark edilen gerçek hataların gerileme testlerini içeriyor
+        # (beyaz ekran, sessizce mock veriye düşme).
+        run: npm test
 
       - name: Derleme kontrolü
         run: npm run build

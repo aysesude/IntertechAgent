@@ -21,9 +21,5 @@
     }
   },
   "include": ["src"],
-  // vitest henüz proje bağımlılığı değil (bkz. src/utils/insights.test.ts
-  // başındaki not) — test dosyaları vitest kurulana kadar prod build'in
-  // type-check kapsamı dışında tutuluyor.
-  "exclude": ["src/**/*.test.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
