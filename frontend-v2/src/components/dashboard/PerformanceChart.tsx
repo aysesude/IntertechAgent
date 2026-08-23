@@ -74,21 +74,29 @@ function buildChartOptions(isDark: boolean) {
     // brandColor ile birebir aynı (yukarıda tanımlı), tek kaynaktan.
     crosshair: { trigger: "focus", orientation: "vertical", color: brandColor, opacity: 0.35 },
     fontName: "Manrope",
-    // Google Charts, Recharts'ın aksine açıkça belirtilmezse animasyon
-    // yapmıyor — startup:true İLK ÇİZİMDE alanın sıfırdan büyümesini
-    // sağlıyor. Dönem değiştiğinde de bu animasyonun oynaması için grafik
-    // bilerek yeniden kuruluyor (bkz. aşağıdaki <Chart key=...>).
+    // GEÇİŞ ANİMASYONU: dönem değişince alan yeni şekle DOĞRU AKAR.
     //
-    // ÖNEMLİ: animation.duration, startup:true ile BİRLİKTE kullanılınca
-    // react-google-charts/Google Charts'ta "Cannot read properties of
-    // undefined (reading 'Do')" hatasıyla çiziyi tamamen çöktürüyor
-    // (grafik alanı boş kalıyor, kırmızı hata kutusu basılıyor). Bisection
-    // ile doğrulandı: {startup:true} tek başına ve {startup:true,
-    // easing:"out"} hatasız çalışıyor; {startup:true, duration:800} VE
-    // {startup:true, duration:500} ikisi de aynı hatayı veriyor — yani
-    // spesifik bir değer değil, startup+duration kombinasyonunun kendisi
-    // sorunlu. Bu yüzden duration kasıtlı olarak verilmiyor.
-    animation: { startup: true, easing: "out" },
+    // `duration` olmadan Google Charts yeni seriyi anında basıyor (varsayılan
+    // süre sıfır). Bu yüzden burada duration verilmek ZORUNDA.
+    //
+    // `startup` BİLEREK YOK. Koddaki eski nota göre `startup: true` ile
+    // `duration` BİRLİKTE kullanıldığında çizim "Cannot read properties of
+    // undefined (reading 'Do')" ile tamamen çöküyor; bisection'la
+    // doğrulanmış. Muhtemel sebebi de bunu açıklıyor: startup animasyonu
+    // "önceki durumdan yeni duruma" akmaya çalışıyor ama ilk çizimde önceki
+    // durum yok. Geçişte ise iki durum da var, dolayısıyla duration tek
+    // başına sorunsuz olmalı.
+    //
+    // ÖDÜN: ilk çizimdeki "sıfırdan büyüme" efekti gitti. Bir kere oynayan
+    // bir efekt için, her dönem değişiminde çalışacak geçiş animasyonundan
+    // vazgeçmek doğru takas değil.
+    //
+    // Bu ayar tarayıcıda doğrulanmalı. Grafik boş kalır ve kırmızı hata
+    // kutusu çıkarsa tek satırlık geri alma: `animation` alanını
+    // `{ startup: true, easing: "out" }` yapmak (animasyon gider, çizim
+    // döner). Aşağıdaki `chartEvents` "error" dinleyicisi hatayı konsola
+    // yazıyor, sessizce yutulmuyor.
+    animation: { duration: 600, easing: "out" },
   };
 }
 
@@ -190,26 +198,17 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
         style={{ opacity: loading ? 0.45 : 1 }}
         aria-busy={loading}
       >
-        {/* KEY'İN İÇİNDE DÖNEM DE VAR, bilerek.
-            `startup: true` yalnızca İLK çizimde animasyon oynatıyor; veri
-            yerinde değiştiğinde Google Charts yeni seriyi animasyonsuz
-            basıyor (varsayılan `animation.duration` sıfır). Gerçek bir
-            geçiş animasyonu için `duration` gerekiyor ama `startup: true`
-            ile birlikte kullanıldığında çizimi tamamen çöktürüyor —
-            yukarıdaki nota bakın, bisection'la doğrulanmış.
-
-            Bu yüzden animasyonu remount ile tetikliyoruz: key değişince
-            <Chart> yeniden kurulur ve startup animasyonu yeni seriyle
-            baştan oynar. KART unmount OLMUYOR — başlık, açıklama, gösterge
-            ve istatistik kutuları yerinde kalıyor, yalnızca çizim alanı
-            yenileniyor. Sayfa düzeni bu yüzden hiç oynamıyor.
-
-            Key GÖSTERİLEN dönemden (`range.key`) alınıyor, kullanıcının
-            SEÇTİĞİNDEN değil: veri gelmeden remount edilseydi animasyon
-            eski seriyle oynar, yeni veri geldiğinde ise animasyonsuz
-            değişirdi — tam tersi. */}
+        {/* KEY'DE YALNIZCA TEMA VAR, dönem YOK — bilerek.
+            Bir ara key'e dönem de eklenmişti: amaç `startup` animasyonunu
+            her dönem değişiminde tetiklemekti, ama sonucu grafiğin YENİDEN
+            KURULMASI oldu; kullanıcı bunu "grafik siliniyor ve geri
+            geliyor" olarak gördü. İstenen davranış grafiğin yerinde durup
+            ŞEKİL DEĞİŞTİRMESİ. Onu artık `animation.duration` sağlıyor
+            (bkz. buildChartOptions), remount'a gerek yok.
+            Tema değişimi hâlâ remount ediyor: renkler options üzerinden
+            geliyor ve yeniden çizim gerektiriyor. */}
         <Chart
-          key={`${resolvedTheme}-${range?.key ?? "bos"}`}
+          key={resolvedTheme}
           chartType="AreaChart"
           data={chartData}
           options={chartOptions}
