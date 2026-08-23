@@ -34,6 +34,12 @@ type AuthStatus = "checking" | "anonymous" | "authenticated";
 
 interface AuthContextValue {
   status: AuthStatus;
+  /**
+   * Giriş ekranında gösterilecek bilgi notu (ör. oturum süresi doldu).
+   * Kullanıcı sessizce dışarı atılmasın diye: 401 alındığında oturum
+   * kapanıyor ama sebebi ekranda yazmıyordu.
+   */
+  notice: string | null;
   /** Giriş yapmış kullanıcının backend'den gelen kaydı. */
   account: AuthUser | null;
   /** Header'ın beklediği görünüm modeli (ad + baş harfler + rol). */
@@ -81,16 +87,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // API adresi tanımlı değilse doğrulanacak bir şey yok; "checking" durumunda
   // sonsuza kadar beklemek yerine doğrudan anonim başlıyoruz.
   const [status, setStatus] = useState<AuthStatus>(isApiConfigured ? "checking" : "anonymous");
-  const logout = useCallback(() => {
+  const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * `sebep` yalnızca oturum KENDİLİĞİNDEN düştüğünde veriliyor (401). Kullanıcı
+   * "Çıkış Yap" dediğinde not gösterilmiyor — zaten kendi yaptığı bir şey.
+   */
+  const logout = useCallback((sebep?: "expired") => {
     writeStoredToken(null);
     setAccessToken(null);
     setAccount(null);
     setStatus("anonymous");
+    setNotice(sebep === "expired" ? "Oturumunuz sona erdi, lütfen tekrar giriş yapın." : null);
   }, []);
 
   // Token süresi dolduğunda (herhangi bir istekte 401) oturumu kapat.
   useEffect(() => {
-    setUnauthorizedHandler(logout);
+    setUnauthorizedHandler(() => logout("expired"));
     return () => setUnauthorizedHandler(null);
   }, [logout]);
 
@@ -131,7 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (iptal) return;
-        logout();
+        // Saklanan token artık geçerli değil — kullanıcı için bu da "oturum
+        // sona erdi" demek.
+        logout("expired");
       });
 
     return () => {
@@ -141,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (nationalId: string, password: string) => {
     const yanit = await loginRequest(nationalId, password);
+    setNotice(null);
     writeStoredToken(yanit.access_token);
     setAccessToken(yanit.access_token);
     setAccount(yanit.user);
@@ -150,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
+      notice,
       account,
       user: {
         name: account?.full_name ?? "",
@@ -161,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
     }),
-    [status, account, login, logout],
+    [status, notice, account, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

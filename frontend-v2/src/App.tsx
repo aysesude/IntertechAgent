@@ -61,7 +61,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { status, user, login, logout } = useAuth();
+  const { status, notice, user, login, logout } = useAuth();
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -103,7 +103,7 @@ function AppShell() {
       <AnimatePresence>
         {!authenticated && (
           <LoginExitOverlay key="login">
-            <LoginScreen onSubmit={handleLogin} />
+            <LoginScreen onSubmit={handleLogin} notice={notice} />
           </LoginExitOverlay>
         )}
       </AnimatePresence>
