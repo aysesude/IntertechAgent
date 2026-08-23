@@ -11,13 +11,15 @@ hâli: bu fonksiyonlar için MCP tool'u yazılmadı ve yazılmamalı. Sohbet
 ("şu kullanıcı olarak giriş yap") oturum ele geçirilmesi demek olurdu.
 """
 
+import secrets
 from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AuthenticationError
+from app.core.config import settings
+from app.core.exceptions import AuthenticationError, ValidationAppError
 from app.core.security import hash_password, verify_password
 from app.models import User
 
@@ -67,3 +69,37 @@ def get_user_by_id(db: Session, user_id: UUID) -> User:
     if user is None:
         raise AuthenticationError("Oturum doğrulanamadı.")
     return user
+
+
+# Yenileme hatalarında tek tip mesaj: hangi alanın yanlış olduğunu söylemek,
+# "bu kimlik kayıtlı mı" sorusuna dolaylı cevap verirdi (giriş ucundaki
+# gerekçenin aynısı).
+_INVALID_RESET = "T.C. kimlik numarası veya doğrulama kodu hatalı."
+
+
+def reset_password(db: Session, national_id: str, code: str, new_password: str) -> None:
+    """Şifreyi günceller (DEMO akışı).
+
+    TEMSİLİ OLAN: kod sunucuda üretilmiyor ve saklanmıyor; yapılandırmadaki
+    sabit kod kabul ediliyor, e-posta gönderilmiyor.
+    GERÇEK OLAN: şifre bcrypt ile özetlenip veritabanına YAZILIYOR, yani
+    kullanıcı bundan sonra yeni şifresiyle giriş yapar.
+
+    Bilinen sınır: yenileme sonrası ESKİ TOKEN'LAR geçersizleşmez. Bunun için
+    token kara listesi ya da özete bağlı bir doğrulama gerekir; 8 saatlik demo
+    token'ı için karşılığı olmayan bir karmaşıklık.
+    """
+    if not settings.demo_password_reset_enabled:
+        raise ValidationAppError("Şifre yenileme bu ortamda kapalı.")
+
+    # Karşılaştırma sabit zamanlı: normal `==` ilk farklı karakterde döndüğü
+    # için harcanan süre ölçülerek kod tahmin edilebilirdi.
+    if not secrets.compare_digest(code, settings.demo_reset_code):
+        raise AuthenticationError(_INVALID_RESET)
+
+    user = db.execute(select(User).where(User.national_id == national_id)).scalar_one_or_none()
+    if user is None:
+        raise AuthenticationError(_INVALID_RESET)
+
+    user.password_hash = hash_password(new_password)
+    db.commit()

@@ -458,6 +458,25 @@ class Settings(BaseSettings):
     # verisi tekdüze, çünkü 50 ayrı şifreyi ezberlemenin demoya katkısı yok.
     demo_user_password: str = "460213"
 
+    # --- Şifre yenileme (DEMO) ---
+    #
+    # AKIŞ TEMSİLİDİR: e-posta GÖNDERİLMEZ, kod sunucuda üretilmez ve
+    # saklanmaz — aşağıdaki sabit kod kabul edilir. Şifre ise GERÇEKTEN
+    # güncellenir.
+    #
+    # GÜVENLİK SINIRI, açıkça: bu uç kimlik doğrulaması istemez. T.C. kimlik
+    # numarasını ve bu kodu bilen biri o hesabın şifresini değiştirebilir —
+    # yani kimlik doğrulamasının etrafından dolaşan bir kapıdır. Sentetik
+    # demo verisiyle çalışan, süreli bir gösterim için kabul edildi.
+    # GERÇEK BİR DAĞITIMDA `DEMO_PASSWORD_RESET_ENABLED=false` yapılmalı;
+    # yerine e-posta doğrulaması, sunucuda üretilen tek kullanımlık kod,
+    # süre ve deneme sınırı gerekir.
+    demo_password_reset_enabled: bool = True
+    demo_reset_code: str = "123456"
+    # Arayüzdeki geri sayımın kaynağı; sunucu şu an süreyi denetlemiyor
+    # (kod saklanmadığı için denetlenecek bir şey yok).
+    password_reset_code_ttl_seconds: int = 180
+
     # --- Chat ---
     # Orchestrator'a bağlam olarak geçilen son mesaj sayısı.
     chat_context_message_limit: int = 10

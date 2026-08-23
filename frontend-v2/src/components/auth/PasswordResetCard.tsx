@@ -9,30 +9,36 @@ import {
   NAVY,
   NAVY_DARK,
 } from "@/components/auth/loginPalette";
+import { completePasswordReset, requestPasswordReset } from "@/api/auth";
 import { gecerliTcKimlikNo } from "@/utils/tckn";
 
 /**
- * Şifre yenileme akışı — ARAYÜZ TEMSİLİ.
+ * Şifre yenileme akışı.
  *
- * ⚠️ SUNUCU TARAFI YOK. Bu akış hiçbir uca istek atmaz ve hiçbir şifreyi
- * DEĞİŞTİRMEZ; ekranların ve adımların nasıl görüneceğini gösterir. Gerçek
- * bir yenileme akışı en az şunları gerektirir ve hiçbiri bu sürümde yok:
- * e-posta gönderimi, tek kullanımlık kodun sunucuda üretilip saklanması,
- * süre ve deneme sayısı sınırı, kodun kullanıldıktan sonra geçersizleşmesi.
+ * TEMSİLİ olan: e-posta GÖNDERİLMEZ ve kod sunucuda üretilip saklanmaz —
+ * yapılandırmadaki sabit kod kabul edilir (bkz. Settings.demo_reset_code).
+ * GERÇEK olan: şifre veritabanında GÜNCELLENİR; kullanıcı bundan sonra yeni
+ * şifresiyle giriş yapar, eskisiyle yapamaz.
  *
- * DEMO SIRASINDA DİKKAT: akış "şifreniz güncellendi" der ama giriş yine ESKİ
- * şifreyle yapılır. Yeni şifreyle giriş denenirse başarısız olur.
+ * Gerçek bir akışın eksikleri: e-posta doğrulaması, sunucuda üretilen tek
+ * kullanımlık kod, deneme sayısı sınırı, kodun kullanıldıktan sonra
+ * geçersizleşmesi.
  *
- * KOD UZUNLUĞU 6 HANE: tek kullanımlık şifre standartlarının varsayılanı
- * (RFC 4226/6238) ve Türkiye'deki bankacılık pratiğiyle aynı. Kod alanı
- * bilerek şifre alanıyla aynı uzunlukta değil — ikisi farklı şeyler ama
- * her ikisi de 6 hane olduğu için ayrı adımlarda gösteriliyor.
+ * KOD UZUNLUĞU VE SÜRE sunucudan geliyor, burada sabit yazılmıyor. Kod 6
+ * hane: tek kullanımlık şifre standartlarının varsayılanı (RFC 4226/6238) ve
+ * Türkiye'deki bankacılık pratiğiyle aynı.
+ *
+ * KODUN KENDİSİ SUNUCUDAN DÖNMÜYOR: arayüz kodu bilmiyor, doğruluğu
+ * tamamlama adımında sunucuda sınanıyor.
  */
 
-/** Tekrar gönderme sayacı (saniye). Bankacılıkta yaygın olan 180 sn. */
-const YENIDEN_GONDER_SANIYE = 180;
+/**
+ * Sunucudan bilgi gelmeden önce kullanılan yedek değerler; normalde ikisi de
+ * `password-reset/request` yanıtından gelir.
+ */
+const VARSAYILAN_KOD_UZUNLUGU = 6;
+const VARSAYILAN_SURE_SANIYE = 180;
 
-const KOD_UZUNLUGU = 6;
 const SIFRE_UZUNLUGU = 6;
 
 type Adim = "kimlik" | "kod" | "yeniSifre" | "bitti";
@@ -62,6 +68,9 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
   const [sifreTekrar, setSifreTekrar] = useState("");
   const [hata, setHata] = useState<string | null>(null);
   const [kalanSaniye, setKalanSaniye] = useState(0);
+  const [gonderiliyor, setGonderiliyor] = useState(false);
+  const [kodUzunlugu, setKodUzunlugu] = useState(VARSAYILAN_KOD_UZUNLUGU);
+  const [sureSaniye, setSureSaniye] = useState(VARSAYILAN_SURE_SANIYE);
 
   // Sayaç yalnızca kod adımında işler; adım değişince durur.
   useEffect(() => {
@@ -70,28 +79,45 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
     return () => window.clearTimeout(t);
   }, [adim, kalanSaniye]);
 
-  const kimlikGonder = (e: FormEvent) => {
+  /** Kod isteği. E-posta gönderilmiyor; sunucu yalnızca alan/süre bilgisi döner. */
+  const koduIste = async () => {
+    const bilgi = await requestPasswordReset(tckn);
+    setKodUzunlugu(bilgi.code_length);
+    setSureSaniye(bilgi.expires_in_seconds);
+    setKalanSaniye(bilgi.expires_in_seconds);
+  };
+
+  const kimlikGonder = async (e: FormEvent) => {
     e.preventDefault();
     if (!gecerliTcKimlikNo(tckn)) {
       setHata("Geçerli bir T.C. kimlik numarası girin.");
       return;
     }
     setHata(null);
-    setKalanSaniye(YENIDEN_GONDER_SANIYE);
-    setAdim("kod");
+    setGonderiliyor(true);
+    try {
+      await koduIste();
+      setAdim("kod");
+    } catch (err) {
+      setHata(err instanceof Error ? err.message : "Kod gönderilemedi.");
+    } finally {
+      setGonderiliyor(false);
+    }
   };
 
   const koduDogrula = (e: FormEvent) => {
     e.preventDefault();
-    if (kod.length !== KOD_UZUNLUGU) {
-      setHata(`Doğrulama kodu ${KOD_UZUNLUGU} haneli olmalı.`);
+    // Yalnızca BİÇİM kontrol ediliyor; kodun doğruluğu sunucuda, tamamlama
+    // adımında sınanıyor — arayüz kodu bilmiyor.
+    if (kod.length !== kodUzunlugu) {
+      setHata(`Doğrulama kodu ${kodUzunlugu} haneli olmalı.`);
       return;
     }
     setHata(null);
     setAdim("yeniSifre");
   };
 
-  const sifreyiKaydet = (e: FormEvent) => {
+  const sifreyiKaydet = async (e: FormEvent) => {
     e.preventDefault();
     if (sifre.length !== SIFRE_UZUNLUGU) {
       setHata(`Şifre ${SIFRE_UZUNLUGU} haneli olmalı.`);
@@ -102,7 +128,19 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
       return;
     }
     setHata(null);
-    setAdim("bitti");
+    setGonderiliyor(true);
+    try {
+      await completePasswordReset(tckn, kod, sifre);
+      setAdim("bitti");
+    } catch (err) {
+      // Kod yanlışsa hata ancak burada anlaşılıyor; kullanıcı kod adımına
+      // geri alınıyor, yoksa şifre alanında sıkışıp kalırdı.
+      setHata(err instanceof Error ? err.message : "Şifre güncellenemedi.");
+      setKod("");
+      setAdim("kod");
+    } finally {
+      setGonderiliyor(false);
+    }
   };
 
   const birincilButon =
@@ -154,7 +192,7 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
       {adim === "kimlik" && (
         <form onSubmit={kimlikGonder} className="mt-5 space-y-4" noValidate>
           <p className="m-0 text-[13.5px] leading-relaxed text-[#5A7292] dark:text-[#B9C4DC]">
-            Kayıtlı T.C. kimlik numaranı gir; e-posta adresine {KOD_UZUNLUGU} haneli bir
+            Kayıtlı T.C. kimlik numaranı gir; e-posta adresine {kodUzunlugu} haneli bir
             doğrulama kodu gönderelim.
           </p>
           <div>
@@ -182,8 +220,13 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
               {hata}
             </p>
           )}
-          <button type="submit" className={birincilButon} style={butonStili}>
-            Doğrulama kodu gönder
+          <button
+            type="submit"
+            disabled={gonderiliyor}
+            className={birincilButon}
+            style={butonStili}
+          >
+            {gonderiliyor ? "Gönderiliyor…" : "Doğrulama kodu gönder"}
           </button>
           {geriBaglantisi}
         </form>
@@ -192,8 +235,8 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
       {adim === "kod" && (
         <form onSubmit={koduDogrula} className="mt-5 space-y-4" noValidate>
           <p className="m-0 text-[13.5px] leading-relaxed text-[#5A7292] dark:text-[#B9C4DC]">
-            Kayıtlı e-posta adresine {KOD_UZUNLUGU} haneli bir doğrulama kodu gönderdik.
-            Kod {sayaciBicimle(YENIDEN_GONDER_SANIYE)} boyunca geçerlidir.
+            Kayıtlı e-posta adresine {kodUzunlugu} haneli bir doğrulama kodu gönderdik.
+            Kod {sayaciBicimle(sureSaniye)} boyunca geçerlidir.
           </p>
           <div>
             <label
@@ -208,10 +251,10 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
               inputMode="numeric"
               autoComplete="one-time-code"
               autoFocus
-              maxLength={KOD_UZUNLUGU}
-              placeholder={`${KOD_UZUNLUGU} haneli kod`}
+              maxLength={kodUzunlugu}
+              placeholder={`${kodUzunlugu} haneli kod`}
               value={kod}
-              onChange={(e) => setKod(e.target.value.replace(/\D/g, "").slice(0, KOD_UZUNLUGU))}
+              onChange={(e) => setKod(e.target.value.replace(/\D/g, "").slice(0, kodUzunlugu))}
               className={`${INPUT_CLASS} text-center text-[18px] tracking-[0.5em]`}
             />
           </div>
@@ -225,7 +268,7 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
               onClick={() => {
                 setKod("");
                 setHata(null);
-                setKalanSaniye(YENIDEN_GONDER_SANIYE);
+                void koduIste().catch(() => setHata("Kod gönderilemedi."));
               }}
               className="font-medium text-[#2557E8] underline-offset-4 transition hover:underline disabled:cursor-not-allowed disabled:text-[#9AA9BC] disabled:no-underline dark:text-[var(--accent-dark-link)]"
               style={{ "--accent-dark-link": ACCENT_DARK_LINK } as CSSProperties}
@@ -300,8 +343,13 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
               {hata}
             </p>
           )}
-          <button type="submit" className={birincilButon} style={butonStili}>
-            Şifreyi güncelle
+          <button
+            type="submit"
+            disabled={gonderiliyor}
+            className={birincilButon}
+            style={butonStili}
+          >
+            {gonderiliyor ? "Güncelleniyor…" : "Şifreyi güncelle"}
           </button>
           {geriBaglantisi}
         </form>

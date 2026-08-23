@@ -71,6 +71,8 @@ export function notifyUnauthorized(): void {
 
 interface RequestOptions extends RequestInit {
   timeoutMs?: number;
+  /** 204 gibi gövdesiz yanıtlarda JSON çözme adımı atlanır. */
+  parseJson?: boolean;
   /**
    * Giriş isteği için: yanlış şifrede gelen 401, "oturum düştü" demek
    * değildir — oturum zaten yok. Bu bayrak olmadan giriş denemesi
@@ -98,7 +100,13 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
     throw new ApiError("VITE_API_BASE_URL tanımlı değil");
   }
 
-  const { timeoutMs = 8000, skipUnauthorizedHandler = false, headers, ...rest } = options;
+  const {
+    timeoutMs = 8000,
+    skipUnauthorizedHandler = false,
+    parseJson = true,
+    headers,
+    ...rest
+  } = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -125,6 +133,7 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
       throw new ApiError(detail ?? `API isteği başarısız: ${response.status}`, response.status);
     }
 
+    if (!parseJson) return undefined as T;
     return (await response.json()) as T;
   } catch (error) {
     // AbortController zaman aşımı DOMException("AbortError") fırlatıyor;
@@ -146,4 +155,23 @@ export function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export function apiPost<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
   return apiFetch<T>(path, { ...options, method: "POST", body: JSON.stringify(body) });
+}
+
+/**
+ * Gövdesiz yanıt döndüren (204) uçlar için.
+ *
+ * `apiPost` her zaman JSON çözmeye çalışıyor; 204'te gövde olmadığı için
+ * bu bir ayrıştırma hatasına dönüşür ve başarılı istek başarısız görünürdü.
+ */
+export function apiPostNoContent(
+  path: string,
+  body: unknown,
+  options: RequestOptions = {},
+): Promise<void> {
+  return apiFetch<void>(path, {
+    ...options,
+    method: "POST",
+    body: JSON.stringify(body),
+    parseJson: false,
+  });
 }

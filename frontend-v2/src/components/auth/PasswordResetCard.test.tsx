@@ -1,9 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 
+const requestPasswordReset = vi.fn();
+const completePasswordReset = vi.fn();
+vi.mock("@/api/auth", () => ({
+  requestPasswordReset: (...a: unknown[]) => requestPasswordReset(...a),
+  completePasswordReset: (...a: unknown[]) => completePasswordReset(...a),
+}));
+
 const { PasswordResetCard } = await import("./PasswordResetCard");
+
+beforeEach(() => {
+  // Kod uzunluğu ve süre SUNUCUDAN geliyor; arayüz bunları sabit yazmıyor.
+  requestPasswordReset.mockReset().mockResolvedValue({ code_length: 6, expires_in_seconds: 180 });
+  completePasswordReset.mockReset().mockResolvedValue(undefined);
+});
 
 /**
  * Şifre yenileme akışı testleri.
@@ -27,32 +41,47 @@ function kur() {
   return { onBack };
 }
 
-/** 1. adımı geçip kod ekranına gelir. */
-function kimlikAdiminiGec() {
+/** 1. adımı geçip kod ekranına gelir (kod isteği sunucuya gidiyor). */
+async function kimlikAdiminiGec() {
   yaz(/T\.C\. Kimlik/i, GECERLI_TCKN);
-  fireEvent.click(screen.getByRole("button", { name: /doğrulama kodu gönder/i }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /doğrulama kodu gönder/i }));
+  });
 }
 
-/** 2. adımı geçip yeni şifre ekranına gelir. */
+/** 2. adımı geçip yeni şifre ekranına gelir (kodun doğruluğu sunucuda sınanır). */
 function kodAdiminiGec() {
   yaz(/Doğrulama Kodu/i, "123456");
   fireEvent.click(screen.getByRole("button", { name: /^doğrula$/i }));
 }
 
+/** 3. adımı doldurup gönderir. */
+async function sifreyiGonder(sifre = "778899", tekrar = "778899") {
+  yaz(/Yeni Şifreniz$/i, sifre);
+  yaz(/Yeni Şifreniz \(Tekrar\)/i, tekrar);
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /şifreyi güncelle/i }));
+  });
+}
+
 describe("1. adım — kimlik", () => {
-  it("geçersiz T.C. kimlik numarasıyla ilerlemez", () => {
+  it("geçersiz T.C. kimlik numarasıyla ilerlemez", async () => {
     kur();
     // Sağlaması tutmayan numara: 11 hane ama son hane bozuk.
     yaz(/T\.C\. Kimlik/i, "55868501481");
-    fireEvent.click(screen.getByRole("button", { name: /doğrulama kodu gönder/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /doğrulama kodu gönder/i }));
+    });
 
     expect(screen.getByRole("alert")).toHaveTextContent("Geçerli bir T.C. kimlik numarası girin.");
     expect(screen.queryByLabelText(/Doğrulama Kodu/i)).not.toBeInTheDocument();
+    // Geçersiz numarada sunucuya HİÇ gidilmemeli.
+    expect(requestPasswordReset).not.toHaveBeenCalled();
   });
 
-  it("geçerli numarayla kod adımına geçer", () => {
+  it("geçerli numarayla kod adımına geçer", async () => {
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
 
     expect(screen.getByLabelText(/Doğrulama Kodu/i)).toBeInTheDocument();
     // Kodun kaç haneli olduğu ve süresi kullanıcıya söylenmeli.
@@ -67,9 +96,9 @@ describe("1. adım — kimlik", () => {
 });
 
 describe("2. adım — doğrulama kodu", () => {
-  it("eksik kodla ilerlemez", () => {
+  it("eksik kodla ilerlemez", async () => {
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
 
     yaz(/Doğrulama Kodu/i, "123");
     fireEvent.click(screen.getByRole("button", { name: /^doğrula$/i }));
@@ -78,19 +107,19 @@ describe("2. adım — doğrulama kodu", () => {
     expect(screen.queryByLabelText(/Yeni Şifreniz$/i)).not.toBeInTheDocument();
   });
 
-  it("sayaç dolmadan 'Tekrar gönder' tıklanamaz", () => {
+  it("sayaç dolmadan 'Tekrar gönder' tıklanamaz", async () => {
     // Aksi halde kullanıcı arka arkaya kod isteyebilir; gerçek bir akışta
     // bu sunucuya yük ve kötüye kullanım kapısı olurdu.
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
 
     expect(screen.getByRole("button", { name: /tekrar gönder/i })).toBeDisabled();
     expect(screen.getByText(/Kalan süre/i)).toBeInTheDocument();
   });
 
-  it("6 haneli kodla şifre adımına geçer", () => {
+  it("6 haneli kodla şifre adımına geçer", async () => {
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
     kodAdiminiGec();
 
     expect(screen.getByLabelText(/Yeni Şifreniz$/i)).toBeInTheDocument();
@@ -98,40 +127,51 @@ describe("2. adım — doğrulama kodu", () => {
 });
 
 describe("3. adım — yeni şifre", () => {
-  it("şifreler eşleşmiyorsa tamamlanmaz", () => {
+  it("şifreler eşleşmiyorsa SUNUCUYA GİTMEZ", async () => {
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
     kodAdiminiGec();
-
-    yaz(/Yeni Şifreniz$/i, "123456");
-    yaz(/Yeni Şifreniz \(Tekrar\)/i, "654321");
-    fireEvent.click(screen.getByRole("button", { name: /şifreyi güncelle/i }));
+    await sifreyiGonder("123456", "654321");
 
     expect(screen.getByRole("alert")).toHaveTextContent("Şifreler eşleşmiyor.");
+    expect(completePasswordReset).not.toHaveBeenCalled();
   });
 
-  it("eksik şifreyle tamamlanmaz", () => {
+  it("eksik şifreyle tamamlanmaz", async () => {
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
     kodAdiminiGec();
-
-    yaz(/Yeni Şifreniz$/i, "123");
-    yaz(/Yeni Şifreniz \(Tekrar\)/i, "123");
-    fireEvent.click(screen.getByRole("button", { name: /şifreyi güncelle/i }));
+    await sifreyiGonder("123", "123");
 
     expect(screen.getByRole("alert")).toHaveTextContent("6 haneli olmalı");
+    expect(completePasswordReset).not.toHaveBeenCalled();
   });
 
-  it("eşleşen şifreyle başarı ekranına ulaşır", () => {
+  it("eşleşen şifreyle sunucuya gider ve başarı ekranına ulaşır", async () => {
     kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
     kodAdiminiGec();
+    await sifreyiGonder();
 
-    yaz(/Yeni Şifreniz$/i, "123456");
-    yaz(/Yeni Şifreniz \(Tekrar\)/i, "123456");
-    fireEvent.click(screen.getByRole("button", { name: /şifreyi güncelle/i }));
-
+    expect(completePasswordReset).toHaveBeenCalledWith(GECERLI_TCKN, "123456", "778899");
     expect(screen.getByText(/Şifren güncellendi/i)).toBeInTheDocument();
+  });
+
+  it("sunucu kodu reddederse KOD adımına geri döner", async () => {
+    // Kodun doğruluğu ancak bu adımda anlaşılıyor; kullanıcı şifre alanında
+    // sıkışıp kalmamalı, kodu yeniden girebilmeli.
+    completePasswordReset.mockRejectedValue(
+      new Error("T.C. kimlik numarası veya doğrulama kodu hatalı."),
+    );
+    kur();
+    await kimlikAdiminiGec();
+    kodAdiminiGec();
+    await sifreyiGonder();
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("doğrulama kodu hatalı"),
+    );
+    expect(screen.getByLabelText(/Doğrulama Kodu/i)).toHaveValue("");
   });
 });
 
@@ -142,13 +182,11 @@ describe("girişe dönüş", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("başarı ekranından da dönülür", () => {
+  it("başarı ekranından da dönülür", async () => {
     const { onBack } = kur();
-    kimlikAdiminiGec();
+    await kimlikAdiminiGec();
     kodAdiminiGec();
-    yaz(/Yeni Şifreniz$/i, "123456");
-    yaz(/Yeni Şifreniz \(Tekrar\)/i, "123456");
-    fireEvent.click(screen.getByRole("button", { name: /şifreyi güncelle/i }));
+    await sifreyiGonder();
 
     fireEvent.click(screen.getByRole("button", { name: /giriş ekranına dön/i }));
     expect(onBack).toHaveBeenCalledTimes(1);

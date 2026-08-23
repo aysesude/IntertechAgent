@@ -192,3 +192,124 @@ def test_token_of_deleted_user_returns_401(anonim, db_session, client_for, giris
 
     response = client.get("/api/auth/me")
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Şifre yenileme (DEMO akışı)
+# ---------------------------------------------------------------------------
+#
+# Akışın TEMSİLİ olan yanı: e-posta gönderilmiyor, kod sunucuda üretilip
+# saklanmıyor — yapılandırmadaki sabit kod kabul ediliyor.
+# GERÇEK olan yanı: şifre veritabanında güncelleniyor. Aşağıdaki testlerin
+# ağırlığı bu ikinci kısımda: yenilemeden sonra kullanıcı YENİ şifresiyle
+# giriş yapabilmeli, ESKİSİYLE yapamamalı.
+
+
+def test_reset_request_does_not_reveal_whether_identity_exists(anonim, giris_kullanicisi):
+    """Kayıtlı ve kayıtsız kimlik AYNI yanıtı almalı.
+
+    Aksi halde bu uç, hangi T.C. kimlik numaralarının sistemde olduğunu tek
+    tek denemeye açık bir araca dönüşürdü.
+    """
+    kayitli = anonim.post("/api/auth/password-reset/request", json={"national_id": _TCKN})
+    kayitsiz = anonim.post("/api/auth/password-reset/request", json={"national_id": "70013389034"})
+
+    assert kayitli.status_code == kayitsiz.status_code == 200
+    assert kayitli.json() == kayitsiz.json()
+
+
+def test_reset_request_returns_code_length_and_ttl(anonim):
+    """Arayüz alan uzunluğunu ve geri sayımı sabit yazmasın diye dönüyor."""
+    response = anonim.post("/api/auth/password-reset/request", json={"national_id": _TCKN})
+    body = response.json()
+    assert body["code_length"] == len(settings.demo_reset_code)
+    assert body["expires_in_seconds"] == settings.password_reset_code_ttl_seconds
+    # Kodun KENDİSİ dönmemeli.
+    assert "code" not in body
+
+
+def test_reset_completes_and_password_actually_changes(anonim, db_session, giris_kullanicisi):
+    """Yenilemeden sonra YENİ şifreyle giriş yapılır, ESKİSİYLE yapılamaz."""
+    yeni_sifre = "778899"
+
+    tamamla = anonim.post(
+        "/api/auth/password-reset/complete",
+        json={
+            "national_id": _TCKN,
+            "code": settings.demo_reset_code,
+            "new_password": yeni_sifre,
+        },
+    )
+    assert tamamla.status_code == 204
+
+    yeniyle = anonim.post("/api/auth/login", json={"national_id": _TCKN, "password": yeni_sifre})
+    assert yeniyle.status_code == 200
+
+    eskiyle = anonim.post("/api/auth/login", json={"national_id": _TCKN, "password": _SIFRE})
+    assert eskiyle.status_code == 401
+
+
+def test_reset_with_wrong_code_is_rejected(anonim, giris_kullanicisi):
+    response = anonim.post(
+        "/api/auth/password-reset/complete",
+        json={"national_id": _TCKN, "code": "000000", "new_password": "778899"},
+    )
+    assert response.status_code == 401
+
+
+def test_reset_error_does_not_reveal_whether_identity_exists(anonim, giris_kullanicisi):
+    """Yanlış kod ile kayıtsız kimlik AYNI cevabı vermeli."""
+    yanlis_kod = anonim.post(
+        "/api/auth/password-reset/complete",
+        json={"national_id": _TCKN, "code": "000000", "new_password": "778899"},
+    )
+    kayitsiz = anonim.post(
+        "/api/auth/password-reset/complete",
+        json={
+            "national_id": "70013389034",
+            "code": settings.demo_reset_code,
+            "new_password": "778899",
+        },
+    )
+    assert yanlis_kod.status_code == kayitsiz.status_code == 401
+    assert yanlis_kod.json() == kayitsiz.json()
+
+
+@pytest.mark.parametrize(
+    "gecersiz,sebep",
+    [
+        ("12345", "5 hane"),
+        ("1234567", "7 hane"),
+        ("12345a", "harf içeriyor"),
+    ],
+)
+def test_reset_rejects_password_the_login_screen_cannot_produce(
+    anonim, giris_kullanicisi, gecersiz, sebep
+):
+    """Yenileme, giriş ekranının kabul ettiği biçimi üretmek ZORUNDA.
+
+    Aksi halde kullanıcı, sonradan giriş yapamayacağı bir şifre belirler.
+    """
+    response = anonim.post(
+        "/api/auth/password-reset/complete",
+        json={"national_id": _TCKN, "code": settings.demo_reset_code, "new_password": gecersiz},
+    )
+    assert response.status_code == 422, sebep
+
+
+def test_reset_can_be_disabled(anonim, monkeypatch, giris_kullanicisi):
+    """Gerçek bir dağıtımda kapatılabilmeli — bu uç kimlik doğrulaması
+    istemiyor, yani kapalıyken hiç var olmamalı."""
+    monkeypatch.setattr(settings, "demo_password_reset_enabled", False, raising=False)
+
+    baslat = anonim.post("/api/auth/password-reset/request", json={"national_id": _TCKN})
+    tamamla = anonim.post(
+        "/api/auth/password-reset/complete",
+        json={
+            "national_id": _TCKN,
+            "code": settings.demo_reset_code,
+            "new_password": "778899",
+        },
+    )
+    assert baslat.status_code == 404
+    assert tamamla.status_code == 404
