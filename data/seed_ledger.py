@@ -17,7 +17,7 @@ günleri ve miktarlar her çalıştırmada aynıdır.
 
 import random
 import uuid
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from faker import Faker
@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import AssetClass, RiskProfile, settings
 from app.core.security import hash_password
-from app.models import Asset, PriceHistory, TransactionType
+from app.models import Asset, PriceHistory, Transaction, TransactionType
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
 
 SEED = 42
@@ -134,6 +134,60 @@ ARCHETYPE_RISK_PROFILE: dict[str, RiskProfile] = _build_archetype_risk_profiles(
 USER_UUID_NAMESPACE = uuid.UUID("6f2a1c7e-9b34-4d51-8a0e-3c5d7e1f2b48")
 
 _TRY_QUANT = Decimal("0.0001")
+
+# --- İşlem çeşitliliği ------------------------------------------------------
+#
+# Ölçüm (21 Ağustos 2026, 50 kullanıcı): alımlar 250 farklı güne yayılmışken
+# satışlar 14 taneydi, hepsi son 15 işlem gününde ve yalnızca 14 kullanıcıda.
+# Sonucu: gerçekleşmiş kâr/zarar neredeyse hiç üretilmiyor, işlem geçmişi
+# "hep alım" gibi görünüyor ve TWR'in dönem içi davranışı sınanmıyordu.
+#
+# Eski kısıtın gerekçesi (satış, aynı varlığın SONRAKİ bir alımını önceden
+# satmasın) geçerli ama son 15 güne sıkışmayı gerektirmiyordu: pozisyon zaten
+# `position_as_of` ile o güne göre hesaplanıyor.
+SELL_PROBABILITY = 0.6
+MAX_SELLS_PER_USER = 4
+
+# --- Ara nakit hareketleri --------------------------------------------------
+#
+# Ölçüm: "yatırılan tutar" serisi 20 kullanıcının 20'sinde de DÜZ çıkıyordu —
+# her portföy başlangıçta tek DEPOSIT alıp bir daha hiç nakit hareketi
+# görmüyordu. Performans grafiğindeki o çizgi hiçbir şey anlatmıyor, TWR'in
+# "dış para akışını getiriden ayırma" yeteneği de gösterilemiyordu.
+EXTRA_DEPOSIT_PROBABILITY = 0.45
+WITHDRAW_PROBABILITY = 0.35
+EXTRA_DEPOSIT_RANGE = (Decimal("0.05"), Decimal("0.20"))  # başlangıç bütçesinin oranı
+WITHDRAW_RANGE = (Decimal("0.15"), Decimal("0.45"))  # çekilebilir nakdin oranı
+
+# Bu tutarın altındaki çekim demoda görünmez; işlem listesini şişirmeye değmez.
+MIN_WITHDRAW_TRY = Decimal("5000")
+
+
+def _cash_floor_from(session: Session, portfolio_id: uuid.UUID, day: date) -> Decimal:
+    """`day` gününden itibaren defterin göreceği EN DÜŞÜK nakit bakiyesi.
+
+    Para çekme bu değerin üstünde olamaz. O günkü bakiyeye bakmak yetmiyor:
+    çekimden SONRA gelen alımlar bakiyeyi aşağı çeker ve defter ara bir günde
+    negatife düşerdi. Değişmez testi (I2) eskiden yalnızca SON bakiyeye
+    baktığı için böyle bir hata sessizce geçerdi; test artık her işlem gününü
+    denetliyor ve bu fonksiyon ona uyacak şekilde yazıldı.
+    """
+    rows = session.execute(
+        select(Transaction.transaction_date, Transaction.cash_amount_try)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.transaction_date)
+    ).all()
+
+    running = Decimal(0)
+    floor: Decimal | None = None
+    for tx_date, cash in rows:
+        running += Decimal(str(cash or 0))
+        if tx_date.date() >= day:
+            floor = running if floor is None else min(floor, running)
+    if floor is None:
+        # `day`den sonra hiç işlem yok: sınır, o ana kadarki bakiyedir.
+        return running
+    return floor
 
 
 def _user_id(user_index: int) -> uuid.UUID:
@@ -342,40 +396,43 @@ def seed_ledger(session: Session) -> int:
                 )
                 tx_count += 1
 
-        # ~%30 kullanıcı geçmişin sonlarında kısmi satış yapar (gerçekleşmiş
-        # kâr/zarar üretimi için).
-        if rng.random() < 0.3:
-            # Satış günü ÖNCE seçilir; pozisyon o güne göre hesaplanır. Aksi
-            # halde satış, aynı varlığın daha sonraki bir alımını "önceden"
-            # satmaya çalışıp defteri tutarsızlaştırabilir.
-            late_days = [d for d in window][-15:]
-            sell_day = late_days[rng.randrange(len(late_days))]
-            quantities = position_as_of(session, portfolio.id, sell_day)
-            sellable = [
-                (asset_id, qty)
-                for asset_id, qty in quantities.items()
-                if qty > 0 and asset_id != assets["MEVDUAT-V"].id
-            ]
-            if sellable:
-                asset_id, quantity = sellable[rng.randrange(len(sellable))]
-                asset = next(a for a in assets.values() if a.id == asset_id)
-                if sell_day not in prices[asset_id]:
-                    # Takvim farkı (tatil): önceki fiyatlı güne çekil ve
-                    # pozisyonu o güne göre yeniden hesapla. Uygun gün yoksa
-                    # miktar 0 kalır ve satış sessizce atlanır.
-                    earlier = [d for d in days_by_asset[asset_id] if d <= sell_day]
-                    if earlier:
+        # --- Kısmi satışlar: pencerenin TAMAMINA yayılır -------------------
+        #
+        # Satış günleri ARTAN sırada işlenir. Sıra önemli: `position_as_of`
+        # oturumdan okuyor, dolayısıyla her hesap kendinden önceki satışları
+        # görür. Ters sırada işlense aynı lotu iki kez satmak mümkün olurdu.
+        if rng.random() < SELL_PROBABILITY:
+            aday_gunler = [d for d in window if d > deposit_day]
+            if aday_gunler:
+                kac = rng.randint(1, MAX_SELLS_PER_USER)
+                for sell_day in sorted(rng.sample(aday_gunler, min(kac, len(aday_gunler)))):
+                    quantities = position_as_of(session, portfolio.id, sell_day)
+                    sellable = [
+                        (asset_id, qty)
+                        for asset_id, qty in quantities.items()
+                        if qty > 0 and asset_id != assets["MEVDUAT-V"].id
+                    ]
+                    if not sellable:
+                        continue
+                    asset_id, quantity = sellable[rng.randrange(len(sellable))]
+                    asset = next(a for a in assets.values() if a.id == asset_id)
+                    if sell_day not in prices[asset_id]:
+                        # Takvim farkı (tatil): önceki fiyatlı güne çekil ve
+                        # pozisyonu o güne göre yeniden hesapla. Uygun gün
+                        # yoksa miktar 0 kalır ve satış sessizce atlanır.
+                        earlier = [d for d in days_by_asset[asset_id] if d <= sell_day]
+                        if not earlier:
+                            continue
                         sell_day = earlier[-1]
                         quantity = position_as_of(session, portfolio.id, sell_day).get(
                             asset_id, Decimal(0)
                         )
-                    else:
-                        quantity = Decimal(0)
-                fraction = Decimal(str(round(rng.uniform(0.1, 0.4), 4)))
-                sell_qty = (quantity * fraction).quantize(
-                    QUANTITY_PRECISION[asset.asset_class], rounding=ROUND_DOWN
-                )
-                if sell_qty > 0:
+                    fraction = Decimal(str(round(rng.uniform(0.1, 0.4), 4)))
+                    sell_qty = (quantity * fraction).quantize(
+                        QUANTITY_PRECISION[asset.asset_class], rounding=ROUND_DOWN
+                    )
+                    if sell_qty <= 0:
+                        continue
                     price = prices[asset_id][sell_day]
                     fx = (
                         _fx_rate_on(prices, days_by_asset, usdtry_id, sell_day)
@@ -401,6 +458,49 @@ def seed_ledger(session: Session) -> int:
                         fee_try=fee,
                     )
                     tx_count += 1
+
+        # --- Ara nakit hareketleri -----------------------------------------
+        #
+        # Ek yatırma nakdi ARTIRIR, dolayısıyla defteri hiçbir günde riske
+        # atmaz; sırası da önemsizdir.
+        if rng.random() < EXTRA_DEPOSIT_PROBABILITY:
+            aday_gunler = [d for d in window if d > deposit_day]
+            if aday_gunler:
+                gun = aday_gunler[rng.randrange(len(aday_gunler))]
+                oran = Decimal(str(round(rng.uniform(*map(float, EXTRA_DEPOSIT_RANGE)), 4)))
+                tutar = (budget * oran).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP)
+                record_transaction(
+                    session,
+                    portfolio.id,
+                    TransactionType.DEPOSIT,
+                    transaction_date=_tx_datetime(gun),
+                    cash_amount_try=tutar,
+                    note="Ek yatırma",
+                )
+                tx_count += 1
+
+        # Çekim EN SON işlenir ve `_cash_floor_from` ile boyutlandırılır:
+        # o günkü bakiyeye göre değil, o günden sonra defterin göreceği EN
+        # DÜŞÜK bakiyeye göre. Aksi halde çekimden sonraki bir alım defteri
+        # ara bir günde eksiye düşürürdü.
+        if rng.random() < WITHDRAW_PROBABILITY:
+            aday_gunler = [d for d in window if d > deposit_day]
+            if aday_gunler:
+                gun = aday_gunler[rng.randrange(len(aday_gunler))]
+                taban = _cash_floor_from(session, portfolio.id, gun)
+                if taban > MIN_WITHDRAW_TRY:
+                    oran = Decimal(str(round(rng.uniform(*map(float, WITHDRAW_RANGE)), 4)))
+                    tutar = (taban * oran).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP)
+                    if tutar >= MIN_WITHDRAW_TRY:
+                        record_transaction(
+                            session,
+                            portfolio.id,
+                            TransactionType.WITHDRAW,
+                            transaction_date=_tx_datetime(gun),
+                            cash_amount_try=-tutar,
+                            note="Para çekme",
+                        )
+                        tx_count += 1
 
         # holdings = defterden türetilir; elle yazım YOK.
         rebuild_holdings(session, portfolio.id)

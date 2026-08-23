@@ -25,7 +25,7 @@ from typing import Any
 from fastmcp import Client
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
-from app.core.config import settings
+from app.core.config import turkey_today
 from app.core.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
@@ -185,7 +185,13 @@ class PortfolioAgent(BaseAgent):
     async def _plan(self, request: AgentRequest, catalog: str) -> list[tuple[str, dict[str, Any]]]:
         history = request.context.get("recent_messages") or []
         prompt = _PLAN_PROMPT.format(
-            today=settings.anchor_date.isoformat(),
+            # `settings.anchor_date` DEĞİL. O, sentetik verinin donmuş "bugün"ü
+            # (şu an 1 Ağustos) ve yalnızca seed'i ilgilendiriyor. Buraya
+            # yazıldığında model gerçekten o tarihte yaşadığını sanıyor: "bu ay",
+            # "geçen hafta", "son 3 ay" gibi her göreli ifade yanlış pencereye
+            # çevriliyordu. Kullanıcıya bugünün ne olduğunu söyleyen tek doğru
+            # kaynak `turkey_today()`.
+            today=turkey_today().isoformat(),
             tool_list=catalog,
             history=_format_history(history),
             query=request.query,
