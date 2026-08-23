@@ -10,9 +10,17 @@ import { useTheme } from "@/context/ThemeContext";
 const RANGE_ORDER: RangeKey[] = ["1A", "3A", "6A", "1Y"];
 
 interface PerformanceChartProps {
-  range: PerformanceRange;
+  /**
+   * Gösterilecek seri. İlk açılışta henüz veri yokken `null` olabilir; o
+   * durumda kart İSKELET olarak çizilir — kartın kendisi hiçbir zaman
+   * DOM'dan kalkmaz, yoksa sayfa düzeni çöker (bkz. DashboardPage).
+   */
+  range: PerformanceRange | null;
+  /** Kullanıcının SEÇTİĞİ dönem. `range` henüz yüklenmemiş olabilir. */
   activeRange: RangeKey;
   onRangeChange: (range: RangeKey) => void;
+  /** Yeni dönem yükleniyor: eski seri sönükleştirilerek gösterilmeye devam eder. */
+  loading?: boolean;
 }
 
 // Google Charts kendi SVG'sini oluştururken options'ı bir kerede işliyor —
@@ -85,8 +93,8 @@ function buildChartOptions(isDark: boolean) {
   };
 }
 
-export function PerformanceChart({ range, activeRange, onRangeChange }: PerformanceChartProps) {
-  const stats = computePerformanceStats(range);
+export function PerformanceChart({ range, activeRange, onRangeChange, loading = false }: PerformanceChartProps) {
+  const stats = range ? computePerformanceStats(range) : null;
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const chartOptions = useMemo(() => buildChartOptions(isDark), [isDark]);
@@ -97,7 +105,10 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
   // çizip (animasyon/crosshair durumunu bozarak) alakasız render'larda
   // görsel titremeye yol açar.
   const chartData = useMemo(
-    () => [["Tarih", "Portföy", "Yatırılan"], ...range.points.map((p) => [p.label, p.portfolio, p.invested])],
+    () => [
+      ["Tarih", "Portföy", "Yatırılan"],
+      ...(range?.points ?? []).map((p) => [p.label, p.portfolio, p.invested]),
+    ],
     [range]
   );
 
@@ -148,11 +159,12 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
         <div>
           <h2 className="font-display m-0 mb-1 text-[17px] font-semibold">Portföy Performansı</h2>
           <p className="m-0 text-[13px] text-ink-muted">
-            {range.subtitle} · portföy değeri
+            {range?.subtitle ?? "—"} · portföy değeri
+            {loading && " · güncelleniyor…"}
             {/* Pencere portföyün ömründen uzunsa backend başlangıcı ilk işleme
                 kırpıyor; söylenmezse grafik sanki o dönem boyunca veri varmış
                 gibi görünür (docs/API.md). */}
-            {range.truncatedToInception && " · portföy başlangıcından itibaren"}
+            {range?.truncatedToInception && " · portföy başlangıcından itibaren"}
           </p>
         </div>
         <div className="flex gap-1">
@@ -171,7 +183,14 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
         </div>
       </div>
 
-      <div className="h-[270px] w-full">
+      {/* Yükleme sırasında seri DOM'da kalıp yalnızca sönükleşiyor: kartın
+          yüksekliği sabit, düzen oynamıyor ve geçiş ani bir kaybolma yerine
+          yumuşak bir soluklaşma oluyor. */}
+      <div
+        className="h-[270px] w-full transition-opacity duration-300"
+        style={{ opacity: loading ? 0.45 : 1 }}
+        aria-busy={loading}
+      >
         <Chart
           key={resolvedTheme}
           chartType="AreaChart"
@@ -212,17 +231,17 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatBlock label="En Yüksek" value={formatTRYCompact(stats.high)} />
-        <StatBlock label="En Düşük" value={formatTRYCompact(stats.low)} />
+        <StatBlock label="En Yüksek" value={stats ? formatTRYCompact(stats.high) : "—"} />
+        <StatBlock label="En Düşük" value={stats ? formatTRYCompact(stats.low) : "—"} />
         {/* Dönem getirisi zaman ağırlıklı (TWR): dönem içinde yatırılan para
             "kâr" olarak görünmesin diye. Yeterli veri yoksa backend null
             döndürüyor ve burada "—" gösteriliyor, 0 değil. */}
         <StatBlock
           label="Dönem Getirisi"
-          value={stats.returnPct === null ? "—" : formatPct(stats.returnPct, 1)}
+          value={stats?.returnPct == null ? "—" : formatPct(stats.returnPct, 1)}
           color={BRAND}
         />
-        <StatBlock label="Toplam Kâr" value={formatTRYCompact(stats.profit)} color={BRAND} />
+        <StatBlock label="Toplam Kâr" value={stats ? formatTRYCompact(stats.profit) : "—"} color={BRAND} />
       </div>
     </Card>
   );

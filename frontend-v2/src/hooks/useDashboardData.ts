@@ -1,113 +1,210 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchHoldings,
   fetchPerformance,
   fetchPortfolioSummary,
   fetchTransactions,
+  type ApiHoldingsValuation,
+  type ApiPerformanceResult,
   type ApiPortfolioSummary,
+  type ApiTransactionList,
 } from "@/api/portfolio";
 import { isApiConfigured } from "@/api/client";
 import { useCurrentUserId } from "@/auth/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
-import {
-  WINDOW_BY_RANGE,
-  priceFreshnessWarning,
-  toDashboardData,
-} from "@/adapters/dashboard";
+import { WINDOW_BY_RANGE, priceFreshnessWarning, toDashboardData } from "@/adapters/dashboard";
 import { mockDashboard } from "@/data/mockData";
-import type { DashboardData, RangeKey } from "@/types/finance";
+import type { DashboardData, PerformanceRange, RangeKey } from "@/types/finance";
 
 export interface DashboardState {
   data: DashboardData;
+  /** İlk yükleme — ekranda gösterilecek gerçek veri henüz yok. */
   loading: boolean;
+  /** Yalnızca dönem değişiyor; ekranın geri kalanı geçerli kalır. */
+  rangeLoading: boolean;
   error: string | null;
   isDemoData: boolean;
   /** Fiyatların bir kısmı eskiyse gösterilecek uyarı (AK 5.3 / docs/API.md). */
   freshnessWarning: string | null;
+  /**
+   * Grafikte GÖSTERİLECEK seri.
+   *
+   * İstenen dönem henüz yüklenmediyse bir ÖNCEKİ dönemin serisi döner.
+   * `null` dönseydi grafik kartı DOM'dan kalkar, sayfa düzeni çöker ve veri
+   * gelince kart yeniden belirirdi.
+   */
+  chartRange: PerformanceRange | null;
   refetch: () => void;
+}
+
+/** Dönemden BAĞIMSIZ veriler: dönem değişince yeniden çekilmezler. */
+interface TemelVeri {
+  ozet: ApiPortfolioSummary;
+  varliklar: ApiHoldingsValuation | null;
+  islemler: ApiTransactionList | null;
 }
 
 /**
  * Dashboard verisi.
  *
- * DÖRT UÇTAN besleniyor ve ikisi ZORUNLU, ikisi opsiyonel:
- * - `summary` + `performance` olmadan ekran çizilemez → hata gösterilir.
- * - `holdings` + `transactions` düşerse ekran yine çizilir; yalnızca donut'un
- *   alt kırılımı ve son işlemler listesi boş kalır. Kısmi başarısızlıkta
- *   her şeyi karartmak, elde olan veriyi de saklamak olurdu.
+ * İKİ AYRI YÜKLEME var ve bu bilinçli:
  *
- * `range` değişince yalnızca performans yeniden çekilir — özet ve varlıklar
- * dönemden bağımsız.
+ * - **Temel** (`/portfolio`, `/holdings`, `/transactions`) dönemden bağımsız;
+ *   yalnızca kullanıcı değişince ya da elle yenilenince çekilir.
+ * - **Performans** (`/performance?window=`) döneme bağlı; dönem değişince TEK
+ *   istek gider ve sonuç önbelleğe alınır — aynı döneme dönmek ağa çıkmaz.
+ *
+ * Tek effect'te toplansaydı dönem düğmesine her basışta dört uç birden
+ * çekilirdi; dahası tema değişimi bile ağ isteği tetiklerdi (renk paleti
+ * dönüşümün girdisi). Şimdi tema değişimi yalnızca yeniden türetir.
+ *
+ * NEDEN "NESİL" SAYACI, effect'e özgü `iptal` BAYRAĞI DEĞİL: `iptal`, effect
+ * HERHANGİ bir sebeple yeniden çalıştığında uçuştaki isteğin cevabını da çöpe
+ * atıyor. Ölçüldü — önbellek state'i bağımlılıktayken, sıfırlama effect'i onu
+ * değiştirdiği an dönem effect'i yeniden çalışıyor, temizlik `iptal = true`
+ * yapıyor ve tek isteğin cevabı sessizce yok sayılıyordu: grafik hiç gelmiyor,
+ * `rangeLoading` sonsuza dek `true` kalıyordu. Nesil sayacı yalnızca gerçekten
+ * geçersizleşme durumlarında (kullanıcı değişimi, elle yenileme) artar.
  */
 export function useDashboardData(range: RangeKey): DashboardState {
   const userId = useCurrentUserId();
   const { resolvedTheme } = useTheme();
   const canli = isApiConfigured && userId !== null;
 
-  const [data, setData] = useState<DashboardData>(mockDashboard);
-  const [loading, setLoading] = useState(canli);
+  const [temel, setTemel] = useState<TemelVeri | null>(null);
+  const [aktifPerformans, setAktifPerformans] = useState<{
+    range: RangeKey;
+    sonuc: ApiPerformanceResult;
+  } | null>(null);
+  const [temelYukleniyor, setTemelYukleniyor] = useState(canli);
+  const [donemYukleniyor, setDonemYukleniyor] = useState(canli);
   const [error, setError] = useState<string | null>(null);
-  const [isLive, setIsLive] = useState(false);
-  const [freshnessWarning, setFreshnessWarning] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
+  // Önbellek ve uçuş takibi REF'te: state olsalardı effect bağımlılığına girer
+  // ve yukarıda anlatılan kendi kendini iptal etme sorununu doğururlardı.
+  const onbellek = useRef<Partial<Record<RangeKey, ApiPerformanceResult>>>({});
+  const ucusta = useRef<Set<RangeKey>>(new Set());
+  const nesil = useRef(0);
+
+  // --- Kullanıcı değişimi: her şey geçersiz --------------------------------
+  // Başkasının serisi bir an bile gösterilemez (AK 5.4).
+  useEffect(() => {
+    nesil.current += 1;
+    onbellek.current = {};
+    ucusta.current = new Set();
+    setAktifPerformans(null);
+    setTemel(null);
+  }, [userId]);
+
+  // --- Temel veri ---------------------------------------------------------
   useEffect(() => {
     if (!canli) {
-      setData(mockDashboard);
-      setLoading(false);
-      setIsLive(false);
+      setTemelYukleniyor(false);
       return;
     }
+    const kullanici = userId!;
+    const benimNesil = nesil.current;
+    setTemelYukleniyor(true);
 
-    let iptal = false;
-    setLoading(true);
-    setError(null);
-
-    async function yukle(kullanici: string) {
-      // Zorunlu ikisi paralel: ekranın iskeleti bunlara bağlı.
-      const [ozet, performans] = await Promise.all([
-        fetchPortfolioSummary(kullanici),
-        fetchPerformance(kullanici, WINDOW_BY_RANGE[range]),
-      ]);
-      // Opsiyonel ikisi: hata verirlerse `null` ile devam edilir.
-      const [varliklar, islemler] = await Promise.all([
-        fetchHoldings(kullanici).catch(() => null),
-        fetchTransactions(kullanici).catch(() => null),
-      ]);
-      return { ozet, performans, varliklar, islemler };
-    }
-
-    yukle(userId!)
-      .then(({ ozet, performans, varliklar, islemler }) => {
-        if (iptal) return;
-        setData(
-          toDashboardData({
-            summary: ozet,
-            performance: performans,
-            range,
-            holdings: varliklar,
-            transactions: islemler,
-            darkTheme: resolvedTheme === "dark",
-          }),
-        );
-        setFreshnessWarning(priceFreshnessWarning(ozet as ApiPortfolioSummary));
-        setIsLive(true);
+    Promise.all([
+      fetchPortfolioSummary(kullanici),
+      // Bu ikisi opsiyonel: düşerlerse `null` ile devam edilir, ekran çizilir.
+      fetchHoldings(kullanici).catch(() => null),
+      fetchTransactions(kullanici).catch(() => null),
+    ])
+      .then(([ozet, varliklar, islemler]) => {
+        if (nesil.current !== benimNesil) return;
+        setTemel({ ozet, varliklar, islemler });
+        setError(null);
       })
       .catch((err: unknown) => {
-        if (iptal) return;
-        setIsLive(false);
+        if (nesil.current !== benimNesil) return;
+        setTemel(null);
         setError(err instanceof Error ? err.message : "Portföy verisi alınamadı.");
       })
       .finally(() => {
-        if (!iptal) setLoading(false);
+        if (nesil.current === benimNesil) setTemelYukleniyor(false);
       });
+  }, [canli, userId, tick]);
 
-    return () => {
-      iptal = true;
-    };
-  }, [canli, userId, range, resolvedTheme, tick]);
+  // --- Dönem verisi -------------------------------------------------------
+  useEffect(() => {
+    if (!canli) {
+      setDonemYukleniyor(false);
+      return;
+    }
 
-  const refetch = useCallback(() => setTick((t) => t + 1), []);
+    const onbellekten = onbellek.current[range];
+    if (onbellekten) {
+      // Ağa çıkmadan, anında.
+      setAktifPerformans({ range, sonuc: onbellekten });
+      setDonemYukleniyor(false);
+      return;
+    }
+    if (ucusta.current.has(range)) {
+      // İstek zaten yolda; ikincisini göndermiyoruz.
+      return;
+    }
 
-  return { data, loading, error, isDemoData: !isLive, freshnessWarning, refetch };
+    const kullanici = userId!;
+    const benimNesil = nesil.current;
+    ucusta.current.add(range);
+    setDonemYukleniyor(true);
+
+    fetchPerformance(kullanici, WINDOW_BY_RANGE[range])
+      .then((sonuc) => {
+        if (nesil.current !== benimNesil) return;
+        onbellek.current[range] = sonuc;
+        setAktifPerformans({ range, sonuc });
+      })
+      .catch((err: unknown) => {
+        if (nesil.current !== benimNesil) return;
+        setError(err instanceof Error ? err.message : "Dönem verisi alınamadı.");
+      })
+      .finally(() => {
+        ucusta.current.delete(range);
+        if (nesil.current === benimNesil) setDonemYukleniyor(false);
+      });
+  }, [canli, userId, range, tick]);
+
+  // --- Türetme ------------------------------------------------------------
+  //
+  // GÖSTERİLEN dönem, İSTENEN dönemden farklı olabilir: yeni dönem yüklenirken
+  // bir öncekinin verisi gösterilmeye devam eder. Bu ayrım şart — aksi halde
+  // türetme mock veriye düşer ve tüm dashboard (özet kartları, dağılım,
+  // işlemler) bir kare boyunca TASARIM VERİSİ gösterirdi.
+  const data = useMemo<DashboardData>(() => {
+    if (!temel || !aktifPerformans) return mockDashboard;
+    return toDashboardData({
+      summary: temel.ozet,
+      performance: aktifPerformans.sonuc,
+      range: aktifPerformans.range,
+      holdings: temel.varliklar,
+      transactions: temel.islemler,
+      darkTheme: resolvedTheme === "dark",
+    });
+  }, [temel, aktifPerformans, resolvedTheme]);
+
+  const canliVeri = temel !== null && aktifPerformans !== null;
+
+  const refetch = useCallback(() => {
+    // Elle yenilemede önbellek DE temizlenir: kullanıcı "güncel veriyi getir"
+    // diyor, önbellekten okumak bunu boşa çıkarırdı.
+    nesil.current += 1;
+    onbellek.current = {};
+    ucusta.current = new Set();
+    setTick((t) => t + 1);
+  }, []);
+
+  return {
+    data,
+    loading: temelYukleniyor && temel === null,
+    rangeLoading: donemYukleniyor,
+    error,
+    isDemoData: !canliVeri,
+    freshnessWarning: temel ? priceFreshnessWarning(temel.ozet) : null,
+    chartRange: aktifPerformans ? (data.performance[aktifPerformans.range] ?? null) : null,
+    refetch,
+  };
 }
