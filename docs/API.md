@@ -26,7 +26,7 @@ kırardı. Yoldaki değer artık yalnızca **doğrulanan bir iddiadır**.
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "access_token": "<imzalı JWT>",
   "token_type": "bearer",
   "expires_in": 28800,
   "user": {
@@ -36,6 +36,9 @@ kırardı. Yoldaki değer artık yalnızca **doğrulanan bir iddiadır**.
   }
 }
 ```
+
+Örnekte gerçek bir token yok: gitleaks JWT biçimli dizeleri sızmış kimlik
+bilgisi sayıp CI'ı kırıyor (ölçüldü, `.github/workflows/ci.yml`).
 
 - **Hatalı kimlik ile hatalı şifre AYNI 401'i döner** (`"T.C. kimlik numarası
   veya şifre hatalı."`). Ayrıştırılsaydı hangi numaraların kayıtlı olduğu tek
