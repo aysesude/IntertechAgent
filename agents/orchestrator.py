@@ -260,6 +260,7 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
         "UNSUPPORTED_LANGUAGE",
         "INJECTION_ATTEMPT",
         "AMBIGUOUS",
+        "SMALLTALK_META",
     }
 
     if state["intent"] in early_exit_intents:
@@ -275,7 +276,6 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
         # sessizce portföy özetiyle cevaplanıyordu — kullanıcı cevap aldığını
         # sanıyordu. Anlaşılmayan soru artık açıkça soruluyor (CLAUDE.md §4).
         logger.warning("[ORCHESTRATOR] Tanınmayan niyet etiketi: %r", state["intent"])
-        state["final_answer"] = _AMBIGUOUS_MESSAGE
         return ["handle_out_of_scope"]
 
     return nodes
