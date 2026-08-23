@@ -35,7 +35,8 @@ function ilkAd(tamAd: string): string {
 
 export function DashboardPage({ introSequence = false }: DashboardPageProps) {
   const [range, setRange] = useState<RangeKey>("1Y");
-  const { data, loading, error, isDemoData, freshnessWarning, refetch } = useDashboardData(range);
+  const { data, loading, rangeLoading, error, isDemoData, freshnessWarning, chartRange, refetch } =
+    useDashboardData(range);
   const { user } = useAuth();
   const shouldReduceMotion = useReducedMotion();
   const stagger = introSequence && !shouldReduceMotion;
@@ -147,7 +148,7 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
               }
               footer={
                 <>
-                  <span className="font-medium text-ink-faint">{data.performance[range]?.subtitle ?? ""}</span>
+                  <span className="font-medium text-ink-faint">{chartRange?.subtitle ?? ""}</span>
                   <InfoTooltip text="Zaman ağırlıklı getiri: dönem içinde yatırdığınız veya çektiğiniz para getiri gibi görünmez." />
                 </>
               }
@@ -157,13 +158,18 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
 
         <StaggerItem active={stagger}>
           <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.65fr_1fr]">
-            {data.performance[range] && (
-              <PerformanceChart
-                range={data.performance[range]}
-                activeRange={range}
-                onRangeChange={setRange}
-              />
-            )}
+            {/* KART HER ZAMAN ÇİZİLİR. Önceden `data.performance[range] &&`
+                ile korunuyordu ve dönem değişince veri bir anlığına
+                `undefined` olduğu için kart DOM'dan kalkıyor, sayfa düzeni
+                çöküyor, veri gelince yeniden beliriyordu. Artık yeni dönem
+                yüklenirken bir öncekinin serisi gösteriliyor (`chartRange`)
+                ve kart hiç unmount olmuyor. */}
+            <PerformanceChart
+              range={chartRange}
+              activeRange={range}
+              onRangeChange={setRange}
+              loading={rangeLoading}
+            />
             <AssetAllocationDonut
               slices={data.allocation}
               instrumentCount={data.instrumentCount}
