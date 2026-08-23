@@ -1,4 +1,4 @@
-.PHONY: up down seed credentials demo-users backfill daily-update test lint
+.PHONY: up down seed credentials demo-users backfill daily-update data-doctor test lint
 
 up:
 	docker compose up --build
@@ -25,6 +25,12 @@ backfill:
 
 daily-update:
 	docker compose exec -w / api python -m data.daily_update
+
+# Maliyet ile degerleme ayni evrenden mi geliyor? Backfill seed'den SONRA
+# calistiysa islem fiyatlari artik var olmayan fiyatlari gosterir ve K/Z
+# uydurma cikar. Sadece OKUR. Ayrinti: scripts/README.md
+data-doctor:
+	docker compose exec -w / api python -m scripts.data_doctor
 
 test:
 	docker compose exec -w / api pytest

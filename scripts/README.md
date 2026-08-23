@@ -98,3 +98,48 @@ Hiçbir şey yazmaz, salt okur.
 docker compose exec -w / api python scripts/fiyat_sicrama_teshis.py
 docker compose exec -w / api python scripts/fiyat_sicrama_teshis.py --sembol PPF,GTA
 ```
+
+## `data_doctor.py`
+
+**Ne zaman:** portföy rakamları tuhaf göründüğünde — abartılı kâr/zarar, bir
+varlıkta olmayacak bir yüzde, ya da bir migration/backfill sonrası "acaba veri
+tutarlı mı" şüphesi. Sunum öncesi tek seferlik sağlık kontrolü olarak da
+çalıştırılabilir.
+
+Tek bir soruyu cevaplar: **maliyet ile değerleme aynı evrenden mi geliyor?**
+
+`seed_ledger` her işlemi, işlemin yapıldığı GÜNÜN `price_history` kaydından
+fiyatlar — bu doğrudur ama tek yönlü korur. `make backfill` `make seed`'den
+SONRA çalıştırılırsa gerçek fiyatlar, defterin dayandığı sentetik satırların
+üzerine yazılır: maliyet artık var olmayan bir fiyattan görünür, değerleme
+gerçek fiyattan yapılır. `docs/DATA.md` doğru sırayı (önce backfill, sonra
+seed) yazar ama hiçbir şey bunu zorlamaz. 20 Ağustos 2026'da ölçülen sonuç:
+151 işlem, 50 portföyün 48'i bozuk, bir varlıkta +%292 sahte kâr.
+
+Altı kontrol: fiyat kaynağı dağılımı · gerçek serinin içinde kalan sentetik
+satır · **işlem fiyatı ↔ o tarihteki `price_history`** (belirleyici olan) ·
+defter/fiyat tarih aralıkları · şüpheli günlük sıçramalar · aşırı pozisyon K/Z.
+
+`fiyat_sicrama_teshis.py` ile ilişkisi: o betik tek bir varlığın sıçramasını
+ve sınıf etiketini teşhis eder (dar ve derin); bu betik tüm defterin maliyet
+tutarlılığını ölçer (geniş). Sıçrama kontrolü ikisinde de var — bu betik
+"bir sorun var mı" der, diğeri "hangi varlıkta, neden" der.
+
+Çözüm önerisi **koşulludur**: sıra hatası bulunduğunda yeniden seed önerir.
+Yalnızca ANCHOR_DATE açığı bulunduğunda önermez — defter `settings.anchor_date`'e
+sabitli olduğu için yeniden seed o açığı kapatmaz, yanlış tavsiye olurdu.
+
+Hiçbir şey yazmaz, salt okur. Çıkış kodu: 0 temiz, 1 bulgu var.
+
+```bash
+make data-doctor
+docker compose exec -w / api python -m scripts.data_doctor
+```
+
+**Canlı ortamda (`/opt/finans/prod`)** kaynak kodu bind mount edilmez ve imaj
+yalnızca `backend/`'den kurulur, yani konteynerde `/scripts` YOKTUR. Orada
+betiği stdin'den geçirin — dosyanın konteynerde bulunmasına gerek kalmaz:
+
+```bash
+sudo docker compose -p finans-prod exec -T -w / api python - < scripts/data_doctor.py
+```
