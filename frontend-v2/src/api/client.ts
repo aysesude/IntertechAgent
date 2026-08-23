@@ -51,6 +51,24 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   unauthorizedHandler = handler;
 }
 
+/**
+ * Akıtılan (streaming) sohbet isteği JSON gövdesi değil ham bir okuma akışı
+ * döndürdüğü için `apiFetch`'ten geçemiyor ve kendi `fetch`'ini kuruyor
+ * (bkz. api/chat.ts). Taban adresi, token'ı ve 401 işleyicisini oradan da
+ * kullanabilmek için üçü burada dışa açılıyor — kopyalanmasınlar diye.
+ */
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function notifyUnauthorized(): void {
+  unauthorizedHandler?.();
+}
+
 interface RequestOptions extends RequestInit {
   timeoutMs?: number;
   /**
