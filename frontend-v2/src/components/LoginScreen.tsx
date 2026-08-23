@@ -44,6 +44,30 @@ const CTA_DARK_HOVER = "#7E2839"; // buton hover
 // ikonlara özel bir tık daha parlak bir bordo.
 const ACCENT_DARK_ICON = "#C25668";
 
+/* ------------------------------------------------------------------ */
+/*  GEÇİCİ: eski arayüze kaçış kapısı                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Eski arayüzün (`frontend/`, geliştirmede port 5173) adresi.
+ *
+ * NEDEN VAR: yeni arayüz henüz ekran ekran bağlanıyor; bir şey tutmazsa
+ * sunum/test sırasında çalıştığı bilinen arayüze dönebilmek gerekiyor.
+ *
+ * NEDEN .env'DEN: adres ortama göre değişiyor (yerelde localhost:5173,
+ * sunucuda Caddy'nin verdiği alan adı) ve TANIMSIZSA BAĞLANTI HİÇ RENDER
+ * EDİLMİYOR — canlıda istenmiyorsa değişkeni koymamak yeterli, kod
+ * değişikliği gerekmiyor.
+ *
+ * DİKKAT: eski arayüz istek başlığına token koymuyor. Bu kapı yalnızca
+ * sunucuda `AUTH_ENFORCE=false` iken işe yarar; `true` iken eski arayüz
+ * 401 alır (bkz. backend/app/api/deps.py).
+ *
+ * SİLİNECEK: frontend-v2 tek arayüz olduğunda bu sabit, aşağıdaki blok ve
+ * `VITE_LEGACY_UI_URL` birlikte kaldırılacak.
+ */
+const LEGACY_UI_URL = import.meta.env.VITE_LEGACY_UI_URL ?? "";
+
 /**
  * object-position değerleri (0 = sol/üst, 0.5 = orta, 1 = sağ/alt).
  */
@@ -501,6 +525,23 @@ export function LoginScreen({
                 <ArrowIcon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
               </button>
             </form>
+
+            {/* GEÇİCİ kaçış kapısı — bkz. LEGACY_UI_URL. Formun DIŞINDA
+                duruyor ki Enter'a basınca yanlışlıkla tetiklenmesin.
+                Kasıtlı olarak sönük: bu bir ürün özelliği değil, geliştirme
+                aracı; giriş akışının önüne geçmemeli. */}
+            {LEGACY_UI_URL && (
+              <div className="mt-5 border-t border-[#DCE3EC] pt-4 text-center dark:border-white/10">
+                <a
+                  href={LEGACY_UI_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[12px] font-medium text-[#7A8CA4] underline-offset-4 transition-colors hover:text-[#5A7292] hover:underline dark:text-[#7C8AA6] dark:hover:text-[#B9C4DC]"
+                >
+                  Eski arayüzü aç (test)
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </div>

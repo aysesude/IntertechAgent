@@ -16,6 +16,11 @@ COPY . .
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
+# GECICI: giris ekranindaki "Eski arayuzu ac (test)" baglantisinin hedefi.
+# Bos gecilirse baglanti hic render edilmez (bkz. LoginScreen.tsx).
+ARG VITE_LEGACY_UI_URL
+ENV VITE_LEGACY_UI_URL=$VITE_LEGACY_UI_URL
+
 RUN npm run build
 
 
