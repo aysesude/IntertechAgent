@@ -152,6 +152,13 @@ yenisini, `oldest_price_date` en eskisini verir. **İkisi farklıysa arayüz
 bunu belirtmelidir** — yalnızca `as_of` gösterilirse özet olduğundan taze
 görünür. Hiç fiyatlı varlık yoksa `oldest_price_date` `null` döner.
 
+**`oldest_price_date` yalnızca PİYASA fiyatı olan varlıkları sayar.** Mevduatın
+birim fiyatı tanımı gereği 1 TL'dir ve hiç güncellenmez; hesaba katıldığında
+tazelik uyarısı HER kullanıcıda kalıcı olarak çıkıyordu (ölçüldü: `as_of`
+21.08 iken `oldest` 31.07). Mevduat eskimiyor, sabit — uyarının anlamlı
+kalması için yalnızca gerçekten geride kalabilecek varlıklara bakılıyor
+(`assets.sub_type` ile ayırt ediliyor).
+
 **İki taban vardır, karıştırılmamalıdır:**
 
 | Alan | Ne | Serbest nakit |
@@ -358,6 +365,49 @@ Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
   raporlanır. Hepsi birden boşsa `409`.
 - `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
   çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
+
+### `GET /api/risk/{user_id}?profile_override=`
+
+7 kademeli risk seviyesi, yıllık volatilite, VaR, Sharpe, yoğunlaşma ve
+çeşitlendirme metrikleri; volatilite profilin beklenen bandının üzerindeyse
+kök neden teşhisi (`causes`) da gelir.
+
+```json
+{
+  "risk_level": "medium_high",
+  "is_within_profile": false,
+  "risk_profile": "conservative",
+  "risk_profile_source": "user",
+  "metrics": {
+    "annualized_volatility_percent": 24.31,
+    "value_at_risk_try": 6968.0, "value_at_risk_percent": 0.44,
+    "value_at_risk_confidence": 95.0, "value_at_risk_horizon_days": 1,
+    "sharpe_ratio": -6.74, "risk_free_rate_percent": 37.0,
+    "max_asset_symbol": "PPF", "max_asset_weight_percent": 24.17,
+    "price_points_used": 260
+  },
+  "warnings": [],
+  "disclaimer": "Bu bir yatırım tavsiyesi değildir. …"
+}
+```
+
+- **0-100 kompozit skor YOK.** Risk v2 onu bilerek kaldırdı; seviye yalnızca
+  volatiliteden gelir, yoğunlaşma/çeşitlendirme skora karışmaz (onlar teşhiste
+  kullanılır). Arayüz skor uydurmamalı.
+- **Yeterli fiyat geçmişi yoksa `risk_level` ve metrikler `null` döner**,
+  tahmini bir değerle doldurulmaz (AK 2.7 / 5.5). Sebep `warnings`'te yazar.
+  Arayüz bu durumda "hesaplanamadı" göstermeli — `0` göstermek "riskiniz yok"
+  demek olurdu.
+- `profile_override` "ya agresif olsaydım?" senaryosudur: hesap o profile göre
+  yapılır ama kullanıcının **kayıtlı profili değişmez** (`risk_profile_source`
+  `override` döner).
+- `scenarios` ürün sahibi kararıyla kapalıdır: risk yalnızca tespit/uyarı
+  içindir, ne yapılacağını önermek kapsam dışı.
+- Bu uç da **ajan çağırmaz**, servisi doğrudan okur.
+
+**Bilinen konu:** risksiz faiz %37 olduğu için muhafazakâr portföylerde Sharpe
+sistematik olarak negatif çıkıyor. Analist onayı bekliyor; arayüzde bağlamsız
+gösterilmemeli.
 
 ### `POST /api/chat` (SSE, `text/event-stream`)
 

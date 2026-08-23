@@ -30,6 +30,12 @@ vi.mock("@/api/portfolio", () => ({
   fetchHoldings: (...a: unknown[]) => fetchHoldings(...a),
   fetchTransactions: (...a: unknown[]) => fetchTransactions(...a),
 }));
+// Risk ucu opsiyonel: düşerse dashboard yine çizilir. Bu testler dönem
+// geçişine odaklandığı için risk hep null döndürülüyor.
+const fetchRiskAssessment = vi.fn();
+vi.mock("@/api/risk", () => ({
+  fetchRiskAssessment: (...a: unknown[]) => fetchRiskAssessment(...a),
+}));
 vi.mock("@/api/client", () => ({ isApiConfigured: true }));
 vi.mock("@/auth/AuthContext", () => ({ useCurrentUserId: () => "kullanici-1" }));
 vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
@@ -90,6 +96,7 @@ beforeEach(() => {
   fetchPortfolioSummary.mockReset().mockResolvedValue(OZET);
   fetchHoldings.mockReset().mockResolvedValue(null);
   fetchTransactions.mockReset().mockResolvedValue(null);
+  fetchRiskAssessment.mockReset().mockResolvedValue(null);
   fetchPerformance.mockReset();
 });
 

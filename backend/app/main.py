@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, chat, market, portfolio, users
+from app.api import auth, chat, market, portfolio, risk, users
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -21,6 +21,7 @@ app.include_router(auth.router)
 app.include_router(portfolio.router)
 app.include_router(portfolio.price_router)
 app.include_router(users.router)
+app.include_router(risk.router)
 app.include_router(market.router)
 app.include_router(chat.router)
 

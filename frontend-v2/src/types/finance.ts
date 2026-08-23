@@ -50,8 +50,29 @@ export interface PeriodReturn {
 
 export interface AssetPerformer {
   name: string;
+  /** Varlık sınıfının Türkçe adı. Boş bırakılırsa ekranda sonu ayraçla biten
+   *  bir metin ("Tüpraş · ") görünür — bu yüzden opsiyonel değil. */
   assetClass: string;
   returnPct: number;
+}
+
+/**
+ * Dashboard'daki risk kartının ihtiyacı.
+ *
+ * 0-100 KOMPOZİT SKOR YOK: risk metodolojisi v2 onu bilerek kaldırdı, yerine
+ * volatiliteden türeyen 7 kademeli etiket geldi. Hesaplanamıyorsa alanlar
+ * `null` gelir ve kart "hesaplanamadı" gösterir — 0 yazmak "riskiniz yok"
+ * demek olurdu (AK 2.7 / 5.5).
+ */
+export interface RiskSummary {
+  /** Türkçe etiket: "Çok Düşük" … "Çok Yüksek". */
+  levelLabel: string | null;
+  annualizedVolatilityPct: number | null;
+  /** Volatilite, kullanıcının profil bandının içinde mi? */
+  withinProfile: boolean | null;
+  profileLabel: string;
+  /** Hesaplanamadıysa sebebi. */
+  warning: string | null;
 }
 
 /**
@@ -288,6 +309,8 @@ export interface DashboardData {
   recommendations: AIRecommendation[];
   bestPerformer?: AssetPerformer;
   worstPerformer?: AssetPerformer;
+  /** Risk ucu düşerse gelmez; kart "hesaplanamadı" gösterir. */
+  risk?: RiskSummary;
   instrumentCount: number;
   assetClassCount: number;
   lastUpdated: string;
