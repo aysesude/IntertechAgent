@@ -223,6 +223,14 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   createdAt: string;
+  /** Cevap hâlâ akıyor — balonda yanıp sönen imleç gösterilir. */
+  streaming?: boolean;
+  /** Hangi ajan yanıtladı (portfolio_agent, market_agent, risk_agent). FR-7 izlenebilirlik. */
+  agentName?: string | null;
+  /** Akış tamamlanmadan koptuysa cevap eksiktir; arayüz bunu belirtmeli. */
+  incomplete?: boolean;
+  /** Ajan/ağ hatası. Dolu olduğunda balon hata biçiminde gösterilir. */
+  error?: string;
 }
 
 export interface ChatThread {

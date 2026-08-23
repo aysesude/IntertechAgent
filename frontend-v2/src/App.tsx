@@ -19,6 +19,7 @@ import {
 import { INTRO_TIMING } from "@/components/LoginScreen";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
+import { ChatProvider } from "@/chat/ChatProvider";
 import type { ScreenId } from "@/types/finance";
 
 // Faz 5'in (Dashboard'un giriş sonrası kart/grafik stagger'ı) görsel olarak
@@ -107,7 +108,12 @@ function AppShell() {
         )}
       </AnimatePresence>
 
+      {/* ChatProvider giriş yapılmış ağacın İÇİNDE: sohbet oturumu kullanıcıya
+          aittir ve çıkışta bileşen söküldüğü için kendiliğinden sıfırlanır.
+          Ayrıca ChatPage ile yüzen ChatWidget'ı aynı oturuma bağlayan yer
+          burası — ikisi de bu sağlayıcının altında. */}
       {authenticated && (
+        <ChatProvider>
         <DashboardEnterFade>
           <div className="min-h-screen bg-surface">
             {/* AnimatePresence mode="wait" sayfa geçişinde eski sayfayı tamamen
@@ -176,6 +182,7 @@ function AppShell() {
             {screen !== "chat" && <ChatWidget />}
           </div>
         </DashboardEnterFade>
+        </ChatProvider>
       )}
     </>
   );
