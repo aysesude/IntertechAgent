@@ -1,7 +1,3 @@
-// Bu proje şu an vitest içermiyor (kurulmadı — bkz. görev talimatı: "vitest
-// yoksa kurma"). Dosya vitest'in describe/it/expect API'siyle yazıldı ve
-// vitest eklendiği anda çalışır; şimdilik build'i etkilememesi için
-// tsconfig.json'da src/**/*.test.ts type-check kapsamının dışında tutuluyor.
 import { describe, expect, it } from "vitest";
 import { buildInsights } from "@/utils/insights";
 import {
@@ -22,6 +18,7 @@ import type {
   Holding,
   PerformanceRange,
   PortfolioPageData,
+  PortfolioSummary,
   RangeKey,
   TargetVsActualRow,
 } from "@/types/finance";
@@ -30,9 +27,28 @@ function emptyRange(key: RangeKey): PerformanceRange {
   return { key, subtitle: "", points: [], annotationIndex: null };
 }
 
+// PortfolioSummary bu test yazildiktan SONRA alan kazandi (costBasis,
+// totalPL, totalPLPct, realReturnPct). Dosya o zaman tip kontrolu disinda
+// tutuldugu icin fark edilmemisti; artik testler de kontrol ediliyor.
+// Tek yerde toplandi ki tip bir daha genislediginde tek satir degissin.
+function baseSummary(overrides: Partial<PortfolioSummary> = {}): PortfolioSummary {
+  return {
+    totalValue: 1_000_000,
+    todayChange: 0,
+    dailyLoserPct: 0,
+    dailyLoserNote: "",
+    riskScore: 50,
+    costBasis: 900_000,
+    totalPL: 100_000,
+    totalPLPct: 11.1,
+    realReturnPct: 0,
+    ...overrides,
+  };
+}
+
 function baseDashboard(overrides: Partial<DashboardData> = {}): DashboardData {
   return {
-    summary: { totalValue: 1_000_000, todayChange: 0, dailyLoserPct: 0, dailyLoserNote: "", riskScore: 50 },
+    summary: baseSummary(),
     performance: {
       "1H": emptyRange("1H"),
       "1A": emptyRange("1A"),
@@ -68,12 +84,19 @@ function makeHolding(overrides: Partial<Holding> & Pick<Holding, "id" | "name" |
     quantity: "1",
     formattedValue: "",
     risk: "Orta",
+    // Lot bazli alanlar da sonradan eklendi; testler bunlari kullanmiyor
+    // ama tip zorunlu tutuyor.
+    currentUnitPrice: 0,
+    unitLabel: "adet",
+    lots: [],
     ...overrides,
   };
 }
 
 function makeAllocationSlice(overrides: Partial<AssetAllocationSlice> & Pick<AssetAllocationSlice, "name" | "value" | "pct">): AssetAllocationSlice {
   return {
+    // Varlik sinifi kimligi sonradan zorunlu oldu (koyu tema paleti icin).
+    id: "stocks",
     formattedValue: "",
     color: "#000",
     highlightColor: "#000",
@@ -115,7 +138,7 @@ describe("buildInsights", () => {
   it("K3 TEK_VARLIK_YOGUNLASMASI: tek varlığın payı sınırı aşıyorsa uyarır", () => {
     const totalValue = 1_000_000;
     const holding = makeHolding({ id: "h1", name: "ASELS", value: (totalValue * (SINGLE_HOLDING_LIMIT_PCT + 5)) / 100, returnPct: 1 });
-    const dashboard = baseDashboard({ summary: { totalValue, todayChange: 0, dailyLoserPct: 0, dailyLoserNote: "", riskScore: 50 } });
+    const dashboard = baseDashboard({ summary: baseSummary({ totalValue }) });
     const portfolio = basePortfolio({ holdings: [holding] });
 
     const result = buildInsights(dashboard, portfolio);
@@ -125,7 +148,7 @@ describe("buildInsights", () => {
 
   it("K4 RISK_SKORU_BANDI: risk skoru bandın dışındaysa hangi yönde olduğunu bildirir", () => {
     const dashboard = baseDashboard({
-      summary: { totalValue: 1_000_000, todayChange: 0, dailyLoserPct: 0, dailyLoserNote: "", riskScore: RISK_BAND.high + 10 },
+      summary: baseSummary({ riskScore: RISK_BAND.high + 10 }),
     });
 
     const result = buildInsights(dashboard, basePortfolio());
@@ -189,7 +212,7 @@ describe("buildInsights", () => {
       { id: "b", label: "B", targetPct: 10, actualPct: 10 + WEIGHT_DEVIATION_LIMIT + 10, diff: WEIGHT_DEVIATION_LIMIT + 10 },
     ];
     const dashboard = baseDashboard({
-      summary: { totalValue, todayChange: 0, dailyLoserPct: 0, dailyLoserNote: "", riskScore: RISK_BAND.high + 10 },
+      summary: baseSummary({ totalValue, riskScore: RISK_BAND.high + 10 }),
       allocation: [
         makeAllocationSlice({ name: "Nakit", value: 200_000, pct: CASH_LIMIT_PCT + 3 }),
         makeAllocationSlice({ name: "Döviz", value: 300_000, pct: FX_LIMIT_PCT + 4 }),
