@@ -10,6 +10,7 @@ import { TransactionsList } from "@/components/dashboard/TransactionsList";
 import { ErrorBanner } from "@/components/common/ErrorBanner";
 import { InfoTooltip } from "@/components/common/InfoTooltip";
 import { InsightsBand } from "@/components/dashboard/InsightsBand";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { TrendUpIcon } from "@/components/icons";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useAuth } from "@/auth/AuthContext";
@@ -45,6 +46,12 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
   const { summary } = data;
 
   const ad = ilkAd(user.name);
+
+  // Gerçek veri yokken içerik çizilmez. Hata durumunda da iskelet kalır
+  // (kartlar ₺0 göstermesin diye) ama NABIZ ATMAZ: sürekli atan bir iskelet
+  // "hâlâ yükleniyor" izlenimi verir, oysa yükleme bitti ve başarısız oldu.
+  // Hata bandı iskeletin üstünde zaten görünüyor.
+  const ilkYukleme = loading;
 
   // İçgörüler tamamen TÜRETİLMİŞ: ek bir istek yok, ekrandaki verinin
   // üzerinde kural tabanlı çalışıyor. Portföy ekranının verisi (hedef
@@ -92,6 +99,13 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
           </div>
         )}
 
+        {/* Gerçek veri gelmeden içerik ÇİZİLMİYOR. Aksi halde ekran bir
+            an tasarım verisiyle doluyor ("stok hali") ve o anda uyarı
+            bandı da bastırılmış oluyordu. */}
+        {ilkYukleme ? (
+          <DashboardSkeleton animated={!error} />
+        ) : (
+          <>
         <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           <StaggerItem active={stagger}>
             <StatCard
@@ -223,6 +237,8 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
         <div className="grid grid-cols-1 gap-6">
           <TransactionsList transactions={data.transactions} />
         </div>
+          </>
+        )}
 
         {/* "Portföyü Yeniden Dengele" ve "Detaylı Rapor Oluştur" butonları
             KALDIRILDI. Mock öneri üretiyorlardı; finansal bir üründe kaynağı

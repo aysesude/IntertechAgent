@@ -48,6 +48,29 @@ interface TemelVeri {
 }
 
 /**
+ * MODÜL DÜZEYİNDE önbellek — sayfalar arası gezinmede hayatta kalır.
+ *
+ * Hook, Dashboard'dan çıkılınca unmount oluyor ve tüm state sıfırlanıyordu;
+ * geri dönüldüğünde veri yeniden çekilene kadar TASARIM VERİSİ görünüyordu
+ * ("sayfanın stok hali"). Üstelik yükleme sırasında "tasarım verisi" uyarısı
+ * da bastırıldığı için uydurma rakamlar uyarısız görünüyordu — bir finans
+ * ürününde en kötü hata modu (CLAUDE.md §4).
+ *
+ * React state'i bunu çözemez çünkü sorun tam olarak state'in kaybolması.
+ * Context'e taşımak da olurdu ama o, veriyi Dashboard'a ihtiyacı olmayan
+ * ekranların ağacına da sokardı. Modül değişkeni en dar çözüm.
+ *
+ * Kullanıcıya bağlı: başkasının verisi bir an bile gösterilemez (AK 5.4).
+ * Oturum kapanınca ağaç unmount olur ama modül hayatta kalır, o yüzden
+ * `userId` eşleşmesi zorunlu.
+ */
+let paylasilanOnbellek: {
+  userId: string;
+  temel: TemelVeri;
+  performans: Partial<Record<RangeKey, ApiPerformanceResult>>;
+} | null = null;
+
+/**
  * Dashboard verisi.
  *
  * İKİ AYRI YÜKLEME var ve bu bilinçli:
@@ -69,46 +92,82 @@ interface TemelVeri {
  * `rangeLoading` sonsuza dek `true` kalıyordu. Nesil sayacı yalnızca gerçekten
  * geçersizleşme durumlarında (kullanıcı değişimi, elle yenileme) artar.
  */
+/**
+ * Veri gelmeden önce kullanılan BOŞ kabuk.
+ *
+ * Sayısal alanlar sıfır ama ekranda gösterilmiyorlar: `loading` true iken
+ * DashboardPage iskelet çiziyor. Buradaki değerlerin görünmesi bir hatadır,
+ * "portföyünüz 0 TL" demek olurdu.
+ */
+const BOS_DASHBOARD: DashboardData = {
+  summary: { totalValue: 0, costBasis: 0, netInvested: 0, totalPL: 0, totalPLPct: 0 },
+  performance: {} as DashboardData["performance"],
+  allocation: [],
+  transactions: [],
+  recommendations: [],
+  instrumentCount: 0,
+  assetClassCount: 0,
+  lastUpdated: "",
+};
+
+/**
+ * Modül önbelleğini boşaltır. YALNIZCA TESTLER İÇİN.
+ *
+ * Modül değişkeni test dosyası boyunca yaşar; sıfırlanmazsa bir testin
+ * çektiği veri diğerine sızar ve testler birbirini gizler.
+ */
+export function __dashboardOnbelleginiSifirla(): void {
+  paylasilanOnbellek = null;
+}
+
 export function useDashboardData(range: RangeKey): DashboardState {
   const userId = useCurrentUserId();
   const { resolvedTheme } = useTheme();
   const canli = isApiConfigured && userId !== null;
 
-  const [temel, setTemel] = useState<TemelVeri | null>(null);
+  // Önbellekte bu kullanıcıya ait veri varsa ekran BOŞ AÇILMAZ.
+  const onbellekGecerli = paylasilanOnbellek?.userId === userId;
+
+  const [temel, setTemel] = useState<TemelVeri | null>(
+    onbellekGecerli ? paylasilanOnbellek!.temel : null,
+  );
   const [aktifPerformans, setAktifPerformans] = useState<{
     range: RangeKey;
     sonuc: ApiPerformanceResult;
-  } | null>(null);
-  const [temelYukleniyor, setTemelYukleniyor] = useState(canli);
-  const [donemYukleniyor, setDonemYukleniyor] = useState(canli);
+  } | null>(() => {
+    if (!onbellekGecerli) return null;
+    const sonuc = paylasilanOnbellek!.performans[range];
+    return sonuc ? { range, sonuc } : null;
+  });
+  const [donemYukleniyor, setDonemYukleniyor] = useState(canli && !onbellekGecerli);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   // Önbellek ve uçuş takibi REF'te: state olsalardı effect bağımlılığına girer
   // ve yukarıda anlatılan kendi kendini iptal etme sorununu doğururlardı.
-  const onbellek = useRef<Partial<Record<RangeKey, ApiPerformanceResult>>>({});
+  const onbellek = useRef<Partial<Record<RangeKey, ApiPerformanceResult>>>(
+    onbellekGecerli ? { ...paylasilanOnbellek!.performans } : {},
+  );
   const ucusta = useRef<Set<RangeKey>>(new Set());
   const nesil = useRef(0);
 
   // --- Kullanıcı değişimi: her şey geçersiz --------------------------------
   // Başkasının serisi bir an bile gösterilemez (AK 5.4).
   useEffect(() => {
+    if (paylasilanOnbellek?.userId === userId) return; // aynı kullanıcı, veri geçerli
     nesil.current += 1;
     onbellek.current = {};
     ucusta.current = new Set();
+    paylasilanOnbellek = null;
     setAktifPerformans(null);
     setTemel(null);
   }, [userId]);
 
   // --- Temel veri ---------------------------------------------------------
   useEffect(() => {
-    if (!canli) {
-      setTemelYukleniyor(false);
-      return;
-    }
+    if (!canli) return;
     const kullanici = userId!;
     const benimNesil = nesil.current;
-    setTemelYukleniyor(true);
 
     Promise.all([
       fetchPortfolioSummary(kullanici),
@@ -121,16 +180,19 @@ export function useDashboardData(range: RangeKey): DashboardState {
     ])
       .then(([ozet, varliklar, islemler, risk]) => {
         if (nesil.current !== benimNesil) return;
-        setTemel({ ozet, varliklar, islemler, risk });
+        const yeniTemel = { ozet, varliklar, islemler, risk };
+        setTemel(yeniTemel);
+        paylasilanOnbellek = {
+          userId: kullanici,
+          temel: yeniTemel,
+          performans: { ...onbellek.current },
+        };
         setError(null);
       })
       .catch((err: unknown) => {
         if (nesil.current !== benimNesil) return;
         setTemel(null);
         setError(err instanceof Error ? err.message : "Portföy verisi alınamadı.");
-      })
-      .finally(() => {
-        if (nesil.current === benimNesil) setTemelYukleniyor(false);
       });
   }, [canli, userId, tick]);
 
@@ -163,6 +225,11 @@ export function useDashboardData(range: RangeKey): DashboardState {
         if (nesil.current !== benimNesil) return;
         onbellek.current[range] = sonuc;
         setAktifPerformans({ range, sonuc });
+        // Dönem serisi de gezinmeye dayanmalı; aksi halde geri dönüldüğünde
+        // grafik yeniden yüklenirdi.
+        if (paylasilanOnbellek?.userId === kullanici) {
+          paylasilanOnbellek.performans = { ...onbellek.current };
+        }
       })
       .catch((err: unknown) => {
         if (nesil.current !== benimNesil) return;
@@ -181,7 +248,11 @@ export function useDashboardData(range: RangeKey): DashboardState {
   // türetme mock veriye düşer ve tüm dashboard (özet kartları, dağılım,
   // işlemler) bir kare boyunca TASARIM VERİSİ gösterirdi.
   const data = useMemo<DashboardData>(() => {
-    if (!temel || !aktifPerformans) return mockDashboard;
+    // API bağlıyken gerçek veri gelene kadar TASARIM VERİSİ DÖNMÜYOR.
+    // Döndüğünde ekran bir an "stok hali"ni gösteriyordu ve o anda uyarı
+    // bandı da bastırılmış oluyordu, yani uydurma rakamlar uyarısız
+    // görünüyordu. Sayfa bu durumda iskelet çiziyor (bkz. DashboardPage).
+    if (!temel || !aktifPerformans) return canli ? BOS_DASHBOARD : mockDashboard;
     return toDashboardData({
       summary: temel.ozet,
       performance: aktifPerformans.sonuc,
@@ -191,7 +262,7 @@ export function useDashboardData(range: RangeKey): DashboardState {
       risk: temel.risk,
       darkTheme: resolvedTheme === "dark",
     });
-  }, [temel, aktifPerformans, resolvedTheme]);
+  }, [temel, aktifPerformans, resolvedTheme, canli]);
 
   const canliVeri = temel !== null && aktifPerformans !== null;
 
@@ -201,12 +272,18 @@ export function useDashboardData(range: RangeKey): DashboardState {
     nesil.current += 1;
     onbellek.current = {};
     ucusta.current = new Set();
+    paylasilanOnbellek = null;
     setTick((t) => t + 1);
   }, []);
 
   return {
     data,
-    loading: temelYukleniyor && temel === null,
+    // "Gösterilecek GERÇEK veri henüz yok" demek — yalnızca ilk yükleme.
+    // Ayrı bir `temelYukleniyor` bayrağına bakmak yetmiyordu: özet gelip dönem serisi
+    // hâlâ yoldayken `data` boş kabuğa düşüyor ve kartlar bir kare boyunca
+    // ₺0 gösteriyordu ("portföyünüz 0 ₺" demek olurdu). Dönem DEĞİŞİMİ bunu
+    // tetiklemez, çünkü o sırada `temel` ve önceki seri elde duruyor.
+    loading: canli && !canliVeri,
     rangeLoading: donemYukleniyor,
     error,
     isDemoData: !canliVeri,
