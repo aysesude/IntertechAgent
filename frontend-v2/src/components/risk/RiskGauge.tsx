@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/common/Card";
+import { CONTENT_REVEAL_DELAY_MS } from "@/components/PageTransition";
 import { useCountUp, easeOutCubic } from "@/hooks/useCountUp";
 import { BRAND, DANGER, INK_FAINT, LINE2, SURFACE_ELEVATED, FIXED_DARK_CHIP } from "@/utils/colors";
 
@@ -15,13 +16,14 @@ const CENTER_Y = 160;
 const RADIUS = 120;
 const NEAR_THRESHOLD = 3;
 
-// PageTransition'daki içerik, mount olduktan SWEEP_DURATION(1.1s) * 0.55
-// ≈ 605ms sonra görünmeye başlıyor (bkz. contentVariants). Gauge'un sayaç
-// animasyonu mount anında değil, içerik gerçekten görünür olmaya
-// başladığında tetiklenmeli — yoksa animasyon wash'ın altında, kimse
-// görmeden oynayıp bitiyor. Küçük bir tampon (15ms) eklendi.
-// NOT: PageTransition'daki gecikme değişirse burası da güncellenmeli.
-const CONTENT_REVEAL_DELAY_MS = 620;
+// Gauge'un sayaç animasyonu mount anında değil, içerik gerçekten görünür
+// olmaya başladığında tetiklenmeli — yoksa kimse görmeden oynayıp biter.
+//
+// Değer artık PageTransition'dan İTHAL EDİLİYOR, elle kopyalanmıyor: eskiden
+// burada 620 sabiti vardı ve "PageTransition'daki gecikme değişirse burası da
+// güncellenmeli" notu düşülmüştü. Nitekim değişti (tam ekran dalga geçişi
+// kaldırıldı, gecikme ~605 ms'den ~80 ms'ye indi) — tek kaynağa bağlamak bu
+// senkronu elle takip etme yükünü ortadan kaldırıyor.
 
 function dotColorAt(value: number): string {
   const t = value / 100;
