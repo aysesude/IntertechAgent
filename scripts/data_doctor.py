@@ -187,24 +187,50 @@ def main() -> int:
         ).all():
             seriler[aid].append((gun, Decimal(fiyat), _kaynak_adi(src)))
 
-        sicrama = 0
+        # Sicramanin IKI TURU var ve karistirilmamalari gerekiyor:
+        #
+        #   ekleme yeri  - iki gunun kaynagi farkli ya da biri sentetik. Sentetik
+        #                  taban fiyat gercek fiyattan kat kat sapabildigi icin
+        #                  (PPF: 118,50 sentetik vs 3,50 gercek) burada onlarca
+        #                  kat sahte getiri olusur. Bu bir SIRA hatasidir,
+        #                  yeniden seed ile duzelir.
+        #   ayni kaynak  - iki yani da ayni gercek saglayici. Sentetik bulasma
+        #                  YOK; ya gercekten oyle hareket etmis ya da saglayici
+        #                  hatali fiyat yayimlamis. Yeniden seed BUNU DUZELTMEZ,
+        #                  cunku ayni fiyati tekrar ceker.
+        #
+        # Ayrim yapilmadiginda arac, saglayici kaynakli tek bir sicrama icin
+        # "yeniden seed" oneriyordu - bosuna is ve yanlis teshis.
+        ekleme_yeri = 0
+        ayni_kaynak: list[tuple] = []
         for aid, seri in seriler.items():
             for (gun0, fiyat0, kaynak0), (gun1, fiyat1, kaynak1) in zip(seri, seri[1:]):
                 if fiyat0 <= 0:
                     continue
                 degisim = abs(fiyat1 / fiyat0 - 1) * 100
-                if degisim > SICRAMA_ESIGI:
-                    sicrama += 1
-                    if sicrama <= 10:
-                        print(
-                            f"  {semboller.get(aid, '?'):<12} {gun0}({kaynak0}) -> "
-                            f"{gun1}({kaynak1})  %{degisim:.1f}"
-                        )
-        if sicrama:
-            print(f"  toplam: {sicrama}")
-            bulgular.append(f"{sicrama} supheli gunluk sicrama (sentetik/gercek ekleme yeri)")
+                if degisim <= SICRAMA_ESIGI:
+                    continue
+                sentetik_bulasik = "synthetic" in (kaynak0, kaynak1)
+                if kaynak0 != kaynak1 or sentetik_bulasik:
+                    ekleme_yeri += 1
+                    etiket = "EKLEME YERI"
+                else:
+                    ayni_kaynak.append((semboller.get(aid, "?"), gun0, gun1, kaynak0, degisim))
+                    etiket = "ayni kaynak"
+                if ekleme_yeri + len(ayni_kaynak) <= 10:
+                    print(
+                        f"  {semboller.get(aid, '?'):<12} {gun0}({kaynak0}) -> "
+                        f"{gun1}({kaynak1})  %{degisim:.1f}  [{etiket}]"
+                    )
+        if ekleme_yeri:
+            bulgular.append(f"{ekleme_yeri} sicrama sentetik/gercek EKLEME YERINDE")
             sira_hatasi = True
-        else:
+        if ayni_kaynak:
+            bulgular.append(
+                f"{len(ayni_kaynak)} sicrama ayni gercek kaynagin icinde "
+                "(saglayici verisi - yeniden seed cozmez)"
+            )
+        if not ekleme_yeri and not ayni_kaynak:
             print("  temiz")
 
         # --- 6. Asiri kar/zarar ----------------------------------------------
