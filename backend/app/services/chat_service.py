@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AuthorizationError, NotFoundError
 from app.models import ChatSession, Message, MessageRole, MessageStatus
 
 
@@ -15,6 +15,13 @@ def get_or_create_session(db: Session, user_id: UUID, session_id: UUID | None) -
         session = db.get(ChatSession, session_id)
         if session is None:
             raise NotFoundError(f"Chat session not found for session_id {session_id}")
+        # AK 5.4. Sahiplik kontrolü olmadan, bir oturum kimliğini ele geçiren
+        # kişi o sohbete kendi mesajını ekleyebilir ve geçmişi bağlam olarak
+        # ajana okutabilirdi. Kontrol servis katmanında, çünkü bu bir HTTP
+        # kuralı değil defterin bütünlük kuralı: oturum sahibinden başkası
+        # ona yazamaz.
+        if session.user_id != user_id:
+            raise AuthorizationError("Bu sohbet oturumuna erişim yetkiniz yok.")
         return session
 
     session = ChatSession(user_id=user_id)
@@ -75,11 +82,20 @@ def get_recent_messages(db: Session, session_id: UUID, limit: int) -> list[Messa
     return list(reversed(rows))
 
 
-def get_session_messages(db: Session, session_id: UUID) -> list[Message]:
-    """Geçmiş ekranı için: oturumdaki tüm mesajları kronolojik sırada döner."""
+def get_session_messages(
+    db: Session, session_id: UUID, *, owner_id: UUID | None = None
+) -> list[Message]:
+    """Geçmiş ekranı için: oturumdaki tüm mesajları kronolojik sırada döner.
+
+    `owner_id` verilirse oturumun o kullanıcıya ait olduğu doğrulanır (AK 5.4).
+    `None` yalnızca kimlik zorunluluğunun kapalı olduğu geçiş döneminde gelir
+    (bkz. api/deps.py, AUTH_ENFORCE).
+    """
     session = db.get(ChatSession, session_id)
     if session is None:
         raise NotFoundError(f"Chat session not found for session_id {session_id}")
+    if owner_id is not None and session.user_id != owner_id:
+        raise AuthorizationError("Bu sohbet oturumuna erişim yetkiniz yok.")
 
     return (
         db.execute(

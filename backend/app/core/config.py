@@ -431,6 +431,33 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origins: str = "http://localhost:5173"
 
+    # --- Kimlik doğrulama ---
+    # Koda gömülü bir varsayılanı YOK, bilerek (CLAUDE.md: gizli bilgi yalnızca
+    # .env'de). Boş bırakılırsa uygulama hiç başlamaz — sessizce sabit bir
+    # anahtarla çalışıp herkesin token üretebilmesindense açıkça patlaması
+    # daha iyi. Alan `str = ""` olarak tanımlı ve kontrolü aşağıdaki
+    # doğrulayıcı yapıyor; Pydantic'in ham "Field required" hatası yerine ne
+    # yapılması gerektiğini söyleyen bir mesaj verebilmek için.
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    # Bir demo günü. Yenileme (refresh) token'ı kapsam dışı: süre dolunca
+    # kullanıcı yeniden giriş yapar.
+    jwt_expire_minutes: int = 480
+
+    # Geçiş bayrağı. VARSAYILANI True — yani unutulursa auth AÇIK kalır,
+    # kapalı değil. Token göndermeyen eski `frontend/` ile çalışmayı sürdüren
+    # geliştirici bunu kendi .env'inde False yapar. frontend-v2'nin sohbeti
+    # uçtan uca çalışır hale geldiğinde (Faz 3) bu bayrak silinecek.
+    auth_enforce: bool = True
+
+    # Sentetik demo kullanıcılarının ortak şifresi. GİZLİ DEĞİL ve olmamalı:
+    # `make demo-users` çıktısında kullanıcıların T.C. kimlik numaralarıyla
+    # birlikte zaten basılıyor — sentetik veriye erişim anahtarıdır, gerçek
+    # bir sır değil. Giriş ekranı 6 haneli sayısal şifre bekliyor.
+    # Doğrulama yolu buna rağmen tamamen gerçek (bcrypt); yalnızca seed
+    # verisi tekdüze, çünkü 50 ayrı şifreyi ezberlemenin demoya katkısı yok.
+    demo_user_password: str = "460213"
+
     # --- Chat ---
     # Orchestrator'a bağlam olarak geçilen son mesaj sayısı.
     chat_context_message_limit: int = 10
@@ -583,6 +610,23 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _validate_jwt_secret_key(self) -> "Settings":
+        """Anahtar yoksa uygulamayı açılışta durdurur.
+
+        Alan `str = ""` olarak tanımlı ve kontrol burada yapılıyor; Pydantic'in
+        ham "Field required" hatası yerine ne yapılması gerektiğini söyleyen
+        bir mesaj verebilmek için (bkz. jwt_secret_key tanımındaki not).
+        """
+        if not self.jwt_secret_key.strip():
+            raise ValueError(
+                "JWT_SECRET_KEY tanımlı değil. .env dosyanıza ekleyin: "
+                "JWT_SECRET_KEY=<uzun-rastgele-bir-değer>  "
+                '(üretmek için: python -c "import secrets; '
+                'print(secrets.token_urlsafe(48))")'
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_risk_scenario_score_weights(self) -> "Settings":
