@@ -67,6 +67,42 @@ Token'ın hâlâ geçerli olup olmadığını ve kime ait olduğunu döner (`Aut
 gövdesi, yukarıdaki `user` alanıyla aynı). Arayüz sayfa yenilendiğinde bunu
 çağırır. Token yoksa `401` + `WWW-Authenticate: Bearer`.
 
+### Eski arayüz için kenar doğrulaması: `LEGACY_GATEWAY_SECRET`
+
+İki arayüz farklı kapılardan geçer ve ikisi de kapalıdır:
+
+| | eski arayüz (`test.…`) | yeni arayüz (`v2.test.…`) |
+|---|---|---|
+| Kapı | ters vekilde basic auth | uygulamanın JWT'si |
+| Backend ne görür | geçit başlığı | `Authorization: Bearer` |
+| Dışarıya açık mı | hayır | hayır |
+
+Eski arayüz token göndermiyor ama zaten Caddy'de basic auth'un arkasında —
+yani o yoldan gelen istek **kenarda doğrulanmış** oluyor. Caddy, kapıyı geçen
+isteğe sırrı taşıyan bir başlık ekler:
+
+```
+handle /api/* {
+    reverse_proxy localhost:8000 {
+        header_up X-Gateway-Auth "<LEGACY_GATEWAY_SECRET ile ayni>"
+    }
+}
+```
+
+- **Sır tanımlı değilse başlık hiç okunmaz** — ayarı yapmayan bir ortamda
+  başlığı uyduran birinin kimlik doğrulamasını atlatması mümkün olmasın diye.
+- **Token varsa geçit başlığı onu ezmez.** Başlık "kimliksiz geç" demektir,
+  kimliği değiştirmez; yeni arayüzün isteklerinde AK 5.4 sahiplik kontrolü tam
+  olarak işlemeye devam eder (ölçüldü: token + geçit başlığı ile başkasının
+  portföyü hâlâ `403`).
+- Karşılaştırma sabit zamanlı (`secrets.compare_digest`): normal `==` ilk
+  farklı karakterde döndüğü için harcanan süre ölçülerek sır tahmin
+  edilebilirdi.
+- Güvenlik sınırı: backend portuna yalnızca ters vekilin ulaşabildiği
+  varsayımına dayanır (sunucuda 8000/8080 dışarıya kapalı).
+
+Eski arayüz emekliye ayrıldığında bu ayar silinecek.
+
 ### Geçiş bayrağı: `AUTH_ENFORCE`
 
 Varsayılanı `true` — unutulursa auth **açık** kalır. `false` iken token

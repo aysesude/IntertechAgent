@@ -12,9 +12,10 @@ topluca kırardı; kazancı ise yalnızca estetik olurdu — kimliğin kaynağı
 token, yoldaki değer artık yalnızca doğrulanan bir iddia.
 """
 
+import secrets
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -43,18 +44,49 @@ def _unauthenticated(message: str) -> HTTPException:
     )
 
 
+def _passed_edge_authentication(request: Request) -> bool:
+    """İstek, ters vekilin kimlik kapısını geçerek mi geldi?
+
+    Eski arayüz token göndermiyor ama ters vekilde HTTP temel kimlik
+    doğrulamasının arkasında duruyor. Caddy, kapıyı geçen isteğe yapılandırılmış
+    sırrı taşıyan bir başlık ekliyor; burada o başlık tanınıyor.
+
+    Sır tanımlı değilse özellik tamamen kapalıdır ve başlık HİÇ okunmaz —
+    kazara bir atlatma yolu açılmasın diye.
+
+    Karşılaştırma `compare_digest` ile: normal `==` ilk farklı karakterde
+    döndüğü için, harcanan süre ölçülerek sır karakter karakter tahmin
+    edilebilirdi.
+    """
+    beklenen = settings.legacy_gateway_secret
+    if not beklenen:
+        return False
+    gelen = request.headers.get(settings.legacy_gateway_header)
+    if not gelen:
+        return False
+    return secrets.compare_digest(gelen, beklenen)
+
+
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User | None:
     """İstekteki Bearer token'dan kullanıcıyı çözer.
 
-    `AUTH_ENFORCE=false` iken token YOKSA `None` döner ve istek geçer — token
-    VARSA yine de doğrulanır (bozuk token sessizce yok sayılmaz). Bu yalnızca
-    geçiş dönemi içindir: token göndermeyen eski `frontend/` çalışmaya devam
-    etsin diye. Bayrağın varsayılanı `True`, yani unutulursa auth açık kalır.
+    Token YOKSA istek iki durumda geçer ve `None` döner:
+
+    1. İstek ters vekilin kimlik kapısını geçmişse (bkz.
+       `_passed_edge_authentication`) — eski arayüzün yolu.
+    2. `AUTH_ENFORCE=false` ise — geçiş dönemi bayrağı, varsayılanı `True`.
+
+    Token VARSA her durumda doğrulanır; bozuk token sessizce yok sayılmaz.
+    Bu sıralama önemli: yeni arayüz token gönderdiği için geçit başlığı olsa
+    bile 1. maddeye düşmez, kimliği gerçekten doğrulanır.
     """
     if credentials is None:
+        if _passed_edge_authentication(request):
+            return None
         if not settings.auth_enforce:
             return None
         raise _unauthenticated("Bu işlem için giriş yapmalısınız.")

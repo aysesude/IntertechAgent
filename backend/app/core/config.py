@@ -444,6 +444,28 @@ class Settings(BaseSettings):
     # kullanıcı yeniden giriş yapar.
     jwt_expire_minutes: int = 480
 
+    # Eski arayüzün (token göndermeyen `frontend/`) kimliğini KENARDA
+    # doğrulama sırrı.
+    #
+    # SORUN: `auth_enforce` genel bir anahtar. Açıldığında token gönderen yeni
+    # arayüz çalışır ama eski arayüz 401 alır; kapatıldığında ikisi de çalışır
+    # ama API dışarıya tamamen açılır (AK 5.4 ihlali).
+    #
+    # ÇÖZÜM: eski arayüz zaten ters vekilde HTTP temel kimlik doğrulamasının
+    # (basic auth) arkasında duruyor — yani o yoldan gelen istek KENARDA
+    # doğrulanmış oluyor. Caddy, kapıyı geçen isteğe bu sırrı taşıyan bir
+    # başlık ekler; backend başlığı tanıdığında token aramaz.
+    #
+    # BOŞ = ÖZELLİK TAMAMEN KAPALI. Sır tanımlanmadıkça başlık hiç
+    # okunmaz, dolayısıyla kazara bir atlatma yolu açılmaz.
+    #
+    # GÜVENLİK SINIRI: bu, backend portuna (8000/8080) yalnızca ters vekilin
+    # ulaşabildiği varsayımına dayanır — sunucuda portlar dışarıya kapalı.
+    # Başlığı taklit edebilmek için önce makineye girmek gerekir.
+    # Eski arayüz emekliye ayrıldığında bu ayar da silinecek.
+    legacy_gateway_secret: str = ""
+    legacy_gateway_header: str = "X-Gateway-Auth"
+
     # Geçiş bayrağı. VARSAYILANI True — yani unutulursa auth AÇIK kalır,
     # kapalı değil. Token göndermeyen eski `frontend/` ile çalışmayı sürdüren
     # geliştirici bunu kendi .env'inde False yapar. frontend-v2'nin sohbeti

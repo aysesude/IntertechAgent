@@ -11,6 +11,7 @@ Vurgu dört noktada:
    şifreyle giriş yapamamalı — bu sütunlar bilerek nullable (bkz. models/user.py).
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -192,3 +193,75 @@ def test_token_of_deleted_user_returns_401(anonim, db_session, client_for, giris
 
     response = client.get("/api/auth/me")
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Kenar (ters vekil) kimlik doğrulaması
+# ---------------------------------------------------------------------------
+#
+# Eski arayüz token göndermiyor ama ters vekilde HTTP temel kimlik
+# doğrulamasının arkasında. Kapıyı geçen isteğe Caddy bir sır başlığı ekliyor;
+# bu sayede `AUTH_ENFORCE=true` iken bile eski arayüz çalışmaya devam ediyor
+# ve API dışarıya açılmıyor.
+
+
+@pytest.fixture()
+def gecit_sirri(monkeypatch):
+    """Sırrı tanımlar ve `auth_enforce`'u AÇAR — asıl sınanmak istenen
+    kombinasyon bu: zorunluluk açıkken eski yolun çalışması."""
+    monkeypatch.setattr(settings, "legacy_gateway_secret", "gecit-sirri-123", raising=False)
+    monkeypatch.setattr(settings, "auth_enforce", True, raising=False)
+    return "gecit-sirri-123"
+
+
+def test_edge_authenticated_request_passes_without_token(
+    anonim, client_for, giris_kullanicisi, gecit_sirri
+):
+    """Geçit başlığını taşıyan istek, token olmadan da geçer."""
+    response = anonim.get(
+        f"/api/portfolio/{giris_kullanicisi.id}",
+        headers={settings.legacy_gateway_header: gecit_sirri},
+    )
+    # Kullanıcının portföyü yok; önemli olan 401 ALMAMASI (kimlik kapısını geçti).
+    assert response.status_code != 401
+
+
+def test_wrong_gateway_secret_is_rejected(anonim, giris_kullanicisi, gecit_sirri):
+    response = anonim.get(
+        f"/api/portfolio/{giris_kullanicisi.id}",
+        headers={settings.legacy_gateway_header: "yanlis-sir"},
+    )
+    assert response.status_code == 401
+
+
+def test_gateway_header_ignored_when_secret_not_configured(anonim, monkeypatch, giris_kullanicisi):
+    """Sır tanımlı değilken başlık HİÇ okunmaz.
+
+    Aksi halde ayarı yapmayan bir ortamda, başlığı uyduran herkes kimlik
+    doğrulamasını atlatabilirdi.
+    """
+    monkeypatch.setattr(settings, "legacy_gateway_secret", "", raising=False)
+    monkeypatch.setattr(settings, "auth_enforce", True, raising=False)
+
+    response = anonim.get(
+        f"/api/portfolio/{giris_kullanicisi.id}",
+        headers={"X-Gateway-Auth": "herhangi-bir-sey"},
+    )
+    assert response.status_code == 401
+
+
+def test_token_still_wins_over_gateway_header(client_for, giris_kullanicisi, gecit_sirri):
+    """Token varsa kimlik GERÇEKTEN doğrulanır; geçit başlığı onu ezmez.
+
+    Yeni arayüz her zaman token gönderiyor, dolayısıyla veri izolasyonu
+    (AK 5.4) bu yolda tam olarak işlemeye devam etmeli.
+    """
+    client = client_for(giris_kullanicisi)
+    baskasinin_kimligi = uuid.uuid4()
+
+    response = client.get(
+        f"/api/portfolio/{baskasinin_kimligi}",
+        headers={settings.legacy_gateway_header: gecit_sirri},
+    )
+    # Geçit başlığı "kimliksiz geç" demek; kimliği DEĞİŞTİRMEZ.
+    assert response.status_code == 403
