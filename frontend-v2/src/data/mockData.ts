@@ -60,6 +60,9 @@ export const mockPortfolioSummary: PortfolioSummary = {
   dailyLoserNote: "Teknoloji hisseleri (3 varlık)",
   riskScore: 62,
   costBasis: PORTFOLIO_COST_BASIS,
+  // Tasarım verisinde net sermaye, maliyetin biraz üzerinde (hesapta bir
+  // miktar serbest nakit varmış gibi) — gerçek veride backend'den gelir.
+  netInvested: Math.round(PORTFOLIO_COST_BASIS * 1.04),
   totalPL: PORTFOLIO_TOTAL_PL,
   totalPLPct: PORTFOLIO_TOTAL_PL_PCT,
   realReturnPct: PORTFOLIO_REAL_RETURN_PCT,
@@ -176,7 +179,7 @@ export const mockRecommendations: AIRecommendation[] = [
 /**
  * Dönem seçici granülerlik mantığı AssetComparisonChart.tsx'teki
  * PERIOD_CONFIG ile aynı prensibi izliyor: dönem uzadıkça nokta sayısı
- * kabalaşıyor (1H/1A günlük, 3A/6A haftalık-ikişer haftalık, 1Y aylık).
+ * kabalaşıyor (1A günlük, 3A/6A haftalık-ikişer haftalık, 1Y aylık).
  *
  * ÖRNEK/PLACEHOLDER: değerler seed'li bir rastgele yürüyüşle üretiliyor
  * (bkz. AssetComparisonChart.tsx'teki generateSeries ile aynı yöntem).
@@ -184,7 +187,6 @@ export const mockRecommendations: AIRecommendation[] = [
  * serisi kullanılmalı; veri şekli (PerformanceRange) aynı kalacak.
  */
 const RANGE_CONFIG: Record<RangeKey, { subtitle: string; points: number; unit: "day" | "month"; stepDays?: number }> = {
-  "1H": { subtitle: "Son 1 hafta", points: 7, unit: "day", stepDays: 1 }, // günlük
   "1A": { subtitle: "Son 1 ay", points: 15, unit: "day", stepDays: 2 }, // ikişer günlük
   "3A": { subtitle: "Son 3 ay", points: 13, unit: "day", stepDays: 7 }, // haftalık
   "6A": { subtitle: "Son 6 ay", points: 13, unit: "day", stepDays: 14 }, // iki haftalık
@@ -192,9 +194,12 @@ const RANGE_CONFIG: Record<RangeKey, { subtitle: string; points: number; unit: "
 };
 
 const MONTH_LABELS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
-const BIST_CURRENT = 2_470_000;
+// Tasarım verisinde yatırılan tutar, portföy değerinin biraz altında ve
+// basamaklı ilerleyen bir çizgi olarak taklit ediliyor; gerçek veride bu
+// seri backend'den (`invested_try`) olduğu gibi geliyor.
+const INVESTED_CURRENT = 2_180_000;
 const PORTFOLIO_STEP_VOLATILITY_PCT = 0.9;
-const BIST_STEP_VOLATILITY_PCT = 0.35;
+const INVESTED_STEP_DROP_PCT = 0.45;
 
 // Basit, deterministik (seed'li) sözde-rastgele üreteç — AssetComparisonChart.tsx'teki ile aynı.
 function mulberry32(seed: number) {
@@ -243,16 +248,18 @@ function buildRange(key: RangeKey): PerformanceRange {
   // değerine sabitlenir, öncesi bu değerden geriye doğru üretilir — böylece
   // hangi dönem seçilirse seçilsin grafik güncel değerle biter.
   const rngPortfolio = mulberry32(seedFromString("portfolio-" + key));
-  const rngBist = mulberry32(seedFromString("bist-" + key));
+  const rngInvested = mulberry32(seedFromString("invested-" + key));
   const portfolioValues = new Array<number>(spec.points);
-  const bistValues = new Array<number>(spec.points);
+  const investedValues = new Array<number>(spec.points);
   portfolioValues[spec.points - 1] = mockPortfolioSummary.totalValue;
-  bistValues[spec.points - 1] = BIST_CURRENT;
+  investedValues[spec.points - 1] = INVESTED_CURRENT;
   for (let i = spec.points - 2; i >= 0; i--) {
     const pNoise = (rngPortfolio() - 0.5) * 2 * PORTFOLIO_STEP_VOLATILITY_PCT;
     portfolioValues[i] = portfolioValues[i + 1] / (1 + pNoise / 100);
-    const bNoise = (rngBist() - 0.5) * 2 * BIST_STEP_VOLATILITY_PCT;
-    bistValues[i] = bistValues[i + 1] / (1 + bNoise / 100);
+    // Yatırılan tutar geriye doğru yalnızca AZALIR (para yatırma anları):
+    // gerçek seride de basamaklı ve monoton artan bir çizgi.
+    const azalma = rngInvested() < 0.25 ? rngInvested() * INVESTED_STEP_DROP_PCT : 0;
+    investedValues[i] = investedValues[i + 1] * (1 - azalma / 100);
   }
 
   let annotationIndex: number | null = null;
@@ -273,7 +280,7 @@ function buildRange(key: RangeKey): PerformanceRange {
     points: labels.map((label, i) => ({
       label,
       portfolio: Math.round(portfolioValues[i]),
-      bist: Math.round(bistValues[i]),
+      invested: Math.round(investedValues[i]),
     })),
   };
 }
@@ -371,7 +378,6 @@ function formatLastUpdated(date: Date): string {
 }
 
 export const mockPerformanceRanges: Record<RangeKey, PerformanceRange> = {
-  "1H": buildRange("1H"),
   "1A": buildRange("1A"),
   "3A": buildRange("3A"),
   "6A": buildRange("6A"),
@@ -396,17 +402,16 @@ export function computePerformanceStats(range: PerformanceRange): PerformanceSta
   const portfolioValues = range.points.map((p) => p.portfolio);
   const high = Math.max(...portfolioValues);
   const low = Math.min(...portfolioValues);
-  const first = portfolioValues[0];
-  const last = portfolioValues[portfolioValues.length - 1];
-  const avgReturnPct = ((last - first) / first) * 100;
-  const bistFirst = range.points[0].bist;
-  const bistLast = range.points[range.points.length - 1].bist;
-  const bistReturnPct = ((bistLast - bistFirst) / bistFirst) * 100;
+  const son = range.points[range.points.length - 1];
   return {
     high,
     low,
-    avgReturnPct,
-    vsBenchmarkPct: avgReturnPct - bistReturnPct,
+    // Gerçek veride TWR backend'den gelir; tasarım verisinde ham değişimle
+    // taklit ediliyor (bu dosya yalnızca API tanımsızken devrede).
+    returnPct:
+      range.returnPct ??
+      ((portfolioValues[portfolioValues.length - 1] - portfolioValues[0]) / portfolioValues[0]) * 100,
+    profit: son.portfolio - son.invested,
   };
 }
 

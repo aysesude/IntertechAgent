@@ -27,16 +27,13 @@ function emptyRange(key: RangeKey): PerformanceRange {
   return { key, subtitle: "", points: [], annotationIndex: null };
 }
 
-// PortfolioSummary bu test yazildiktan SONRA alan kazandi (costBasis,
-// totalPL, totalPLPct, realReturnPct). Dosya o zaman tip kontrolu disinda
-// tutuldugu icin fark edilmemisti; artik testler de kontrol ediliyor.
-// Tek yerde toplandi ki tip bir daha genislediginde tek satir degissin.
+// PortfolioSummary bu test yazildiktan sonra iki kez degisti; sabitler tek
+// yerde toplandi ki tip bir daha genislediginde tek satir degissin.
 function baseSummary(overrides: Partial<PortfolioSummary> = {}): PortfolioSummary {
   return {
     totalValue: 1_000_000,
     todayChange: 0,
-    dailyLoserPct: 0,
-    dailyLoserNote: "",
+    netInvested: 900_000,
     riskScore: 50,
     costBasis: 900_000,
     totalPL: 100_000,
@@ -50,7 +47,6 @@ function baseDashboard(overrides: Partial<DashboardData> = {}): DashboardData {
   return {
     summary: baseSummary(),
     performance: {
-      "1H": emptyRange("1H"),
       "1A": emptyRange("1A"),
       "3A": emptyRange("3A"),
       "6A": emptyRange("6A"),

@@ -7,7 +7,7 @@ import { formatTRYCompact, formatPct } from "@/utils/format";
 import { BRAND } from "@/utils/colors";
 import { useTheme } from "@/context/ThemeContext";
 
-const RANGE_ORDER: RangeKey[] = ["1H", "1A", "3A", "6A", "1Y"];
+const RANGE_ORDER: RangeKey[] = ["1A", "3A", "6A", "1Y"];
 
 interface PerformanceChartProps {
   range: PerformanceRange;
@@ -30,10 +30,10 @@ function buildChartOptions(isDark: boolean) {
   // (AA eşiği 4.5:1'in çok altında) — "#6B7180"e çekildi, ~4.9:1. Dark
   // "#9AA4B8" zaten ~5.89:1, dokunulmadı.
   const axisTextColor = isDark ? "#9AA4B8" : "#6B7180";
-  const bistLineColor = isDark ? "#4A5A7A" : "#C7CBD4";
+  const investedLineColor = isDark ? "#4A5A7A" : "#C7CBD4";
 
   return {
-    colors: [brandColor, bistLineColor],
+    colors: [brandColor, investedLineColor],
     backgroundColor: "transparent",
     curveType: "function",
     legend: { position: "none" },
@@ -58,8 +58,8 @@ function buildChartOptions(isDark: boolean) {
     },
     // focusTarget:"category" + tooltip.trigger:"focus" -> imleç grafiğin
     // herhangi bir yatay konumunda gezerken (tam veri noktasının üstünde
-    // olmak zorunda kalmadan) o aya karşılık gelen TÜM serileri (Portföy +
-    // BIST 100) aynı anda gösteren tek bir tooltip açılır.
+    // olmak zorunda kalmadan) o güne karşılık gelen HER İKİ seriyi (Portföy +
+    // Yatırılan) aynı anda gösteren tek bir tooltip açılır.
     focusTarget: "category",
     tooltip: { trigger: "focus", isHtml: true, textStyle: { fontName: "Manrope", fontSize: 12.5 } },
     // Dikey crosshair, imlecin hizasındaki ayı işaretler — renk temaya göre
@@ -97,7 +97,7 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
   // çizip (animasyon/crosshair durumunu bozarak) alakasız render'larda
   // görsel titremeye yol açar.
   const chartData = useMemo(
-    () => [["Tarih", "Portföy", "BIST 100"], ...range.points.map((p) => [p.label, p.portfolio, p.bist])],
+    () => [["Tarih", "Portföy", "Yatırılan"], ...range.points.map((p) => [p.label, p.portfolio, p.invested])],
     [range]
   );
 
@@ -147,7 +147,13 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
       <div className="mb-1.5 flex items-center justify-between">
         <div>
           <h2 className="font-display m-0 mb-1 text-[17px] font-semibold">Portföy Performansı</h2>
-          <p className="m-0 text-[13px] text-ink-muted">{range.subtitle} · portföy değeri</p>
+          <p className="m-0 text-[13px] text-ink-muted">
+            {range.subtitle} · portföy değeri
+            {/* Pencere portföyün ömründen uzunsa backend başlangıcı ilk işleme
+                kırpıyor; söylenmezse grafik sanki o dönem boyunca veri varmış
+                gibi görünür (docs/API.md). */}
+            {range.truncatedToInception && " · portföy başlangıcından itibaren"}
+          </p>
         </div>
         <div className="flex gap-1">
           {RANGE_ORDER.map((key) => (
@@ -198,18 +204,25 @@ export function PerformanceChart({ range, activeRange, onRangeChange }: Performa
           Portföyün
         </div>
         <div className="flex items-center gap-2 text-[12.5px] text-ink-muted">
-          {/* buildChartOptions'taki bistLineColor ile birebir aynı literal
+          {/* buildChartOptions'taki investedLineColor ile birebir aynı literal
               değerler — biri değişirse diğeri de güncellenmeli. */}
           <span className="h-0.5 w-4 rounded-sm" style={{ backgroundColor: isDark ? "#4A5A7A" : "#C7CBD4" }} />
-          BIST 100 endeksi
+          Yatırılan tutar
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatBlock label="En Yüksek" value={formatTRYCompact(stats.high)} />
         <StatBlock label="En Düşük" value={formatTRYCompact(stats.low)} />
-        <StatBlock label="Ort. Getiri" value={formatPct(stats.avgReturnPct, 1)} color={BRAND} />
-        <StatBlock label="BIST 100'e Göre" value={`${stats.vsBenchmarkPct > 0 ? "+" : ""}${stats.vsBenchmarkPct.toFixed(2).replace(".", ",")} puan`} color={BRAND} />
+        {/* Dönem getirisi zaman ağırlıklı (TWR): dönem içinde yatırılan para
+            "kâr" olarak görünmesin diye. Yeterli veri yoksa backend null
+            döndürüyor ve burada "—" gösteriliyor, 0 değil. */}
+        <StatBlock
+          label="Dönem Getirisi"
+          value={stats.returnPct === null ? "—" : formatPct(stats.returnPct, 1)}
+          color={BRAND}
+        />
+        <StatBlock label="Toplam Kâr" value={formatTRYCompact(stats.profit)} color={BRAND} />
       </div>
     </Card>
   );
