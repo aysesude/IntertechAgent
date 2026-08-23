@@ -22,15 +22,15 @@ Türkiye İş Bankası tarafından kurulmuştur.
 (temel cam, otomotiv ve taşıt camları), **cam ev eşyası/züccaciye**
 (sofra-mutfak eşyaları, hediyelik cam ürünleri), **cam ambalaj** (su,
 içecek, gıda, ilaç ve kozmetik sektörleri için ambalaj camı) ve
-**kimyasallar** (soda külü ve krom kimyasalları üretimi).
+**kimyasallar** (soda külü ve krom kimyasalları üretimi). Şirket, BIST'te Taş ve
+Toprağa Dayalı Sanayi sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Şirketin en büyük pay sahibi Türkiye İş Bankası'dır. Diğer önemli
 ortaklar arasında Efes Holding (yaklaşık yüzde 6,77 pay) ve Anadolu
-Hayat Emeklilik yer almaktadır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Hayat Emeklilik yer almaktadır. Yönetim kurulu başkanı, Adnan Bali'nin
+ardından bu göreve getirilen ve önceden Türkiye İş Bankası genel müdürü
+olan Hakan Aran'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import AssetClass, RiskProfile, settings
+from app.core.security import hash_password
 from app.models import Asset, PriceHistory, TransactionType
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
 
@@ -194,6 +195,23 @@ def seed_ledger(session: Session) -> int:
     fake = Faker("tr_TR")
     fake.unique.clear()
 
+    # Modül düzeyinde değil burada: bcrypt özeti pahalı bir hesap ve seed
+    # dışında bu modülü import eden hiç kimseye maliyet çıkarmamalı.
+    demo_password_hash = hash_password(settings.demo_user_password)
+
+    # AYRI ve KENDİ RNG'sine sahip bir Faker örneği, bilerek. T.C. kimlik
+    # numaralarını yukarıdaki `fake`ten üretmek her kullanıcıda bir çağrı daha
+    # ekler ve SONRAKİ kullanıcıların e-posta/adlarını kaydırırdı; bu
+    # değişikliğin mevcut seed çıktısına dokunmaması gerekiyor.
+    #
+    # `Faker.seed()` DEĞİL `seed_instance()`: birincisi sınıf düzeyindedir ve
+    # tüm örneklerin PAYLAŞTIĞI üreteci sıfırlar — burada çağrılsaydı `fake`in
+    # akışını da başa sardırırdı. `seed_instance` bu örneğe kendi Random'ını
+    # verir, iki akış tamamen bağımsız olur.
+    fake_identity = Faker("tr_TR")
+    fake_identity.seed_instance(SEED)
+    fake_identity.unique.clear()
+
     assets, prices, days_by_asset = _load_price_book(session)
     usdtry_id = assets["USDTRY"].id
 
@@ -214,6 +232,17 @@ def seed_ledger(session: Session) -> int:
             email=fake.unique.email(),
             full_name=fake.name(),
             risk_profile=ARCHETYPE_RISK_PROFILE[archetype_name],
+            # Faker'ın tr_TR sağlayıcısı SAĞLAMASI GEÇERLİ bir T.C. kimlik
+            # numarası üretir (doğrulandı), dolayısıyla giriş ekranındaki
+            # 11 hane + sağlama kontrolü anlamlı bir kapı olur. Faker.seed
+            # sabit olduğu için aynı kullanıcı her seed'de aynı numarayı alır
+            # — ekip numarayı ezberler, seed tazelense de bozulmaz.
+            national_id=fake_identity.unique.ssn(),
+            # Tüm demo kullanıcıları aynı şifreyi paylaşır ve özet BİR KEZ
+            # hesaplanır: 50 ayrı bcrypt çağrısı seed'e ~15 saniye eklerdi ve
+            # 50 farklı şifreyi ezberlemenin demoya hiçbir katkısı yok.
+            # Doğrulama yolu buna rağmen tamamen gerçek (bkz. auth_service).
+            password_hash=demo_password_hash,
         )
         session.add(user)
         session.flush()

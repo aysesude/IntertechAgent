@@ -24,11 +24,13 @@ mağazaları (ATÜ Duty Free) ve bilişim teknolojileri (TAV Technologies)
 alanlarında iştirakleriyle entegre bir havalimanı servis sağlayıcısı
 konumundadır. Yurt dışında Gürcistan, Kuzey Makedonya, Tunus, Suudi
 Arabistan ve Kazakistan gibi ülkelerde havalimanı yapım ve işletme
-projeleri yürütmektedir.
+projeleri yürütmektedir. Şirket, BIST'te Ulaştırma sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Mayıs 2012'den bu yana Fransız Groupe ADP (Aéroports de Paris), TAV
-Havalimanları'nın çoğunluk hissedarı konumundadır. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Havalimanları'nın çoğunluk hissedarı konumundadır. Yönetim kurulu
+başkanı Justine Coutard, başkan vekili Ali Haydar Kurtdarcan'dır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

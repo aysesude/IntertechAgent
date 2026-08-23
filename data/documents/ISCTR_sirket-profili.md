@@ -22,15 +22,13 @@ sermayenin yüzde 25'i bizzat Mustafa Kemal Atatürk tarafından
 
 Türkiye'nin en büyük özel bankalarından biri olarak bireysel, kurumsal
 ve ticari bankacılık, yatırım bankacılığı ve varlık yönetimi
-alanlarında hizmet vermektedir.
+alanlarında hizmet vermektedir. Şirket, BIST'te Bankacılık sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Banka halka açıktır; Atatürk'e ait hisselerin (yaklaşık yüzde 28,09)
 temettü hakları, Atatürk'ün vasiyeti gereği Cumhuriyet Halk Partisi'ne
-(CHP) tahsis edilmiştir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+(CHP) tahsis edilmiştir. Yönetim kurulu başkanı Adnan Bali'dir. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

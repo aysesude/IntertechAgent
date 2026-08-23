@@ -39,3 +39,19 @@ services:
     command: ["nginx", "-g", "daemon off;"]
     volumes: []
     restart: always
+
+  # frontend ile aynı desen. Bu blok OLMADAN canlı ortamda frontend-v2,
+  # docker-compose.yml'deki geliştirme ayarlarıyla (vite dev sunucusu, kaynak
+  # kodu bind mount, anonim node_modules volume'ü) çalışırdı.
+  frontend-v2:
+    build:
+      context: ./frontend-v2
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        # VITE_ degiskenleri DERLEME ANINDA gomuluyor; build arg olarak
+        # gecilmezse canli derlemede tanimsiz kalir ve baglanti hic cikmaz.
+        VITE_LEGACY_UI_URL: ${VITE_LEGACY_UI_URL:-}
+    command: ["nginx", "-g", "daemon off;"]
+    volumes: []
+    restart: always

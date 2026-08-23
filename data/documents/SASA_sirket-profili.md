@@ -21,7 +21,8 @@ kurulmuştur.
 ve ara/özellikli ürünlerin üretimi ve pazarlaması alanında faaliyet
 göstermektedir; sektöründe dünyanın önde gelen üreticilerinden
 biridir. 2000 yılında dünya kimya devi DuPont ile ortak girişim
-kurarak "DupontSA" adını almıştır.
+kurarak "DupontSA" adını almıştır. Şirket, BIST'te Kimya, Petrol,
+Plastik sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -29,6 +30,7 @@ kurarak "DupontSA" adını almıştır.
 şirketin yüzde 51 oranındaki hisseleri Erdemoğlu Holding A.Ş.
 tarafından satın alınmıştır. Ağustos 2015'te tamamlanan zorunlu pay
 alım süreci sonunda Erdemoğlu Holding'in şirketteki payı yüzde
-84,80'e ulaşmıştır; kalan pay halka açıktır. Bu doküman şirketin
-kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar
-ayrı `bilanco` türü dokümanlarda yer alır.
+84,80'e ulaşmıştır; kalan pay halka açıktır. Yönetim kurulu başkanı
+İbrahim Erdemoğlu, başkan vekili Ali Erdemoğlu'dur. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

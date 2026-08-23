@@ -10,10 +10,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.config import AssetClass
-from app.main import app
 from app.models import (
     Asset,
     Holding,
@@ -26,8 +24,14 @@ from app.models import (
 
 
 @pytest.fixture()
-def client():
-    return TestClient(app)
+def client(client_for, api_user):
+    """`api_user` adına kimlik doğrulanmış istemci.
+
+    Uçlar artık token istiyor (AK 5.4) ve yoldaki `user_id`'nin token sahibiyle
+    aynı olmasını şart koşuyor; dosyadaki testlerin tamamı `api_user`ı okuduğu
+    için istemci baştan onun adına imzalanıyor.
+    """
+    return client_for(api_user)
 
 
 @pytest.fixture()
@@ -159,20 +163,48 @@ def test_price_history_endpoint_reports_unknown_symbols(client, api_user):
     assert body["as_of"] == "2026-01-09"
 
 
-def test_unknown_user_returns_404_not_409(client, db_session):
+def test_ak_5_4_another_users_portfolio_returns_403(client):
+    """Başkasının (ya da olmayan birinin) portföyü istenirse 403 (AK 5.4).
+
+    Veri izolasyonu geldikten sonra bu uçlarda 404 ARTIK ERİŞİLEBİLİR DEĞİL:
+    yoldaki kimlik token sahibiyle eşleşmek zorunda, dolayısıyla var olmayan
+    bir kullanıcı sorulamıyor. Kontrol veritabanına hiç bakmadan iki UUID
+    karşılaştırılarak yapılıyor — "bu kullanıcı var mı" bilgisi de sızmıyor.
+    """
     missing = uuid.uuid4()
     for yol in ("", "/holdings", "/performance", "/benchmark", "/transactions"):
         response = client.get(f"/api/portfolio/{missing}{yol}")
-        assert response.status_code == 404, yol
+        assert response.status_code == 403, yol
 
 
-def test_portfolio_without_transactions_returns_409(client, db_session):
-    """Kaynak var ama hesaplanacak veri yok — 404'ten farkli bir durum."""
+def test_ak_5_4_request_without_token_returns_401(client_for, api_user):
+    """Token yoksa 401 — 403 değil. Arayüz ikisini farklı ele alıyor:
+    401 giriş ekranına döner, 403 "erişim yetkiniz yok" gösterir."""
+    anonim = client_for()
+    response = anonim.get(f"/api/portfolio/{api_user.id}")
+    assert response.status_code == 401
+
+
+def test_ak_5_4_invalid_token_returns_401(client_for, api_user):
+    """Bozuk/imzasız token sessizce yok sayılmaz."""
+    sahte = client_for()
+    response = sahte.get(
+        f"/api/portfolio/{api_user.id}",
+        headers={"Authorization": "Bearer bu-gecerli-bir-token-degil"},
+    )
+    assert response.status_code == 401
+
+
+def test_portfolio_without_transactions_returns_409(client_for, db_session):
+    """Kaynak var ama hesaplanacak veri yok — 403/404'ten farkli bir durum.
+
+    Kendi istemcisini kuruyor: dosyadaki ortak `client` `api_user` adina
+    imzali, buradaki bos portfoy baska bir kullaniciya ait."""
     user = User(email="bos-api@example.com", full_name="Bos")
     db_session.add(user)
     db_session.flush()
     db_session.add(Portfolio(user_id=user.id))
     db_session.commit()
 
-    response = client.get(f"/api/portfolio/{user.id}/performance")
+    response = client_for(user).get(f"/api/portfolio/{user.id}/performance")
     assert response.status_code == 409

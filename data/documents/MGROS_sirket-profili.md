@@ -22,7 +22,8 @@ Migros, Türkiye'nin 81 ilinde faaliyet gösteren bir gıda perakende
 zinciridir; yurt dışında Kuzey Makedonya ve Kazakistan'da da
 operasyonları bulunmaktadır. Şirket, geleneksel perakendeciliğin
 ötesinde entegre bir hizmet ekosistemi (dijital/teknoloji platformu)
-sunmayı hedeflemektedir.
+sunmayı hedeflemektedir. Şirket, BIST'te Perakende Ticaret sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı geçmişi
 
@@ -36,6 +37,7 @@ Market'i satın almıştır.
 
 Güncel ana ortak AG Anadolu Grubu Holding A.Ş. olup payı yaklaşık
 yüzde 36,19'dur. Kalan hisseler Borsa İstanbul'da halka açık olarak
-işlem görmektedir. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+işlem görmektedir. Yönetim kurulu başkanı, 22 Nisan 2026'da bu göreve
+seçilen Kamilhan Süleyman Yazıcı'dır; Talip Altuğ Aksoy başkan
+vekilidir. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
+dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

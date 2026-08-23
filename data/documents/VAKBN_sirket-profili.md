@@ -21,13 +21,16 @@ geçmiştir. Kuruluş sermayesi 50 milyon TL idi.
 Temel bankacılık ürün ve hizmetlerinin yanı sıra yatırım bankacılığı
 ve sermaye piyasası faaliyetlerinde de bulunmaktadır. Finansal bağlı
 ortaklıkları aracılığıyla finansal kiralamadan faktoring hizmetlerine
-kadar geniş bir yelpazede finansal ürün sunmaktadır.
+kadar geniş bir yelpazede finansal ürün sunmaktadır. Şirket, BIST'te
+Bankacılık sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Banka, vakıfların bir araya gelmesiyle kurulmuş özel hukuk
 hükümlerine tabi bir kuruluş olarak faaliyet göstermektedir. Hisseleri
-Borsa İstanbul'da "VAKBN" koduyla işlem görmektedir. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır, daha ayrıntılı pay
-dağılımı için bankanın resmi faaliyet raporlarına başvurulmalıdır.
+Borsa İstanbul'da "VAKBN" koduyla işlem görmektedir. Yönetim kurulu
+başkanı, 9 Nisan 2026'daki 72. Olağan Genel Kurul'da onaylanan Mustafa
+Saydam'dır; Cemil Ragıp Ertem başkan vekilidir. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır, daha ayrıntılı pay dağılımı için
+bankanın resmi faaliyet raporlarına başvurulmalıdır.

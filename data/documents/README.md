@@ -45,6 +45,7 @@ tablolar kullanılabilir.
 | `tur` | Evet | `haber` · `bilanco` · `analiz` · `duyuru` · `makro` · `sirket_profili` · `referans` |
 | `donem` | `tur: bilanco` ise Evet | `YYYY-Qn` formatında (ör. `2026-Q2`). Hangi çeyreğe ait olduğunu deterministik filtreler için işaretler — eksikse "yanlış çeyrek döndürme" riskine karşı korunamaz |
 | `konsolide_mi` | `tur: bilanco` ise Evet | `true`/`false`. Solo ile konsolide tablo aynı çeyrekte farklı rakamlar verir; hangisi olduğu belirsizse karıştırılabilir |
+| `revize_no` | Hayır (varsayılan: `1`) | Yalnızca `tur: bilanco`. Bir şirket aynı çeyreği düzeltilmiş rakamlarla yeniden yayımlarsa (restatement), yeni dokümana bir üst `revize_no` verin (ör. `2`). Ingest, aynı `sirket`+`donem` için yalnızca en yüksek `revize_no`'yu işler — eskisi otomatik dışlanır. Aynı `revize_no` ile çakışan iki doküman bulunursa ingest hata verip durur (hangisinin güncel olduğu belirsiz demektir, biri elle düzeltilmeli) |
 | `dil` | Evet | `tr` veya `en` |
 
 ---
@@ -101,10 +102,11 @@ sırası:
   finansal oran tanımları (F/K, ROE, cari oran vb.), SPK/BDDK temel
   çerçevesi, TFRS temel kavramları. Neredeyse hiç değişmez.
 
-`haber` (piyasa haberi) ve `analiz` (hedef fiyat) ile `makro` (faiz,
-enflasyon gibi periyodik göstergeler) türleri **artık yeni eklenmiyor**
-— bunlar hızlı bayatlayan veri sınıfına giriyor. Mevcut dokümanlar
-kaldırılmadı (henüz), ama bu türlerden yeni doküman EKLEMEYİN.
+`haber` (piyasa haberi), `analiz` (hedef fiyat) ve `makro` (faiz,
+enflasyon gibi periyodik göstergeler) türleri **artık RAG'da tutulmuyor**
+— bunlar hızlı bayatlayan veri sınıfına girdiği için 2026-08-22'de
+kaldırıldı (31 doküman). Bu tür sorular artık canlı-internet ajanının
+kapsamında; bu türlerden yeni doküman EKLEMEYİN.
 
 ---
 

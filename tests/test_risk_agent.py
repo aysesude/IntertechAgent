@@ -1,7 +1,28 @@
 """Risk/Strateji Ajanı'nın LLM'e gitmeyen kısımları: senaryo tetikleme kararı
-ve değerlendirmenin küçültülmesi."""
+ve değerlendirmenin küçültülmesi.
 
-from agents.risk_agent import _compact, _wants_scenarios
+2026-08-22 eki: sinyal tabanlı risk değerlendirmesinin (bkz. modül
+docstring'i, agents/prompts/risk_signals.md) LLM'e GİTMEYEN yardımcıları —
+dummy anket puanı eşlemesi, LLM çıktısının JSON'a ayrıştırılması, ham tool
+verisinin LLM bağlamına dönüştürülmesi. `_assess_signals`'ın kendisi gerçek
+bir LLM çağrısı yaptığı için burada test edilmiyor; ajanın diğer LLM'li
+kısımlarında olduğu gibi (`_summarize`) bu proje deterministik pytest yerine
+manuel/entegrasyon doğrulaması kullanıyor."""
+
+import json
+
+import pytest
+
+from agents.risk_agent import (
+    _SIGNAL_PROMPT_TEMPLATE,
+    _build_signal_context,
+    _compact,
+    _dummy_survey_score,
+    _extract_json_object,
+    _render_signal_prompt,
+    _wants_scenarios,
+)
+from app.core.config import RiskProfile
 
 
 def test_senaryo_yalnizca_aksiyon_sorularinda_istenir():
@@ -226,3 +247,142 @@ def test_prompt_alan_adi_yazmayi_yasakliyor():
     from agents.risk_agent import _PROMPT_TEMPLATE
 
     assert "JSON ALAN ADLARINI ASLA YAZMA" in _PROMPT_TEMPLATE
+
+
+def test_dummy_anket_puani_profile_gore_esleniyor():
+    """Gerçek anket gelene kadarki GEÇİCİ eşleme (bkz. modül docstring'i).
+
+    Puanlar bilinçli olarak advice_eligibility.ASSET_CLASS_ADVICE_RISK_LEVEL
+    kırılım noktalarına (1/3/4/6) denk düşecek şekilde seçildi.
+    """
+    assert _dummy_survey_score(RiskProfile.CONSERVATIVE) == 2
+    assert _dummy_survey_score(RiskProfile.BALANCED) == 4
+    assert _dummy_survey_score(RiskProfile.GROWTH) == 5
+    assert _dummy_survey_score(RiskProfile.AGGRESSIVE) == 7
+
+
+def test_dummy_anket_puani_profil_yoksa_none():
+    """Profil tanınmıyorsa ya da hiç yoksa puan uydurulmaz."""
+    assert _dummy_survey_score(None) is None
+
+
+def test_json_ciktisi_kod_bloguyla_gelirse_ayiklanir():
+    """Prompt "yalnızca JSON" istiyor ama modeller sık sık ``` bloğuna sarar
+    (bkz. _extract_json_object docstring'i); bu tolere edilmeli."""
+    duz = '{"risk_level": "az_riskli"}'
+    ucgen_json_etiketli = '```json\n{"risk_level": "az_riskli"}\n```'
+    ucgen_etiketsiz = '```\n{"risk_level": "az_riskli"}\n```'
+
+    for metin in (duz, ucgen_json_etiketli, ucgen_etiketsiz):
+        assert _extract_json_object(metin) == {"risk_level": "az_riskli"}
+
+
+def test_json_ciktisi_bozuksa_hata_yukselir():
+    """Onarım denenmez (bkz. fonksiyon docstring'i): bozuk JSON çağıran
+    tarafa görünür bir hata olarak gitmeli, sessizce doldurulmamalı."""
+    with pytest.raises(json.JSONDecodeError):
+        _extract_json_object("bu JSON degil")
+
+
+def test_sinyal_baglami_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan varlık ağırlık hesabına girmediği gibi (bkz.
+    get_holdings sözleşmesi) sinyal bağlamına da girmemeli."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "stock", "weight_percent": 60.0},
+            {
+                "symbol": "XYZ",
+                "asset_class": "bond",
+                "weight_percent": None,
+                "price_missing": True,
+            },
+        ]
+    }
+    news_data = {"assets": [], "assets_without_documents": ["TST"], "confidence": "low"}
+
+    context = _build_signal_context(holdings_data, news_data, None, None)
+
+    assert context["varliklar"] == [{"sembol": "TST", "sinif": "stock", "agirlik_yuzde": 60.0}]
+    assert context["haber_kapsami_olmayan_varliklar"] == ["TST"]
+    assert context["haber_guven_duzeyi"] == "low"
+
+
+def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
+    """Her varlığın haber/bilanço/yorum parçaları kendi sembolü altında,
+    beklenen alan adlarıyla (tur/baslik/tarih/kaynak/icerik) toplanmalı."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "stock", "weight_percent": 100.0}]
+    }
+    news_data = {
+        "assets": [
+            {
+                "symbol": "TST",
+                "documents": [
+                    {
+                        "tur": "haber",
+                        "baslik": "Şirket X büyüme rakamlarını açıkladı",
+                        "tarih": "2026-08-20",
+                        "kaynak": "Örnek Kaynak",
+                        "content": "İçerik metni.",
+                    }
+                ],
+            }
+        ],
+        "assets_without_documents": [],
+        "confidence": "normal",
+    }
+
+    context = _build_signal_context(holdings_data, news_data, None, None)
+
+    assert context["haberler"]["TST"] == [
+        {
+            "tur": "haber",
+            "baslik": "Şirket X büyüme rakamlarını açıkladı",
+            "tarih": "2026-08-20",
+            "kaynak": "Örnek Kaynak",
+            "icerik": "İçerik metni.",
+        }
+    ]
+
+
+def test_sinyal_baglami_dummy_puan_yoksa_alanlar_eklenmez():
+    """Profil tanınmıyorsa (dummy puan üretilemiyorsa) anket/izin alanları
+    bağlama hiç eklenmemeli — uydurulmuş bir puan görünmemeli."""
+    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None)
+
+    assert "survey_puani_dummy" not in context
+    assert "survey_puani_dummy_uyarisi" not in context
+    assert "bu_puanla_izinli_siniflar" not in context
+
+
+def test_sinyal_baglami_dummy_puan_uyarisiyla_ve_izinli_siniflarla_gelir():
+    """Dummy puan varsa hem açık bir uyarı hem de o puanla izinli varlık
+    sınıfları bağlama eklenmeli (LLM'in "profil_sapmasi" sinyalini
+    değerlendirebilmesi için)."""
+    context = _build_signal_context({"holdings": []}, {"assets": []}, RiskProfile.CONSERVATIVE, 2)
+
+    assert context["survey_puani_dummy"] == 2
+    assert "GERÇEK bir anket sonucu değildir" in context["survey_puani_dummy_uyarisi"]
+    # Korumacı dummy puanı (2), yalnızca nakit sınıfını (kırılım noktası 1) geçer.
+    assert context["bu_puanla_izinli_siniflar"] == ["cash"]
+
+
+def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():
+    """REGRESYON: risk_signals.md'nin çıktı biçimi bölümünde literal JSON
+    örneği (`{`/`}` karakterleri) var — bunlarla dolu bir şablonu `.format()`
+    ile doldurmaya çalışmak `ValueError: unmatched '{'` ile patlar (Python
+    `.format()` her `{`/`}`'i bir yer tutucu sanır). `_render_signal_prompt`
+    bu yüzden `.format()` DEĞİL `.replace()` kullanıyor; bu test hem şablonun
+    gerçekten literal süslü parantez içerdiğini (regresyonun hâlâ mümkün
+    olduğunu) hem de `_render_signal_prompt`'un bunlara rağmen çökmediğini
+    doğruluyor."""
+    # Şablon değişmişse bu varsayım da geçersiz kalabilir — önce onu kontrol et.
+    assert '"risk_level"' in _SIGNAL_PROMPT_TEMPLATE
+    assert _SIGNAL_PROMPT_TEMPLATE.count("{context_json}") == 1
+
+    rendered = _render_signal_prompt({"varliklar": [{"sembol": "TST", "agirlik_yuzde": 60.0}]})
+
+    assert "{context_json}" not in rendered
+    assert '"sembol": "TST"' in rendered
+    # Şemadaki literal parantezler dokunulmadan kalmalı (kaçırılmamalı/silinmemeli).
+    assert '"risk_level": "az_riskli"' in rendered

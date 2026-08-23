@@ -3,7 +3,8 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass
+from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass, settings
+from app.core.security import verify_password
 from app.models import Holding, PriceHistory, User
 from app.services.ledger_service import cash_balance_as_of
 from data.generate_dummy import (
@@ -120,3 +121,44 @@ def test_generate_dummy_risk_profile_never_mismatches_stock_weight(engine):
                 f"{user.risk_profile.value} profilinin sınırı {limit:.0%} "
                 f"(tolerans dahil {limit + tolerance:.0%})"
             )
+
+
+def test_fr_0_seeded_users_can_log_in(engine):
+    """Seed her kullanıcıya giriş yapabileceği bir kimlik vermeli (FR-0).
+
+    Üç şey birden doğrulanıyor:
+    1. T.C. kimlik numarası SAĞLAMASI GEÇERLİ — giriş ekranındaki 11 hane +
+       sağlama kontrolü anlamlı bir kapı olsun diye.
+    2. Numaralar benzersiz — `users.national_id` UNIQUE, çakışma seed'i düşürür.
+    3. Ortak şifre gerçekten çalışıyor — özet doğru hesaplanmış olmalı;
+       `hash_password` çağrısının unutulması ya da yanlış değerin özetlenmesi
+       ancak burada yakalanır.
+    """
+    generate_dummy_main()
+
+    with Session(engine) as session:
+        users = session.execute(select(User)).scalars().all()
+
+        assert all(u.national_id for u in users), "her kullanıcının kimlik numarası olmalı"
+        assert len({u.national_id for u in users}) == len(users), "numaralar benzersiz olmalı"
+        assert all(_gecerli_tckn(u.national_id) for u in users), "sağlama tutmalı"
+
+        # Şifre doğrulama yolu uçtan uca çalışmalı.
+        ornek = users[0]
+        assert verify_password(settings.demo_user_password, ornek.password_hash)
+        assert not verify_password("yanlis-sifre", ornek.password_hash)
+
+
+def _gecerli_tckn(numara: str) -> bool:
+    """T.C. kimlik numarası sağlama algoritması.
+
+    10. hane: (tek sıradakilerin toplamı × 7 − çift sıradakilerin toplamı) mod 10
+    11. hane: ilk on hanenin toplamı mod 10
+    İlk hane 0 olamaz.
+    """
+    if len(numara) != 11 or not numara.isdigit() or numara[0] == "0":
+        return False
+    hane = [int(k) for k in numara]
+    onuncu = ((sum(hane[0:9:2]) * 7) - sum(hane[1:8:2])) % 10
+    onbirinci = sum(hane[:10]) % 10
+    return hane[9] == onuncu and hane[10] == onbirinci

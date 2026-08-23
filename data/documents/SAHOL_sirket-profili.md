@@ -30,9 +30,9 @@ Holding, iştirakleri aracılığıyla Türkiye'de ve uluslararası alanda
 finans, üretim ve ticaret sektörlerindeki şirketlerin yönetimi ve
 koordinasyonuyla ilgilenmektedir. Şirket altı ana segmentte faaliyet
 gösterir: Bankacılık, Finansal Hizmetler, Enerji, Malzeme Teknolojileri,
-Dijital ve Diğer. En büyük iştiraki Akbank'tır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Dijital ve Diğer. En büyük iştiraki Akbank'tır. Şirket, BIST'te
+Holding ve Yatırım sektöründe sınıflandırılmaktadır. Yönetim kurulu
+başkanlığını, 27 Mart 2025'te Güler Sabancı'dan bu görevi devralan
+Hayri Çulhacı yürütmektedir. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır.

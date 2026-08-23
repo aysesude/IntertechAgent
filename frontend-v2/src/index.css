@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tema renkleri — tailwind.config.ts'teki brand/navy/ink/line/surface
+   token'ları bu değişkenlere referans veriyor. .dark class'ı (ThemeContext
+   tarafından <html>'e eklenir/çıkarılır) devreye girdiğinde tüm bu
+   token'ları kullanan Tailwind class'ları otomatik olarak koyu temaya
+   geçer — bileşenlerin kendisi değişmeden. */
+:root {
+  --color-brand: #2557E8;
+  --color-navy: #0B2653;
+  --color-surface: #FFFFFF;
+  --color-surface-elevated: #FFFFFF;
+  --color-ink: #0B0E14;
+  --color-ink-soft: #2E3440;
+  --color-ink-muted: #5C6270;
+  --color-ink-faint: #8A8F98;
+  --color-line: #E4E6EC;
+  --color-line-2: #EEF0F4;
+  --color-brand-tint: #EEF3FF;
+  --color-brand-border: #C3D6F8;
+  --shadow-tooltip: 0 14px 34px rgba(11, 14, 20, 0.12);
+  /* positive/negative: light modda mevcut brand/danger ile birebir aynı
+     değerler — bu token'lar sadece koyu temada brand'in bordoya kayması
+     yüzünden kâr/zarar renklerinin ayrışması için var; light'ta hiçbir
+     görsel farkları yok. */
+  --color-positive: #2557E8;
+  --color-negative: #E63946;
+  --color-brand-bright: #2557E8;
+}
+
+.dark {
+  /* Koyu temanın vurgu rengi mavi'den bordoya çevrildi (ay ışığı/deniz
+     tablosuyla uyum için). brand-bright, çizgi grafiği/ilerleme çubuğu gibi
+     ince/küçük alanlarda bu bordonun daha parlak bir versiyonu. */
+  --color-brand: #C4485A;
+  --color-brand-bright: #EB5265;
+  /* navy düz metinde ("kicker" etiketleri) kullanılıyor — artık marka
+     bordosuyla akraba, açık bir gül/bordo tonu. */
+  --color-navy: #DE545E;
+  /* Sayfa zemini ve kart zemini birbirine çok yakın (LoginScreen'deki
+     #0A0F16/#121822 ayrımıyla aynı mantık) — kartlar artık kenarlıkla değil,
+     shadow ile zeminden ayrışıyor (bkz. Card.tsx). */
+  --color-surface: #0A131D;
+  --color-surface-elevated: #0B151E;
+  --color-ink: #EDF1F7;
+  --color-ink-soft: #C7CEDB;
+  /* ink-muted: kart zemini üstünde ~5.9:1 — AA (4.5:1) geçiyor, değiştirilmedi. */
+  --color-ink-muted: #9AA4B8;
+  /* ink-faint eskiden #7C8598'di: küçük metin için AA eşiğinin altında
+     kalıyordu. #909BB0'a çekildi — okunaklı ama ink-muted'ten hâlâ soluk. */
+  --color-ink-faint: #909BB0;
+  --color-line: #2A3B5C;
+  --color-line-2: #223252;
+  /* text-brand (koyu temada bordo) bu ikisinin üzerine yazılıyor — brand'in
+     kendisiyle aynı kaynaktan (rgba'sı) türetiliyor, biri değişince
+     diğeri de otomatik güncellensin diye elle senkron tutuluyor. */
+  --color-brand-tint: rgba(196, 72, 90, 0.14);
+  --color-brand-border: rgba(196, 72, 90, 0.4);
+  /* Light moddaki rgba(11,14,20,.12) koyu zeminde neredeyse görünmüyordu —
+     daha koyu ve daha belirgin bir gölge. */
+  --shadow-tooltip: 0 16px 40px rgba(0, 0, 0, 0.55);
+  /* Bordo vurgu, negative ile (aşağıda) neredeyse aynı sıcaklıkta olduğundan
+     kâr/zarar birbirine karışıyordu — brand'den tamamen bağımsız, ayrı bir
+     yeşil/kırmızı çift tanımlandı. */
+  --color-positive: #46C79A;
+  --color-negative: #FF6B72;
+  /* Koyu temada birincil buton dolgusu (Button.tsx) ve kullanıcı avatarının
+     zemini (Header.tsx) — tek kaynak, ikisi de buradan okur. */
+  --color-cta-dark: #7A2B39;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    overflow-x: hidden;
+    /* Dikey kaydırma çubuğu için yer her zaman rezerve edilir — bazı
+       sayfalarda çubuk çıkıp bazılarında çıkmaması viewport genişliğini
+       değiştiriyor, bu da fixed konumlu BackgroundLayer'ın bg-cover
+       hesaplamasını her sayfa geçişinde yeniden tetikleyip görseli
+       yatayda kaydırıyordu. */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-surface text-ink font-sans antialiased;
+    overflow-x: hidden;
+  }
+
+  a {
+    @apply text-brand;
+  }
+
+  a:hover {
+    @apply text-brand-dark;
+  }
+
+  ::selection {
+    background: rgba(37, 87, 232, 0.16);
+  }
+}
+
+/* Google Charts'ın (PerformanceChart.tsx) isHtml:true tooltip'i — gerçek bir
+   DOM/CSS elemanı olduğu için CSS var() burada (options nesnesinin aksine)
+   güvenilir şekilde çalışıyor. */
+.google-visualization-tooltip {
+  background: var(--color-surface-elevated) !important;
+  border-color: var(--color-line) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-tooltip) !important;
+}
+
+/* Koyu temada tooltip zemini/kenarlığı kartlardan (surface-elevated) farklı,
+   ayrı bir literal — kartlarla karışmasın diye kasıtlı olarak token değil. */
+.dark .google-visualization-tooltip {
+  background: #16141A !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* Google Charts'ın isHtml tooltip'i (PerformanceChart.tsx, focusTarget:
+   "category") HER metin span'ine kendi inline color:#000000'unu yazıyor —
+   canlı DOM incelemesiyle doğrulandı, seri DEĞERLERİ bile kendi rengini
+   almıyor, sadece küçük renk karesi (.google-visualization-tooltip-square)
+   seri rengini taşıyor. Bu yüzden hem başlık/etiket hem değer metinlerini
+   burada elle, üç ayrı spesifik konumla renklendiriyoruz (evrensel "*"
+   seçici YOK) — !important şart, çünkü her biri inline style'ı eziyor.
+   DOM sırası: <li> 1 = ay/kategori başlığı (tek span); <li> 2 = Portföy
+   (kare + etiket span + değer span); <li> 3 = BIST 100 (aynı yapı). */
+.dark .google-visualization-tooltip-item-list > li:first-child > span {
+  color: #EDF1F7 !important;
+}
+.dark .google-visualization-tooltip-item-list > li:not(:first-child) > span:first-of-type {
+  color: #B9C4DC !important;
+}
+.dark .google-visualization-tooltip-item-list > li:nth-child(2) > span:last-of-type {
+  /* Portföy değeri — buildChartOptions'taki brandColor (dark: #EB5265) ile
+     birebir aynı literal, biri değişirse diğeri de güncellenmeli. */
+  color: #EB5265 !important;
+}
+.dark .google-visualization-tooltip-item-list > li:nth-child(3) > span:last-of-type {
+  /* BIST 100 değeri — buildChartOptions'taki bistLineColor (dark: #4A5A7A)
+     ile birebir aynı literal. */
+  color: #4A5A7A !important;
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
+
+/* Recharts pie/donut dilimleri tıklanabilir olduğu için tarayıcının
+   varsayılan (dikdörtgen) focus outline'ını alıyor — bunun yerine
+   klavye kullanıcıları için marka renginde ince bir focus-visible
+   halkası gösteriyoruz. */
+.recharts-pie-sector:focus,
+.recharts-sector:focus {
+  outline: none;
+}
+
+.recharts-pie-sector:focus-visible,
+.recharts-sector:focus-visible {
+  outline: 2px solid #2557e8;
+  outline-offset: 2px;
+}
+
+@keyframes annPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+

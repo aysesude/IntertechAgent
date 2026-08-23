@@ -19,7 +19,8 @@ temelleri 3 Nisan 1937 tarihinde atılmıştır. İlk yüksek fırın 9 Eylül
 ## Faaliyet alanı
 
 Şirketin faaliyet alanı, her çeşit ham demir ve çelik mamullerinin
-ile kok ve kok yan ürünlerinin imalatı ve satışıdır.
+ile kok ve kok yan ürünlerinin imalatı ve satışıdır. Şirket, BIST'te
+Metal Ana Sanayi sektöründe sınıflandırılmaktadır.
 
 ## Özelleştirme ve ortaklık yapısı
 
@@ -29,6 +30,7 @@ faaliyet gösterdikten sonra 30 Mart 1995 tarihinde özelleştirilmiştir.
 Hisseleri Borsa İstanbul'da "KRDMD" (ve ayrıca A/B grup hisseler
 için farklı kodlarla) işlem görmektedir. Güncel ortaklık pay dağılımına
 ilişkin ayrıntı için şirketin resmi ortaklık yapısı sayfasına
-başvurulmalıdır; bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler, dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+başvurulmalıdır. Yönetim kurulu başkanı, Eylül 2025'te İsmail Demir'in
+yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler, dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

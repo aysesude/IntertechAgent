@@ -19,12 +19,15 @@ kurulmuştur.
 
 Şirket, binek araç, hafif ve ağır ticari araç distribütörlüğü ile bu
 araçların satış sonrası servis ve destek hizmetlerini yürütmektedir.
+Şirket, BIST'te Otomotiv sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Doğuş Otomotiv, Doğuş Holding grubuna bağlı bir şirkettir. Hisseleri
 17 Haziran 2004 tarihinde halka arz edilmiş olup Borsa İstanbul'da
-"DOAS" koduyla işlem görmektedir. Bu doküman şirketin kimlik ve
-yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
-`bilanco` türü dokümanlarda yer alır, ayrıntılı pay dağılımı için
-şirketin resmi yatırımcı ilişkileri sayfasına başvurulmalıdır.
+"DOAS" koduyla işlem görmektedir. Yönetim kurulu başkanı, 26 Mart 2026
+tarihli olağan genel kurul sonrası atanan Emir Ali Bilaloğlu'dur; aynı
+zamanda icra kurulu başkanıdır. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır, ayrıntılı pay dağılımı için şirketin resmi
+yatırımcı ilişkileri sayfasına başvurulmalıdır.

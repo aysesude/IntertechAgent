@@ -15,9 +15,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user, verify_user_access
 from app.core.config import Granularity, PriceCurrency, TimeWindow
 from app.core.db import get_db
 from app.core.exceptions import InsufficientDataError, NotFoundError, ValidationAppError
+from app.models import User
 from app.schemas.portfolio import (
     BenchmarkComparison,
     HoldingsValuation,
@@ -67,8 +69,13 @@ def _http(exc: Exception) -> HTTPException:
 
 
 @router.get("/{user_id}", response_model=PortfolioSummary)
-def read_portfolio_summary(user_id: UUID, db: Session = Depends(get_db)) -> PortfolioSummary:
+def read_portfolio_summary(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+) -> PortfolioSummary:
     """Toplam değer, maliyet, kâr/zarar ve varlık sınıfı dağılımı (pasta grafiği)."""
+    verify_user_access(user_id, current_user)
     try:
         return get_portfolio_summary(db, user_id)
     except APP_ERRORS as exc:
@@ -76,12 +83,17 @@ def read_portfolio_summary(user_id: UUID, db: Session = Depends(get_db)) -> Port
 
 
 @router.get("/{user_id}/holdings", response_model=HoldingsValuation)
-def read_holdings(user_id: UUID, db: Session = Depends(get_db)) -> HoldingsValuation:
+def read_holdings(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+) -> HoldingsValuation:
     """Varlık tablosu: TRY değer, ağırlık, ortalama maliyet, gerçekleşmiş/gerçekleşmemiş K/Z.
 
     Fiyatı bulunamayan varlık listeden düşmez; `price_missing=True` ile döner ve
     arayüz o satırda "—" gösterir.
     """
+    verify_user_access(user_id, current_user)
     try:
         return get_holdings_valuation(db, user_id)
     except APP_ERRORS as exc:
@@ -93,12 +105,14 @@ def read_performance(
     user_id: UUID,
     window: TimeWindow = Query(TimeWindow.M1, description="1m | 3m | 6m | 12m"),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> PerformanceResult:
     """Değer serisi + kümülatif yatırılan para (aradaki boşluk toplam kârdır).
 
     `summary.change_amount` ve `change_percent` dış akıştan arındırılmıştır:
     para yatırmak "kâr" olarak görünmez.
     """
+    verify_user_access(user_id, current_user)
     try:
         return get_portfolio_performance(db, user_id, window)
     except APP_ERRORS as exc:
@@ -112,6 +126,7 @@ def read_transactions(
     end_date: date | None = Query(None, description="YYYY-AA-GG, dahil"),
     symbols: list[str] | None = Query(None, description="Yalnızca bu semboller"),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> TransactionList:
     """Alım/satım işaretçileri ve nakit hareketleri.
 
@@ -120,6 +135,7 @@ def read_transactions(
     """
     # Tarih ayrıştırma FastAPI'ye bırakılır: bozuk biçim zaten 422 döner,
     # burada ikinci bir doğrulama yazmak iki farklı hata mesajı üretirdi.
+    verify_user_access(user_id, current_user)
     try:
         return get_transactions(
             db, user_id, start_date=start_date, end_date=end_date, symbols=symbols
@@ -133,12 +149,14 @@ def read_benchmark(
     user_id: UUID,
     window: TimeWindow = Query(TimeWindow.M3, description="1m | 3m | 6m | 12m"),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> BenchmarkComparison:
     """Portföy getirisi ↔ endeksler (bar grafiği).
 
     Pencere başındaki miktarlar dondurulur, yalnızca fiyat değişimi ölçülür —
     endeksin saf fiyat getirisiyle aynı ölçekte olması için.
     """
+    verify_user_access(user_id, current_user)
     try:
         return get_benchmark_comparison(db, user_id, window)
     except APP_ERRORS as exc:
@@ -152,6 +170,11 @@ def read_price_history(
     granularity: Granularity = Query(Granularity.AUTO),
     currency: PriceCurrency = Query(PriceCurrency.TRY),
     db: Session = Depends(get_db),
+    # Kullanıcıya özel veri DEĞİL: aynı sembolün serisi herkes için aynı,
+    # bu yüzden sahiplik kontrolü yok. Yine de giriş şartı aranıyor — tek
+    # açık uç bırakmak, evrendeki tüm sembollerin fiyat geçmişini kimliksiz
+    # dışarı vermek olurdu.
+    current_user: User | None = Depends(get_current_user),  # noqa: ARG001
 ) -> PriceHistoryResult:
     """Sembol bazlı kapanış serisi (varlık başına fiyat grafiği).
 

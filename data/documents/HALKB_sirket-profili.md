@@ -22,7 +22,8 @@ Banka, 1938'den bu yana esnaf ve sanatkârları desteklemek ve
 ekonomik kalkınmayı hızlandırmak amacıyla faaliyet göstermektedir.
 Başta esnaf, sanatkâr, KOBİ, kadın ve genç girişimciler olmak üzere
 ekonomik aktörlere ve kalkınmayı teşvik eden öncü projelere kredi
-desteği sağlamaktadır.
+desteği sağlamaktadır. Şirket, BIST'te Bankacılık sektöründe
+sınıflandırılmaktadır.
 
 ## Tarihçe
 
@@ -33,7 +34,8 @@ kredi kullandırma yetkisiyle çalışmaya başlamıştır.
 ## Ortaklık yapısı
 
 Hisseleri Borsa İstanbul'da "HALKB" koduyla işlem görmektedir; banka
-kamu bankası statüsündedir. Bu doküman şirketin kimlik ve yapısal
+kamu bankası statüsündedir. Yönetim kurulu başkanı Meltem Taylan Aydın,
+başkan vekili Şeref Aksaç'tır. Bu doküman şirketin kimlik ve yapısal
 bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
 dokümanlarda yer alır, ayrıntılı pay dağılımı için bankanın resmi
 yatırımcı ilişkileri sayfasına başvurulmalıdır.
