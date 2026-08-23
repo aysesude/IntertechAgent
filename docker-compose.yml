@@ -118,8 +118,26 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # frontend-v2 KENDİ alan adından servis ediliyor ve o alan adında
+      # Caddy /api/* yolunu backend'e vekilliyor — yani istekler AYNI KÖKENE
+      # gider. Eski `frontend` başka bir alan adında durduğu için ayrı
+      # değişken gerekiyor; ikisi aynı değeri paylaşamaz.
+      #
+      # Bu ayrım şart, sadece derli toplu olsun diye değil: test alan adı
+      # basic_auth ile korunuyor ve tarayıcı ÇAPRAZ KÖKEN isteklerine
+      # basic_auth bilgisini eklemez — arayüz API'yi komşu alan adından
+      # çağırsaydı her istek 401 alırdı.
+      #
+      # Tanımlı değilse ortak değere düşer (tek arayüzün olduğu yerel kurulum).
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL_V2:-${VITE_API_BASE_URL}}
     ports:
-      - "${FRONTEND_V2_PORT_HOST:-5174}:5174"
+      # Sunucudaki host portu haritası (test ve prod aynı makinede koşuyor):
+      #   5173 test eski arayüz · 5174 prod eski arayüz
+      #   5175 test frontend-v2  · 5176 prod frontend-v2
+      # Varsayılan 5175: 5174 prod'un eski arayüzünde DOLU (bir kez çakıştı,
+      # deploy "port is already allocated" ile düştü).
+      - "${FRONTEND_V2_PORT_HOST:-5175}:5174"
     volumes:
       - ./frontend-v2:/app
       - /app/node_modules
