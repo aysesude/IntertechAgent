@@ -9,6 +9,7 @@ import {
   type ApiPortfolioSummary,
   type ApiTransactionList,
 } from "@/api/portfolio";
+import { fetchRiskAssessment, type ApiRiskAssessment } from "@/api/risk";
 import { isApiConfigured } from "@/api/client";
 import { useCurrentUserId } from "@/auth/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -42,6 +43,8 @@ interface TemelVeri {
   ozet: ApiPortfolioSummary;
   varliklar: ApiHoldingsValuation | null;
   islemler: ApiTransactionList | null;
+  /** Risk ucu düşerse `null`; kart "hesaplanamadı" gösterir, ekran çizilir. */
+  risk: ApiRiskAssessment | null;
 }
 
 /**
@@ -109,13 +112,16 @@ export function useDashboardData(range: RangeKey): DashboardState {
 
     Promise.all([
       fetchPortfolioSummary(kullanici),
-      // Bu ikisi opsiyonel: düşerlerse `null` ile devam edilir, ekran çizilir.
+      // Bu üçü opsiyonel: düşerlerse `null` ile devam edilir, ekran çizilir.
+      // Risk özellikle kırılgan — yeterli fiyat geçmişi yoksa hesaplanamıyor —
+      // ve onun yüzünden tüm dashboard'u karartmak doğru olmaz.
       fetchHoldings(kullanici).catch(() => null),
       fetchTransactions(kullanici).catch(() => null),
+      fetchRiskAssessment(kullanici).catch(() => null),
     ])
-      .then(([ozet, varliklar, islemler]) => {
+      .then(([ozet, varliklar, islemler, risk]) => {
         if (nesil.current !== benimNesil) return;
-        setTemel({ ozet, varliklar, islemler });
+        setTemel({ ozet, varliklar, islemler, risk });
         setError(null);
       })
       .catch((err: unknown) => {
@@ -182,6 +188,7 @@ export function useDashboardData(range: RangeKey): DashboardState {
       range: aktifPerformans.range,
       holdings: temel.varliklar,
       transactions: temel.islemler,
+      risk: temel.risk,
       darkTheme: resolvedTheme === "dark",
     });
   }, [temel, aktifPerformans, resolvedTheme]);

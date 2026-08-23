@@ -1,3 +1,4 @@
+import type { ApiRiskAssessment, ApiRiskLevel } from "@/api/risk";
 import type {
   ApiAssetClass,
   ApiHoldingsValuation,
@@ -16,6 +17,7 @@ import type {
   PerformanceRange,
   PortfolioSummary,
   RangeKey,
+  RiskSummary,
   Transaction,
 } from "@/types/finance";
 
@@ -240,6 +242,41 @@ export function toTransactions(liste: ApiTransactionList, limit = 6): Transactio
     });
 }
 
+
+// ---------------------------------------------------------------------------
+// Risk
+// ---------------------------------------------------------------------------
+
+/** 7 kademeli etiketin Türkçe karşılığı. Tek kaynak burası. */
+const RISK_LEVEL_LABELS: Record<ApiRiskLevel, string> = {
+  very_low: "Çok Düşük",
+  low: "Düşük",
+  low_medium: "Düşük-Orta",
+  medium: "Orta",
+  medium_high: "Orta-Yüksek",
+  high: "Yüksek",
+  very_high: "Çok Yüksek",
+};
+
+const RISK_PROFILE_LABELS: Record<ApiRiskAssessment["risk_profile"], string> = {
+  conservative: "Korumacı",
+  balanced: "Dengeli",
+  growth: "Büyüme",
+  aggressive: "Agresif",
+};
+
+export function toRiskSummary(risk: ApiRiskAssessment): RiskSummary {
+  return {
+    levelLabel: risk.risk_level ? RISK_LEVEL_LABELS[risk.risk_level] : null,
+    annualizedVolatilityPct: risk.metrics.annualized_volatility_percent,
+    withinProfile: risk.is_within_profile,
+    profileLabel: RISK_PROFILE_LABELS[risk.risk_profile],
+    // Birden fazla uyarı olabilir; kartta yer olmadığı için ilki gösteriliyor,
+    // tamamı Risk ekranında listelenecek.
+    warning: risk.warnings.length > 0 ? risk.warnings[0] : null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Bileşim
 // ---------------------------------------------------------------------------
@@ -251,7 +288,15 @@ export interface DashboardSources {
   /** Kısmi başarısızlıkta `null` gelebilir; dağılım alt kırılımsız çizilir. */
   holdings: ApiHoldingsValuation | null;
   transactions: ApiTransactionList | null;
+  /** Risk ucu düşerse `null`; kart "hesaplanamadı" gösterir. */
+  risk: ApiRiskAssessment | null;
   darkTheme: boolean;
+}
+
+/** Sembolden varlık sınıfının Türkçe adını bulur; bulunamazsa boş döner. */
+function _sinifAdi(varliklar: ApiHoldingsValuation, symbol: string): string {
+  const satir = varliklar.holdings.find((h) => h.symbol === symbol);
+  return satir ? ASSET_CLASS_LABELS[satir.asset_class] : "";
 }
 
 export function toDashboardData(kaynak: DashboardSources): DashboardData {
@@ -270,11 +315,14 @@ export function toDashboardData(kaynak: DashboardSources): DashboardData {
     // Öneriler risk ajanının senaryolarından gelecek (Faz 5). Kaynağı yokken
     // üretmiyoruz.
     recommendations: [],
+    // Varlık sınıfı, performansçının SEMBOLÜ üzerinden varlık tablosundan
+    // bulunuyor. Boş bırakıldığında ekranda sonu ayraçla biten bir metin
+    // görünüyordu ("Tüpraş · ").
     ...(holdings?.best_performer
       ? {
           bestPerformer: {
             name: holdings.best_performer.name,
-            assetClass: "",
+            assetClass: _sinifAdi(holdings, holdings.best_performer.symbol),
             returnPct: holdings.best_performer.unrealized_pnl_percent,
           },
         }
@@ -283,11 +331,12 @@ export function toDashboardData(kaynak: DashboardSources): DashboardData {
       ? {
           worstPerformer: {
             name: holdings.worst_performer.name,
-            assetClass: "",
+            assetClass: _sinifAdi(holdings, holdings.worst_performer.symbol),
             returnPct: holdings.worst_performer.unrealized_pnl_percent,
           },
         }
       : {}),
+    ...(kaynak.risk ? { risk: toRiskSummary(kaynak.risk) } : {}),
     instrumentCount: ozet.holdings_count,
     assetClassCount: ozet.allocation.length,
     lastUpdated: formatDateDMY(ozet.as_of),

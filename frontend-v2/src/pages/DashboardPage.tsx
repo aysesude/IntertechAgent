@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { dashboardStaggerItem } from "@/components/PageTransition";
 import { PageHeading } from "@/components/common/PageHeading";
@@ -9,10 +9,12 @@ import { PerformerHighlights } from "@/components/dashboard/PerformerHighlights"
 import { TransactionsList } from "@/components/dashboard/TransactionsList";
 import { ErrorBanner } from "@/components/common/ErrorBanner";
 import { InfoTooltip } from "@/components/common/InfoTooltip";
+import { InsightsBand } from "@/components/dashboard/InsightsBand";
 import { TrendUpIcon } from "@/components/icons";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useAuth } from "@/auth/AuthContext";
-import { formatTRY, formatSignedTRY, formatPct } from "@/utils/format";
+import { formatTRY, formatSignedTRY, formatPct, formatNumberTR } from "@/utils/format";
+import { buildInsights } from "@/utils/insights";
 import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
 import type { RangeKey, ScreenId } from "@/types/finance";
 
@@ -43,6 +45,15 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
   const { summary } = data;
 
   const ad = ilkAd(user.name);
+
+  // İçgörüler tamamen TÜRETİLMİŞ: ek bir istek yok, ekrandaki verinin
+  // üzerinde kural tabanlı çalışıyor. Portföy ekranının verisi (hedef
+  // dağılım, pozisyon listesi) henüz bağlı olmadığı için o kurallar
+  // şimdilik boş girdiyle atlanıyor; dashboard'dan beslenenler çalışıyor.
+  const insights = useMemo(
+    () => buildInsights(data, { assetClasses: [], holdings: [], riskSummary: [], targetVsActual: [], instrumentCount: data.instrumentCount, assetClassCount: data.assetClassCount }),
+    [data],
+  );
 
   return (
     <div className="relative min-h-screen">
@@ -100,7 +111,13 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
                     <span className={summary.todayChange >= 0 ? "text-positive" : "text-negative"}>
                       {formatSignedTRY(summary.todayChange)}
                     </span>
-                    <span className="font-medium text-ink-faint">bugün</span>
+                    {/* "bugün" YAZMIYOR, bilerek. Borsa hafta sonu ve tatilde
+                        kapalı; Pazartesi bakan kullanıcıya Cuma kapanışına
+                        göre değişim gösteriliyor. "bugün" demek, piyasanın
+                        kapalı olduğu bir günde yanlış bir iddia olurdu. */}
+                    <span className="font-medium text-ink-faint">
+                      {data.lastUpdated} kapanışı
+                    </span>
                   </>
                 )
               }
@@ -136,21 +153,37 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             />
           </StaggerItem>
 
-          {/* Tasarımdaki "Risk Skoru 0-100" kartının yerine: risk metodolojisi
-              v2 bu kompozit skoru bilerek kaldırdı (yerine 7 kademeli etiket +
-              volatilite) ve REST ucu henüz yok. Risk kartı o uç açıldığında
-              gerçek haliyle geri gelecek. */}
+          {/* Risk kartı. Tasarımdaki "Risk Skoru 0-100" DEĞİL: risk
+              metodolojisi v2 kompozit skoru bilerek kaldırdı, yerine
+              volatiliteden türeyen 7 kademeli etiket geldi. Skoru geri
+              getirmek, kaldırılma gerekçesini görmezden gelmek olurdu.
+
+              Dönem getirisi buradan çıkarıldı çünkü grafiğin altındaki
+              kutuda zaten var — aynı rakamı iki yerde göstermek kartı
+              harcıyordu. */}
           <StaggerItem active={stagger}>
             <StatCard
-              label="Dönem Getirisi"
-              value={
-                summary.periodReturnPct === undefined ? "—" : formatPct(summary.periodReturnPct)
-              }
+              label="Risk Seviyesi"
+              value={data.risk?.levelLabel ?? "—"}
               footer={
-                <>
-                  <span className="font-medium text-ink-faint">{chartRange?.subtitle ?? ""}</span>
-                  <InfoTooltip text="Zaman ağırlıklı getiri: dönem içinde yatırdığınız veya çektiğiniz para getiri gibi görünmez." />
-                </>
+                data.risk?.annualizedVolatilityPct == null ? (
+                  // Yeterli fiyat geçmişi yoksa risk UYDURULMAZ (AK 2.7).
+                  <span className="font-medium text-ink-faint">
+                    {data.risk?.warning ?? "hesaplanamadı"}
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-medium text-ink-faint">
+                      yıllık %{formatNumberTR(data.risk.annualizedVolatilityPct, 1)} oynaklık
+                    </span>
+                    {data.risk.withinProfile === false && (
+                      <span className="font-semibold text-negative">· profil üstü</span>
+                    )}
+                    <InfoTooltip
+                      text={`Seviye, portföyün yıllık oynaklığından hesaplanır. ${data.risk.profileLabel} profilinin beklenen bandına göre değerlendirilir.`}
+                    />
+                  </>
+                )
               }
             />
           </StaggerItem>
@@ -177,6 +210,13 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             />
           </div>
         </StaggerItem>
+
+        {/* VİRA'nın notu: portföyden TÜRETİLEN kural tabanlı içgörüler.
+            Dil modeli devrede değil — her içgörünün dayandığı rakam
+            ekrandaki veriden geliyor (bkz. utils/insights.ts).
+            Boşsa hiç render edilmiyor: söylenecek bir şey yokken başlık
+            göstermek "sistem bir şey buldu" izlenimi verirdi. */}
+        {insights.length > 0 && <InsightsBand insights={insights} />}
 
         <PerformerHighlights best={data.bestPerformer} worst={data.worstPerformer} />
 

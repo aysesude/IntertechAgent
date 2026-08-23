@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ApiRiskAssessment } from "@/api/risk";
 import type {
   ApiHoldingsValuation,
   ApiPerformanceResult,
@@ -7,6 +8,7 @@ import type {
 } from "@/api/portfolio";
 import {
   priceFreshnessWarning,
+  toRiskSummary,
   toAllocation,
   toDashboardData,
   toPerformanceRange,
@@ -299,6 +301,7 @@ describe("toDashboardData", () => {
       range: "3A",
       holdings: null,
       transactions: null,
+      risk: null,
       darkTheme: false,
     });
     // Yeniden dengeleme önerileri risk ajanından gelecek; uydurulmuyor.
@@ -313,6 +316,7 @@ describe("toDashboardData", () => {
       range: "3A",
       holdings: null,
       transactions: null,
+      risk: null,
       darkTheme: false,
     });
     expect(d.performance["3A"]).toBeDefined();
@@ -326,11 +330,123 @@ describe("toDashboardData", () => {
       range: "3A",
       holdings: null,
       transactions: null,
+      risk: null,
       darkTheme: false,
     });
     expect(d.instrumentCount).toBe(10);
     expect(d.assetClassCount).toBe(2);
     // Uygulamanın ortak tarih biçimi gün/ay/yıl (bkz. utils/format.ts).
     expect(d.lastUpdated).toBe("20/08/2026");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Risk
+// ---------------------------------------------------------------------------
+
+function risk(ustuneYaz: Partial<ApiRiskAssessment> = {}): ApiRiskAssessment {
+  return {
+    user_id: "u1",
+    as_of: "2026-08-20",
+    risk_profile: "conservative",
+    risk_profile_source: "user",
+    risk_level: "medium_high",
+    is_within_profile: false,
+    metrics: {
+      annualized_volatility_percent: 24.31,
+      max_drawdown_percent: 8.4,
+      diversification_ratio: 1.36,
+      value_at_risk_try: 6968,
+      value_at_risk_percent: 0.44,
+      value_at_risk_confidence: 95,
+      value_at_risk_horizon_days: 1,
+      sharpe_ratio: -6.74,
+      risk_free_rate_percent: 37,
+      max_asset_weight_percent: 24.17,
+      max_asset_symbol: "PPF",
+      holdings_count: 8,
+      asset_class_count: 5,
+      price_points_used: 260,
+    },
+    warnings: [],
+    disclaimer: "Bu bir yatırım tavsiyesi değildir.",
+    ...ustuneYaz,
+  };
+}
+
+describe("toRiskSummary", () => {
+  it("7 kademeli etiketi Türkçeye çevirir", () => {
+    // 0-100 kompozit skor v2'de KALDIRILDI; etiket tek gösterim.
+    expect(toRiskSummary(risk()).levelLabel).toBe("Orta-Yüksek");
+    expect(toRiskSummary(risk({ risk_level: "very_low" })).levelLabel).toBe("Çok Düşük");
+    expect(toRiskSummary(risk({ risk_level: "very_high" })).levelLabel).toBe("Çok Yüksek");
+  });
+
+  it("profil bandının dışında olmayı taşır", () => {
+    expect(toRiskSummary(risk()).withinProfile).toBe(false);
+    expect(toRiskSummary(risk({ is_within_profile: true })).withinProfile).toBe(true);
+  });
+
+  it("hesaplanamayan risk için null taşır, 0 ÜRETMEZ", () => {
+    // 0 gösterilseydi ekranda "riskiniz yok" yazardı — elimizde olmayan bir
+    // bilgiyi uydurmak olurdu (AK 2.7 / 5.5).
+    const yetersiz = toRiskSummary(
+      risk({
+        risk_level: null,
+        is_within_profile: null,
+        metrics: { ...risk().metrics, annualized_volatility_percent: null },
+        warnings: ["Yeterli fiyat geçmişi yok."],
+      }),
+    );
+    expect(yetersiz.levelLabel).toBeNull();
+    expect(yetersiz.annualizedVolatilityPct).toBeNull();
+    expect(yetersiz.warning).toBe("Yeterli fiyat geçmişi yok.");
+  });
+
+  it("profil adını Türkçeleştirir", () => {
+    expect(toRiskSummary(risk()).profileLabel).toBe("Korumacı");
+    expect(toRiskSummary(risk({ risk_profile: "aggressive" })).profileLabel).toBe("Agresif");
+  });
+});
+
+describe("performansçının varlık sınıfı", () => {
+  it("SEMBOL üzerinden varlık tablosundan bulunur", () => {
+    // Boş bırakıldığında ekranda sonu ayraçla biten bir metin görünüyordu
+    // ("Tüpraş · ").
+    const d = toDashboardData({
+      summary: OZET,
+      performance: performans(),
+      range: "3A",
+      holdings: {
+        user_id: "u1",
+        as_of: "2026-08-20",
+        holdings: [
+          {
+            symbol: "TUPRS",
+            name: "Tüpraş",
+            asset_class: "stock",
+            currency: "TRY",
+            quantity: 10,
+            current_price_try: 391.75,
+            market_value_try: 3917.5,
+            weight_percent: 1,
+            avg_cost_try: 172.63,
+            cost_basis_try: 1726.3,
+            unrealized_pnl_try: 2191.2,
+            unrealized_pnl_percent: 126.91,
+            realized_pnl_try: 0,
+            price_missing: false,
+          },
+        ],
+        best_performer: { symbol: "TUPRS", name: "Tüpraş", unrealized_pnl_percent: 126.91 },
+        worst_performer: null,
+        excluded_symbols: [],
+      },
+      transactions: null,
+      risk: null,
+      darkTheme: false,
+    });
+
+    expect(d.bestPerformer?.assetClass).toBe("Hisse Senedi");
   });
 });
