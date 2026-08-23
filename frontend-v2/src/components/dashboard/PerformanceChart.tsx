@@ -75,10 +75,9 @@ function buildChartOptions(isDark: boolean) {
     crosshair: { trigger: "focus", orientation: "vertical", color: brandColor, opacity: 0.35 },
     fontName: "Manrope",
     // Google Charts, Recharts'ın aksine açıkça belirtilmezse animasyon
-    // yapmıyor — startup:true ilk çizimde çubukların/alanın sıfırdan
-    // büyümesini sağlıyor. <Chart key={resolvedTheme}> tema değişince
-    // component'i remount ettiği için animasyon tema geçişinde de tekrar
-    // oynayacak — kabul edilebilir, key kaldırılmadı.
+    // yapmıyor — startup:true İLK ÇİZİMDE alanın sıfırdan büyümesini
+    // sağlıyor. Dönem değiştiğinde de bu animasyonun oynaması için grafik
+    // bilerek yeniden kuruluyor (bkz. aşağıdaki <Chart key=...>).
     //
     // ÖNEMLİ: animation.duration, startup:true ile BİRLİKTE kullanılınca
     // react-google-charts/Google Charts'ta "Cannot read properties of
@@ -191,8 +190,26 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
         style={{ opacity: loading ? 0.45 : 1 }}
         aria-busy={loading}
       >
+        {/* KEY'İN İÇİNDE DÖNEM DE VAR, bilerek.
+            `startup: true` yalnızca İLK çizimde animasyon oynatıyor; veri
+            yerinde değiştiğinde Google Charts yeni seriyi animasyonsuz
+            basıyor (varsayılan `animation.duration` sıfır). Gerçek bir
+            geçiş animasyonu için `duration` gerekiyor ama `startup: true`
+            ile birlikte kullanıldığında çizimi tamamen çöktürüyor —
+            yukarıdaki nota bakın, bisection'la doğrulanmış.
+
+            Bu yüzden animasyonu remount ile tetikliyoruz: key değişince
+            <Chart> yeniden kurulur ve startup animasyonu yeni seriyle
+            baştan oynar. KART unmount OLMUYOR — başlık, açıklama, gösterge
+            ve istatistik kutuları yerinde kalıyor, yalnızca çizim alanı
+            yenileniyor. Sayfa düzeni bu yüzden hiç oynamıyor.
+
+            Key GÖSTERİLEN dönemden (`range.key`) alınıyor, kullanıcının
+            SEÇTİĞİNDEN değil: veri gelmeden remount edilseydi animasyon
+            eski seriyle oynar, yeni veri geldiğinde ise animasyonsuz
+            değişirdi — tam tersi. */}
         <Chart
-          key={resolvedTheme}
+          key={`${resolvedTheme}-${range?.key ?? "bos"}`}
           chartType="AreaChart"
           data={chartData}
           options={chartOptions}
