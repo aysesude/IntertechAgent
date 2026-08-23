@@ -75,10 +75,18 @@ export default {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        // "VİRA düşünüyor…" noktaları. pulseDot'tan ayrı: o 2 saniyelik
+        // sakin bir "çevrimiçi" nabzı, bu ise sıra sıra yanan bir bekleme
+        // işareti — aynı ritmi paylaşsalardı ikisi de anlamını yitirirdi.
+        thinkingDot: {
+          "0%, 80%, 100%": { opacity: ".25", transform: "translateY(0)" },
+          "40%": { opacity: "1", transform: "translateY(-2px)" },
+        },
       },
       animation: {
         fadeUp: "fadeUp .3s ease-out both",
         pulseDot: "pulseDot 2s infinite",
+        thinkingDot: "thinkingDot 1.2s ease-in-out infinite",
         slideUpPanel: "slideUpPanel .2s cubic-bezier(0.4,0,0.2,1)",
         sonarPing: "sonarPing 4.6s ease-out infinite",
         tipIn: "tipIn .15s ease-out both",
