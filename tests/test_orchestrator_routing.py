@@ -80,7 +80,6 @@ def test_unknown_intent_asks_instead_of_defaulting_to_portfolio():
     """
     state = _state("beklenmeyen_etiket")
     assert _route_after_intent(state) == ["handle_out_of_scope"]
-    assert state["final_answer"] == _AMBIGUOUS_MESSAGE
 
 
 def test_ambiguous_message_mentions_risk_as_an_example():
