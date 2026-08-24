@@ -98,7 +98,18 @@ _PREFIX_MATCH_LEN = (
 # hiç devreye girmeden 5 alakasız şirketin profili dönmüştü). Havuz
 # genişletilerek KRDMD'nin kendi dokümanı havuza girip güvenlik ağını
 # (bkz. _sirket_matches_query) tetikleyebiliyor.
-_MIN_CANDIDATE_POOL = 30
+#
+# 30'dan 130'a yükseltildi (2026-08-24, temettü geçmişi eklendikten sonra
+# ölçüldü): 31 profilin TAMAMINA aynı kalıpta temettü cümlesi eklenince
+# aynı sorun çok daha yaygınlaştı — 31 şirketin 12'sinde ("[Şirket]'in
+# temettü ödemesi ne kadar" sorgusuyla ölçüldü) kendi dokümanı 30'luk
+# havuzun dışında kaldı, en kötü durumda (ARCLK) 108. sırada. Korpus
+# toplam ~150 parça olduğu için (küçük, sabit boyutlu bir demo korpusu)
+# havuzu neredeyse tüm korpusu kapsayacak şekilde genişletmenin performans
+# maliyeti ihmal edilebilir; asıl doğruluk güvencesi zaten mesafe eşiği +
+# kelime-örtüşme kapısı, havuz yalnızca "adaya bile giremeden elenme"
+# riskini azaltıyor.
+_MIN_CANDIDATE_POOL = 130
 
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
@@ -230,6 +241,56 @@ _GENERIC_FINANCE_TERMS = {
     # "bulundu" saydırdı.
     "odeme",
     "dagit",
+    # "tarih" (hak kullanım tarihi, ödeme tarihi, kayıt tarihi, kesim
+    # tarihi) temettü paragrafının en sık tekrarlanan kelimesi haline geldi
+    # — 31 profilin neredeyse tamamında birden fazla kez geçiyor (ölçümle
+    # doğrulandı: "Sahte Sanayi'nin temettü dağıtım tarihi nedir" sorgusu,
+    # uydurma kısım hiç eşleşmemesine rağmen salt "tarihi" + "temettü" +
+    # "dağıtım" kelimeleri üzerinden BIMAS/KCHOL/DOAS/ISCTR/ASTOR gibi
+    # tamamen alakasız şirketleri "bulundu" saydırdı).
+    "tarih",
+    # Temettü cümlesinin geri kalan kalıp kelimeleri de aynı gerekçeyle
+    # jenerikleştirildi (ölçümle doğrulandı, 40 uydurma-şirket sorgusundan
+    # oluşan bir tarama ile): "2026" ve "yılında" hemen her bilanço/temettü
+    # cümlesinde geçen yıl ifadesi; "başına" ("hisse başına brüt/net ...")
+    # pay-birimi klişesi. Bunlar tek başına eskiden de jenerikti ama artık
+    # temettü/tarih/ödeme/dağıt ile birlikte havuzda ikinci-üçüncü jenerik
+    # eşleşme olarak oranı dolduruyor, geriye kalan TEK ayırt edici kelime
+    # de (ör. "bankası", "otomotiv") sektör düzeyinde bir kelime olabiliyor
+    # ve yine tamamen alakasız gerçek şirketleri "bulundu" saydırıyor.
+    "2026",
+    "yilinda",
+    "yili",
+    "basina",
+    # "bankası"/"otomotiv" zaten _SIRKET_ALIASES tasarımında "aşırı jenerik"
+    # kabul edilip takma ad listesine hiç alınmamıştı (bkz. FROTO/DOAS
+    # yorumları) — aynı gerekçe burada da geçerli, iki yerde tutarsız
+    # davranmamak için jenerik listeye de eklendi.
+    "bankasi",
+    "otomotiv",
+    # BIST sektör sınıflandırması (ayrı bir turda eklendi) BİRDEN FAZLA
+    # şirketin paylaştığı sektörler için de aynı "aşırı jenerik" sorununu
+    # taşıyor — ölçümle doğrulandı (40 uydurma-şirket sorgusu taraması):
+    # "sanayi" (hem sektör adı hem de "... Sanayi ve Ticaret A.Ş." gibi
+    # yaygın bir hukuki ek), "metal" (Metal Ana Sanayi: EREGL+KRDMD),
+    # "gıda" (Gıda, İçecek: CCOLA+ULKER) tek başına ayırt edici kelime
+    # sayılıp tamamen alakasız uydurma şirket sorgularını gerçek şirket
+    # verisiyle eşleştirdi. Yalnızca TEK bir şirkete özgü sektör kelimeleri
+    # (ör. "savunma", "inşaat", "imalat") bilinçli olarak burada DEĞİL —
+    # bu korpusta hâlâ gerçekten ayırt edici.
+    "sanayi",
+    "metal",
+    "gida",
+    "kimya",
+    "petrol",
+    "plastik",
+    "bankacilik",
+    "ulastirma",
+    "telekomunikasyon",
+    "perakende",
+    "ticaret",
+    "yatirim",
+    "gayrimenkul",
 }
 
 

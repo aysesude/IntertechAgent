@@ -558,6 +558,34 @@ def test_retrieve_uydurma_sirket_temettu_odeme_dagitim_kelimeleriyle_bulunmus_sa
     assert retriever.retrieve("Falanca Enerji'nin temettü dağıtımı nasıl") == []
 
 
+def test_retrieve_uydurma_sirket_sektor_tarih_yil_kelimeleriyle_bulunmus_sayilmaz():
+    """Temettü paragrafının diğer kalıp kelimeleri de aynı gerekçeyle
+    jenerikleştirildi (ölçümle doğrulandı, 2026-08-24: 40 uydurma-şirket
+    sorgusundan oluşan bir tarama, gerçek şirketlerin 31'inde 30'unun
+    sızdığını gösterdi). İki ayrı kaynak: (1) "tarih"/"2026"/"yılında"/
+    "başına" temettü cümlesinin ("... tarihi 2026'dır", "hisse başına ...")
+    her yerde tekrarlanan iskeleti; (2) daha önce ayrı bir turda eklenen
+    BIST sektör sınıflandırması ("sanayi", "metal", "gıda" gibi BİRDEN
+    FAZLA şirketin paylaştığı sektör kelimeleri) artık temettü kelimeleriyle
+    birlikte oranı dolduruyor. Bu test her iki kaynaktan da örnek içerir."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Ereğli Demir Çelik Metal Ana Sanayi sektöründe sınıflandırılmaktadır, "
+                "hisse başına temettü ödeme tarihi 2026 yılında",
+                baslik="Ereğli Demir Çelik Şirket Profili",
+                sirket="EREGL",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    assert retriever.retrieve("Örnek Metal Sanayi'nin temettü ödemesi ne kadar") == []
+    assert retriever.retrieve("Zafer Madencilik'nin temettü dağıtım tarihi nedir") == []
+    assert retriever.retrieve("Vizyon Sanayi 2026 yılında temettü dağıttı mı") == []
+
+
 # ---------------------------------------------------------------------------
 # Sirket adiyla anilan sorgu, kelime-ortusme oranindan muaf
 # ---------------------------------------------------------------------------
