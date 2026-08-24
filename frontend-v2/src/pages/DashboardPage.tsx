@@ -228,7 +228,9 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             Yeniden dengeleme, risk servisinin kural tabanlı senaryo motoru
             REST'e açıldığında gerçek haliyle geri gelecek. */}
 
-        <p className="m-0 mt-8 text-center text-xs italic text-ink-faint">
+        {/* Sadece açık temada ink-soft: ink-faint, sayfa zeminindeki yarı
+            saydam arka plan üstünde okunaklı değildi. Koyu tema aynı kaldı. */}
+        <p className="m-0 mt-8 text-center text-xs italic text-ink-soft dark:text-ink-faint">
           {INVESTMENT_DISCLAIMER}
         </p>
       </div>

@@ -52,7 +52,12 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
       className="sticky top-0 z-[100] border-b border-line bg-white/92 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#0D0A0C]/50 dark:backdrop-blur-xl"
     >
       <div className="relative mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:h-[68px] sm:px-6 md:px-10 lg:gap-11">
-        <div className="flex items-center gap-[11px]">
+        <button
+          type="button"
+          onClick={() => onNavigate("dashboard")}
+          aria-label="Dashboard'a git"
+          className="flex items-center gap-[11px] rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
           {/* vira_logo_text.svg zaten gemi + "Vira" yazısını birlikte
               içeren tam lockup — ayrıca vira_logo.svg eklemeye gerek yok
               (eklenirse gemi iki kere görünür). */}
@@ -61,7 +66,7 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
             alt="VİRA"
             className="block h-8 object-contain dark:[filter:brightness(0)_invert(1)]"
           />
-        </div>
+        </button>
 
         {/* Sol (logo) ve sağ (bildirim/kullanıcı) bloklar farklı genişlikte
             olduğu için flex-1 içinde justify-center kullanmak nav'ı sayfanın
@@ -165,7 +170,7 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
               </div>
               <div className="hidden text-left leading-[1.25] md:block">
                 <div className="text-[13px] font-semibold">{user.name}</div>
-                <div className="text-[11px] text-ink-faint">{user.role}</div>
+                <div className="text-[11px] text-ink-soft dark:text-ink-faint">{user.role}</div>
               </div>
             </button>
 
@@ -173,7 +178,7 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
               <div className="absolute right-0 top-[calc(100%+10px)] w-[230px] animate-tipIn overflow-hidden rounded-xl border border-line bg-white shadow-pop dark:bg-surface-elevated">
                 <div className="border-b border-line2 px-4 py-3.5">
                   <div className="text-[13.5px] font-semibold">{user.name}</div>
-                  <div className="mt-0.5 text-[11.5px] text-ink-faint">{user.role}</div>
+                  <div className="mt-0.5 text-[11.5px] text-ink-soft dark:text-ink-faint">{user.role}</div>
                 </div>
                 <div className="p-1.5">
                   {["Hesap Ayarları", "Yardım Merkezi", "Gizlilik ve Kullanım Koşulları"].map((label) => (

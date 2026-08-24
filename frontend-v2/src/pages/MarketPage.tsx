@@ -5,7 +5,8 @@ import { InfluenceList } from "@/components/market/InfluenceList";
 import { CalendarCard } from "@/components/market/CalendarCard";
 import { useMarketData } from "@/hooks/useMarketData";
 
-const FILTERS = ["Tümü", "Portföyümü etkileyen", "Makro", "Emtia"];
+// "Tümü" bilerek SONDA: en sağda durması isteniyor, iki temada da.
+const FILTERS = ["Portföyümü etkileyen", "Makro", "Emtia", "Tümü"];
 
 export function MarketPage() {
   const { data } = useMarketData();
@@ -19,16 +20,19 @@ export function MarketPage() {
         description="Kaynaklardan derlenen içerikler RAG ile özetlenir; her özet kaynağına bağlıdır."
         actions={
           <div className="flex flex-wrap gap-2">
-            {FILTERS.map((f, i) => (
+            {FILTERS.map((f) => (
               <span
                 key={f}
                 className={
                   "rounded-full px-[15px] py-[9px] text-[12.5px] font-semibold " +
-                  (i === 0
+                  (f === "Tümü"
                     ? "bg-brand text-white"
-                    : i === 1
-                      ? "border-[1.5px] border-brand-border text-brand"
-                      : "border border-line text-ink-muted")
+                    : f === "Portföyümü etkileyen"
+                      ? // Şeffaf zemin, sayfanın üst bandındaki tabloya karşı
+                        // koyu temada neredeyse görünmüyordu — ChatPage'deki
+                        // önerilen-soru pilleriyle aynı opak zemin çözümü.
+                        "border-[1.5px] border-brand-border bg-white text-brand dark:bg-surface-elevated"
+                      : "border border-line bg-white text-ink-muted dark:bg-surface-elevated")
                 }
               >
                 {f}

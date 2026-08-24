@@ -27,7 +27,7 @@ export function RiskPage() {
 
       <StrategyRecommendations recommendations={data.recommendations} />
 
-      <p className="m-0 mt-4 text-center text-xs italic text-ink-faint">{INVESTMENT_DISCLAIMER}</p>
+      <p className="m-0 mt-4 text-center text-xs italic text-ink-soft dark:text-ink-faint">{INVESTMENT_DISCLAIMER}</p>
       </div>
     </div>
   );
