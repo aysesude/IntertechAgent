@@ -527,6 +527,13 @@ class Settings(BaseSettings):
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
     # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
     anchor_date: date = date(2026, 8, 1)
+    # Güncel fiyat bu kadar takvim gününden eskiyse "eski" işaretlenir.
+    # 4 gün: piyasa Cuma kapanır, Pazartesi açılır — Pazar günü sorulan bir
+    # fiyat 2 günlüktür ve normaldir. Araya resmî tatil girdiğinde 3-4 güne
+    # çıkabilir. Bunun üstü, günlük toplama işinin durduğu anlamına gelir ve
+    # kullanıcıya söylenmelidir.
+    current_price_stale_days: int = 4
+
     # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
     # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
     evds_api_key: str | None = None

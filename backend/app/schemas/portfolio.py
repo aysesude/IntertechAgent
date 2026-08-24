@@ -300,3 +300,46 @@ class PriceHistoryResult(BaseModel):
     # `series` içinde yer almaz; birinin verisinin olmaması diğerlerinin
     # serisini engellemez.
     symbols_without_data: list[str] = []
+
+
+class CurrentPrice(BaseModel):
+    """Bir varlığın veritabanındaki EN SON kapanış fiyatı."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    name: str
+    asset_class: AssetClass
+    currency: str
+    price: Money
+    # Bu fiyatın ait olduğu gün. "Bugün" DEĞİL: piyasa hafta sonu ve tatilde
+    # kapalı olduğu için son kapanış birkaç gün öncesine ait olabilir ve
+    # sunum katmanı bunu söylemek zorunda.
+    price_date: date
+    # Fiyatın nereden geldiği (tcmb, yfinance, tefas, synthetic...). AK 5.1
+    # "yalnızca onaylı kaynaklar" şartının izlenebilir karşılığı: kullanıcı
+    # rakamın resmî mi yoksa üretilmiş mi olduğunu görebilmeli.
+    source: str
+    # Son fiyat gününden bu yana geçen TAKVİM günü. Hafta sonunda 1-3 arası
+    # normaldir; büyük değerler toplama işinin durduğunu gösterir.
+    age_days: int
+    # Fiyat, beklenenden eski. Eşik `settings.current_price_stale_days`.
+    # Uyarı ÜRETİLİR, fiyat gizlenmez: eldeki en iyi veriyi eskiliğini
+    # söyleyerek vermek, hiç vermemekten iyidir (zarif düşüş).
+    stale: bool
+
+
+class CurrentPriceResult(BaseModel):
+    """Güncel fiyat sorgusunun sonucu.
+
+    Kısmi sonuç hata değildir: tanınmayan sembol diğerlerinin fiyatını
+    engellemez, ama SÖYLENİR — sessizce atlanırsa kullanıcı sorduğu varlığın
+    cevapta olmadığını fark etmez (AK 5.5).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    as_of: date
+    prices: list[CurrentPrice] = []
+    unknown_symbols: list[str] = []
+    symbols_without_data: list[str] = []

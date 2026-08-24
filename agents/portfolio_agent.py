@@ -25,6 +25,8 @@ from typing import Any
 from fastmcp import Client
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
+from agents.formatting import tr_amount as _tr_amount
+from agents.formatting import tr_percent as _tr_percent
 from app.core.config import turkey_today
 from app.core.llm_client import get_llm_client
 
@@ -330,20 +332,6 @@ _TX_TYPE_TR = {
     "withdraw": "para çekme",
     "fee": "komisyon",
 }
-
-
-def _tr_amount(value: Any, *, signed: bool = False) -> str:
-    if value is None:
-        return "—"
-    text = f"{float(value):+,.2f}" if signed else f"{float(value):,.2f}"
-    return text.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
-
-
-def _tr_percent(value: Any, *, signed: bool = False) -> str:
-    if value is None:
-        return "—"
-    text = f"{float(value):+.2f}" if signed else f"{float(value):.2f}"
-    return text.replace(".", ",") + "%"
 
 
 def _render(data: dict[str, Any]) -> str:
