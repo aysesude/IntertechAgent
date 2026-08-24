@@ -21,6 +21,10 @@ KAP'tan geldiği bulanıklaşır (2026-08-24 kararı: "RAG değişmeyecek bilgil
 içindir, güncel bildirim listesi ayrı ve etiketli kalır"). KAP'a
 ulaşılamazsa bu blok sessizce atlanır — RAG özeti kendi başına geçerli bir
 cevaptır, canlı ek bir "varsa iyi" katmandır.
+
+Fiyat/kur soruları ("dolar ne kadar", "altın son 3 ayda ne yaptı") RAG'e hiç
+gitmez — bkz. `price_query.fiyat_niyeti`. Sayılar `price_history`
+tablosundan geliyor, doküman aramasının konusu değil.
 """
 
 from collections.abc import Callable
@@ -29,7 +33,9 @@ from pathlib import Path
 from typing import Any
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
+from agents.formatting import tr_amount as _tr_amount
 from agents.market_query import filtre_cikar, guncellik_istegi_var_mi
+from agents.price_query import fiyat_niyeti
 from app.core.llm_client import get_llm_client
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_text(
@@ -99,12 +105,82 @@ def _kap_blogu(disclosures: list[dict[str, Any]]) -> str:
     return _KAP_BASLIGI + "\n".join(satirlar)
 
 
+def _render_guncel_fiyat(data: dict[str, Any]) -> str:
+    """Güncel fiyatları etiketli satırlara döker.
+
+    TARİH HER SATIRDA yazılır. Fiyat "bugünün" fiyatı olmak zorunda değil —
+    piyasa hafta sonu ve tatilde kapalı — ve tarihi söylemeden vermek, olmayan
+    bir tazelik iddia etmek olurdu. `source` de yazılır: kullanıcı rakamın
+    resmî bir kaynaktan mı yoksa üretilmiş veriden mi geldiğini görebilmeli
+    (AK 5.1).
+    """
+    satirlar: list[str] = []
+    for p in data.get("prices") or []:
+        satir = (
+            f"{p.get('name')} ({p.get('symbol')}): "
+            f"{_tr_amount(p.get('price'))} TL — {_tarih_bicimle(p.get('price_date'))} "
+            f"kapanışı, kaynak: {p.get('source')}"
+        )
+        if p.get("stale"):
+            # Eski fiyat GİZLENMEZ, eskiliği söylenir (zarif düşüş).
+            satir += f" [DİKKAT: {p.get('age_days')} gün önceki fiyat, güncel olmayabilir]"
+        satirlar.append(satir)
+    eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
+    if eksik:
+        satirlar.append("Fiyatı bulunamayan: " + ", ".join(eksik))
+    if not satirlar:
+        return "Güncel fiyat: istenen varlık için kayıt yok."
+    return "Güncel fiyatlar\n" + "\n".join(satirlar)
+
+
+def _render_fiyat_gecmisi(data: dict[str, Any]) -> str:
+    """Seriyi uç noktalara indirger: başlangıç, bitiş, değişim.
+
+    Tam seri (60-120 nokta) anlatıya girmez; hem ücretli token hem de modelin
+    yanlış değer okuma kaynağı. Yüzde değişim burada hesaplanıyor — LLM'in
+    seriden çıkarması istenmiyor.
+    """
+    series = data.get("series") or {}
+    satirlar: list[str] = []
+    for sembol, noktalar in sorted(series.items()):
+        if not noktalar:
+            continue
+        ilk, son = noktalar[0], noktalar[-1]
+        ilk_fiyat = float(ilk.get("close") or 0)
+        son_fiyat = float(son.get("close") or 0)
+        degisim = ((son_fiyat / ilk_fiyat - 1) * 100) if ilk_fiyat else None
+        satir = (
+            f"{sembol}: {_tarih_bicimle(ilk.get('date'))} {_tr_amount(ilk_fiyat)} TL → "
+            f"{_tarih_bicimle(son.get('date'))} {_tr_amount(son_fiyat)} TL"
+        )
+        if degisim is not None:
+            isaret = "+" if degisim >= 0 else "-"
+            satir += f" ({isaret}%{_tr_amount(abs(degisim))})"
+        satirlar.append(satir)
+    eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
+    if eksik:
+        satirlar.append("Veri bulunamayan: " + ", ".join(eksik))
+    if not satirlar:
+        return "Fiyat geçmişi: istenen varlık için kayıt yok."
+    return f"Fiyat geçmişi ({data.get('window', '—')})\n" + "\n".join(satirlar)
+
+
 class MarketAgent(BaseAgent):
     agent_name = "market_agent"
 
     async def execute(
         self, request: AgentRequest, *, on_token: Callable[[str], None] | None = None
     ) -> AgentResponse:
+        # FİYAT SORUSU RAG'E GİTMEZ.
+        #
+        # Kur ve fiyat dokümanlarda değil `price_history` tablosunda yaşıyor.
+        # Bu dal olmadan "dolar ne kadar?" sorusu belge aramasına düşüyor ve
+        # "veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı"
+        # dönüyordu (ölçüldü, 23 Ağustos test turu) — elde güncel kur dururken.
+        fiyat = fiyat_niyeti(request.query)
+        if fiyat is not None:
+            return await self._fiyat_yaniti(fiyat)
+
         filtreler = filtre_cikar(request.query)
         tool_result = await self.call_mcp_tool(
             "search_market_news", {"query": request.query, **filtreler}
@@ -141,6 +217,36 @@ class MarketAgent(BaseAgent):
             agent_name=self.agent_name,
             success=True,
             summary_text=summary_text,
+            data=data,
+        )
+
+    async def _fiyat_yaniti(self, niyet: dict) -> AgentResponse:
+        """Güncel fiyat veya fiyat geçmişi yanıtı — LLM DEVREDE DEĞİL.
+
+        Sayılar tool'dan geliyor ve buradan olduğu gibi geçiyor; cümleyi
+        orchestrator'ın merge adımı kuruyor (ajanların ortak sözleşmesi).
+        Ara bir LLM çağrısı hem gecikme ekler hem de rakamı yeniden yazma
+        riski taşır.
+        """
+        semboller = niyet["symbols"]
+        if niyet["history"]:
+            tool_adi = "get_asset_price_history"
+            args: dict[str, Any] = {"symbols": semboller}
+        else:
+            tool_adi = "get_current_prices"
+            args = {"symbols": semboller}
+
+        tool_result = await self.call_mcp_tool(tool_adi, args)
+        if not tool_result.get("success"):
+            error = tool_result.get("error", {})
+            return self.error_response(error.get("message", "Fiyat verisi alınamadı"))
+
+        data = tool_result["data"]
+        metin = _render_fiyat_gecmisi(data) if niyet["history"] else _render_guncel_fiyat(data)
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=metin,
             data=data,
         )
 
