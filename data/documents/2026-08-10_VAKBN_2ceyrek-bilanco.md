@@ -30,6 +30,14 @@ VakıfBank, yılın ilk altı ayında 33,701 milyar TL konsolide net kâr
 elde etti. Solo bazda ilk yarı net kârı, geçen yılın aynı dönemine
 kıyasla yüzde 0,15 artışla 30,108 milyar TL'ye ulaştı.
 
+## Gelir ve gider kalemleri (2. çeyrek)
+
+İkinci çeyrek net faiz geliri 53 milyar TL (yıllık bazda yüzde 75
+artış), net ücret ve komisyon gelirleri 22,4 milyar TL (yıllık bazda
+yüzde 28 artış) olarak gerçekleşti. Brüt faiz gelirleri 293,5 milyar
+TL'ye ulaşırken faiz giderleri 240,5 milyar TL oldu. Faaliyet giderleri
+çeyreklik bazda yüzde 12 artışla 43,8 milyar TL'ye yükseldi.
+
 ## Bilanço büyüklükleri
 
 Toplam varlıklar yıllık bazda yüzde 28 artışla 5,8 trilyon TL'ye,

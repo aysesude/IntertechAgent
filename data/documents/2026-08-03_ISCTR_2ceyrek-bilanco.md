@@ -32,7 +32,10 @@ dikkat çekti.
 Kredi hacmi yüzde 6 artışla 3,08 trilyon TL'ye, mevduatlar ise yüzde 4
 artışla 3,47 trilyon TL'ye yükseldi. Bankanın faiz gelirleri 484,6
 milyar TL'ye ulaşırken, net ücret ve komisyon gelirleri 77,2 milyar TL
-olarak gerçekleşti.
+olarak gerçekleşti. İkinci çeyreğe özel olarak net faiz geliri 33,8
+milyar TL, net ücret ve komisyon gelirleri ise çeyreklik bazda yüzde 19
+artışla 45,2 milyar TL oldu; net faiz marjı bir önceki çeyrekteki yüzde
+3,8 seviyesinden yüzde 2,1'e geriledi.
 
 ## Değerlendirme
 
