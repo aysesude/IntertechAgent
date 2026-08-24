@@ -176,7 +176,7 @@ function FeatureCards() {
       {FEATURES.map(({ icon: Icon, title, body }) => (
         <div
           key={title}
-          className="flex h-full flex-col justify-start rounded-2xl border border-white/60 bg-white/[0.78] px-4 py-3.5 shadow-[0_8px_28px_-16px_rgba(11,38,83,0.45)] backdrop-blur-md dark:border-transparent dark:bg-[#1A1512]/[0.90] dark:shadow-[0_8px_28px_-18px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)]"
+          className="flex h-full flex-col justify-start rounded-2xl border border-transparent bg-white/[0.40] px-4 py-3.5 shadow-[0_8px_28px_-16px_rgba(11,38,83,0.45)] backdrop-blur-[16px] dark:bg-[#07111c]/[0.45] dark:shadow-[0_8px_28px_-18px_rgba(0,0,0,0.55)]"
         >
           <div className="flex items-start gap-3">
             <span
@@ -401,7 +401,7 @@ export function LoginScreen({
         <div className="flex items-center justify-center lg:justify-end lg:py-10 lg:pr-6">
           <div
             data-login-card
-            className="w-full max-w-[452px] rounded-[26px] border border-white/70 bg-white/[0.72] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-[#1A1512]/[0.90] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:p-8"
+            className="w-full max-w-[452px] rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-[#19100B]/[0.32] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.55)] sm:p-8"
           >
             <img
               src="/vira_logo_text.svg"
