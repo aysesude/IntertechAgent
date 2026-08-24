@@ -43,6 +43,26 @@ export function HoldingReturnDetail({ holding, onClose }: HoldingReturnDetailPro
     return () => previouslyFocused?.focus();
   }, []);
 
+  // Panel açıkken arkadaki sayfa scroll'u kilitlenir — aksi halde arka plan
+  // kayarken sabit panel yerinde durur ve ikisi görsel olarak birbirinden
+  // kopar. Scrollbar kaybolunca sayfa genişliği artıp içerik kayacağı için
+  // (Windows/Linux gibi overlay olmayan scrollbar'larda) o genişlik kadar
+  // sağa padding eklenip telafi ediliyor.
+  useEffect(() => {
+    const { body, documentElement } = document;
+    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
+    const previousOverflow = body.style.overflow;
+    const previousPaddingRight = body.style.paddingRight;
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPaddingRight;
+    };
+  }, []);
+
   // Escape, panelin kendi onKeyDown'ına (odak-bağımlı bubbling) DEĞİL,
   // document seviyesindeki bir listener'a bağlı — odak henüz panele
   // taşınmamışken (mount anındaki kısa an) Escape'e basılırsa odağa bağlı
@@ -104,9 +124,13 @@ export function HoldingReturnDetail({ holding, onClose }: HoldingReturnDetailPro
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="relative z-10 max-h-[85vh] w-full max-w-[560px] overflow-y-auto outline-none"
+        className="relative z-10 w-full max-w-[560px] outline-none"
       >
-        <Card className="p-6">
+        {/* Dikey flex kolon + overflow-hidden: başlık/özet ("shrink-0") hep
+            görünür kalır, sadece parti listesi kendi alanında kayar. Kartın
+            kendisi 85vh'i geçmez; overflow-hidden köşelerin yuvarlaklığını
+            iç scrollbar'a rağmen korur. */}
+        <Card className="flex max-h-[85vh] flex-col overflow-hidden">
           <button
             onClick={onClose}
             aria-label="Kapat"
@@ -115,52 +139,63 @@ export function HoldingReturnDetail({ holding, onClose }: HoldingReturnDetailPro
             <XIcon size={16} />
           </button>
 
-          <h2 id={titleId} className="font-display m-0 pr-10 text-[19px] font-semibold">
-            {holding.name}
-          </h2>
-          <p className="m-0 mt-0.5 text-[13px] text-ink-faint">{holding.assetClass}</p>
+          <div className="shrink-0">
+            <h2 id={titleId} className="font-display m-0 pr-10 text-[19px] font-semibold">
+              {holding.name}
+            </h2>
+            <p className="m-0 mt-0.5 text-[13px] text-ink-faint">{holding.assetClass}</p>
 
-          {/* ÖZET — referans görselde yok, kullanıcı partileri kafasında
-              toplamak zorunda kalmasın diye eklendi. Parti bloklarından
-              ayrışsın diye zemin bir kademe daha belirgin. */}
-          <div className="mt-4 grid grid-cols-2 gap-3.5 rounded-[12px] bg-[#F0F2F5] p-4 dark:bg-white/[0.05] sm:grid-cols-4">
-            <SummaryItem label="Toplam Adet" value={formatQuantityByUnit(totals.totalQuantity, holding.unitLabel)} />
-            <SummaryItem label="Toplam Değer" value={formatTRY2(totals.totalValue)} />
-            <SummaryItem
-              label="Olası K/Z"
-              value={formatSignedTRY2(totals.totalPnl)}
-              color={totals.totalPnl >= 0 ? POSITIVE : NEGATIVE}
-            />
-            <SummaryItem
-              label="Ağırlıklı Getiri"
-              value={formatPct(totals.weightedReturnPct)}
-              color={totals.weightedReturnPct >= 0 ? POSITIVE : NEGATIVE}
-            />
+            {/* ÖZET — referans görselde yok, kullanıcı partileri kafasında
+                toplamak zorunda kalmasın diye eklendi. Parti bloklarından
+                ayrışsın diye zemin bir kademe daha belirgin. */}
+            <div className="mt-4 grid grid-cols-2 gap-3.5 rounded-[12px] bg-[#F0F2F5] p-4 dark:bg-white/[0.05] sm:grid-cols-4">
+              <SummaryItem label="Toplam Adet" value={formatQuantityByUnit(totals.totalQuantity, holding.unitLabel)} />
+              <SummaryItem label="Toplam Değer" value={formatTRY2(totals.totalValue)} />
+              <SummaryItem
+                label="Olası K/Z"
+                value={formatSignedTRY2(totals.totalPnl)}
+                color={totals.totalPnl >= 0 ? POSITIVE : NEGATIVE}
+              />
+              <SummaryItem
+                label="Ağırlıklı Getiri"
+                value={formatPct(totals.weightedReturnPct)}
+                color={totals.weightedReturnPct >= 0 ? POSITIVE : NEGATIVE}
+              />
+            </div>
+
+            <div className="mt-5 text-[11px] font-semibold uppercase tracking-[.7px] text-ink-faint">
+              Getiri Detayları
+            </div>
           </div>
 
-          <div className="mt-5 text-[11px] font-semibold uppercase tracking-[.7px] text-ink-faint">
-            Getiri Detayları
-          </div>
-
-          <div className="mt-3 flex flex-col gap-2.5">
-            {holding.lots.map((lot) => {
-              const value = lotValue(lot, holding.currentUnitPrice);
-              const pnl = lotPnl(lot, holding.currentUnitPrice);
-              const returnPct = lotReturnPct(lot, holding.currentUnitPrice);
-              const days = lotDaysHeld(lot);
-              const tone = pnl >= 0 ? POSITIVE : NEGATIVE;
-              return (
-                <div key={lot.id} className="rounded-[10px] bg-[#F7F8FA] p-3.5 dark:bg-white/[0.03]">
-                  <DetailRow label="Alış Tarihi/Gün Sayısı" value={`${formatDateDMY(lot.purchaseDate)} - ${days} Gün`} />
-                  <DetailRow label="Güncel Adet" value={formatQuantityByUnit(lot.quantity, holding.unitLabel)} />
-                  <DetailRow label="Toplam Değer" value={formatTRY2(value)} />
-                  <DetailRow label="Alış Birim Fiyatı" value={formatUnitPrice(lot.unitCost, holding.unitLabel)} />
-                  <DetailRow label="Güncel Birim Fiyatı" value={formatUnitPrice(holding.currentUnitPrice, holding.unitLabel)} />
-                  <DetailRow label="Olası Kâr/Zarar" value={formatSignedTRY2(pnl)} color={tone} />
-                  <DetailRow label="Olası Getiri" value={formatPct(returnPct)} color={tone} />
-                </div>
-              );
-            })}
+          {/* min-h-0 şart: flex item'ların varsayılan min-height'ı "auto"
+              olduğu için onsuz bu alan içeriği kadar büyür ve overflow-y-auto
+              hiç devreye girmez. Sağdaki p-6 (Card'ın kendi padding'i)
+              scrollbar'ı listenin içine, kartın köşesinden içeride tutar.
+              pr-2.5: macOS'un overlay scrollbar'ı yer kaplamadan içeriğin
+              ÜSTÜNE biner — bu boşluk olmadan sağa hizalı değerlerin
+              üzerine biniyordu. */}
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2.5">
+            <div className="flex flex-col gap-2.5 pb-1">
+              {holding.lots.map((lot) => {
+                const value = lotValue(lot, holding.currentUnitPrice);
+                const pnl = lotPnl(lot, holding.currentUnitPrice);
+                const returnPct = lotReturnPct(lot, holding.currentUnitPrice);
+                const days = lotDaysHeld(lot);
+                const tone = pnl >= 0 ? POSITIVE : NEGATIVE;
+                return (
+                  <div key={lot.id} className="rounded-[10px] bg-[#F7F8FA] p-3.5 dark:bg-white/[0.03]">
+                    <DetailRow label="Alış Tarihi/Gün Sayısı" value={`${formatDateDMY(lot.purchaseDate)} - ${days} Gün`} />
+                    <DetailRow label="Güncel Adet" value={formatQuantityByUnit(lot.quantity, holding.unitLabel)} />
+                    <DetailRow label="Toplam Değer" value={formatTRY2(value)} />
+                    <DetailRow label="Alış Birim Fiyatı" value={formatUnitPrice(lot.unitCost, holding.unitLabel)} />
+                    <DetailRow label="Güncel Birim Fiyatı" value={formatUnitPrice(holding.currentUnitPrice, holding.unitLabel)} />
+                    <DetailRow label="Olası Kâr/Zarar" value={formatSignedTRY2(pnl)} color={tone} />
+                    <DetailRow label="Olası Getiri" value={formatPct(returnPct)} color={tone} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </Card>
       </motion.div>
