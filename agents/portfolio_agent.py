@@ -42,6 +42,13 @@ TOOLS = (
     "get_portfolio_performance",
     "get_transactions",
     "get_benchmark_comparison",
+    # Bir VARLIĞIN fiyat geçmişi. MCP'de kayıtlıydı ama hiçbir ajanın tool
+    # listesinde değildi, yani sohbetten erişilemiyordu: "XAUTRY'nin son 3
+    # aydaki fiyat geçmişini ver" sorusu piyasa ajanına düşüp RAG'de doküman
+    # aranıyor ve "bulunamadı" dönüyordu (ölçüldü, 23 Ağustos test turu).
+    # Bölünme şu: sayısal veri portföy ajanında, doküman/haber piyasa
+    # ajanında. Fiyat serisi sayısal veridir.
+    "get_asset_price_history",
 )
 
 # Tool sonucunun `data` içinde duracağı anahtar.
@@ -51,6 +58,7 @@ _RESULT_KEY = {
     "get_portfolio_performance": "performance",
     "get_transactions": "transactions",
     "get_benchmark_comparison": "benchmark",
+    "get_asset_price_history": "price_history",
 }
 
 # Plan başına tavan: modelin "ne olur ne olmaz hepsini çağırayım" davranışını
@@ -430,10 +438,53 @@ def _render(data: dict[str, Any]) -> str:
         ]
         blocks.append("Kıyaslama: " + " | ".join(parts))
 
+    price_history = data.get("price_history")
+    if price_history:
+        blocks.append(_render_price_history(price_history))
+
     if data.get("failed_tools"):
         blocks.append("Alınamayan bilgiler: " + ", ".join(data["failed_tools"]))
 
     return "\n\n".join(blocks) if blocks else "Portföy verisi bulunamadı."
+
+
+def _render_price_history(payload: dict[str, Any]) -> str:
+    """Fiyat serisini UÇ NOKTALARA indirger: başlangıç, bitiş, değişim.
+
+    Tam seri (60-120 nokta) anlatıya girmez — hem ücretli token hem de modelin
+    yanlış değer okuma kaynağı. Grafik zaten seriyi API'den kendisi alıyor.
+    Sayısal değişim burada hesaplanıyor; LLM'in seriden yüzde çıkarması
+    istenmiyor.
+
+    Bulunamayan semboller SÖYLENİR: sessizce atlanırsa kullanıcı sorduğu
+    varlığın cevapta olmadığını fark etmez (uydurmama, AK 5.5).
+    """
+    series = payload.get("series") or {}
+    satirlar: list[str] = []
+
+    for sembol, noktalar in sorted(series.items()):
+        if not noktalar:
+            continue
+        ilk = noktalar[0]
+        son = noktalar[-1]
+        ilk_fiyat = float(ilk.get("close") or 0)
+        son_fiyat = float(son.get("close") or 0)
+        degisim = ((son_fiyat / ilk_fiyat - 1) * 100) if ilk_fiyat else None
+        satirlar.append(
+            f"{sembol}: {ilk.get('date')} {_tr_amount(ilk_fiyat)} → "
+            f"{son.get('date')} {_tr_amount(son_fiyat)}"
+            + (f" ({_tr_percent(degisim, signed=True)})" if degisim is not None else "")
+        )
+
+    eksik = list(payload.get("unknown_symbols") or []) + list(
+        payload.get("symbols_without_data") or []
+    )
+    if eksik:
+        satirlar.append("Veri bulunamayan semboller: " + ", ".join(eksik))
+
+    if not satirlar:
+        return "Fiyat geçmişi: istenen sembol(ler) için veri yok."
+    return f"Fiyat geçmişi ({payload.get('window', '—')})\n" + "\n".join(satirlar)
 
 
 def _render_transactions(payload: dict[str, Any]) -> str:
@@ -460,4 +511,11 @@ def _render_transactions(payload: dict[str, Any]) -> str:
         f"{_tr_amount(bucket['quantity'])} adet, toplam {_tr_amount(bucket['amount'])} TL"
         for (symbol, tx_type), bucket in sorted(totals.items())
     ]
-    return "İşlemler\n" + "\n".join(parts)
+    # Toplam sayı AYRICA yazılır.
+    #
+    # "Bu ay KAÇ işlem yaptım?" sorusuna sembol bazlı bir döküm dönüyor ama
+    # sorulan sayı hiçbir yerde geçmiyordu; toplamı satırlardan saymak
+    # merge adımına kalıyordu ve o da yapmıyordu (ölçüldü, 23 Ağustos test
+    # turu). Sayı burada, veriden hesaplanıyor — LLM'in sayması istenmiyor.
+    baslik = f"İşlemler (toplam {len(rows)} işlem)"
+    return baslik + "\n" + "\n".join(parts)

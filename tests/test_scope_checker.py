@@ -98,3 +98,34 @@ def test_advice_flag_still_matches_inflected_forms():
 def test_empty_message_is_rejected():
     """AK-4.7."""
     assert _intent("   ") == "OUT_OF_SCOPE"
+
+
+# ---------------------------------------------------------------------------
+# "yatirim" ile "yatir" ayri kelimelerdir
+# ---------------------------------------------------------------------------
+
+
+def test_yatirim_kelimesi_islem_talebi_sayilmaz():
+    """Bir risk sorusu, islem emri sanilarak reddedilmemeli.
+
+    Kelime eslestirme 5+ harfli fiillere sonek toleransi taniyor
+    ("transfer" -> "transferi"). "yatir" tam 5 harf oldugu icin bu toleransi
+    aliyor ve "yatirim" kelimesini yutuyordu — bu urunun en sik gecen ismini.
+    Olculen (23 Agustos test turu): "Cok fazla hisseye mi YATIRIM
+    yapiyorum?" sorusuna "Bu islemi gerceklestirmeye yetkim bulunmuyor"
+    donuyordu.
+    """
+    assert _intent("Çok fazla hisseye mi yatırım yapıyorum?") != "UNAUTHORIZED_ACTION"
+    assert _intent("Portföyümde ne kadar yatırım var?") != "UNAUTHORIZED_ACTION"
+    assert _intent("Yatırım tavsiyesi verir misin?") != "UNAUTHORIZED_ACTION"
+
+
+def test_gercek_yatirma_emri_hala_reddedilir():
+    """Duzeltme kapiyi acmamali: emir kipi "yatir" hala islem talebidir.
+
+    Istisna kaliplarina "yatirim" eklemek bu testi dusururdu — o liste tum
+    islem kontrolunu kapatiyor, yani gercek bir emir de kapidan gecerdi.
+    """
+    assert _intent("Hesabıma 10.000 TL yatır") == "UNAUTHORIZED_ACTION"
+    assert _intent("Bana 10.000 TL'lik THYAO al.") == "UNAUTHORIZED_ACTION"
+    assert _intent("THYAO sat") == "UNAUTHORIZED_ACTION"
