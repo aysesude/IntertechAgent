@@ -33,6 +33,9 @@ Telekomünikasyon sektöründe sınıflandırılmaktadır.
 
 Güncel ortaklık yapısında Türkiye Varlık Fonu, T.C. Hazine ve Maliye
 Bakanlığı ve halka açık hisseler yer almaktadır. Yönetim kurulu
-başkanı İsmail İlhan Hatipoğlu'dur. Bu doküman şirketin kimlik ve
-yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
+başkanı İsmail İlhan Hatipoğlu'dur. Şirket, 13 Mart 2026'da KAP'a
+yaptığı bildirimde; 5G lisans ödemeleri, borç geri ödeme planı ve
+yatırım önceliği gerekçesiyle 2025 yılı kârı için temettü dağıtmama
+kararı aldığını duyurmuştur. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
 türü dokümanlarda yer alır.

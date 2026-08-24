@@ -526,6 +526,38 @@ def test_retrieve_uydurma_sirket_holding_enerji_kelimeleriyle_bulunmus_sayilmaz(
     assert retriever.retrieve("Falanca Enerji'nin ortaklık yapısı nasıl") == []
 
 
+def test_retrieve_uydurma_sirket_temettu_odeme_dagitim_kelimeleriyle_bulunmus_sayilmaz():
+    """ "Temettü"/"ödeme"/"dağıt-" 31 `sirket_profili` dokümanının TAMAMINDA
+    (temettü geçmişi paragrafı eklendikten sonra) geçen jenerik kelimelere
+    dönüştü (ölçümle doğrulandı, 2026-08-24: "ABC Holding'in temettü
+    ödemesi ne kadar" sorgusu "ödemesi" kelimesinin TCELL'in kendi "ödeme
+    tarihi ..." cümlesiyle örtüşmesi yüzünden, "Falanca Enerji'nin temettü
+    dağıtımı nasıl" sorgusu ise "dağıtımı" kelimesinin ASTOR'un "dağıtım
+    sistemleri"/"dağıtılmasına karar verildi" ifadeleriyle örtüşmesi
+    yüzünden, uydurma şirket adı hiç eşleşmemesine rağmen tamamen alakasız
+    gerçek şirketleri "bulundu" saydırdı)."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Turkcell ortaklık yapısı: ödeme tarihi 9 Aralık 2026 net 3,40 TL temettü",
+                baslik="Turkcell Şirket Profili",
+                sirket="TCELL",
+                distance=0.3,
+            ),
+            _doc(
+                "Astor Enerji elektrik dağıtım sistemleri üretimi, temettü dağıtılmasına karar verildi",
+                baslik="Astor Enerji Şirket Profili",
+                sirket="ASTOR",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    assert retriever.retrieve("ABC Holding'in temettü ödemesi ne kadar") == []
+    assert retriever.retrieve("Falanca Enerji'nin temettü dağıtımı nasıl") == []
+
+
 # ---------------------------------------------------------------------------
 # Sirket adiyla anilan sorgu, kelime-ortusme oranindan muaf
 # ---------------------------------------------------------------------------

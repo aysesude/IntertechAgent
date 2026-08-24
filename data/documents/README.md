@@ -100,9 +100,11 @@ sırası:
   bulunmuyor, henüz sistematik olarak hedeflenmiyor.
 - **`sirket_profili`** — şirketin kimlik/yapısal bilgisi: faaliyet alanı,
   sektör, kuruluş tarihi, ortaklık yapısı, ana iştirakler, yönetim
-  kurulu/üst yönetim, halka açıklık oranı. Yılda birkaç kez değişse de
-  "statik" sayılır, periyodik olarak yeniden ingest edilebilir. **Her
-  şirket için hedef: 1 doküman.**
+  kurulu/üst yönetim, halka açıklık oranı, temettü (kurumsal olay)
+  geçmişi. Yılda birkaç kez değişse de "statik" sayılır, periyodik
+  olarak yeniden ingest edilebilir. **Her şirket için hedef: 1
+  doküman.** Denetim raporları ve dipnotlar bilinçli olarak hedeflenmiyor
+  (düşük bilgi değeri/yüksek araştırma maliyeti oranı).
 - **`referans`** — şirketten bağımsız, ansiklopedik/düzenleyici bilgi:
   finansal oran tanımları (F/K, ROE, cari oran vb.), SPK/BDDK temel
   çerçevesi, TFRS temel kavramları. Neredeyse hiç değişmez.

@@ -30,6 +30,9 @@ sınıflandırılmaktadır.
 Ortaklık yapısında pladis Foods Limited (Yıldız Holding'in küresel
 gıda iştiraki) ve Yıldız Holding'in diğer iştirakleri ile birlikte
 Ülker ailesi yaklaşık yüzde 7,5 pay ile yer almaktadır. Yönetim kurulu
-başkanı Ahmet Bal'dır (görev süresi 14.6.2023-14.6.2026). Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+başkanı Ahmet Bal'dır (görev süresi 14.6.2023-14.6.2026). 2026 yılında
+hisse başına brüt 5,73284 TL, net 4,87292 TL nakit temettü
+dağıtılmasına karar verildi (dağıtılabilir kârın yaklaşık yüzde
+6,92'si); kesim tarihi 19 Haziran 2026'dır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

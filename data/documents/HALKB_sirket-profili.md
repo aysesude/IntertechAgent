@@ -35,7 +35,10 @@ kredi kullandırma yetkisiyle çalışmaya başlamıştır.
 
 Hisseleri Borsa İstanbul'da "HALKB" koduyla işlem görmektedir; banka
 kamu bankası statüsündedir. Yönetim kurulu başkanı Meltem Taylan Aydın,
-başkan vekili Şeref Aksaç'tır. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır, ayrıntılı pay dağılımı için bankanın resmi
-yatırımcı ilişkileri sayfasına başvurulmalıdır.
+başkan vekili Şeref Aksaç'tır. Banka, 12 Mart 2026'da KAP'a yaptığı
+bildirimde 2025 yılı kârı için temettü dağıtım oranını yüzde 0 olarak
+açıkladığını, yani temettü dağıtılmayacağını duyurmuştur. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır, ayrıntılı pay
+dağılımı için bankanın resmi yatırımcı ilişkileri sayfasına
+başvurulmalıdır.

@@ -31,6 +31,8 @@ Toprağa Dayalı Sanayi sektöründe sınıflandırılmaktadır.
 ortaklar arasında Efes Holding (yaklaşık yüzde 6,77 pay) ve Anadolu
 Hayat Emeklilik yer almaktadır. Yönetim kurulu başkanı, Adnan Bali'nin
 ardından bu göreve getirilen ve önceden Türkiye İş Bankası genel müdürü
-olan Hakan Aran'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini
+olan Hakan Aran'dır. 2026 yılında hisse başına brüt 0,58762 TL, net
+0,49948 TL nakit temettü dağıtılmasına karar verildi; ödeme tarihi 3
+Haziran 2026'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini
 özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
 yer alır.
