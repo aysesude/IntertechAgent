@@ -125,9 +125,7 @@ class KapProvider:
         try:
             from pykap.bist import BISTCompany
         except ImportError as exc:
-            raise ProviderError(
-                "kap", ticker, "pykap kurulu değil (`pip install pykap`)"
-            ) from exc
+            raise ProviderError("kap", ticker, "pykap kurulu değil (`pip install pykap`)") from exc
 
         bugun = date.today()
         baslangic = bugun - timedelta(days=gun_penceresi)

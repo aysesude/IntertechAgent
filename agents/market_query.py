@@ -124,9 +124,7 @@ def filtre_cikar(query: str) -> dict[str, str]:
 # Sorgunun ARŞİV değil GÜNCELLİK istediğini işaretleyen kelimeler. Kelime
 # sınırıyla aranır (`\b`) — aksi hâlde "sonuç" içindeki "son" gibi sahte
 # eşleşmeler olur.
-_GUNCELLIK_KELIMELERI_RE = re.compile(
-    r"\b(son|guncel|bugun|simdi|dun|yeni)\b"
-)
+_GUNCELLIK_KELIMELERI_RE = re.compile(r"\b(son|guncel|bugun|simdi|dun|yeni)\b")
 
 
 def guncellik_istegi_var_mi(query: str) -> bool:
