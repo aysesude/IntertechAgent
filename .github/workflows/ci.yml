@@ -51,33 +51,8 @@ jobs:
       - name: Testler (pytest)
         run: pytest
 
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - run: npm ci
-
-      - name: Lint (eslint)
-        run: npm run lint
-
-      - name: Derleme kontrolü
-        # Derlenmiyorsa canlıya alınamaz — tip hatalarını burada yakalarız.
-        run: npm run build
-        env:
-          VITE_API_BASE_URL: http://localhost:8000
-
   frontend-v2:
-    # frontend/ ile AYNI kontroller, ayrı bağımlılık ağacı olduğu için ayrı iş.
+    # Projenin tek arayüzü. Eski `frontend` işi, klasörle birlikte kaldırıldı.
     # Bu iş olmadan frontend-v2'deki tip hataları CI'dan sessizce geçerdi.
     runs-on: ubuntu-latest
     defaults:

@@ -122,7 +122,7 @@ finans-danismani/
   mcp_server/        # MCP Server + tools/
   rag/               # RAG pipeline iskeleti (vector_store, ingest, retriever)
   data/              # generate_dummy.py
-  frontend/          # React + Vite + TS
+  frontend-v2/       # VİRA arayüzü (React + Vite + TS) — tek arayüz
   tests/             # pytest
   docs/              # ARCHITECTURE.md, API.md, AGENTS.md
 ```

@@ -94,24 +94,17 @@ services:
     depends_on:
       - postgres
 
-  frontend:
-    build:
-      context: ./frontend
-    restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "${FRONTEND_PORT_HOST:-5173}:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - api
-    command: npm run dev -- --host 0.0.0.0
-
-  # VİRA arayüzü (frontend-v2). `frontend` ile YAN YANA koşar, onun yerine
-  # geçmez: mevcut arayüz çalışır durumda kalsın diye ayrı klasör, ayrı port.
-  # Parite sağlandığında `frontend` emekliye ayrılıp isimler takas edilecek.
+  # VİRA arayüzü — projenin TEK arayüzü.
+  #
+  # Eski `frontend` servisi kaldırıldı: Dashboard dışındaki tüm ekranları
+  # ("TODO: bu ekran henüz uygulanmadı") 11 satırlık iskeletlerdi ve sohbet
+  # ekranı yoktu. v2 her ekranda ya eşit ya üstün olduğu için yan yana
+  # koşmanın bir karşılığı kalmadı.
+  #
+  # Klasör adı `frontend-v2` KALDI. Yeniden adlandırmak yüz küsur dosyayı
+  # taşımak, CI yollarını, Docker bağlamını ve alias yapılandırmasını aynı
+  # anda değiştirmek demek; sunumdan önce alınacak bir risk değil ve
+  # incelemeyi de okunmaz hâle getirir. Ayrı ve kozmetik bir iş.
   frontend-v2:
     build:
       context: ./frontend-v2
@@ -132,12 +125,14 @@ services:
       # Tanımlı değilse ortak değere düşer (tek arayüzün olduğu yerel kurulum).
       VITE_API_BASE_URL: ${VITE_API_BASE_URL_V2:-${VITE_API_BASE_URL}}
     ports:
-      # Sunucudaki host portu haritası (test ve prod aynı makinede koşuyor):
-      #   5173 test eski arayüz · 5174 prod eski arayüz
-      #   5175 test frontend-v2  · 5176 prod frontend-v2
-      # Varsayılan 5175: 5174 prod'un eski arayüzünde DOLU (bir kez çakıştı,
-      # deploy "port is already allocated" ile düştü).
-      - "${FRONTEND_V2_PORT_HOST:-5175}:5174"
+      # Sunucudaki host portu `.env` ile veriliyor (test ve prod aynı
+      # makinede koşuyor, çakışmamaları gerekiyor). Yerelde varsayılan 5173:
+      # eski arayüz kalktığı için o port artık boş.
+      #
+      # DİKKAT: sunucuda bu portu değiştirmek Caddy'yi de değiştirmeyi
+      # gerektirir — Caddy konteyner adına değil HOST PORTUNA vekillik ediyor
+      # ve Caddyfile bu depoda değil, sunucuda duruyor.
+      - "${FRONTEND_V2_PORT_HOST:-5173}:5174"
     volumes:
       - ./frontend-v2:/app
       - /app/node_modules

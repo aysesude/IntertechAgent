@@ -41,8 +41,8 @@ data/                    seed betikleri + backfill/daily_update CLI
 agents/                  ajanlar + orchestrator (yeniden yazılacak — bkz. Durum)
 mcp_server/              MCP tool'ları
 rag/                     RAG pipeline (iskelet)
-frontend/                React + TS + Tailwind (mevcut arayüz)
-frontend-v2/             VİRA arayüzü — yan yana koşar, bkz. kendi README'si
+frontend-v2/             VİRA arayüzü (React + TS + Tailwind) — TEK arayüz;
+                         eski `frontend/` kaldırıldı, bkz. kendi README'si
 tests/                   pytest; test adları kabul kriterine bağlanır
 ```
 
