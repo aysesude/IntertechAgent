@@ -51,9 +51,20 @@ jobs:
       - name: Testler (pytest)
         run: pytest
 
-  frontend-v2:
-    # Projenin tek arayüzü. Eski `frontend` işi, klasörle birlikte kaldırıldı.
-    # Bu iş olmadan frontend-v2'deki tip hataları CI'dan sessizce geçerdi.
+  # İŞ ADI `frontend`, KLASÖR `frontend-v2` — kasıtlı.
+  #
+  # Bu iş projenin tek arayüzünü kontrol ediyor, dolayısıyla adı doğru: v2
+  # artık "ikinci arayüz" değil, arayüzün kendisi. Klasör adı ayrı bir iş
+  # olarak sonra hizalanacak (bkz. docker-compose.yml).
+  #
+  # Ad ayrıca PRATİK bir zorunluluk: `frontend` dal koruma kural setlerinde
+  # ZORUNLU kontrol olarak kayıtlı ve o kayıt yalnızca depo admini tarafından
+  # değiştirilebilir. İş silinseydi ya da başka bir adla koşsaydı, kontrol hiç
+  # rapor göndermez ve her PR "bekliyor" durumunda sonsuza kadar kilitlenirdi
+  # — nitekim bir kez tam olarak bu oldu. Bu işi yeniden adlandırırken kural
+  # setinin de güncellenmesi gerekir.
+  frontend:
+    # Bu iş olmadan arayüzdeki tip hataları CI'dan sessizce geçerdi.
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -70,8 +81,8 @@ jobs:
       - run: npm ci
 
       - name: Tip kontrolü (tsc)
-        # frontend/'te eslint var, burada yok: taşınan proje eslint
-        # yapılandırmasıyla gelmedi. Test dosyaları da bu kapsamda.
+        # eslint yok: taşınan proje eslint yapılandırmasıyla gelmedi.
+        # Test dosyaları da bu kapsamda.
         run: npm run lint
 
       - name: Testler (vitest)
