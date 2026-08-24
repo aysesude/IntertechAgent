@@ -9,7 +9,6 @@ interface ImportMetaEnv {
    * HİÇ render edilmez. frontend-v2 tek arayüz olduğunda bu değişken ve onu
    * kullanan blok silinecek (bkz. LoginScreen.tsx).
    */
-  readonly VITE_LEGACY_UI_URL?: string;
 }
 
 interface ImportMeta {
