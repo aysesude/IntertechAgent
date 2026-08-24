@@ -32,7 +32,11 @@ export function PortfolioPage() {
             "flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors " +
             (showComparison
               ? "border-brand bg-brand-tint text-brand"
-              : "border-line text-ink-muted hover:border-brand hover:text-brand")
+              : // Şeffaf zemin + soluk metin, sayfanın yarı saydam arka
+                // planı üstünde açık temada neredeyse görünmüyordu. Sadece
+                // açık temada opak beyaz zemin + daha koyu metin; koyu tema
+                // aynı kaldı (orada zaten yeterince ayrışıyordu).
+                "border-line bg-white text-ink-soft hover:border-brand hover:text-brand dark:bg-transparent dark:text-ink-muted")
           }
         >
           {showComparison ? <LayoutGrid size={14} /> : <LineChartIcon size={14} />}

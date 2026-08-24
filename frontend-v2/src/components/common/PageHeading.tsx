@@ -13,7 +13,12 @@ export function PageHeading({ kicker, title, description, actions }: PageHeading
       <div>
         <div className="font-display mb-2.5 text-xs font-semibold uppercase tracking-[1.4px] text-navy">{kicker}</div>
         <h1 className="font-display m-0 mb-2 text-[26px] font-bold tracking-[-1px] sm:text-[32px] lg:text-[38px]">{title}</h1>
-        {description && <p className="m-0 max-w-2xl text-[14px] text-ink-muted sm:text-[15px]">{description}</p>}
+        {/* Açık temada ink-muted, sayfa arka planındaki (BackgroundLayer)
+            yarı saydam tablo dokusunun üstünde yeterince kontrast vermiyordu
+            — sadece açık temada ink-soft'a çekildi, koyu tema aynı kaldı. */}
+        {description && (
+          <p className="m-0 max-w-2xl text-[14px] text-ink-soft sm:text-[15px] dark:text-ink-muted">{description}</p>
+        )}
       </div>
       {actions && <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">{actions}</div>}
     </div>

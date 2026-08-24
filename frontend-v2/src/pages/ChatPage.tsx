@@ -51,14 +51,14 @@ export function ChatPage() {
             onClick={() => downloadTranscript(messages, user.name)}
             disabled={messages.length === 0}
             title="Bu sohbetteki tüm soru ve yanıtları .txt olarak indir"
-            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-muted transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-muted"
+            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft dark:text-ink-muted dark:disabled:hover:text-ink-muted"
           >
             <DownloadIcon size={14} />
             Dökümü İndir
           </button>
           <button
             onClick={resetSession}
-            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-muted transition-colors hover:border-brand hover:text-brand"
+            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand dark:text-ink-muted"
           >
             <PlusIcon size={14} />
             Yeni Sohbet
@@ -135,7 +135,7 @@ export function ChatPage() {
 
       {/* CLAUDE.md §4: her finansal çıktı bu ibareyi taşımak zorunda.
           Ajan metnin içinde de veriyor; burası sunum katmanının garantisi. */}
-      <p className="m-0 mt-3 shrink-0 text-center text-xs italic text-ink-faint">
+      <p className="m-0 mt-3 shrink-0 text-center text-xs italic text-ink-soft dark:text-ink-faint">
         {INVESTMENT_DISCLAIMER}
       </p>
     </div>

@@ -534,7 +534,7 @@ export function LoginScreen({
                   } as CSSProperties
                 }
               >
-                {submitted ? "Giriş yapılıyor…" : "Vira Et"}
+                {submitted ? "Giriş yapılıyor…" : "Giriş Yap"}
                 <ArrowIcon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
               </button>
             </form>
