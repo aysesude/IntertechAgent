@@ -64,6 +64,12 @@ class AssetSpec:
     # üzerinden getiri biriktirir.
     synthetic_daily_drift: float | None = None
     synthetic_daily_volatility: float | None = None
+    # Kullanıcı portföyünde TUTULABİLİR mi.
+    #
+    # Endeksler (XU100) fiyatlanır ve saklanır — kıyaslama onlara dayanıyor —
+    # ama satın alınamazlar. Bayrak olmasaydı seed, endeksi sıradan bir hisse
+    # gibi kullanıcılara dağıtırdı.
+    tradable: bool = True
 
 
 def _stock(symbol: str, name: str, base_price: str) -> AssetSpec:
@@ -167,6 +173,24 @@ def _fund(
 
 
 ASSET_UNIVERSE: list[AssetSpec] = [
+    # --- Endeks (kıyaslama için; tutulamaz) ---
+    #
+    # `get_benchmark_comparison` BIST 100'ü hep istiyordu ama evrende karşılığı
+    # yoktu: varlık bulunamayınca kıyas listesinden SESSİZCE düşüyordu.
+    # Ölçülen sonuç (23 Ağustos test turu): "Portföyüm BIST 100'e göre nasıl?"
+    # sorusuna altın ve dolar karşılaştırması dönüyor, endeksten hiç söz
+    # edilmiyordu — sorulan şey cevaplanmadan.
+    #
+    # base_price uydurma değil, ölçülmüş: 21.08.2025 kapanışı (yfinance).
+    AssetSpec(
+        symbol="XU100",
+        name="BIST 100",
+        asset_class=AssetClass.STOCK,
+        base_price=Decimal("11313.90"),
+        data_source=PriceSource.YFINANCE,
+        provider_symbol="XU100.IS",
+        tradable=False,
+    ),
     # --- Hisse (BIST, yfinance) ---
     _stock("THYAO", "Türk Hava Yolları", "285.00"),
     _stock("ASELS", "Aselsan", "62.50"),

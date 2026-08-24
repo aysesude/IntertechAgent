@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.core.config import AssetClass, RiskProfile, settings
 from app.core.security import hash_password
 from app.models import Asset, PriceHistory, Transaction, TransactionType
+from app.providers.universe import SPEC_BY_SYMBOL
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
 
 SEED = 42
@@ -269,8 +270,22 @@ def seed_ledger(session: Session) -> int:
     assets, prices, days_by_asset = _load_price_book(session)
     usdtry_id = assets["USDTRY"].id
 
+    # Alım adayları YALNIZCA tutulabilir varlıklar.
+    #
+    # Endeksler (XU100) fiyatlanıp saklanıyor çünkü kıyaslama onlara dayanıyor,
+    # ama satın alınamazlar. Bu süzgeç olmadan seed, BIST 100'ü sıradan bir
+    # hisse gibi kullanıcılara dağıtırdı — portföyünde "1.084 adet BIST 100"
+    # duran bir kullanıcı hem saçma hem de tüm dağılım/risk hesabını bozardı.
+    #
+    # Tutulabilirlik `assets` tablosunda değil evren tanımında yaşıyor
+    # (`providers/universe.py`); DB'ye bir kolon eklemek yerine oradan
+    # okunuyor. Başka bir tüketici de bu bilgiye ihtiyaç duyarsa kolon
+    # gerekecek.
     assets_by_class: dict[AssetClass, list[Asset]] = {}
     for asset in assets.values():
+        spec = SPEC_BY_SYMBOL.get(asset.symbol)
+        if spec is not None and not spec.tradable:
+            continue
         assets_by_class.setdefault(asset.asset_class, []).append(asset)
     for asset_list in assets_by_class.values():
         asset_list.sort(key=lambda a: a.symbol)  # determinizm sözlük sırasına bağlı kalmasın

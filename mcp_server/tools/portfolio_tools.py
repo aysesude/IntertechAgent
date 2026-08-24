@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastmcp import FastMCP
 
-from app.core.config import TimeWindow
+from app.core.config import AssetClass, TimeWindow
 
 # Takma adlar zorunlu: aşağıdaki tool fonksiyonlarının adı servis
 # fonksiyonlarıyla aynı, takma ad olmadan tool kendi kendini çağırırdı.
@@ -151,6 +151,7 @@ def register(mcp: FastMCP) -> list[str]:
         start_date: date | None = None,
         end_date: date | None = None,
         symbols: list[str] | None = None,
+        asset_class: AssetClass | None = None,
     ) -> dict[str, Any]:
         """Kullanıcının alım/satım ve nakit hareketlerini listeler.
 
@@ -169,6 +170,10 @@ def register(mcp: FastMCP) -> list[str]:
             end_date: Bitiş tarihi, dahil. Verilmezse bugüne kadar.
             symbols: Yalnızca bu sembollerin işlemleri, ör. ["XAUTRY"].
                 Verilmezse tüm işlemler, nakit hareketleri dahil.
+            asset_class: Yalnızca bu varlık sınıfının işlemleri: stock,
+                precious_metal, currency, bond, cash. "Hangi HİSSELERİ aldım",
+                "altın işlemlerim" gibi SINIF bazlı sorular için — hangi
+                sembolün hangi sınıfta olduğunu bilmene gerek kalmaz.
 
         Returns:
             Başarılı: data.transactions = [{transaction_date, type, symbol,
@@ -181,7 +186,12 @@ def register(mcp: FastMCP) -> list[str]:
         """
         with db_session() as db:
             return fetch_transactions(
-                db, user_id, start_date=start_date, end_date=end_date, symbols=symbols
+                db,
+                user_id,
+                start_date=start_date,
+                end_date=end_date,
+                symbols=symbols,
+                asset_class=asset_class,
             ).model_dump(mode="json")
 
     @mcp.tool(name="get_benchmark_comparison")

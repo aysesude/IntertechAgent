@@ -28,10 +28,14 @@ def _normalize(text: str) -> str:
 _SUFFIX_SAFE_MIN = 5  # bu uzunluktan itibaren sonek toleransı güvenli
 
 
-def _matches_word(query: str, phrase: str) -> bool:
+def _matches_word(query: str, phrase: str, *, exact: bool = False) -> bool:
     """Kelime sınırıyla eşleşme (alt dize DEĞİL).
     ...
     """
+    if exact:
+        # Sonek toleransının zararlı olduğu fiiller için: "yatır" ile
+        # "yatırım" ayrı kelimelerdir, ilki emir kipi ikincisi isim.
+        return re.search(r"\b" + re.escape(phrase) + r"\b", query) is not None
     if len(phrase) >= _SUFFIX_SAFE_MIN:
         # "transfer" → "transferi", "kaldıraç" → "kaldıraçlı"
         pattern = r"\b" + re.escape(phrase) + r"[a-zçğıöşü]{0,6}\b"
@@ -119,9 +123,13 @@ def check_scope(query: str) -> dict:
     # geniş eşleşme burada güvenli yönde hata yapar, alt dize kalıyor.
     is_istisna = any(istisna in query_lower for istisna in istisnalar)
 
+    # Sonek toleransı bazı fiiller için zararlı: bkz. scope.yaml
+    # `tam_eslesme_fiiller` — "yatır" toleransla "yatırım"ı yutuyordu.
+    tam_eslesme = {_normalize(f) for f in islem_talebi.get("tam_eslesme_fiiller", [])}
+
     if not is_istisna:
         for fiil in fiiller:
-            if _matches_word(query_lower, fiil):
+            if _matches_word(query_lower, fiil, exact=_normalize(fiil) in tam_eslesme):
                 return {
                     "intent": "UNAUTHORIZED_ACTION",
                     "message": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim.",

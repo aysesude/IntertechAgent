@@ -610,6 +610,7 @@ def get_transactions(
     start_date: date | None = None,
     end_date: date | None = None,
     symbols: list[str] | None = None,
+    asset_class: AssetClass | None = None,
 ) -> TransactionList:
     """İşlem defterini filtreleyerek döndürür.
 
@@ -620,6 +621,13 @@ def get_transactions(
 
     `symbols` verilmezse nakit hareketleri (DEPOSIT/WITHDRAW/FEE/INTEREST) de
     listeye girer; verilirse yalnızca o sembollere ait BUY/SELL/DIVIDEND döner.
+
+    `asset_class` "hangi HİSSELERİ aldım" gibi sınıf bazlı sorular içindir.
+    Sembol süzgeciyle aynı şeyi yapamaz: çağıran taraf (ajanın planlayıcısı)
+    kullanıcının hangi sembollerinin hisse olduğunu bilmiyor. Süzgeç yokken
+    "Temmuz'da hangi hisseleri aldım?" sorusuna bir TAHVİL fonu dönüyordu
+    (ölçüldü, 23 Ağustos test turu). Sınıf süzgeci de sembol süzgeci gibi
+    nakit hareketlerini listeden çıkarır.
 
     SIRALAMA: eskiden yeniye. Grafikteki işaretçiler zaman ekseninde soldan
     sağa diziliyor; `position_after` da ancak bu sırada anlamlı.
@@ -678,6 +686,10 @@ def get_transactions(
             continue
 
         symbol = tx.asset.symbol if tx.asset is not None else None
+        if asset_class is not None and (
+            tx.asset is None or tx.asset.asset_class is not asset_class
+        ):
+            continue
         if wanted_symbols is not None:
             # Sembol süzgeci verildiğinde nakit hareketleri (DEPOSIT/WITHDRAW/
             # FEE/INTEREST) listeye girmez: "TUPRS'ta ne yaptım" sorusunun

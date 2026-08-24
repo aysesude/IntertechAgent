@@ -524,3 +524,107 @@ def test_retrieve_uydurma_sirket_holding_enerji_kelimeleriyle_bulunmus_sayilmaz(
 
     assert retriever.retrieve("ABC Holding'in ikinci çeyrek net kârı nedir") == []
     assert retriever.retrieve("Falanca Enerji'nin ortaklık yapısı nasıl") == []
+
+
+# ---------------------------------------------------------------------------
+# Sirket adiyla anilan sorgu, kelime-ortusme oranindan muaf
+# ---------------------------------------------------------------------------
+
+
+def test_sirketi_adiyla_anan_sorgu_oran_kapisindan_muaf():
+    """Kullanici dokumani olan bir sirketi ADIYLA andiysa sonuc elenmemeli.
+
+    Olculdu (23 Agustos test turu): "ASELS hakkinda ne biliyorsun?" sorgusu
+    0.50 oran aliyordu ve kural `> 0.5` oldugu icin dogru dokuman ELENIYOR,
+    kullaniciya "veritabaninda bulunamadi" donuyordu. Sirket kodu TAM
+    eslesmisti; eleyen sey sorunun geri kalanindaki konusma diliydi
+    ("hakkinda", "ne biliyorsun").
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "ASELSAN 2026 ikinci ceyrekte net kar acikladi. Gelirler artti.",
+                sirket="ASELS",
+                baslik="ASELSAN 2026 2. Ceyrek Finansal Sonuclari",
+                tur="bilanco",
+            )
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("ASELS hakkinda ne biliyorsun?")
+
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["metadata"]["sirket"] == "ASELS"
+
+
+def test_korpus_farkli_kelime_kullansa_da_sirket_eslesmesi_yeterli():
+    """Kullanicinin sozcugu korpusunkinden farkli olabilir.
+
+    "TUPRS'un BILANCOSUNDA one cikan ne var?" sorgusunda dokumanlar
+    "bilanco" demiyor, "finansal sonuclar" diyor. Oran 0.25'e dusuyordu
+    (yalnizca `tuprs` ortusuyordu) ve dogru dokuman eleniyordu.
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Tupras 2026 ikinci ceyrek finansal sonuclarini acikladi.",
+                sirket="TUPRS",
+                baslik="Tupras 2026 2. Ceyrek Finansal Sonuclari",
+                tur="bilanco",
+            )
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("TUPRS'un bilancosunda one cikan ne var?")
+
+    assert len(sonuclar) == 1
+
+
+def test_muafiyet_BASKA_sirketin_dokumanini_kapsamaz():
+    """Muafiyet dar olmali: yalnizca sorguda anilan sirketin dokumani.
+
+    Genis tutulsaydi, iki sirketin neredeyse ayni kalipla yazilmis
+    bilancolari arasinda yanlis sirket de kapidan gecerdi — bu kapinin
+    engellemek icin var oldugu tam olarak o durum.
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "ASELSAN 2026 ikinci ceyrekte net kar acikladi.",
+                sirket="ASELS",
+                baslik="ASELSAN 2026 2. Ceyrek",
+                tur="bilanco",
+            ),
+            _doc(
+                "Turk Hava Yollari 2026 ikinci ceyrekte net kar acikladi.",
+                sirket="THYAO",
+                baslik="THYAO 2026 2. Ceyrek",
+                tur="bilanco",
+            ),
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("ASELS hakkinda ne biliyorsun?")
+
+    donen_sirketler = {r["metadata"]["sirket"] for r in sonuclar}
+    assert donen_sirketler == {"ASELS"}, "THYAO dokumani sizmamali"
+
+
+def test_muafiyet_alakasiz_sorguyu_kapidan_gecirmez():
+    """Hicbir sirketle eslesmeyen sorgu icin kapi AYNEN duruyor.
+
+    Muafiyet oran kuralini gevsetmiyor, yalnizca deterministik olarak
+    alakali oldugu kanitlanmis sonucu kapsam disi birakiyor.
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "ASELSAN 2026 ikinci ceyrekte net kar acikladi.",
+                sirket="ASELS",
+                baslik="ASELSAN 2026 2. Ceyrek",
+                tur="bilanco",
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("Bitcoin fiyati ne kadar") == []

@@ -459,11 +459,31 @@ class Retriever:
         where = _build_where(sirket, donem, donem_listesi, tur)
         results = self._store.similarity_search(query, top_k=candidate_pool, where=where)
 
+        # Sorgu bir şirketi ADIYLA anıyorsa, O ŞİRKETE ait sonuç kelime-örtüşme
+        # oranından MUAFTIR.
+        #
+        # Oran kapısı alakasız sonuçları elemek için var ve o işi yapıyor; ama
+        # kullanıcı elimizde dokümanı bulunan bir şirketi adıyla andığında alaka
+        # zaten deterministik olarak kanıtlanmıştır — şirket kodunu sıradan bir
+        # kelime gibi saymak yanlıştı. Ölçülen (23 Ağustos test turu):
+        #   "ASELS hakkında ne biliyorsun?"          -> 0.50, kural `> 0.5`  ELENDİ
+        #   "TUPRS'un bilançosunda öne çıkan ne var?" -> 0.25                 ELENDİ
+        # İkisinde de şirket kodu TAM eşleşmişti; eleyen şey sorunun geri
+        # kalanındaki konuşma dili ("hakkında", "ne biliyorsun") ve korpusun
+        # farklı sözcük seçimiydi — dokümanlar "bilanço" değil "finansal
+        # sonuçlar" diyor.
+        #
+        # Muafiyet DAR: yalnızca kendi `sirket` alanı sorguyla eşleşen sonucu
+        # kapsıyor. Başka şirketin dokümanı, alakasız sorgu ve mesafe eşiği
+        # aynen eskisi gibi eleniyor.
         filtered = [
             r
             for r in results
             if r.get("distance", 1.0) <= settings.rag_distance_threshold
-            and _shares_a_keyword(query_keywords, _result_keywords(r))
+            and (
+                _shares_a_keyword(query_keywords, _result_keywords(r))
+                or _sirket_matches_query(r, query_keywords)
+            )
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
 

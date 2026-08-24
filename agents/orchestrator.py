@@ -65,6 +65,24 @@ AGENT_NODES = {
 # (CLAUDE.md §4). Kısa biçim, prompt'takiyle birebir aynı.
 _DISCLAIMER = "Bu bir yatırım tavsiyesi değildir."
 
+
+def _mesaj(anahtar: str, varsayilan: str) -> str:
+    """Kullanıcıya gösterilen metni scope.yaml'dan okur.
+
+    Metinler koddan ayrı tutuluyor (NFR: "kapsam kuralları koda gömülmez");
+    içerik ekibi kod değişikliği olmadan güncelleyebilsin diye. Anahtar
+    bulunamazsa kod içindeki yedek metin kullanılır — eksik bir YAML anahtarı
+    yüzünden kullanıcıya boş yanıt dönmemeli.
+    """
+    from agents.scope_checker import scope_config
+
+    metin = scope_config.get("mesajlar", {}).get(anahtar, {}).get("varsayilan")
+    return metin.strip() if isinstance(metin, str) and metin.strip() else varsayilan
+
+
+# Niyet tespitine verilen sohbet geçmişi uzunluğu (mesaj sayısı).
+_INTENT_HISTORY_TURNS = 4
+
 _AMBIGUOUS_MESSAGE = (
     "Sorunuzun tam olarak neyle ilgili olduğunu anlayamadım. Lütfen "
     "'Portföyüm ne durumda?', 'Riskim nedir?' veya 'Son piyasa haberleri neler?' "
@@ -105,17 +123,83 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "etiket kullanılır.\n"
         "  Örnek: 'riskim nedir', 'portföyümde çok fazla hisse mi var', "
         "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
-        "'çok mu riskli yatırım yapıyorum'\n\n"
+        "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
+        "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
+        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
+        "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı.\n"
+        "  Örnek: '2027de dolar kaç TL olur', 'altın yükselecek mi', "
+        "'bu hisse gelecek yıl ne kadar olur'\n"
+        "KAPSAM_DISI — finansla ya da kullanıcının portföyüyle ilgisi olmayan "
+        "her şey; ayrıca kripto, türev ve gayrimenkul gibi desteklenmeyen "
+        "varlıklar.\n"
+        "  Örnek: 'hava nasıl', 'maç kaç kaç bitti', 'yemek tarifi ver'\n\n"
         "Birden fazla konu varsa hepsini yaz: 'portföyüm ve riskim nasıl' → PORTFOLIO, RISK\n"
         "Sorulmayan konuyu EKLEME. Soru yalnızca değer/dağılım soruyorsa RISK "
         "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
         "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
-        "'riskim nedir' → sadece RISK."
+        "'riskim nedir' → sadece RISK.\n"
+        "TAHMIN ve KAPSAM_DISI TEK BAŞINA yazılır, başka etiketle birlikte değil.\n"
+        "TAKİP SORUSU: Soru kendi başına anlaşılmıyorsa ('bunu açıkla', 'peki "
+        "ya', 'neden böyle') ÖNCEKİ KONUŞMA'da neyin konuşulduğuna bak ve o "
+        "konunun etiketini ver."
     )
 
+    # Sınıflandırıcı sohbet geçmişini de görür.
+    #
+    # Görmediğinde takip soruları anlaşılmıyordu: "Riskim nedir?" cevabının
+    # ardından gelen "Bunu biraz daha açıklar mısın?" sorusu, kendi başına
+    # hiçbir konuya bağlanamadığı için AMBIGUOUS'a düşüyor ve kullanıcı
+    # "sorunuzu anlayamadım" cevabı alıyordu (ölçüldü, 23 Ağustos test turu) —
+    # oysa neyi kastettiği bir önceki mesajdan bellidir.
+    #
+    # Yalnızca son birkaç tur alınıyor: sınıflandırma tek bir kararlık iş,
+    # uzun geçmiş hem token harcar hem de eski konuların etiketi yenisine
+    # karışır.
+    gecmis = (state.get("history") or [])[-_INTENT_HISTORY_TURNS:]
+    if gecmis:
+        satirlar = "\n".join(
+            f"{'Kullanıcı' if m.get('role') == 'user' else 'Asistan'}: "
+            f"{(m.get('content') or '')[:200]}"
+            for m in gecmis
+        )
+        siniflandirma_girdisi = f"ÖNCEKİ KONUŞMA:\n{satirlar}\n\nSORU:\n{query}"
+    else:
+        siniflandirma_girdisi = query
+
     try:
-        response = await llm.generate(query, system=system_prompt)
+        response = await llm.generate(siniflandirma_girdisi, system=system_prompt)
         response_text = response.strip().upper()
+
+        # Bu iki etiket AJANA GİTMEZ, doğrudan yanıtla sonuçlanır — ve ajan
+        # etiketlerinden ÖNCE bakılır: model ikisini birden yazdığında
+        # (talimat aksini söylese de) reddetme kararı kazanmalı.
+        #
+        # Eskiden ikisi de yoktu ve sınıflandırıcının "hiçbiri" seçeneği
+        # bulunmuyordu: hava durumu sorusu MARKET'e düşüp RAG'e gidiyor,
+        # kullanıcı "veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi
+        # bulunamadı" görüyordu — sistem arızalıymış gibi. Gelecek tahmini de
+        # aynı yoldan geçiyordu (ölçüldü, 23 Ağustos test turu).
+        if "TAHMIN" in response_text:
+            return {
+                "intent": "FUTURE_PREDICTION",
+                "flags": scope_result.get("flags", []),
+                "final_answer": _mesaj(
+                    "gelecek_tahmini",
+                    "Gelecekteki fiyat veya getiri tahmini yapmıyorum; elimdeki "
+                    "veriler geçmişe ve bugüne ait.",
+                ),
+            }
+        if "KAPSAM_DISI" in response_text:
+            return {
+                "intent": "OUT_OF_SCOPE",
+                "flags": scope_result.get("flags", []),
+                "final_answer": _mesaj(
+                    "out_of_scope",
+                    "Bu konuda yardımcı olamıyorum. Portföyünüz ve piyasalar "
+                    "hakkındaki sorularınızı yanıtlayabilirim.",
+                ),
+            }
+
         labels = [label for label in AGENT_INTENTS if label.upper() in response_text]
 
         # Geriye dönük uyum: eski prompt tek kelimelik BOTH/RAG döndürüyordu.
@@ -211,17 +295,70 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
     if errors:
         combined_texts.append("ALINAMAYAN BİLGİLER (KULLANICIYA BELİRT):\n" + "\n".join(errors))
 
+    # Soru, verilerin ÜSTÜNE ve ayrı bir başlıkla konur: aynı bloğa
+    # karıştırılsaydı model soru metnini de aktarılacak veri sanabilirdi.
+    #
+    # `.get` ile okunuyor: bu, nihai yanıtın yazıldığı yer. Alan beklenmedik
+    # bir çağrı yolunda eksik kalırsa cevabın odağı zayıflar ama sohbet
+    # ayakta kalır — bir KeyError burada tüm yanıtı düşürürdü.
+    soru = (state.get("message") or "").strip()
     combined_text = "\n\n".join(combined_texts)
+    if soru:
+        combined_text = f"KULLANICININ SORUSU:\n{soru}\n\n{combined_text}"
 
+    # SORU BU ADIMA GEÇİRİLİR.
+    #
+    # Eskiden geçirilmiyordu: merge yalnızca veri yığınını görüyor, üstüne
+    # "hiçbir bilgiyi silme" talimatı alıyordu. Elinde soru olmayan ve eleme
+    # hakkı bulunmayan bir modelin yapabileceği tek şey her şeyi tekrar
+    # yazmaktı. Ölçülen sonuç: "en çok kazandıran varlığım hangisi?"
+    # sorusuna sekiz varlık sıralanıyor ve cevap en sona gömülüyordu;
+    # "volatilitem iyi mi kötü mü?" sorusunun yargı kısmı hiç
+    # cevaplanmıyordu; "NVIDIA almalı mıyım?" sorusuna alakasız bir risk
+    # özeti dönüyordu.
+    #
+    # "Hiçbir bilgiyi silme" kuralı tamamen kaldırılmadı, İKİYE AYRILDI:
+    # veri elenebilir, UYARILAR elenemez. O kural aslında sorumluluk reddini
+    # ve "şu veriye ulaşılamadı" bildirimlerini korumak için konmuştu;
+    # elemeyi de yasaklaması yan etkiydi.
     system_prompt = (
-        "Aşağıda bir veya daha fazla veri kaynağından/uzman ajandan gelen ham yanıtlar ve varsa eksik bilgiler bulunmaktadır.\n"
-        "Görev: Bu verileri alıp, objektif, pürüzsüz, tekil ve anlaşılır bir Türkçe yanıt oluşturarak son kullanıcıya sun.\n"
-        "Verilerin hangi ajan veya RAG'den geldiğini söyleme, doğrudan bilgiyi harmanlayıp ver.\n"
-        "Eğer bazı bilgiler eksikse ('ALINAMAYAN BİLGİLER' kısmı varsa), bunu kullanıcıya doğal bir dille ('Şu an piyasa verilerine ulaşamıyorum ancak portföyünüz...' gibi) belirt.\n"
-        "Hiçbir bilgiyi silme veya uydurma yapma, sadece metinleri iyi bir düzene sok.\n"
-        "Yanıtına 'Merhaba', 'Cevap:' gibi etiketler ekleme. Sadece içeriği ver.\n"
-        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi değildir.' uyarısını ekle.\n"
-        "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', 'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca veriyi nesnel bir şekilde ilet."
+        "Aşağıda kullanıcının SORUSU ve bu soruya cevap vermek için toplanmış "
+        "ÖLÇÜLMÜŞ VERİLER var. Görevin, soruyu Türkçe ve doğrudan yanıtlamak.\n"
+        "\n"
+        "SORUYU CEVAPLA: Yanıtın ilk cümlesi sorulan şeye cevap versin. "
+        "Kullanıcı tek bir şey sorduysa (hangi varlık, ne kadar, kaç tane) "
+        "önce onu söyle; destekleyici ayrıntı sonra gelir.\n"
+        "\n"
+        "İLGİSİZ VERİYİ DIŞARIDA BIRAK: Verilerde soruyla ilgisi olmayan "
+        "bölümler olabilir. Onları AKTARMA. Soru bir varlık hakkındaysa tüm "
+        "portföyü listeleme; soru risk hakkındaysa portföy özetini tekrar "
+        "etme.\n"
+        "\n"
+        "VERİDE YOKSA SÖYLE: Sorulan bilgi verilerde yoksa bunu açıkça "
+        "belirt. Yakın duran başka bir veriyi cevap yerine koyma ve "
+        "verilerden çıkmayan hiçbir sayı, oran veya isim üretme.\n"
+        "\n"
+        "UYARILARI KORU: 'ALINAMAYAN BİLGİLER' bölümü, hesaplanamayan "
+        "metrikler ve veri eksikliği notları ELENEMEZ; doğal bir dille "
+        "aktarılır ('Şu an piyasa verilerine ulaşamıyorum ancak "
+        "portföyünüz...' gibi).\n"
+        "\n"
+        "KAYNAKLARI KORU: Verilerde 'Kaynaklar:' listesi varsa yanıtın sonunda "
+        "AYNEN kalır — doküman adı, yayın ve tarih dahil. Bir bilgi hangi "
+        "belgeye dayanıyorsa kullanıcı bunu görebilmelidir; kaynağı düşürmek "
+        "bilgiyi doğrulanamaz hâle getirir.\n"
+        "\n"
+        "Verilerin hangi ajandan veya kaynaktan geldiğini söyleme. "
+        "'Merhaba', 'Cevap:' gibi etiketler ekleme, sadece içeriği ver.\n"
+        "Para ve oranlarda Türkçe biçim kullan: 1.234,56 TL ve +%8,41 "
+        "(yüzde işareti sayıdan ÖNCE, artı/eksi en başta).\n"
+        "\n"
+        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi "
+        "değildir.' uyarısını ekle.\n"
+        "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme "
+        "senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', "
+        "'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca "
+        "veriyi nesnel bir şekilde ilet."
     )
 
     flags = state.get("flags", [])
@@ -261,6 +398,7 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
         "INJECTION_ATTEMPT",
         "AMBIGUOUS",
         "SMALLTALK_META",
+        "FUTURE_PREDICTION",
     }
 
     if state["intent"] in early_exit_intents:
