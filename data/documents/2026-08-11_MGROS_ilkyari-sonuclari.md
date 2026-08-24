@@ -19,7 +19,9 @@ ve mağazacılık yatırımlarını açıkladı.
 
 Şirket, 2026 yılının ilk yarısında satışlarını reel bazda yüzde 4,5
 artırarak 241,3 milyar TL'ye çıkardı. Aynı dönemde 1 milyar 78 milyon
-TL net kâr elde etti.
+TL net kâr elde etti. İlk yarı brüt kârı 55,753 milyar TL, FAVÖK'ü ise
+10,967 milyar TL olarak gerçekleşti; FAVÖK yıllık bazda yüzde 7
+gerilerken brüt kâr yatay seyretti.
 
 ## Mağaza ağı yatırımı
 

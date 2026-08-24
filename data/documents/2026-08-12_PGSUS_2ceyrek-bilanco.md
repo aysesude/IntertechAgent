@@ -21,9 +21,12 @@ Aydınlatma Platformu'na (KAP) bildirdi. Diğer bazı şirketlerin aksine
 
 Şirket, ikinci çeyrekte 4,793 milyar TL (yaklaşık 92 milyon avro) net
 zarar açıkladı. Çeyrek hasılatı 45,7 milyar TL oldu; satış gelirleri
-geçen yılın aynı dönemine göre yüzde 27 arttı. Buna karşın FAVÖK
-yıllık bazda yüzde 69 gerileyerek 80 milyon avroya düştü. Toplam
-yolcu sayısı yüzde 1 azalarak 10,5 milyona geriledi.
+geçen yılın aynı dönemine göre yüzde 27 arttı. Gelirin dağılımı yurt
+içi tarife geliri 145 milyon avro, yurt dışı tarife geliri 392 milyon
+avro ve yan gelirler 311 milyon avro şeklinde gerçekleşti. Buna karşın
+FAVÖK yıllık bazda yüzde 69 gerileyerek 80 milyon avroya düştü; toplam
+giderler yüzde 24 artışla 899 milyon avroya yükseldi. Toplam yolcu
+sayısı yüzde 1 azalarak 10,5 milyona geriledi.
 
 ## İlk 6 aylık dönem (2026 Ocak-Haziran)
 

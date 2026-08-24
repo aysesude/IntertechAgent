@@ -31,7 +31,8 @@ belirgin şekilde aştı.
 İlk yarı net kârı 14,4 milyar TL olarak açıklandı; bu, 2025 yılının aynı
 dönemine göre yüzde 70,6 artışa denk geliyor. İlk yarıda ciro yüzde 25,
 FAVÖK yüzde 31, net kâr yüzde 71 artış kaydetti. FAVÖK marjı ilk yarıda
-yüzde 26 seviyesine ulaştı (1 puanlık iyileşme). Şirketin sipariş defteri
+yüzde 26 seviyesine ulaştı (1 puanlık iyileşme). Brüt kâr marjı ilk
+yarıda yüzde 32 ile yıllık bazda yatay seyretti. Şirketin sipariş defteri
 yılın ilk yarısı sonunda 23,2 milyar dolar seviyesine yükseldi.
 
 ## Not

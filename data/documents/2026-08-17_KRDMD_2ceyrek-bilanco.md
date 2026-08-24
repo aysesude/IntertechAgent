@@ -33,7 +33,8 @@ açıklamıştı.
 
 İkinci çeyrek satış geliri, yıllık bazda yüzde 7,7 artışla 20 milyar
 792 milyon TL'ye yükseldi. FAVÖK, önemli ölçüde artışla 2 milyar 652
-milyon TL'ye ulaştı; FAVÖK marjı yüzde 12,8 seviyesine çıktı.
+milyon TL'ye ulaştı; FAVÖK marjı yüzde 12,8 seviyesine çıktı. İlk yarı
+brüt kârı 3,42 milyar TL olarak gerçekleşti.
 
 ## Değerlendirme
 

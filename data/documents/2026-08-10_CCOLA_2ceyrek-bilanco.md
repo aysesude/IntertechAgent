@@ -23,7 +23,10 @@ etti; bu rakam, geçen yılın aynı döneminde kaydedilen 6,7 milyar TL'ye
 göre yaklaşık yüzde 24 artışa işaret etti ve 7,9 milyar TL'lik piyasa
 beklentisini aştı. Net kâr marjı yüzde 12,3 olarak gerçekleşti. Çeyrek
 satış geliri 67,2 milyar TL olup, 67,99 milyar TL'lik piyasa
-beklentisiyle uyumlu şekilde yıllık yüzde 5,7 büyüdü.
+beklentisiyle uyumlu şekilde yıllık yüzde 5,7 büyüdü. Brüt kâr yüzde
+14,2 artışla 25,7 milyar TL'ye yükselirken brüt kâr marjı yüzde 38,2'ye
+genişledi. Faaliyet kârı yüzde 25,8 artışla 12,1 milyar TL'ye çıkarken
+faaliyet kâr marjı yüzde 17,9 oldu.
 
 ## İlk yarı (Ocak-Haziran 2026)
 

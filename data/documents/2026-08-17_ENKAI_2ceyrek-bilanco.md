@@ -27,7 +27,9 @@ analist beklentisini yüzde 11 aştı, gelir yıllık bazda yüzde 42,
 
 İnşaat segmentinde gelir yıllık bazda yüzde 12 artışla 24,8 milyar
 TL'ye ulaştı. Gayrimenkul kira gelirleri, 2025 2. çeyrekteki 3,7 milyar
-TL'den yüzde 43 artışla 5,3 milyar TL'ye yükseldi.
+TL'den yüzde 43 artışla 5,3 milyar TL'ye yükseldi. Ticaret segmenti
+geliri 3,5 milyar TL, enerji segmenti geliri ise 12,3 milyar TL olarak
+gerçekleşti.
 
 ## FAVÖK ve nakit pozisyonu
 

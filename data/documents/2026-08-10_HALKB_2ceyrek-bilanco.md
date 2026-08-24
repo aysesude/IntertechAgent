@@ -31,8 +31,10 @@ dönemine göre yüzde 40 artırarak 17,73 milyar TL'ye yükseltti.
 
 Faiz gelirleri 527,6 milyar TL'ye, net ücret ve komisyon gelirleri 36,1
 milyar TL'ye ulaştı. Net faaliyet kârı 21,44 milyar TL seviyesine
-çıktı. Krediler 2,50 trilyon TL'ye, mevduatlar ise yüzde 8 artışla 3,79
-trilyon TL'ye yükseldi.
+çıktı. İkinci çeyrek faaliyet giderleri 39,6 milyar TL'ye çıkarken
+gider/gelir oranı 7,5 puan artışla yüzde 70,3'e yükseldi. Krediler 2,50
+trilyon TL'ye, mevduatlar ise yüzde 8 artışla 3,79 trilyon TL'ye
+yükseldi.
 
 ## Değerlendirme
 

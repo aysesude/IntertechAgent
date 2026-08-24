@@ -91,8 +91,13 @@ ayrı bir ajan karşılıyor. RAG'a eklenecek yeni dokümanlar için öncelik
 sırası:
 
 - **`bilanco`** — dönemsel finansal tablolar. Yayımlandıktan sonra
-  değişmez (yeniden düzenleme/restatement dışında), bu yüzden ideal RAG
-  içeriği. Her şirket için mevcut hedef: son 1-2 çeyrek.
+  değişmez (yeniden düzenleme/restatement dışında, bkz. `revize_no`
+  alanı), bu yüzden ideal RAG içeriği. Her şirket için mevcut hedef:
+  son 1-2 çeyrek. Mümkün olan şirketlerde net kâr/hasılat/FAVÖK'ün
+  ötesinde gelir tablosu ara kalemleri de (brüt kâr, faaliyet kârı/EBIT,
+  segment kırılımı) hedeflenir — kaynakta yoksa uydurulmaz, boş
+  bırakılır. Nakit akış tablosu kalemleri genelde haber kaynaklarında
+  bulunmuyor, henüz sistematik olarak hedeflenmiyor.
 - **`sirket_profili`** — şirketin kimlik/yapısal bilgisi: faaliyet alanı,
   sektör, kuruluş tarihi, ortaklık yapısı, ana iştirakler, yönetim
   kurulu/üst yönetim, halka açıklık oranı. Yılda birkaç kez değişse de
