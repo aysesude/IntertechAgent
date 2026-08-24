@@ -129,3 +129,38 @@ def test_gercek_yatirma_emri_hala_reddedilir():
     assert _intent("Hesabıma 10.000 TL yatır") == "UNAUTHORIZED_ACTION"
     assert _intent("Bana 10.000 TL'lik THYAO al.") == "UNAUTHORIZED_ACTION"
     assert _intent("THYAO sat") == "UNAUTHORIZED_ACTION"
+
+
+# ---------------------------------------------------------------------------
+# Sirket adi, kapsam-disi bir varlik etiketiyle kelime duzeyinde cakisiyor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # "Emlak Konut" -> gayrimenkul sinifindaki "konut" etiketiyle cakisiyor.
+        "Emlak Konut'un temettü ödemesi ne zaman?",
+        "EKGYO hissesi ne kadar",
+        # "Yapı Kredi" -> bankacilik_urunleri sinifindaki "kredi" etiketiyle cakisiyor.
+        "Yapı Kredi'nin 2026 temettüsü ne kadar?",
+        "YKBNK hissesi ne kadar",
+    ],
+)
+def test_sirket_adi_kapsam_disi_etiketle_cakissa_bile_gecer(query):
+    """Ölçümle doğrulandı (2026-08-24): "Emlak Konut'un temettü ödemesi ne
+    zaman?" ve "Yapı Kredi'nin 2026 temettüsü ne kadar?" sorguları, sırasıyla
+    "konut" (gayrimenkul) ve "kredi" (bankacılık ürünleri) kapsam-dışı
+    etiketleriyle salt kelime düzeyinde çakıştığı için — sorguda "hisse"/
+    "BIST" gibi kapsam-içi bir kelime hiç geçmediğinde — KESİN ve HER
+    SEFERİNDE (check_scope() deterministik) OUT_OF_SCOPE dönüyordu; oysa
+    RAG'de bu iki BIST şirketinin verisi doğru ve eksiksiz duruyor."""
+    assert _intent(query) == "pass_to_llm"
+
+
+def test_gercek_kapsam_disi_konut_kredi_sorulari_hala_reddedilir():
+    """Yukarıdaki düzeltme kapıyı açmamalı: sorguda bilinen bir BIST şirket
+    adı GEÇMEYEN gerçek "konut"/"kredi" soruları hâlâ kapsam dışı sayılmalı."""
+    assert _intent("konut kredisi ne kadar") == "OUT_OF_SCOPE"
+    assert _intent("ev almak için ne kadar kredi çekebilirim") == "OUT_OF_SCOPE"
+    assert _intent("kredi kartı limitim ne kadar") == "OUT_OF_SCOPE"

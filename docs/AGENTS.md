@@ -89,6 +89,47 @@ internetten canlı veri çekmez). Sorguyla alakalı kayıt yoksa tool
 Etiketleme kritik: parçalar eskiden etiketsiz birleştiriliyordu ve model iki
 ayrı şirketin rakamlarını tek cümlede harmanlayabiliyordu.
 
+### Canlı katman — RAG'ın üstüne eklenen, LLM'e girmeyen bloklar
+
+RAG yalnızca **değişmeyecek arşiv bilgisi** tutar (bilanço metni, şirket
+profili, referans). Güncel bilgi ayrı bir yoldan, soru anında çekilir ve
+`summary_text`'in sonuna **kendi etiketli bloğu** olarak eklenir. İki blok
+birbirini dışlar:
+
+| Koşul | Tool | Blok başlığı |
+|---|---|---|
+| Şirket tespit edildi **ve** güncellik isteniyor | `get_live_kap_disclosures` | `Güncel KAP Bildirimleri:` |
+| Şirket tespit edilMEdi **ve** gündem isteniyor | `get_live_market_headlines` | `Güncel Piyasa Başlıkları:` |
+
+Karar `agents/market_query.py`'de kural tabanlı verilir. Şirket sorulduğunda
+genel gündem eklenmez (sorulmayan bilgiyle cevabı seyreltir), şirket
+sorulmadığında KAP'a hangi şirketi soracağımız belirsizdir.
+
+**Bloklar LLM'den geçmez.** RAG özetiyle aynı cümlede eritilirse hangi
+bilginin arşivden hangisinin canlı kaynaktan geldiği bulanıklaşır. Bu
+garanti tek başına ajanda tutulamıyor: orchestrator'ın `merge_responses`
+adımı tüm ajan çıktılarını ikinci bir LLM'den geçiriyor ve ilk sürümde bu
+blokları düzyazıya eritiyordu (ölçüldü, 24 Ağustos). Merge prompt'una
+"CANLI BLOKLARI KORU" kuralı bu yüzden eklendi.
+
+**Dış kaynağa ulaşılamazsa blok sessizce atlanır** — RAG özeti kendi başına
+geçerli bir cevaptır, canlı katman "varsa iyi" bir ektir.
+
+Kaynaklar ve ölçümle alınan kararlar:
+
+- **KAP** (`app/providers/kap_p.py`, `pykap` üzerinden). Resmî bir API yok;
+  kütüphane KAP sayfalarını okur (AK 5.1 çekincesi). `pykap`'ın
+  `get_expected_disclosure_list` fonksiyonu denendi ve **yanlış** bulundu:
+  geçmiş bildirimleri değil gelecekteki dosyalama takvimini döndürüyor.
+  Doğrusu `get_historical_disclosure_list`.
+- **BloombergHT** (`app/providers/bloomberg_ht_p.py`, httpx + lxml). Yalnızca
+  **genel gündem** verir, şirket bazlı haber vermez: bir hissenin kendi
+  sayfasındaki "İlgili Haberler" bloğu genel `/borsa` sayfasınınkiyle birebir
+  aynı çıktı, şirket bazlı haber ancak `robots.txt`'nin yasakladığı site içi
+  aramadan gelir. `sitemap_google_news.xml` de kullanılmadı — içeriği iki ay
+  eskiydi. Maddelerin ayrı bağlantısı yok, kaynak olarak sayfanın kendisi
+  verilir; olmayan bir permalink üretilmez. Sonuç 5 dakika önbellekte tutulur.
+
 ## Risk Ajanı
 
 `agents/risk_agent.py`: `get_risk_assessment` tool'unu çağırır, dönen
