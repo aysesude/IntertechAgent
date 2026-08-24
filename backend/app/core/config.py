@@ -425,6 +425,11 @@ class Settings(BaseSettings):
     # mertebesindedir; RAG ilk çağrıda embedding modelini ve indeksi yükler.
     mcp_tool_timeout_default: float = 10.0
     mcp_tool_timeout_rag: float = 60.0
+    # KAP canlı bildirim sorgusu: RAG'ın aksine embedding modeli yüklemiyor
+    # ama dış siteye HTTP isteği + sayfa ayrıştırma yapıyor (pykap). 60 sn'lik
+    # RAG payına gerek yok, 10 sn'lik varsayılan ise KAP yavaşladığında dar
+    # gelebilir — ikisi arasında ayrı bir değer.
+    mcp_tool_timeout_live_news: float = 20.0
 
     # --- API ---
     api_host: str = "0.0.0.0"
