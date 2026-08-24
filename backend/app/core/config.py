@@ -401,7 +401,7 @@ class Settings(BaseSettings):
     # Bazı yeni nesil modeller `temperature` parametresini reddediyor
     # (yalnızca varsayılan değeri kabul ediyorlar). Sağlayıcı 400 dönerse
     # .env'de OPENAI_TEMPERATURE'ı boş bırak: parametre isteğe hiç eklenmez.
-    openai_temperature: float | None = 0.1
+    openai_temperature: float | None = 0.0
 
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
