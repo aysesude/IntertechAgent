@@ -68,10 +68,15 @@ Sized and paced for a chat bubble: same boat, calmer water, animated ellipsis.
 {isStreaming && <PaperBoatThinking />}
 <PaperBoatThinking size={32} label="Searching" />
 <PaperBoatThinking showLabel={false} />
+<PaperBoatThinking label="Thinking" showDots={false} />
 ```
 
 Same props as the loader, with `size: 38`, `speed: 0.72`, `amplitude: 0.85` and
-`showLabel: true` as defaults.
+`showLabel: true` as defaults, plus `showDots: true`.
+
+Set `showDots={false}` where the sailing mark is meant to be the only motion:
+two animations at different tempos side by side read as two separate things,
+and the eye follows the faster one.
 
 ## Colour
 

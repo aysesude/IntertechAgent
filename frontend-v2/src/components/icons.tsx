@@ -91,6 +91,8 @@ export const SendIcon = (p: IconProps) =>
     </>
   ));
 export const PlusIcon = (p: IconProps) => base(p, <path d="M12 5v14M5 12h14" />);
+export const DownloadIcon = (p: IconProps) =>
+  base(p, <path d="M12 3v12M7 11l5 5 5-5M4 20h16" />);
 export const XIcon = (p: IconProps) => base(p, <path d="M18 6 6 18M6 6l12 12" />);
 export const ArrowUpIcon = (p: IconProps) => base(p, <path d="M12 19V5M5 12l7-7 7 7" />);
 export const ArrowDownIcon = (p: IconProps) => base(p, <path d="M12 5v14M5 12l7 7 7-7" />);

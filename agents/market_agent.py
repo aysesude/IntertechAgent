@@ -21,10 +21,6 @@ KAP'tan geldiği bulanıklaşır (2026-08-24 kararı: "RAG değişmeyecek bilgil
 içindir, güncel bildirim listesi ayrı ve etiketli kalır"). KAP'a
 ulaşılamazsa bu blok sessizce atlanır — RAG özeti kendi başına geçerli bir
 cevaptır, canlı ek bir "varsa iyi" katmandır.
-
-Fiyat/kur soruları ("dolar ne kadar", "altın son 3 ayda ne yaptı") RAG'e hiç
-gitmez — bkz. `price_query.fiyat_niyeti`. Sayılar `price_history`
-tablosundan geliyor, doküman aramasının konusu değil.
 """
 
 from collections.abc import Callable
@@ -125,9 +121,11 @@ def _render_guncel_fiyat(data: dict[str, Any]) -> str:
             # Eski fiyat GİZLENMEZ, eskiliği söylenir (zarif düşüş).
             satir += f" [DİKKAT: {p.get('age_days')} gün önceki fiyat, güncel olmayabilir]"
         satirlar.append(satir)
+
     eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
     if eksik:
         satirlar.append("Fiyatı bulunamayan: " + ", ".join(eksik))
+
     if not satirlar:
         return "Güncel fiyat: istenen varlık için kayıt yok."
     return "Güncel fiyatlar\n" + "\n".join(satirlar)
@@ -142,6 +140,7 @@ def _render_fiyat_gecmisi(data: dict[str, Any]) -> str:
     """
     series = data.get("series") or {}
     satirlar: list[str] = []
+
     for sembol, noktalar in sorted(series.items()):
         if not noktalar:
             continue
@@ -157,9 +156,11 @@ def _render_fiyat_gecmisi(data: dict[str, Any]) -> str:
             isaret = "+" if degisim >= 0 else "-"
             satir += f" ({isaret}%{_tr_amount(abs(degisim))})"
         satirlar.append(satir)
+
     eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
     if eksik:
         satirlar.append("Veri bulunamayan: " + ", ".join(eksik))
+
     if not satirlar:
         return "Fiyat geçmişi: istenen varlık için kayıt yok."
     return f"Fiyat geçmişi ({data.get('window', '—')})\n" + "\n".join(satirlar)

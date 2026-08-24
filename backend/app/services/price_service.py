@@ -24,10 +24,15 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import Granularity, PriceCurrency, TimeWindow
+from app.core.config import Granularity, PriceCurrency, TimeWindow, settings, turkey_today
 from app.core.exceptions import InsufficientDataError, NotFoundError, ValidationAppError
 from app.models import Asset, PriceHistory
-from app.schemas.portfolio import PriceHistoryResult, PricePoint
+from app.schemas.portfolio import (
+    CurrentPrice,
+    CurrentPriceResult,
+    PriceHistoryResult,
+    PricePoint,
+)
 from app.services.valuation_service import FX_SYMBOL_BY_CURRENCY, PriceBook
 
 # Grafik hedefi: 700px genişlikte 365 nokta çizmek bilgi değil gürültü, ve seri
@@ -246,4 +251,85 @@ def get_asset_price_history(
         series=series,
         unknown_symbols=unknown_symbols,
         symbols_without_data=symbols_without_data,
+    )
+
+
+def get_current_prices(db: Session, symbols: list[str]) -> CurrentPriceResult:
+    """Sembollerin veritabanındaki EN SON kapanış fiyatını döndürür.
+
+    "Dolar ne kadar?" sorusunun kaynağı burasıdır. Fiyatlar günlük toplama
+    işiyle (`data/daily_update.py`, sunucuda cron) TCMB/yfinance/TEFAS'tan
+    çekilip `price_history`'ye yazılıyor; bu fonksiyon o kaydı okur.
+
+    NEDEN CANLI ÇAĞRI DEĞİL: sağlayıcıya sohbet akışının içinden gitmek
+    yanıta saniyeler ekler (TEFAS tek başına birkaç saniye) ve ağ tökezlerse
+    cevap hiç gelmez — üstelik ingest'in kaynak öncelik kurallarını da
+    atlardı. Kayıtlı fiyat ZATEN gerçek kaynaktan geliyor; eksik olan tek şey
+    tazeliğinin söylenmesiydi, o da `price_date`/`age_days`/`stale` ile
+    veriliyor. Hafta sonu sorulan bir kur için Cuma kapanışı doğru cevaptır:
+    TCMB hafta sonu kur yayımlamaz.
+
+    Kısmi sonuç hata değildir; tanınmayan ve fiyatı olmayan semboller ayrı
+    ayrı raporlanır (AK 5.5 — eksik veri sessizce yutulmaz).
+
+    Raises:
+        ValidationAppError: sembol listesi boş.
+        NotFoundError: hiçbir sembol varlık evreninde tanınmadı.
+    """
+    if not symbols:
+        raise ValidationAppError("symbols boş olamaz")
+
+    istenen = [s.strip().upper() for s in symbols if s and s.strip()]
+    if not istenen:
+        raise ValidationAppError("symbols boş olamaz")
+
+    assets = {
+        a.symbol: a
+        for a in db.execute(select(Asset).where(Asset.symbol.in_(istenen))).scalars().all()
+    }
+    taninmayan = [s for s in istenen if s not in assets]
+    if not assets:
+        raise NotFoundError(f"Tanınmayan sembol(ler): {', '.join(taninmayan)}")
+
+    # Varlık başına son fiyat satırı. Sembol sayısı bir avuç olduğu için
+    # varlık başına tek sorgu yeterli; tek bir pencere fonksiyonu yazmak
+    # SQLite/PostgreSQL arasında ek uyum yükü getirirdi.
+    fiyatlar: list[CurrentPrice] = []
+    verisiz: list[str] = []
+    bugun = turkey_today()
+
+    for sembol in istenen:
+        asset = assets.get(sembol)
+        if asset is None:
+            continue
+        satir = db.execute(
+            select(PriceHistory)
+            .where(PriceHistory.asset_id == asset.id)
+            .order_by(PriceHistory.price_date.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        if satir is None:
+            verisiz.append(sembol)
+            continue
+
+        yas = (bugun - satir.price_date).days
+        fiyatlar.append(
+            CurrentPrice(
+                symbol=asset.symbol,
+                name=asset.name,
+                asset_class=asset.asset_class,
+                currency=asset.currency,
+                price=satir.close_price,
+                price_date=satir.price_date,
+                source=getattr(satir.source, "value", str(satir.source)),
+                age_days=yas,
+                stale=yas > settings.current_price_stale_days,
+            )
+        )
+
+    return CurrentPriceResult(
+        as_of=max((f.price_date for f in fiyatlar), default=bugun),
+        prices=fiyatlar,
+        unknown_symbols=taninmayan,
+        symbols_without_data=verisiz,
     )

@@ -96,15 +96,30 @@ interface PageTransitionProps {
   children: React.ReactNode;
   /** Sadece LoginScreen'den gelen ilk Dashboard mount'unda true — Faz 5. */
   dashboardEnter?: boolean;
+  /**
+   * Sayfa görüntü alanına OTURUR, taşmaz.
+   *
+   * Varsayılan `min-h-screen` çoğu ekran için doğru: içerik kısa olsa bile
+   * arka plan katmanı tüm ekranı kaplar. Ama sohbet ekranında yanlış — kendi
+   * yüksekliğini görüntü alanından hesaplıyor ve tek kayan yüzeyin mesaj
+   * akışı olmasını istiyor. `min-h-screen` orada sayfayı da kaydırılabilir
+   * yapıp iki ayrı kayan yüzey yaratıyordu.
+   */
+  fullHeight?: boolean;
 }
 
-export const PageTransition: React.FC<PageTransitionProps> = ({ children, dashboardEnter = false }) => {
+export const PageTransition: React.FC<PageTransitionProps> = ({
+  children,
+  dashboardEnter = false,
+  fullHeight = false,
+}) => {
   const shouldReduceMotion = useReducedMotion();
   const useStagger = dashboardEnter && !shouldReduceMotion;
+  const yukseklik = fullHeight ? "h-full" : "min-h-screen";
 
   // Hareketi azaltma tercihinde hiç animasyon yok: içerik doğrudan görünür.
   if (shouldReduceMotion) {
-    return <div className="relative min-h-screen">{children}</div>;
+    return <div className={`relative ${yukseklik}`}>{children}</div>;
   }
 
   return (
@@ -113,7 +128,7 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children, dashbo
       animate="animate"
       exit="exit"
       variants={useStagger ? dashboardContentVariants : contentVariants}
-      className="relative min-h-screen"
+      className={`relative ${yukseklik}`}
     >
       {children}
     </motion.div>

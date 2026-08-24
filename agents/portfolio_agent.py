@@ -25,7 +25,9 @@ from typing import Any
 from fastmcp import Client
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
-from app.core.config import settings
+from agents.formatting import tr_amount as _tr_amount
+from agents.formatting import tr_percent as _tr_percent
+from app.core.config import turkey_today
 from app.core.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,13 @@ TOOLS = (
     "get_portfolio_performance",
     "get_transactions",
     "get_benchmark_comparison",
+    # Bir VARLIĞIN fiyat geçmişi. MCP'de kayıtlıydı ama hiçbir ajanın tool
+    # listesinde değildi, yani sohbetten erişilemiyordu: "XAUTRY'nin son 3
+    # aydaki fiyat geçmişini ver" sorusu piyasa ajanına düşüp RAG'de doküman
+    # aranıyor ve "bulunamadı" dönüyordu (ölçüldü, 23 Ağustos test turu).
+    # Bölünme şu: sayısal veri portföy ajanında, doküman/haber piyasa
+    # ajanında. Fiyat serisi sayısal veridir.
+    "get_asset_price_history",
 )
 
 # Tool sonucunun `data` içinde duracağı anahtar.
@@ -51,6 +60,7 @@ _RESULT_KEY = {
     "get_portfolio_performance": "performance",
     "get_transactions": "transactions",
     "get_benchmark_comparison": "benchmark",
+    "get_asset_price_history": "price_history",
 }
 
 # Plan başına tavan: modelin "ne olur ne olmaz hepsini çağırayım" davranışını
@@ -185,7 +195,13 @@ class PortfolioAgent(BaseAgent):
     async def _plan(self, request: AgentRequest, catalog: str) -> list[tuple[str, dict[str, Any]]]:
         history = request.context.get("recent_messages") or []
         prompt = _PLAN_PROMPT.format(
-            today=settings.anchor_date.isoformat(),
+            # `settings.anchor_date` DEĞİL. O, sentetik verinin donmuş "bugün"ü
+            # (şu an 1 Ağustos) ve yalnızca seed'i ilgilendiriyor. Buraya
+            # yazıldığında model gerçekten o tarihte yaşadığını sanıyor: "bu ay",
+            # "geçen hafta", "son 3 ay" gibi her göreli ifade yanlış pencereye
+            # çevriliyordu. Kullanıcıya bugünün ne olduğunu söyleyen tek doğru
+            # kaynak `turkey_today()`.
+            today=turkey_today().isoformat(),
             tool_list=catalog,
             history=_format_history(history),
             query=request.query,
@@ -318,20 +334,6 @@ _TX_TYPE_TR = {
 }
 
 
-def _tr_amount(value: Any, *, signed: bool = False) -> str:
-    if value is None:
-        return "—"
-    text = f"{float(value):+,.2f}" if signed else f"{float(value):,.2f}"
-    return text.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
-
-
-def _tr_percent(value: Any, *, signed: bool = False) -> str:
-    if value is None:
-        return "—"
-    text = f"{float(value):+.2f}" if signed else f"{float(value):.2f}"
-    return text.replace(".", ",") + "%"
-
-
 def _render(data: dict[str, Any]) -> str:
     """Tool verisini LLM'e verilecek kompakt metne çevirir.
 
@@ -424,10 +426,53 @@ def _render(data: dict[str, Any]) -> str:
         ]
         blocks.append("Kıyaslama: " + " | ".join(parts))
 
+    price_history = data.get("price_history")
+    if price_history:
+        blocks.append(_render_price_history(price_history))
+
     if data.get("failed_tools"):
         blocks.append("Alınamayan bilgiler: " + ", ".join(data["failed_tools"]))
 
     return "\n\n".join(blocks) if blocks else "Portföy verisi bulunamadı."
+
+
+def _render_price_history(payload: dict[str, Any]) -> str:
+    """Fiyat serisini UÇ NOKTALARA indirger: başlangıç, bitiş, değişim.
+
+    Tam seri (60-120 nokta) anlatıya girmez — hem ücretli token hem de modelin
+    yanlış değer okuma kaynağı. Grafik zaten seriyi API'den kendisi alıyor.
+    Sayısal değişim burada hesaplanıyor; LLM'in seriden yüzde çıkarması
+    istenmiyor.
+
+    Bulunamayan semboller SÖYLENİR: sessizce atlanırsa kullanıcı sorduğu
+    varlığın cevapta olmadığını fark etmez (uydurmama, AK 5.5).
+    """
+    series = payload.get("series") or {}
+    satirlar: list[str] = []
+
+    for sembol, noktalar in sorted(series.items()):
+        if not noktalar:
+            continue
+        ilk = noktalar[0]
+        son = noktalar[-1]
+        ilk_fiyat = float(ilk.get("close") or 0)
+        son_fiyat = float(son.get("close") or 0)
+        degisim = ((son_fiyat / ilk_fiyat - 1) * 100) if ilk_fiyat else None
+        satirlar.append(
+            f"{sembol}: {ilk.get('date')} {_tr_amount(ilk_fiyat)} → "
+            f"{son.get('date')} {_tr_amount(son_fiyat)}"
+            + (f" ({_tr_percent(degisim, signed=True)})" if degisim is not None else "")
+        )
+
+    eksik = list(payload.get("unknown_symbols") or []) + list(
+        payload.get("symbols_without_data") or []
+    )
+    if eksik:
+        satirlar.append("Veri bulunamayan semboller: " + ", ".join(eksik))
+
+    if not satirlar:
+        return "Fiyat geçmişi: istenen sembol(ler) için veri yok."
+    return f"Fiyat geçmişi ({payload.get('window', '—')})\n" + "\n".join(satirlar)
 
 
 def _render_transactions(payload: dict[str, Any]) -> str:
@@ -454,4 +499,11 @@ def _render_transactions(payload: dict[str, Any]) -> str:
         f"{_tr_amount(bucket['quantity'])} adet, toplam {_tr_amount(bucket['amount'])} TL"
         for (symbol, tx_type), bucket in sorted(totals.items())
     ]
-    return "İşlemler\n" + "\n".join(parts)
+    # Toplam sayı AYRICA yazılır.
+    #
+    # "Bu ay KAÇ işlem yaptım?" sorusuna sembol bazlı bir döküm dönüyor ama
+    # sorulan sayı hiçbir yerde geçmiyordu; toplamı satırlardan saymak
+    # merge adımına kalıyordu ve o da yapmıyordu (ölçüldü, 23 Ağustos test
+    # turu). Sayı burada, veriden hesaplanıyor — LLM'in sayması istenmiyor.
+    baslik = f"İşlemler (toplam {len(rows)} işlem)"
+    return baslik + "\n" + "\n".join(parts)

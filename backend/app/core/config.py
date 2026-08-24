@@ -1,7 +1,7 @@
 """Uygulama genelindeki tüm yapılandırma buradan okunur. Kodun başka hiçbir
 yerinde sabit bağlantı adresi, anahtar veya model adı bulunmamalıdır."""
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from functools import lru_cache
@@ -532,6 +532,13 @@ class Settings(BaseSettings):
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
     # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
     anchor_date: date = date(2026, 8, 1)
+    # Güncel fiyat bu kadar takvim gününden eskiyse "eski" işaretlenir.
+    # 4 gün: piyasa Cuma kapanır, Pazartesi açılır — Pazar günü sorulan bir
+    # fiyat 2 günlüktür ve normaldir. Araya resmî tatil girdiğinde 3-4 güne
+    # çıkabilir. Bunun üstü, günlük toplama işinin durduğu anlamına gelir ve
+    # kullanıcıya söylenmelidir.
+    current_price_stale_days: int = 4
+
     # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
     # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
     evds_api_key: str | None = None
@@ -669,3 +676,22 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+# Türkiye 2016'dan beri kalıcı olarak UTC+3; yaz saati uygulaması yok.
+# Sabit fark kullanmak `zoneinfo`'ya (ve Windows'ta `tzdata` paketine)
+# bağımlılığı ortadan kaldırıyor ve bu ülke için sonucu birebir aynı.
+TURKEY_UTC_OFFSET = timezone(timedelta(hours=3))
+
+
+def turkey_today() -> date:
+    """Türkiye saatiyle bugünün tarihi.
+
+    Sunucu UTC çalışıyor. `date.today()` kullanılsaydı gece yarısı ile 03:00
+    arasında ekranda ve sohbette DÜNÜN tarihi görünürdü — Türkçe bir finans
+    ürününde kullanıcının takvimi esas alınmalı.
+
+    `settings.anchor_date` ile KARIŞTIRILMAMALI: o, sentetik verinin donmuş
+    "bugün"üdür ve yalnızca üretim/seed tarafını ilgilendirir. Kullanıcıya
+    bugünün ne olduğunu söyleyen tek doğru kaynak burasıdır.
+    """
+    return datetime.now(TURKEY_UTC_OFFSET).date()

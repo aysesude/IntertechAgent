@@ -128,7 +128,15 @@ function AppShell() {
               onLogout={logout}
             />
 
-            <main className="relative z-[1] mx-auto max-w-[1440px] px-4 py-6 pb-24 sm:px-6 sm:py-9 md:px-10">
+            <main
+              className={
+                "relative z-[1] mx-auto max-w-[1440px] px-4 py-6 sm:px-6 sm:py-9 md:px-10 " +
+                // Alt dolgu yüzen sohbet balonuna yer açmak içindi; o balon
+                // sohbet ekranında gizli olduğu için orada yalnızca kartı
+                // ekrandan taşırıyordu.
+                (screen === "chat" ? "pb-6 sm:pb-9" : "pb-24")
+              }
+            >
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                   <Route path="/" element={<Navigate to={SCREEN_PATHS.dashboard} replace />} />
@@ -167,7 +175,7 @@ function AppShell() {
                   <Route
                     path={SCREEN_PATHS.chat}
                     element={
-                      <PageTransition>
+                      <PageTransition fullHeight>
                         <ChatPage />
                       </PageTransition>
                     }

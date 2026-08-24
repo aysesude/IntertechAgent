@@ -142,10 +142,83 @@ def test_seeded_user_ids_are_stable(seeded):
 
 
 def test_cash_never_negative(seeded):
+    """Nakit HER GÜN sıfırın üstünde kalmalı, yalnızca sonda değil.
+
+    Test önceden tek bir `cash_balance_as_of(...)` çağrısıyla yalnızca SON
+    bakiyeye bakıyordu. Bir portföy dönem ortasında elinde olmayan parayı
+    harcayıp sonradan gelen faiz/satışla toparlansaydı, defter o gün fiilen
+    eksideyken test yeşil yanardı. Nakit hareketleri (WITHDRAW) seed'e
+    eklenirken bu boşluk gerçek bir risk hâline geldi, o yüzden değişmez
+    her işlem gününde denetleniyor.
+    """
     with Session(seeded) as session:
         for portfolio in session.execute(select(Portfolio)).scalars().all():
-            balance = cash_balance_as_of(session, portfolio.id)
-            assert balance >= 0, f"negatif nakit: {portfolio.id} -> {balance}"
+            gunler = (
+                session.execute(
+                    select(func.date(Transaction.transaction_date))
+                    .where(Transaction.portfolio_id == portfolio.id)
+                    .distinct()
+                )
+                .scalars()
+                .all()
+            )
+            for gun in gunler:
+                if isinstance(gun, str):  # SQLite `date()` metin döndürür
+                    gun = date.fromisoformat(gun)
+                balance = cash_balance_as_of(session, portfolio.id, gun)
+                assert balance >= 0, f"negatif nakit: {portfolio.id} @ {gun} -> {balance}"
+
+
+def test_write_guard_alone_cannot_keep_the_ledger_solvent(seeded):
+    """Yazma anındaki nakit koruması TARİH BİLMİYOR — bu testin sebebi o.
+
+    `record_transaction`, negatif nakit ayağını `cash_balance_as_of(db,
+    portfolio_id)` ile denetliyor: gün parametresi YOK, yani defterin
+    TOPLAMINA bakıyor. Tarihi geride olan bir çekim, kendisinden SONRA
+    tarihlenmiş bir yatırma sayesinde bu kapıdan geçebiliyor ve defter aradaki
+    günlerde eksiye düşüyor.
+
+    Bu bir `record_transaction` hatası değil, sınırı: tek bir satırı yazarken
+    tüm zaman çizgisini yeniden denetlemek pahalı olurdu. Sınır bilindiği için
+    üreten taraf (seed) çekimi `_cash_floor_from` ile boyutlandırıyor ve I2
+    her işlem gününü ayrı ayrı denetliyor. Bu test o iş bölümünü kayda
+    geçiriyor: koruma tek başına yetseydi ikisine de gerek olmazdı.
+    """
+    with Session(seeded) as session:
+        user = User(email="tarih-sirasi@example.com", full_name="Sira Testi")
+        session.add(user)
+        session.flush()
+        portfolio = Portfolio(user_id=user.id)
+        session.add(portfolio)
+        session.flush()
+
+        gec_gun = datetime(2026, 3, 31, 10, tzinfo=timezone.utc)
+        erken_gun = datetime(2026, 3, 1, 10, tzinfo=timezone.utc)
+
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.DEPOSIT,
+            transaction_date=gec_gun,
+            cash_amount_try=Decimal("100000"),
+        )
+        # Yatırmadan ÖNCEKİ bir güne çekim: toplam bakiye 100.000 olduğu için
+        # yazma koruması buna izin veriyor.
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.WITHDRAW,
+            transaction_date=erken_gun,
+            cash_amount_try=Decimal("-80000"),
+        )
+        session.flush()
+
+        # Son bakiye sağlıklı: I2'nin ESKİ hâli (yalnızca son bakiye) bunu
+        # yakalayamazdı.
+        assert cash_balance_as_of(session, portfolio.id) == Decimal("20000")
+
+        # Oysa çekim gününde defter 80.000 TL ekside.
+        assert cash_balance_as_of(session, portfolio.id, erken_gun.date()) == Decimal("-80000")
 
 
 def test_record_transaction_rejects_overdraft(seeded):
