@@ -44,12 +44,34 @@ class AgentResponse(BaseModel):
 
 ## Piyasa Araştırma Ajanı (`agents/market_agent.py`) — çalışıyor
 
-`search_market_news` MCP tool'unu çağırır. Tool saf DB tabanlı RAG'dır (LLM
-yok, internetten canlı veri çekmez). Sorguyla alakalı kayıt yoksa tool
-`NOT_FOUND` döner, ajan bunu diğer tool hatalarıyla aynı yoldan
-(`AgentResponse.error`) taşır.
+Ajan iki ayrı soru tipine bakar ve **girişte dallanır**:
 
-Ajan üç adım uygular:
+| Soru tipi | Nereye gider | Örnek |
+|---|---|---|
+| **Fiyat / kur** | `get_current_prices` | "dolar ne kadar", "gram altın kaç TL" |
+| **Fiyat seyri** | `get_asset_price_history` | "dolar son bir yılda ne yaptı" |
+| **Haber / bilanço / kavram** | `search_market_news` (RAG) | "Aselsan haberleri", "net faiz marjı ne demek" |
+
+Dallanma `agents/price_query.py` ile **kural tabanlı** yapılır, LLM
+kullanılmaz: soru tipi ("ne kadar", "kaç TL") ve varlık adı sonlu ve iyi
+tanımlı bir küme. İkinci bir LLM planlayıcısı hem yanıta gecikme ekler hem de
+sohbetin en sık sorulan sorusunu modelin gününe bağlardı.
+
+**Neden bu dal var:** kur ve fiyat dokümanlarda değil `price_history`
+tablosunda yaşıyor. Dal olmadan "dolar ne kadar?" belge aramasına düşüyor ve
+"veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı"
+dönüyordu — elde güncel kur dururken (ölçüldü, 23 Ağustos test turu).
+
+**Fiyat yolunda LLM devrede değil:** sayılar tool'dan geldiği gibi geçer,
+cümleyi orchestrator'ın merge adımı kurar. Fiyatın tarihi ve kaynağı her
+satırda yazılır — fiyat "bugünün" fiyatı olmak zorunda değil (piyasa hafta
+sonu kapalı) ve tarihi söylemeden vermek olmayan bir tazelik iddia etmek
+olurdu. Beklenenden eski fiyat gizlenmez, eskiliği söylenir.
+
+**Haber yolu** (`search_market_news`) saf DB tabanlı RAG'dır (LLM yok,
+internetten canlı veri çekmez). Sorguyla alakalı kayıt yoksa tool
+`NOT_FOUND` döner, ajan bunu diğer tool hatalarıyla aynı yoldan
+(`AgentResponse.error`) taşır. Bu yolda üç adım uygulanır:
 
 1. **Deterministik filtre** — `agents/market_query.py` sorgudan şirket kodunu
    (`data/company_mappings.json`) ve dönemi (`2026-Q2`) çıkarır, tool'a
