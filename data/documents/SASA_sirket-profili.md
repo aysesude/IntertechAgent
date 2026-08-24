@@ -31,6 +31,9 @@ Plastik sektöründe sınıflandırılmaktadır.
 tarafından satın alınmıştır. Ağustos 2015'te tamamlanan zorunlu pay
 alım süreci sonunda Erdemoğlu Holding'in şirketteki payı yüzde
 84,80'e ulaşmıştır; kalan pay halka açıktır. Yönetim kurulu başkanı
-İbrahim Erdemoğlu, başkan vekili Ali Erdemoğlu'dur. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+İbrahim Erdemoğlu, başkan vekili Ali Erdemoğlu'dur. Şirket, TFRS'ye göre
+21,985 milyar TL tutarındaki 2025 net zararı nedeniyle 2026 yılında
+temettü dağıtmamıştır (10 Nisan 2026 KAP bildirimi, 5 Mayıs 2026 genel
+kurulunda onaylandı). Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır.

@@ -45,6 +45,8 @@ göre yaklaşık yüzde 26,3 ile yüzde 26,9 arasında değişmektedir (iki
 kaynak farklı hesaplama yöntemi kullanmaktadır, kesin ve güncel tarihli
 bir oran için KAP'taki resmi ortaklık yapısı bildirimine bakılmalıdır).
 Yönetim kurulu başkanı, 18 Mart 2026 tarihli 62. Olağan Genel Kurul
-Toplantısı'nda onaylanan Ömer M. Koç'tur. Bu doküman şirketin kimlik ve
-yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
-türü dokümanlarda yer alır.
+Toplantısı'nda onaylanan Ömer M. Koç'tur. 2026 yılında (2025 kârından)
+hisse başına brüt 6,83 TL, net 5,8055 TL nakit temettü dağıtılmasına
+karar verildi; hak kullanım tarihi 25 Mart 2026'dır. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

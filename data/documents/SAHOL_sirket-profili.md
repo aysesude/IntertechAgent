@@ -33,6 +33,8 @@ gösterir: Bankacılık, Finansal Hizmetler, Enerji, Malzeme Teknolojileri,
 Dijital ve Diğer. En büyük iştiraki Akbank'tır. Şirket, BIST'te
 Holding ve Yatırım sektöründe sınıflandırılmaktadır. Yönetim kurulu
 başkanlığını, 27 Mart 2025'te Güler Sabancı'dan bu görevi devralan
-Hayri Çulhacı yürütmektedir. Bu doküman şirketin kimlik ve yapısal
+Hayri Çulhacı yürütmektedir. 2026 yılında hisse başına brüt 1,41356 TL,
+net 1,33897 TL nakit temettü dağıtılmasına karar verildi; hak kullanım
+tarihi 1 Nisan 2026'dır. Bu doküman şirketin kimlik ve yapısal
 bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
 dokümanlarda yer alır.

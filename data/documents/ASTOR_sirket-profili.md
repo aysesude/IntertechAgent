@@ -24,7 +24,9 @@ satışı; bunun yanında ilgili mühendislik, montaj ve teknik hizmetlerin
 sunulması alanında faaliyet göstermektedir. Şirket, BIST'te İmalat
 (Metal Eşya, Makine, Elektrikli Cihazlar ve Ulaşım Araçları)
 sektöründe sınıflandırılmaktadır. Yönetim kurulu başkanı ve aynı
-zamanda genel müdürü Feridun Geçgel'dir. Bu doküman şirketin
+zamanda genel müdürü Feridun Geçgel'dir. 2026 yılında hisse başına
+brüt 2,19115 TL, net 1,86248 TL nakit temettü dağıtılmasına karar
+verildi; hak kullanım tarihi 15/19 Ekim 2026'dır. Bu doküman şirketin
 kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar
 ayrı `bilanco` türü dokümanlarda yer alır. Ortaklık yapısına ilişkin
 ayrıntılı pay dağılımı bilgisi mevcut kaynaklarda netleştirilemediği

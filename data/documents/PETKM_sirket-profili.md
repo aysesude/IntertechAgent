@@ -32,6 +32,7 @@ yüzde 51'i satılarak özelleştirilmiştir. Bugün Petkim'in yönetim
 kontrolünü elinde bulunduran ana ortağı, Azerbaycan Cumhuriyeti
 Devleti'nin resmi petrol şirketi SOCAR'ın Türkiye iştiraki SOCAR
 Türkiye Enerji A.Ş.'dir. Yönetim kurulu başkanı Anar Mammadov, başkan
-vekili Kanan Najafov'dur. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+vekili Kanan Najafov'dur. Şirket, 20 Nisan 2026'da KAP'a yaptığı
+bildirimde 2025 yılı kârı için temettü dağıtmama kararı aldığını
+duyurmuştur. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
+dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

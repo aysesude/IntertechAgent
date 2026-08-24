@@ -36,6 +36,8 @@ nihai en büyük pay sahibi Koç Holding'dir. Şirket 2006 yılında
 Tüpraş hisseleri 1991 yılından bu yana Borsa İstanbul'da işlem
 görmektedir; Sermaye Piyasası Kurulu'na kayıtlıdır. Yönetim kurulu
 başkanlığını 2008'den bu yana M. Ömer Koç yürütmektedir; Yıldırım Ali
-Koç başkan vekilidir. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+Koç başkan vekilidir. 2026 yılında hisse başına toplam net 14,56 TL
+nakit temettü iki taksitte (16 Mart: net 8,82 TL, 30 Eylül: net 5,73
+TL) dağıtılmasına karar verildi. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır.

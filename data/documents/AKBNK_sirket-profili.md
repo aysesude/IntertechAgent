@@ -30,6 +30,8 @@ Akbank'ın en büyük hissedarı Sabancı Holding'dir; Sakıp Sabancı
 Holding ve Hacı Ömer Sabancı Holding toplam olarak yaklaşık yüzde 49
 hisseye sahiptir. Kalan yaklaşık yüzde 51'i emeklilik fonları, küçük
 yatırımcılar ve yabancı yatırımcılar arasında halka açık olarak işlem
-görmektedir. Yönetim kurulu başkanı Suzan Sabancı Dinçer'dir. Bu
+görmektedir. Yönetim kurulu başkanı Suzan Sabancı Dinçer'dir. 2026
+yılında hisse başına brüt 2,20180 TL, net 1,87153 TL nakit temettü
+dağıtılmasına karar verildi; hak kullanım tarihi 26 Mart 2026'dır. Bu
 doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

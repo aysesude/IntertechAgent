@@ -33,6 +33,8 @@ olarak işlem görmektedir.
 
 Şirket 2005 yılında halka açılmış, o tarihten bu yana Borsa İstanbul'da
 işlem görmektedir. Yönetim kurulu başkanı, 5 Mayıs 2026 tarihli olağan
-genel kurul toplantısı sonrası atanan Mahmud Muhammed Topbaş'tır. Bu
-doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+genel kurul toplantısı sonrası atanan Mahmud Muhammed Topbaş'tır. 2026
+yılında hisse başına toplam brüt 14 TL, net 11,9 TL nakit temettü üç
+taksitte (17 Haziran, 16 Eylül, 16 Aralık) dağıtılmasına karar verildi.
+Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

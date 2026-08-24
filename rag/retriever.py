@@ -200,6 +200,26 @@ _GENERIC_FINANCE_TERMS = {
     "kari",
     "yapisi",
     "ortaklik",
+    # "temettü" artık 31 `sirket_profili` dokümanının TAMAMINDA geçiyor (her
+    # şirkete 2026 temettü/kurumsal olay bilgisi eklendi) — "holding"/
+    # "enerji" ile aynı sınıfta jenerik bir kelimeye dönüştü. Eklenmeden
+    # önce ölçümle doğrulandı: "XYZ Teknoloji'nin temettüsü ne kadar"
+    # sorgusu, "teknoloji" kelimesinin ASTOR dokümanındaki "teknik" ile
+    # 4 harflik önek çakışması + "temettüsü"nün ASTOR'un kendi temettü
+    # cümlesiyle eşleşmesi yüzünden (2/3 oranı > 0.5) uydurma şirket adı
+    # hiç eşleşmemesine rağmen gerçek ASTOR verisini "bulundu" saydırdı.
+    "temettu",
+    # Temettü paragrafının boyutlu kalıp kelimeleri de aynı gerekçeyle
+    # jenerikleştirildi (ölçümle doğrulandı): "ABC Holding'in temettü
+    # ödemesi ne kadar" sorgusu "ödemesi" kelimesinin TCELL/EREGL gibi
+    # alakasız şirketlerin kendi "ödeme tarihi ..." cümleleriyle eşleşmesi
+    # yüzünden yanlış şirket verisini "bulundu" saydırdı; "Falanca
+    # Enerji'nin temettü dağıtımı nasıl" sorgusu da benzer şekilde
+    # "dağıtımı" kelimesinin ASTOR'daki "dağıtım sistemleri"/"dağıtılmasına
+    # karar verildi" ifadeleriyle eşleşmesiyle ASTOR'u yanlışlıkla
+    # "bulundu" saydırdı.
+    "odeme",
+    "dagit",
 }
 
 

@@ -39,6 +39,8 @@ sahip çok sayıda iştirake sahiptir. Öne çıkan bir örnek: SunExpress,
 Türk Hava Yolları ile Lufthansa'nın eşit ortaklığında 1989 yılında
 Antalya'da kurulmuş olup Türkiye-Avrupa turizm hattında faaliyet
 göstermektedir. Yönetim kurulu başkanı, 9 Nisan 2026 itibarıyla Prof.
-Dr. Murat Şeker'dir. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+Dr. Murat Şeker'dir. Şirket, Orta Doğu'daki jeopolitik belirsizlik
+nedeniyle nakit pozisyonunu korumak amacıyla 2025 yılı kârı için
+temettü dağıtmama, kârı geçmiş yıllar kârlarına aktarma kararı almıştır.
+Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

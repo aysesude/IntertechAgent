@@ -34,6 +34,9 @@ sermaye payı yaklaşık yüzde 49,34'tür. Kalan yaklaşık yüzde 50,66'lık
 pay diğer ortaklara ve halka açık kısma aittir. Hisseleri Borsa
 İstanbul'da "EKGYO" koduyla işlem görmektedir. Yönetim kurulu başkanı,
 7 Nisan 2026'daki yönetim kurulu toplantısında seçilen Dr. Ertan
-Keleş'tir; Hakan Gedikli başkan vekilidir. Bu doküman şirketin kimlik
+Keleş'tir; Hakan Gedikli başkan vekilidir. Şirket, GYO statüsü
+nedeniyle stopajsız olarak hisse başına brüt/net 0,60 TL nakit temettü
+dağıtılmasına karar verdi (Birinci Temettü tutarı 2,28 milyar TL); hak
+kullanım tarihi 24 Haziran 2026'dır. Bu doküman şirketin kimlik
 ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
 `bilanco` türü dokümanlarda yer alır.

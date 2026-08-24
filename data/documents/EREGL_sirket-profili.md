@@ -30,6 +30,7 @@ Maden Metalürji) devredilmiştir. Güncel ortaklık yapısında Ataer
 Holding A.Ş. yaklaşık yüzde 49,54 paya sahiptir; kalan pay dağınık
 diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır.
 Yönetim kurulu başkanı, OYTAŞ İç ve Dış Ticaret A.Ş.'yi temsilen Murat
-Yalçıntaş'tır. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+Yalçıntaş'tır. 2026 yılında hisse başına brüt 0,55 TL, net 0,4675 TL
+nakit temettü dağıtılmasına karar verildi; ödeme tarihi 3 Haziran
+2026'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
+dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

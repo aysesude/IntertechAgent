@@ -39,5 +39,9 @@ Güncel ana ortak AG Anadolu Grubu Holding A.Ş. olup payı yaklaşık
 yüzde 36,19'dur. Kalan hisseler Borsa İstanbul'da halka açık olarak
 işlem görmektedir. Yönetim kurulu başkanı, 22 Nisan 2026'da bu göreve
 seçilen Kamilhan Süleyman Yazıcı'dır; Talip Altuğ Aksoy başkan
-vekilidir. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
-dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+vekilidir. 2026 yılında hisse başına brüt 4,55 TL, net 3,87315 TL
+nakit temettü dağıtılmasına karar verildi (Kasım 2025'te dağıtılan 650
+milyon TL avans temettü sonrası kalan 825 milyon TL nakit olarak
+ödenecek); ödeme tarihi 13 Mayıs 2026'dır. Bu doküman şirketin kimlik
+ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

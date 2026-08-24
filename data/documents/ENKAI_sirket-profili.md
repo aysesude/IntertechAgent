@@ -31,6 +31,8 @@ Holding Yatırım A.Ş. ile yasal olarak birleşmiştir. Şirketin
 çoğunluk hissesi Tara Holding A.Ş.'ye ait olup, hisselerin bir kısmı
 halka açıktır. Hisseleri Borsa İstanbul'da "ENKAI" koduyla işlem
 görmektedir. Yönetim kurulu başkanlığını, kurucu Şarık Tara'nın
-1994'te görevi devrettiği oğlu Mehmet Sinan Tara yürütmektedir. Bu
+1994'te görevi devrettiği oğlu Mehmet Sinan Tara yürütmektedir. 2026
+yılında hisse başına brüt 2,10 TL, net 1,79433 TL nakit temettü
+dağıtılmasına karar verildi; kayıt tarihi 8 Nisan 2026'dır. Bu
 doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
