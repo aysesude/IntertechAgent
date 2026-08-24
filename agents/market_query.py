@@ -124,7 +124,12 @@ def filtre_cikar(query: str) -> dict[str, str]:
 # Sorgunun ARŞİV değil GÜNCELLİK istediğini işaretleyen kelimeler. Kelime
 # sınırıyla aranır (`\b`) — aksi hâlde "sonuç" içindeki "son" gibi sahte
 # eşleşmeler olur.
-_GUNCELLIK_KELIMELERI_RE = re.compile(r"\b(son|guncel|bugun|simdi|dun|yeni)\b")
+#
+# "haber" de güncellik sayılır: "ASELSAN haberleri neler" sorusu "son"
+# demeden de bugünü kastediyor. Bu kelime olmadan soru yalnızca arşive
+# gidiyor ve şirketin o günkü bildirimi hiç görünmüyordu (ölçüldü).
+# Gövde olarak yazıldı ("haberleri", "haberi" de eşleşsin).
+_GUNCELLIK_KELIMELERI_RE = re.compile(r"\b(son|guncel|bugun|simdi|dun|yeni|haber\w*)\b")
 
 
 def guncellik_istegi_var_mi(query: str) -> bool:
@@ -142,3 +147,24 @@ def guncellik_istegi_var_mi(query: str) -> bool:
     düşük tutuldu.
     """
     return bool(_GUNCELLIK_KELIMELERI_RE.search(_normalize(query)))
+
+
+# Sorgunun GENEL piyasa gündemini istediğini işaretleyen kelimeler. Kelime
+# sınırıyla aranır; "haberler" gibi çekimli hâlleri yakalamak için gövde
+# olarak yazıldı ("haber" -> "haberler", "haberi").
+_GUNDEM_KELIMELERI_RE = re.compile(r"\b(haber\w*|gundem\w*|piyasa\w*|borsa\w*|ekonomi\w*)\b")
+
+
+def genel_gundem_istegi_var_mi(query: str) -> bool:
+    """Sorgu, ŞİRKETSİZ bir genel piyasa gündemi mi istiyor?
+
+    İki koşul birlikte aranır (çağıran tarafta): gündem kelimesi VAR ve
+    şirket tespit edilMEmiş. Şirket adı geçen bir soruda ("ASELSAN haberleri
+    neler") gündem bloğu eklenmez — kullanıcı o şirketi sordu, karşılığı
+    KAP bildirimleridir; genel gündem başlıkları alakasız gürültü olurdu.
+
+    Güncellik şartı burada AYRICA aranmaz: "piyasa haberleri neler" cümlesi
+    "son" demeden de bugünü kastediyor. Arşivde haber tutmadığımız için bu
+    soruların tek karşılığı zaten canlı gündem.
+    """
+    return bool(_GUNDEM_KELIMELERI_RE.search(_normalize(query)))
