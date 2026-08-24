@@ -119,3 +119,26 @@ def filtre_cikar(query: str) -> dict[str, str]:
     if donem := donem_tespit_et(query):
         filtreler["donem"] = donem
     return filtreler
+
+
+# Sorgunun ARŞİV değil GÜNCELLİK istediğini işaretleyen kelimeler. Kelime
+# sınırıyla aranır (`\b`) — aksi hâlde "sonuç" içindeki "son" gibi sahte
+# eşleşmeler olur.
+_GUNCELLIK_KELIMELERI_RE = re.compile(r"\b(son|guncel|bugun|simdi|dun|yeni)\b")
+
+
+def guncellik_istegi_var_mi(query: str) -> bool:
+    """Sorgu, arşivde henüz olmayabilecek GÜNCEL bir bilgi mi istiyor?
+
+    Canlı KAP çağrısı (`get_live_kap_disclosures`) her piyasa sorusunda
+    tetiklenmez — 60 saniyeye kadar sürebilen bir dış istektir ve çoğu soru
+    zaten RAG'daki arşiv belgeleriyle (bilanço metni, şirket profili) tam
+    cevaplanır. Bu fonksiyon, sorgunun güncellik ipucu taşıyıp taşımadığını
+    işaretler; taşımıyorsa canlı çağrı hiç yapılmaz.
+
+    Kasıtlı olarak kaba bir sezgi: yanlış negatif (güncellik istendiği hâlde
+    tetiklenmemek) sessiz bir eksiklik, yanlış pozitif ise en kötü ihtimalle
+    gereksiz bir dış istek — ikincisi daha ucuz bir hata, bu yüzden eşik
+    düşük tutuldu.
+    """
+    return bool(_GUNCELLIK_KELIMELERI_RE.search(_normalize(query)))
