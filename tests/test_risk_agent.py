@@ -19,6 +19,7 @@ from agents.risk_agent import (
     _compact,
     _dummy_survey_score,
     _extract_json_object,
+    _macro_queries_for_holdings,
     _render_signal_prompt,
     _wants_scenarios,
 )
@@ -386,3 +387,91 @@ def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():
     assert '"sembol": "TST"' in rendered
     # Şemadaki literal parantezler dokunulmadan kalmalı (kaçırılmamalı/silinmemeli).
     assert '"risk_level": "az_riskli"' in rendered
+
+
+def test_makro_sorgular_yalnizca_tutulan_siniflar_icin_uretilir():
+    """2026-08-24 eki: Tahvil/Döviz/Altın/Nakit'in şirket bilançosu yoktur,
+    haber kaynağı makro piyasa haberleridir (bkz. modül docstring'i). Ama
+    yalnızca PORTFÖYDE FİİLEN TUTULAN sınıflar sorgulanmalı — tutulmayan bir
+    sınıf için RAG çağrısı yapmak gereksiz gecikme + alakasız gürültüdür."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "stock", "weight_percent": 50.0},
+            {"symbol": "APT", "asset_class": "bond", "weight_percent": 50.0},
+        ]
+    }
+
+    sorgular = _macro_queries_for_holdings(holdings_data)
+
+    assert sorgular == ["faiz kararı tahvil piyasası getiri görünümü"]
+
+
+def test_makro_sorgular_hisseyi_atlar():
+    """STOCK için makro sorgu üretilmez — sembol bazlı get_portfolio_news
+    zaten hisseleri kapsıyor, ayrı bir makro sorgu gereksiz gürültü olurdu."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "stock", "weight_percent": 100.0}]
+    }
+
+    assert _macro_queries_for_holdings(holdings_data) == []
+
+
+def test_makro_sorgular_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan bir varlığın sınıfı için makro sorgu üretilmemeli —
+    tutuluyor gibi görünse de ağırlık hesabına hiç girmiyor."""
+    holdings_data = {
+        "holdings": [
+            {
+                "symbol": "XAU",
+                "asset_class": "precious_metal",
+                "weight_percent": None,
+                "price_missing": True,
+            }
+        ]
+    }
+
+    assert _macro_queries_for_holdings(holdings_data) == []
+
+
+def test_makro_sorgular_birden_fazla_sinif_icin_sirali_uretilir():
+    """Birden fazla makro-kaynaklı sınıf tutuluyorsa hepsi için sorgu
+    üretilmeli, sıra `_MACRO_QUERY_BY_ASSET_CLASS` tanım sırasını izlemeli
+    (deterministik — testte kırılgan küme sıralamasına bağlı kalınmasın)."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "XAU", "asset_class": "precious_metal", "weight_percent": 30.0},
+            {"symbol": "APT", "asset_class": "bond", "weight_percent": 30.0},
+            {"symbol": "USDTRY", "asset_class": "currency", "weight_percent": 20.0},
+            {"symbol": "MEVDUAT", "asset_class": "cash", "weight_percent": 20.0},
+        ]
+    }
+
+    sorgular = _macro_queries_for_holdings(holdings_data)
+
+    assert sorgular == [
+        "faiz kararı tahvil piyasası getiri görünümü",
+        "döviz kuru hareketleri merkez bankası faiz kararı",
+        "altın gümüş kıymetli maden piyasası fiyat görünümü",
+        "enflasyon faiz oranı mevduat piyasası görünümü",
+    ]
+
+
+def test_sinyal_baglami_makro_gelismeler_varsayilan_bos_liste():
+    """`macro_context` verilmezse "makro_gelismeler" anahtarı yine de var
+    olmalı (boş liste olarak) — alan hiç eksik olmamalı, CLAUDE.md §4'teki
+    "alan silinmesin" ilkesiyle tutarlı (LLM eksik alanı uydurmaya kalkışmaz,
+    var olan boş alanı görür)."""
+    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None)
+
+    assert context["makro_gelismeler"] == []
+
+
+def test_sinyal_baglami_makro_gelismeler_tasinir():
+    """Çekilen makro haberler context'e olduğu gibi taşınmalı — burada
+    hiçbir dönüşüm/süzme yapılmıyor, bu iş zaten `_fetch_macro_context`'te
+    bitmiş oluyor."""
+    macro = [{"tur": "haber", "baslik": "Faiz kararı", "tarih": "2026-08-20", "icerik": "..."}]
+
+    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None, macro)
+
+    assert context["makro_gelismeler"] == macro

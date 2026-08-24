@@ -20,6 +20,22 @@ kod tarafında GARANTİ EDİLEMEZ — LLM çıktısı deterministik değildir. �
 agent bunu zorlayamaz; yalnızca prompt'ta istenir (bkz. risk_signals.md).
 Benzer şekilde "emir kipi yok" ve "her bulgu kaynaklı" kuralları da yalnızca
 prompt seviyesinde istenir, kod bunu doğrulamaz.
+
+2026-08-24 güncellemesi (doküman yeniden okundu, "riskk" bölümü genişletildi):
+- `RiskSignalFinding.signal` (tekil) -> `signals` (liste) oldu. Doküman:
+  "Aynı varlıkta birden fazla sinyal varsa bunları tek bir yüksek önemli
+  bulguda birleştirir." Yani bir varlık için birden fazla sinyal tetiklendiyse
+  N ayrı bulgu değil, TEK bulgu + birden fazla sinyal kodu üretilir.
+- `contribution` alanı eklendi ("dusuk"/"orta"/"yuksek") — doküman "riske
+  katkı düzeyi"ni her bulgu için ZORUNLU tutuyor, önceki şemada eksikti. Eşik
+  verilmiyor (bilinçli): LLM ağırlık + güncellik + ciddiyet + tetiklenen
+  sinyal sayısına bakıp yorumluyor (bkz. risk_signals.md).
+- Sinyal 5'in (profil_sapmasi) "kullanıcı anketi yeniledi, profili düştü"
+  tetikleyicisi GERÇEK anket geçmişi olmadan (dummy puan, bkz.
+  agents/risk_agent.py) TESPİT EDİLEMEZ — yalnızca "elindeki bir varlık
+  sınıfı ŞU ANKİ (dummy) puanla izinli mi" karşılaştırması yapılabilir. Bu,
+  doğrulanmak üzere iş analistine iletildi (bkz. agents/risk_agent.py'deki
+  ilgili not); bilinen bir sınırlama olarak burada da belgeleniyor.
 """
 
 from enum import Enum
@@ -51,13 +67,22 @@ class RiskSignalCode(str, Enum):
 
 
 class RiskSignalFinding(BaseModel):
-    """Portföydeki bir varlık için tek bir sinyal bulgusu."""
+    """Portföydeki bir varlık için TEK bir bulgu.
+
+    `signals` bilinçli olarak LİSTE: doküman aynı varlıkta birden fazla
+    sinyal tetiklenirse bunların AYRI bulgular değil, tek bir bulguda
+    birleştirilmesini istiyor (bkz. risk_signals.md "aynı varlıkta birden
+    fazla sinyal" kuralı). En az bir sinyal zorunlu — boş liste anlamsız bir
+    bulgudur."""
 
     model_config = ConfigDict(frozen=True)
 
     asset_symbol: str
     weight_percent: float
-    signal: RiskSignalCode
+    signals: list[RiskSignalCode] = Field(min_length=1)
+    # Eşiksiz: LLM ağırlık + güncellik + ciddiyet + tetiklenen sinyal
+    # sayısına bakıp yorumluyor (bkz. risk_signals.md "katkı düzeyi atama").
+    contribution: Literal["dusuk", "orta", "yuksek"]
     explanation: str
     # olumsuz_haber/sektor_gelismesi icin EN AZ bir kaynak beklenir (prompt
     # kurali); konsantrasyon/sektor_yogunlasmasi/profil_sapmasi icin bos

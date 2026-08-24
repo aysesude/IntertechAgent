@@ -20,7 +20,21 @@ Dummy anket puanı: 1-7 arası gerçek anket henüz yok (kapsamı ayrı, PO onay
 bekleniyor — bu dosyaya dokunmadan önce mutlaka hatırlat). Bu yüzden
 `_DUMMY_SURVEY_SCORE_BY_PROFILE` mevcut 4'lü `RiskProfile`'dan GEÇİCİ bir 1-7
 değeri türetir; DB şemasına dokunmaz, gerçek anket geldiğinde bu eşleme
-tamamen silinip yerine gerçek alan okunmalı."""
+tamamen silinip yerine gerçek alan okunmalı.
+
+2026-08-24 eki — Doküman yeniden okundu ("riskk" bölümü genişletildi).
+Değişenler: (1) `RiskSignalFinding` artık `signals` (liste, tekten çoğula) +
+`contribution` alanı taşıyor (bkz. app/schemas/risk_signals.py). (2) Sinyal 5
+(profil_sapmasi) artık netçe "elindeki varlık sınıfı ŞU ANKİ dummy puanla
+izinli mi" karşılaştırmasına bağlandı — "kullanıcı anketi yeniledi" alt
+durumu gerçek anket geçmişi olmadan TESPİT EDİLEMEZ, bu iş analistine
+iletildi. (3) Makro haber entegrasyonu eklendi (`_fetch_macro_context`):
+Tahvil/Döviz/Altın/Nakit sınıflarının şirket bilançosu olmadığı için
+`get_portfolio_news` bu sınıflarda neredeyse hiç doküman döndürmüyor —
+doküman bu sınıflar için haber kaynağının makro/piyasa haberleri olduğunu
+belirtiyor. Bu haberler yalnızca `investment_strategy` metnini besler,
+sinyal tetiklemek (kaynak sayılmak) için KULLANILMAZ — bkz.
+agents/prompts/risk_signals.md."""
 
 import json
 import logging
@@ -70,6 +84,38 @@ def _dummy_survey_score(profile: RiskProfile | None) -> int | None:
     if profile is None:
         return None
     return _DUMMY_SURVEY_SCORE_BY_PROFILE.get(profile)
+
+
+# Şirket bilançosu olmayan sınıflar için haber kaynağı makro piyasa
+# haberleridir (bkz. modül docstring'i, 2026-08-24 eki). STOCK burada YOK:
+# hisse zaten get_portfolio_news ile sembol bazlı kapsanıyor, ayrıca makro
+# sorgu eklemek gürültü + gereksiz RAG çağrısı olurdu.
+_MACRO_QUERY_BY_ASSET_CLASS: dict[str, str] = {
+    "bond": "faiz kararı tahvil piyasası getiri görünümü",
+    "currency": "döviz kuru hareketleri merkez bankası faiz kararı",
+    "precious_metal": "altın gümüş kıymetli maden piyasası fiyat görünümü",
+    "cash": "enflasyon faiz oranı mevduat piyasası görünümü",
+}
+
+
+def _macro_queries_for_holdings(holdings_data: dict[str, Any]) -> list[str]:
+    """Portföyde fiilen TUTULAN, şirket bilançosu olmayan sınıflar için
+    hangi makro haber sorgularının çalıştırılacağını belirler.
+
+    Yalnızca portföyde gerçekten bulunan sınıflar sorgulanır (tutulmayan bir
+    sınıf için RAG çağrısı yapmak gereksiz gecikme + alakasız gürültüdür).
+    Sıra `_MACRO_QUERY_BY_ASSET_CLASS` tanım sırasını izler ki sonuç
+    deterministik olsun (testte kırılgan sıralamaya bağlı kalınmasın)."""
+    held_classes = {
+        h.get("asset_class")
+        for h in holdings_data.get("holdings", [])
+        if not h.get("price_missing")
+    }
+    return [
+        query
+        for asset_class, query in _MACRO_QUERY_BY_ASSET_CLASS.items()
+        if asset_class in held_classes
+    ]
 
 
 # Kök neden teşhisindeki alan adlarının kullanıcıya gösterilecek karşılıkları.
@@ -244,13 +290,19 @@ def _build_signal_context(
     news_data: dict[str, Any],
     profile: RiskProfile | None,
     dummy_score: int | None,
+    macro_context: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """LLM'e verilecek ham veriyi toplar. HİÇBİR SINIFLANDIRMA/HESAPLAMA
-    yapmaz — yalnızca üç kaynaktan (holdings ağırlıkları, portföy haberleri,
-    profil→dummy puan eşlemesi) gelen veriyi tek bir sözlükte birleştirir.
-    Sektör verisi (Sinyal 2'nin ön koşulu) bilerek YOK — henüz üretilmedi
-    (ekipte Çağan'ın görevi); prompt bunun yokluğunu Sinyal 2'yi atlayarak
-    ele almalı, burada uydurulmaz."""
+    yapmaz — yalnızca dört kaynaktan (holdings ağırlıkları, portföy
+    haberleri, profil→dummy puan eşlemesi, makro haberler) gelen veriyi tek
+    bir sözlükte birleştirir. Sektör verisi (Sinyal 2'nin ön koşulu) bilerek
+    YOK — henüz üretilmedi (ekipte Çağan'ın görevi); prompt bunun yokluğunu
+    Sinyal 2'yi atlayarak ele almalı, burada uydurulmaz.
+
+    `macro_context` opsiyonel: `None`/boş liste geçilirse "makro_gelismeler"
+    anahtarı boş liste olarak eklenir (prompt bunu görüp o bölümü boş
+    bırakır, alan HİÇ eksik olmaz — CLAUDE.md §4'teki "alan silinmesin"
+    ilkesiyle tutarlı)."""
     context: dict[str, Any] = {
         "varliklar": [
             {
@@ -278,6 +330,11 @@ def _build_signal_context(
     context["haberler"] = haberler
     context["haber_kapsami_olmayan_varliklar"] = news_data.get("assets_without_documents", [])
     context["haber_guven_duzeyi"] = news_data.get("confidence")
+    # Belirli bir varlığa değil genele/sektöre ait — bilinçli olarak
+    # "haberler"in DIŞINDA, ayrı bir anahtarda. Prompt bunu yalnızca
+    # investment_strategy için kullanır, sinyal kaynağı SAYMAZ (bkz.
+    # risk_signals.md).
+    context["makro_gelismeler"] = macro_context or []
 
     if dummy_score is not None:
         context["survey_puani_dummy"] = dummy_score
@@ -369,10 +426,20 @@ class RiskAgent(BaseAgent):
             )
             return None
 
+        # Makro haberler ana akışı BLOKE ETMEZ: bulunamazsa (ör. o sınıflar
+        # için RAG'de hiç doküman yoksa) sinyal değerlendirmesi yine de
+        # devam eder, yalnızca investment_strategy daha az arka plana sahip
+        # olur — bu bir hata değil, bkz. _fetch_macro_context.
+        macro_context = await self._fetch_macro_context(holdings_result["data"])
+
         profile = _risk_profile(assessment_data.get("risk_profile"))
         dummy_score = _dummy_survey_score(profile)
         context = _build_signal_context(
-            holdings_result["data"], news_result["data"], profile, dummy_score
+            holdings_result["data"],
+            news_result["data"],
+            profile,
+            dummy_score,
+            macro_context,
         )
         prompt = _render_signal_prompt(context)
 
@@ -384,6 +451,40 @@ class RiskAgent(BaseAgent):
         except (json.JSONDecodeError, ValidationError, TypeError) as exc:
             logger.warning("[AJAN] risk: sinyal LLM ciktisi ayristirilamadi — %s", exc)
             return None
+
+    async def _fetch_macro_context(self, holdings_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Şirket bilançosu olmayan sınıflar (Tahvil/Döviz/Altın/Nakit) için
+        makro piyasa haberi çeker (bkz. modül docstring'i, 2026-08-24 eki).
+
+        Her sorgu bağımsız denenir; biri `NOT_FOUND`/`PROVIDER_UNAVAILABLE`
+        ile başarısız olursa (ör. o konuda hiç doküman yoksa) yalnızca o
+        sorgu atlanır — tüm sinyal değerlendirmesi bloklanmaz, çünkü bu
+        veri yalnızca "investment_strategy" metnini besler, hiçbir sinyali
+        TETİKLEMEZ (bkz. risk_signals.md)."""
+        sonuclar: list[dict[str, Any]] = []
+        for sorgu in _macro_queries_for_holdings(holdings_data):
+            search_result = await self.call_mcp_tool(
+                "search_market_news", {"query": sorgu, "top_k": 3}
+            )
+            if not search_result.get("success"):
+                logger.info(
+                    "[AJAN] risk: makro sorgu sonuçsuz, atlanıyor — sorgu=%r, hata=%s",
+                    sorgu,
+                    search_result.get("error"),
+                )
+                continue
+            for parca in search_result.get("data", {}).get("results", []):
+                metadata = parca.get("metadata") or {}
+                sonuclar.append(
+                    {
+                        "tur": metadata.get("tur"),
+                        "baslik": metadata.get("baslik"),
+                        "tarih": metadata.get("tarih"),
+                        "kaynak": metadata.get("kaynak"),
+                        "icerik": parca.get("content"),
+                    }
+                )
+        return sonuclar
 
     async def _summarize(
         self,
