@@ -10,6 +10,7 @@ import pytest
 from agents.market_query import (
     donem_tespit_et,
     filtre_cikar,
+    genel_gundem_istegi_var_mi,
     guncellik_istegi_var_mi,
     sirket_tespit_et,
 )
@@ -96,6 +97,48 @@ def test_sonuc_kelimesi_son_ile_sahte_eslesmez():
     """Kelime sınırı olmadan 'son' ARAMASI 'sonuç' icindeki 'son'u da
     yakalar — bu yanlis pozitifi engelliyoruz."""
     assert guncellik_istegi_var_mi("işlem sonucu nedir") is False
+
+
+def test_haber_kelimesi_guncellik_sayilir():
+    """'ASELSAN haberleri neler' sorusu 'son' demeden de bugunu kastediyor.
+    Bu kelime guncellik sayilmadiginda soru yalnizca arsive gidiyor ve
+    sirketin o gunku KAP bildirimi hic gorunmuyordu."""
+    assert guncellik_istegi_var_mi("ASELSAN haberleri neler") is True
+    assert guncellik_istegi_var_mi("bu şirketle ilgili bir haber var mı") is True
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "son piyasa haberleri neler",
+        "bugün piyasada ne oldu",
+        "gündemde ne var",
+        "borsa bugün nasıl",
+        "ekonomi haberleri neler",
+    ],
+)
+def test_genel_gundem_istegi_tespit_edilir(query):
+    assert genel_gundem_istegi_var_mi(query) is True
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "portföyüm ne durumda",
+        "riskim nedir",
+        "2026 2. çeyrek net kârı ne kadardı",
+    ],
+)
+def test_gundem_kelimesi_yoksa_false_doner(query):
+    assert genel_gundem_istegi_var_mi(query) is False
+
+
+def test_gundem_ve_sirket_ayri_sorulardir():
+    """Ikisi ayni sorguda da gecebilir ("ASELSAN haberleri"); hangisinin
+    kazanacagina market_agent karar verir (sirket varsa KAP). Bu fonksiyon
+    yalnizca gundem kelimesinin varligini bildirir, sirkete bakmaz."""
+    assert genel_gundem_istegi_var_mi("ASELSAN haberleri neler") is True
+    assert sirket_tespit_et("ASELSAN haberleri neler") == "ASELS"
 
 
 def test_filtre_cikar_yalnizca_dolu_alanlari_dondurur():

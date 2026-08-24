@@ -21,6 +21,12 @@ KAP'tan geldiği bulanıklaşır (2026-08-24 kararı: "RAG değişmeyecek bilgil
 içindir, güncel bildirim listesi ayrı ve etiketli kalır"). KAP'a
 ulaşılamazsa bu blok sessizce atlanır — RAG özeti kendi başına geçerli bir
 cevaptır, canlı ek bir "varsa iyi" katmandır.
+
+Sorgu bir şirkete işaret ETMİYOR ama genel gündem istiyorsa (bkz.
+`market_query.genel_gundem_istegi_var_mi`), aynı desenle
+`get_live_market_headlines` çağrılıp BloombergHT son dakika başlıkları
+eklenir. İkisi birbirini dışlar: şirket sorulduğunda genel gündem alakasız
+gürültüdür, şirket sorulmadığında KAP'a hangi şirketi soracağımız belirsizdir.
 """
 
 from collections.abc import Callable
@@ -30,7 +36,11 @@ from typing import Any
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
 from agents.formatting import tr_amount as _tr_amount
-from agents.market_query import filtre_cikar, guncellik_istegi_var_mi
+from agents.market_query import (
+    filtre_cikar,
+    genel_gundem_istegi_var_mi,
+    guncellik_istegi_var_mi,
+)
 from agents.price_query import fiyat_niyeti
 from app.core.llm_client import get_llm_client
 
@@ -40,6 +50,7 @@ _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_
 
 _KAYNAK_BASLIGI = "\n\nKaynaklar:\n"
 _KAP_BASLIGI = "\n\nGüncel KAP Bildirimleri:\n"
+_GUNDEM_BASLIGI = "\n\nGüncel Piyasa Başlıkları:\n"
 
 
 def _tarih_bicimle(ham: Any) -> str:
@@ -99,6 +110,28 @@ def _kap_blogu(disclosures: list[dict[str, Any]]) -> str:
             satir += f" ({url})"
         satirlar.append(satir)
     return _KAP_BASLIGI + "\n".join(satirlar)
+
+
+def _gundem_blogu(headlines: list[dict[str, Any]], kaynak_url: str | None) -> str:
+    """`- TCMB: ... — 24.08.2026 14:38` biçiminde, LLM'den geçmeden doğrudan
+    sitenin kendi başlıklarıyla listelenir.
+
+    Madde başına bağlantı YOK: BloombergHT son dakika maddelerinin ayrı bir
+    adresi bulunmuyor (ölçüldü), bu yüzden kaynak listenin sonunda bir kez
+    verilir. Olmayan bir permalink üretmek uydurma olurdu.
+    """
+    if not headlines:
+        return ""
+    satirlar = []
+    for h in headlines:
+        satir = f"- {h.get('baslik') or 'Başlıksız haber'}"
+        if tarih := h.get("tarih"):
+            satir += f" — {tarih}"
+        satirlar.append(satir)
+    blok = _GUNDEM_BASLIGI + "\n".join(satirlar)
+    if kaynak_url:
+        blok += f"\nKaynak: BloombergHT ({kaynak_url})"
+    return blok
 
 
 def _render_guncel_fiyat(data: dict[str, Any]) -> str:
@@ -207,12 +240,24 @@ class MarketAgent(BaseAgent):
         # ("piyasa nasıl gidiyor" gibi genel bir soru) hangi şirketin
         # bildirimi isteneceği belirsiz, bu adım tamamen atlanır.
         canli_bildirimler: list[dict[str, Any]] = []
-        if (sirket := filtreler.get("sirket")) and guncellik_istegi_var_mi(request.query):
+        canli_gundem: dict[str, Any] = {}
+        sirket = filtreler.get("sirket")
+        if sirket and guncellik_istegi_var_mi(request.query):
             canli_bildirimler = await self._canli_kap_bildirimleri(sirket, on_token=on_token)
             summary_text += _kap_blogu(canli_bildirimler)
+        elif not sirket and genel_gundem_istegi_var_mi(request.query):
+            # `elif`: şirket sorulduğunda genel gündem eklenmez. "ASELSAN
+            # haberleri" sorusuna piyasanın günlük gündemini iliştirmek,
+            # sorulmayan bilgiyle cevabı seyreltmek olurdu.
+            canli_gundem = await self._canli_piyasa_gundemi(on_token=on_token)
+            summary_text += _gundem_blogu(
+                canli_gundem.get("headlines") or [], canli_gundem.get("kaynak_url")
+            )
 
         if canli_bildirimler:
             data = {**data, "canli_kap_bildirimleri": canli_bildirimler}
+        if canli_gundem.get("headlines"):
+            data = {**data, "canli_piyasa_gundemi": canli_gundem["headlines"]}
 
         return AgentResponse(
             agent_name=self.agent_name,
@@ -265,6 +310,22 @@ class MarketAgent(BaseAgent):
         if disclosures and on_token is not None:
             on_token(_kap_blogu(disclosures))
         return disclosures
+
+    async def _canli_piyasa_gundemi(
+        self, *, on_token: Callable[[str], None] | None = None
+    ) -> dict[str, Any]:
+        """BloombergHT'ye ulaşılamazsa boş sözlük döner; gerekçesi
+        `_canli_kap_bildirimleri` ile aynı — canlı katman ana cevabı
+        düşürmez."""
+        tool_result = await self.call_mcp_tool("get_live_market_headlines", {})
+        if not tool_result.get("success"):
+            return {}
+
+        data = tool_result.get("data") or {}
+        headlines = data.get("headlines") or []
+        if headlines and on_token is not None:
+            on_token(_gundem_blogu(headlines, data.get("kaynak_url")))
+        return data
 
     async def _summarize(
         self,
