@@ -399,9 +399,21 @@ class Settings(BaseSettings):
     # toplayıcı. Kod değişmiyor, yalnızca .env değişiyor.
     openai_base_url: str = "https://api.openai.com/v1"
     # Bazı yeni nesil modeller `temperature` parametresini reddediyor
-    # (yalnızca varsayılan değeri kabul ediyorlar). Sağlayıcı 400 dönerse
-    # .env'de OPENAI_TEMPERATURE'ı boş bırak: parametre isteğe hiç eklenmez.
-    openai_temperature: float | None = 0.0
+    # (yalnızca varsayılan değeri kabul ediyorlar) — ölçümle doğrulandı:
+    # gerçek sağlayıcıya karşı canlı çağrıda "gpt-5.6-luna" modeli HEM 0.1
+    # HEM 0.0 için "Only the default (1) value is supported" diyerek 400
+    # döndü. Varsayılan bu yüzden None: temperature isteğe hiç eklenmez
+    # (bkz. OpenAIClient._payload — `if self._temperature is not None`).
+    # Modeliniz temperature'ı destekliyorsa .env'de OPENAI_TEMPERATURE'ı
+    # açıkça bir sayıya ayarlayabilirsiniz (ör. 0.0, deterministik niyet
+    # sınıflandırması için tercih edilir).
+    #
+    # DİKKAT: .env'de bu satırı BOŞ DEĞERLE bırakmak (`OPENAI_TEMPERATURE=`)
+    # pydantic-settings'te float parse hatasıyla TÜM UYGULAMAYI ÇÖKERTİR —
+    # `env_parse_none_str` yapılandırılmadığı için boş dize None'a
+    # dönüşmüyor. "Boş bırakmak" istenen davranış için satırın .env'den
+    # TAMAMEN SİLİNMESİ gerekir, boş değerle bırakılması değil.
+    openai_temperature: float | None = None
 
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
