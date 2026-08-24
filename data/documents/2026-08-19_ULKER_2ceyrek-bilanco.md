@@ -26,6 +26,8 @@ TL, FAVÖK ise 2,80 milyar TL olarak gerçekleşti.
 
 Ülker'in ilk yarı net kârı, geçen yılın aynı dönemindeki 4,33 milyar
 TL'ye kıyasla yüzde 28,83 gerileyerek yaklaşık 3,08 milyar TL'ye indi.
+İlk yarı hasılatı 63,28 milyar TL, brüt kârı 16,74 milyar TL, FAVÖK'ü
+ise 8,29 milyar TL olarak gerçekleşti.
 
 ## Piyasa tepkisi
 

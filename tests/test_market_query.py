@@ -7,7 +7,12 @@ cikarim sessiz bir hataya donusur: filtre yanlis sirkete daralir ve kullaniciya
 
 import pytest
 
-from agents.market_query import donem_tespit_et, filtre_cikar, sirket_tespit_et
+from agents.market_query import (
+    donem_tespit_et,
+    filtre_cikar,
+    guncellik_istegi_var_mi,
+    sirket_tespit_et,
+)
 
 
 @pytest.mark.parametrize(
@@ -66,6 +71,31 @@ def test_yil_yazilmamissa_donem_uretilmez():
 
 def test_ceyrek_yazilmamissa_donem_uretilmez():
     assert donem_tespit_et("2026 yilinda ne oldu") is None
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "ASELSAN'in son bildirimi ne",
+        "guncel durum nedir",
+        "bugun ne oldu",
+        "şimdi fiyat ne kadar",
+        "dün ne açıklandı",
+        "yeni bir haber var mı",
+    ],
+)
+def test_guncellik_kelimeleri_tespit_edilir(query):
+    assert guncellik_istegi_var_mi(query) is True
+
+
+def test_guncellik_kelimesi_yoksa_false_doner():
+    assert guncellik_istegi_var_mi("2026 2. çeyrek net kârı ne kadardı") is False
+
+
+def test_sonuc_kelimesi_son_ile_sahte_eslesmez():
+    """Kelime sınırı olmadan 'son' ARAMASI 'sonuç' icindeki 'son'u da
+    yakalar — bu yanlis pozitifi engelliyoruz."""
+    assert guncellik_istegi_var_mi("işlem sonucu nedir") is False
 
 
 def test_filtre_cikar_yalnizca_dolu_alanlari_dondurur():

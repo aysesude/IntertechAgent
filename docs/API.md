@@ -1,7 +1,7 @@
 # API Sözleşmesi
 
 Şemaların tanımlı olduğu yer: `backend/app/schemas/`. Frontend tipleri
-(`frontend/src/types/`) bunlarla birebir eşleşmelidir.
+(`frontend-v2/src/api/`) bunlarla birebir eşleşmelidir.
 
 ## Kimlik doğrulama (FR-0 / AK 5.4)
 
@@ -116,9 +116,16 @@ gövdesi, yukarıdaki `user` alanıyla aynı). Arayüz sayfa yenilendiğinde bun
 ### Geçiş bayrağı: `AUTH_ENFORCE`
 
 Varsayılanı `true` — unutulursa auth **açık** kalır. `false` iken token
-GÖNDERMEYEN istekler geçer (token gönderilirse yine doğrulanır); yalnızca
-token göndermeyen eski `frontend/` ile çalışmayı sürdürenler için. Bayrak,
-`frontend-v2`'nin sohbeti uçtan uca çalışır hale gelince silinecek.
+GÖNDERMEYEN istekler geçer (token gönderilirse yine doğrulanır).
+
+**Bu bayrağın varlık sebebi kalmadı.** Tek gerekçesi, token göndermeyen eski
+`frontend/` ile çalışmayı sürdürebilmekti; o arayüz kaldırıldı ve tek arayüz
+olan `frontend-v2` her istekte token gönderiyor.
+
+Silinmesi AYRI bir iş olarak bırakıldı, arayüz kaldırma işine eklenmedi:
+bayrak güvenlik davranışını değiştiriyor ve bir ortamın `.env`'inde `false`
+duruyorsa silmek o ortamda auth'u aniden zorunlu kılar. Kaldırmadan önce her
+ortamda değerinin `true` olduğu doğrulanmalı.
 
 ## REST
 

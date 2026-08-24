@@ -25,7 +25,9 @@ ve kurum beklentilerinin üzerinde kaldı.
 
 Satış gelirleri 221,1 milyar TL'ye ulaşarak piyasa beklentisi olan
 210,7 milyar TL'yi aştı; buna karşın gelir yıllık bazda yüzde 14
-geriledi.
+geriledi. Brüt kâr yüzde 29 azalışla 15,1 milyar TL'ye gerilerken brüt
+kâr marjı yüzde 6,8'e daraldı. Esas faaliyet kârı (EBIT) yüzde 60
+azalışla 6,4 milyar TL oldu.
 
 ## Operasyonel veriler
 

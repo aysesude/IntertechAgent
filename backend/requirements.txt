@@ -44,6 +44,9 @@ yfinance>=0.2.43
 pandas>=2.2.2
 tefas-crawler>=0.3.4
 lxml>=5.3.0
+# KAP canlı bildirim sorgusu (app/providers/kap_p.py). Resmi degil, MIT
+# lisansli, PyPI'de aktif bakimli (bkz. kap_p.py docstring'i).
+pykap>=0.2.0
 
 pytest>=8.3.3
 pytest-asyncio>=0.24.0

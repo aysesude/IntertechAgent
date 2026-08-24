@@ -12,6 +12,15 @@ Sayısal hiçbir değer LLM tarafından üretilmez.
   2. Etiketli parçalar — her parça `[n] Başlık (Kaynak, tarih)` başlığıyla
      LLM'e verilir. Eskiden parçalar etiketsiz birleştiriliyordu; model iki
      ayrı şirketin rakamlarını tek cümlede harmanlayabiliyordu.
+
+Ayrıca: sorgu bir şirkete işaret ediyor VE güncellik istiyorsa (bkz.
+`market_query.guncellik_istegi_var_mi`), `get_live_kap_disclosures` ile canlı
+bir KAP bildirim listesi de eklenir. Bu blok LLM'e ASLA verilmez — RAG
+özetiyle aynı cümlede eritilirse hangi bilginin arşivden hangisinin şu an
+KAP'tan geldiği bulanıklaşır (2026-08-24 kararı: "RAG değişmeyecek bilgiler
+içindir, güncel bildirim listesi ayrı ve etiketli kalır"). KAP'a
+ulaşılamazsa bu blok sessizce atlanır — RAG özeti kendi başına geçerli bir
+cevaptır, canlı ek bir "varsa iyi" katmandır.
 """
 
 from collections.abc import Callable
@@ -21,7 +30,7 @@ from typing import Any
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
 from agents.formatting import tr_amount as _tr_amount
-from agents.market_query import filtre_cikar
+from agents.market_query import filtre_cikar, guncellik_istegi_var_mi
 from agents.price_query import fiyat_niyeti
 from app.core.llm_client import get_llm_client
 
@@ -30,6 +39,7 @@ _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_
 )
 
 _KAYNAK_BASLIGI = "\n\nKaynaklar:\n"
+_KAP_BASLIGI = "\n\nGüncel KAP Bildirimleri:\n"
 
 
 def _tarih_bicimle(ham: Any) -> str:
@@ -73,6 +83,22 @@ def _kaynak_blogu(results: list[dict[str, Any]]) -> str:
     if not gorulen:
         return ""
     return _KAYNAK_BASLIGI + "\n".join(f"- {etiket}" for etiket in gorulen)
+
+
+def _kap_blogu(disclosures: list[dict[str, Any]]) -> str:
+    """`- Finansal Rapor (6 Aylık) — 04.08.2026 (https://...)` biçiminde,
+    LLM'den geçmeden doğrudan KAP'ın kendi ifadeleriyle listelenir."""
+    if not disclosures:
+        return ""
+    satirlar = []
+    for d in disclosures:
+        satir = f"- {d.get('baslik') or 'Başlıksız bildirim'}"
+        if tarih := d.get("tarih"):
+            satir += f" — {tarih}"
+        if url := d.get("url"):
+            satir += f" ({url})"
+        satirlar.append(satir)
+    return _KAP_BASLIGI + "\n".join(satirlar)
 
 
 def _render_guncel_fiyat(data: dict[str, Any]) -> str:
@@ -176,6 +202,18 @@ class MarketAgent(BaseAgent):
         results = data.get("results") or []
         summary_text = await self._summarize(request.query, results, on_token=on_token)
 
+        # Güncellik istenen, şirketi belirlenmiş sorularda RAG'a ek olarak
+        # canlı KAP bildirimleri de eklenir. Şirket tespit edilemediyse
+        # ("piyasa nasıl gidiyor" gibi genel bir soru) hangi şirketin
+        # bildirimi isteneceği belirsiz, bu adım tamamen atlanır.
+        canli_bildirimler: list[dict[str, Any]] = []
+        if (sirket := filtreler.get("sirket")) and guncellik_istegi_var_mi(request.query):
+            canli_bildirimler = await self._canli_kap_bildirimleri(sirket, on_token=on_token)
+            summary_text += _kap_blogu(canli_bildirimler)
+
+        if canli_bildirimler:
+            data = {**data, "canli_kap_bildirimleri": canli_bildirimler}
+
         return AgentResponse(
             agent_name=self.agent_name,
             success=True,
@@ -212,6 +250,21 @@ class MarketAgent(BaseAgent):
             summary_text=metin,
             data=data,
         )
+
+    async def _canli_kap_bildirimleri(
+        self, sirket: str, *, on_token: Callable[[str], None] | None = None
+    ) -> list[dict[str, Any]]:
+        """KAP'a ulaşılamazsa (ağ, zaman aşımı, pykap kurulu değil vb.) ana
+        cevabı bozmadan sessizce boş liste döner — RAG özeti kendi başına
+        geçerli bir cevaptır, bu yalnızca "varsa iyi" bir ek katmandır."""
+        tool_result = await self.call_mcp_tool("get_live_kap_disclosures", {"sirket": sirket})
+        if not tool_result.get("success"):
+            return []
+
+        disclosures = tool_result.get("data", {}).get("disclosures") or []
+        if disclosures and on_token is not None:
+            on_token(_kap_blogu(disclosures))
+        return disclosures
 
     async def _summarize(
         self,

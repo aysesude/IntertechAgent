@@ -26,7 +26,8 @@ aştı.
 
 Astor Enerji'nin ilk altı ay net kârı, geçen yılın aynı dönemine göre
 yüzde 88 artışla 4,646 milyar TL'ye ulaştı. Aynı dönemde satış gelirleri
-yüzde 7, faaliyet kârı ise yüzde 26 arttı.
+19,21 milyar TL'ye ulaşarak yüzde 7, faaliyet kârı ise yüzde 26 arttı.
+İlk yarı brüt kârı, yüzde 12 artışla 7,85 milyar TL'ye yükseldi.
 
 ## Diğer göstergeler
 
