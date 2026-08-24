@@ -25,13 +25,23 @@ class LLMClient(ABC):
 
 
 class OllamaClient(LLMClient):
-    def __init__(self, base_url: str, model: str, temperature: float = 0.1) -> None:
+    def __init__(self, base_url: str, model: str, temperature: float = 0.0) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         # Ollama'nın varsayılan sıcaklığı 0.8 — yaratıcı yazım için tasarlanmış.
         # Küçük modellerde bu değer dil kaymasına yol açıyor: cümlenin ortasında
         # İngilizce/Fransızca kelimelere geçiyor ("valueye", "which accounts for").
         # Finansal özet deterministik bir görev, düşük sıcaklık doğru tercih.
+        #
+        # 0.1 -> 0.0 (2026-08-24): 0.1 hâlâ örnekleme rastgeleliği taşıyordu —
+        # ölçümle doğrulandı, `detect_intent`'in niyet sınıflandırma çağrısı
+        # AYNI sorguda (Kardemir/Astor Enerji gibi) bazen doğru ajana
+        # yönlendiriyor, bazen "anlayamadım"a düşüyordu; kural tabanlı
+        # `check_scope()` ve RAG katmanı aynı sorgularda tam deterministikti
+        # (3/3 tekrarda birebir aynı), yani rastgelelik yalnızca bu LLM
+        # çağrısındaydı. Niyet sınıflandırması "doğru ajana git ya da hiç
+        # cevap verme" gibi ikili/yüksek riskli bir karar — çeşitlilik
+        # istenmeyen, tam deterministik olması gereken bir görev.
         self._options = {"temperature": temperature}
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
@@ -82,7 +92,7 @@ class OpenAIClient(LLMClient):
         api_key: str | None,
         model: str,
         base_url: str = "https://api.openai.com/v1",
-        temperature: float | None = 0.1,
+        temperature: float | None = 0.0,
     ) -> None:
         if not api_key:
             # Anahtarsız istek sağlayıcıdan 401 dönerdi; hatayı burada, ne
