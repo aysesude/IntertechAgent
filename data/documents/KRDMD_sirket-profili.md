@@ -31,11 +31,15 @@ Hisseleri Borsa İstanbul'da "KRDMD" (ve ayrıca A/B grup hisseler
 için farklı kodlarla) işlem görmektedir. Güncel ortaklık pay dağılımına
 ilişkin ayrıntı için şirketin resmi ortaklık yapısı sayfasına
 başvurulmalıdır. Yönetim kurulu başkanı, Eylül 2025'te İsmail Demir'in
-yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Şirket son 6 yıldır
-düzenli (genellikle Haziran ve Kasım aylarında) temettü dağıtma
-geleneğine sahiptir, ancak dağıtım oranı 2019'daki yüzde 4,5-4,8
-seviyesinden 2022'de yüzde 2,6-3,1'e, 2023'te yüzde 0,4-0,5'e gerileyen
-bir düşüş trendindedir; 2026 yılına ait kesin temettü tutarı
-araştırma tarihi itibarıyla KAP'ta henüz açıklanmamıştı. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler, dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler, dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.
+
+## Temettü geçmişi
+
+Kardemir son 6 yıldır düzenli (genellikle Haziran ve Kasım aylarında)
+temettü dağıtma geleneğine sahiptir, ancak dağıtım oranı 2019'daki
+yüzde 4,5-4,8 seviyesinden 2022'de yüzde 2,6-3,1'e, 2023'te yüzde
+0,4-0,5'e gerileyen bir düşüş trendindedir; 2026 yılına ait kesin
+temettü tutarı araştırma tarihi itibarıyla KAP'ta henüz
+açıklanmamıştı.

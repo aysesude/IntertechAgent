@@ -69,6 +69,16 @@ _STOPWORDS = {
     # aynı anda çözüyor.
     "turkiye",
     "turk",
+    # "durumda"/"uygulanır" — TFRS/TMS referans dokümanı eklendikten sonra
+    # ölçümle doğrulandı: "TMS 29 nedir, hangi durumda uygulanır?" sorgusunda
+    # tek ayırt edici kelime "tms" iken ("29" 2 harf olduğu için zaten
+    # eleniyor), bu iki jenerik soru-kalıbı kelimesi query_keywords'ün
+    # 2/3'ünü oluşturup oranı (1/3) `> 0.5` barajının altına düşürüyordu —
+    # doğru dokümanın kendisi havuzda ve mesafe eşiğinin altındaydı ama
+    # salt oran yüzünden elendi. "nasıl"/"nedir"/"hangi" gibi zaten var olan
+    # soru-kalıbı stopword'leriyle aynı sınıf.
+    "durumda",
+    "uygulanir",
 }
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
