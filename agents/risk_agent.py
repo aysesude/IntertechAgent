@@ -34,7 +34,26 @@ Tahvil/Döviz/Altın/Nakit sınıflarının şirket bilançosu olmadığı için
 doküman bu sınıflar için haber kaynağının makro/piyasa haberleri olduğunu
 belirtiyor. Bu haberler yalnızca `investment_strategy` metnini besler,
 sinyal tetiklemek (kaynak sayılmak) için KULLANILMAZ — bkz.
-agents/prompts/risk_signals.md."""
+agents/prompts/risk_signals.md.
+
+2026-08-25 eki — Canlı veri genişlemesi. Doküman "riskk" bölümü, "market
+research ajanı" bölümü ve "next toplantıda sorulacaklar" (live'a çıkacak mı?)
+birlikte incelendi: dokümanın kendi "market ajanı" tasarımı (KAP + canlı
+haber API + MCP/Web Search, intent bazlı yönlendirme) hiçbir altyapısı
+olmayan, takımın kendisinin "açık soru" işaretlediği geniş bir mimari — yeni
+bir haber API'si/KAP scraper edinmek analiste sormadan tek başına
+verilebilecek bir karar değil (ücret + altyapı kararı).
+Bunun yerine DAR ve BUGÜN yapılabilir bir alt küme uygulandı: proje zaten
+yfinance kullanıyor (ücretsiz, anahtarsız); Döviz ve Kıymetli Maden'in
+yfinance'te gerçek ticker'ı var (bkz. app/providers/universe.py). Bunlar için
+`data/macro_news_update.py` (price_service.py'deki "canlı çağrı sohbet anını
+bloklamasın" ilkesiyle, GÜNLÜK BATCH olarak) canlı haber çekip
+`macro_news_snapshot`a yazıyor; `_fetch_macro_context` bunu `get_macro_news`
+ile OKUYOR, portföydeki GERÇEK sembole göre kişiselleştirilmiş. Tahvil/Nakit
+için yfinance'te ticker yok — onlar RAG'daki (donmuş, 2026-08-20'den beri
+yeni eklenmeyen) makro dokümanlarda kalmaya devam ediyor; bu bilinen bir
+sınırlama olarak kabul edildi, analiste iletilmedi (maliyet/altyapı kararı
+gerektirmiyor)."""
 
 import json
 import logging
@@ -54,6 +73,7 @@ from app.core.config import (
     RiskProfile,
 )
 from app.core.llm_client import get_llm_client
+from app.providers.universe import SPEC_BY_SYMBOL, macro_news_key
 from app.schemas.risk_signals import RiskSignalAssessment
 from app.services.advice_eligibility import allowed_asset_classes
 
@@ -90,16 +110,28 @@ def _dummy_survey_score(profile: RiskProfile | None) -> int | None:
 # haberleridir (bkz. modül docstring'i, 2026-08-24 eki). STOCK burada YOK:
 # hisse zaten get_portfolio_news ile sembol bazlı kapsanıyor, ayrıca makro
 # sorgu eklemek gürültü + gereksiz RAG çağrısı olurdu.
+#
+# 2026-08-25 eki: yalnızca BOND ve CASH burada kalıyor. CURRENCY ve
+# PRECIOUS_METAL artık RAG'daki (donmuş) makro dokümanları DEĞİL,
+# `get_macro_news` üzerinden CANLI ve portföye göre kişiselleştirilmiş
+# (yalnızca tutulan sembol) haber alıyor — bkz. `_live_macro_symbols_for_holdings`
+# ve app/services/macro_news_ingest.py modül docstring'i (neden bu ayrım:
+# yfinance'te yalnızca bu iki sınıfın gerçek ticker'ı var; Tahvil/Nakit'in
+# yok, RAG'daki mevcut TCMB/enflasyon dokümanları onlar için tek kaynak
+# olmaya devam ediyor).
 _MACRO_QUERY_BY_ASSET_CLASS: dict[str, str] = {
     "bond": "faiz kararı tahvil piyasası getiri görünümü",
-    "currency": "döviz kuru hareketleri merkez bankası faiz kararı",
-    "precious_metal": "altın gümüş kıymetli maden piyasası fiyat görünümü",
     "cash": "enflasyon faiz oranı mevduat piyasası görünümü",
 }
 
+# `_live_macro_symbols_for_holdings`'in kapsadığı sınıflar — yalnızca bunlar
+# `get_macro_news`'e (canlı) gider, geri kalanı `_MACRO_QUERY_BY_ASSET_CLASS`
+# üzerinden RAG'a (bkz. yukarıdaki not).
+_LIVE_MACRO_ASSET_CLASSES = frozenset({"currency", "precious_metal"})
+
 
 def _macro_queries_for_holdings(holdings_data: dict[str, Any]) -> list[str]:
-    """Portföyde fiilen TUTULAN, şirket bilançosu olmayan sınıflar için
+    """Portföyde fiilen TUTULAN, RAG'a gidecek (Tahvil/Nakit) sınıflar için
     hangi makro haber sorgularının çalıştırılacağını belirler.
 
     Yalnızca portföyde gerçekten bulunan sınıflar sorgulanır (tutulmayan bir
@@ -116,6 +148,32 @@ def _macro_queries_for_holdings(holdings_data: dict[str, Any]) -> list[str]:
         for asset_class, query in _MACRO_QUERY_BY_ASSET_CLASS.items()
         if asset_class in held_classes
     ]
+
+
+def _live_macro_symbols_for_holdings(holdings_data: dict[str, Any]) -> list[str]:
+    """Portföyde fiilen TUTULAN Döviz/Kıymetli Maden varlıkları için
+    `get_macro_news`'e geçirilecek "haber anahtarı" listesini üretir (bkz.
+    `app.providers.universe.macro_news_key`).
+
+    Tanınmayan bir sembol (evrende olmayan, ör. test verisi) veya haber
+    anahtarı üretilemeyen bir varlık (`macro_news_key` None dönerse)
+    SESSİZCE atlanır — uydurma yok, yalnızca o varlık için canlı bağlam
+    üretilmez. Sonuç tekilleştirilir (ör. CEYREK + YARIM ikisi de XAUTRY'ye
+    düşer) ve deterministik sırayla (portföydeki varlık sırası) döner."""
+    keys: list[str] = []
+    seen: set[str] = set()
+    for h in holdings_data.get("holdings", []):
+        if h.get("price_missing") or h.get("asset_class") not in _LIVE_MACRO_ASSET_CLASSES:
+            continue
+        spec = SPEC_BY_SYMBOL.get(h.get("symbol"))
+        if spec is None:
+            continue
+        key = macro_news_key(spec)
+        if key is None or key in seen:
+            continue
+        seen.add(key)
+        keys.append(key)
+    return keys
 
 
 # Kök neden teşhisindeki alan adlarının kullanıcıya gösterilecek karşılıkları.
@@ -454,14 +512,23 @@ class RiskAgent(BaseAgent):
 
     async def _fetch_macro_context(self, holdings_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Şirket bilançosu olmayan sınıflar (Tahvil/Döviz/Altın/Nakit) için
-        makro piyasa haberi çeker (bkz. modül docstring'i, 2026-08-24 eki).
+        makro piyasa bağlamı toplar (bkz. modül docstring'i, 2026-08-24 ve
+        2026-08-25 ekleri). İki ayrı kaynaktan beslenir:
 
-        Her sorgu bağımsız denenir; biri `NOT_FOUND`/`PROVIDER_UNAVAILABLE`
-        ile başarısız olursa (ör. o konuda hiç doküman yoksa) yalnızca o
-        sorgu atlanır — tüm sinyal değerlendirmesi bloklanmaz, çünkü bu
-        veri yalnızca "investment_strategy" metnini besler, hiçbir sinyali
-        TETİKLEMEZ (bkz. risk_signals.md)."""
+        - Döviz/Kıymetli Maden → `get_macro_news` (CANLI, yfinance haber
+          akışından, portföydeki GERÇEK sembole göre kişiselleştirilmiş —
+          bkz. `_live_macro_symbols_for_holdings`).
+        - Tahvil/Nakit → `search_market_news` (RAG, donmuş ama var olan
+          mevcut makro dokümanlar — yfinance'te bu iki sınıfın ticker'ı yok).
+
+        Her sorgu/sembol bağımsız denenir; biri `NOT_FOUND`/
+        `PROVIDER_UNAVAILABLE` ile başarısız olursa yalnızca o parça atlanır
+        — tüm sinyal değerlendirmesi bloklanmaz, çünkü bu veri yalnızca
+        "investment_strategy" metnini besler, hiçbir sinyali TETİKLEMEZ
+        (bkz. risk_signals.md)."""
         sonuclar: list[dict[str, Any]] = []
+        sonuclar.extend(await self._fetch_live_macro_news(holdings_data))
+
         for sorgu in _macro_queries_for_holdings(holdings_data):
             search_result = await self.call_mcp_tool(
                 "search_market_news", {"query": sorgu, "top_k": 3}
@@ -482,6 +549,37 @@ class RiskAgent(BaseAgent):
                         "tarih": metadata.get("tarih"),
                         "kaynak": metadata.get("kaynak"),
                         "icerik": parca.get("content"),
+                    }
+                )
+        return sonuclar
+
+    async def _fetch_live_macro_news(self, holdings_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Döviz/Kıymetli Maden için `get_macro_news`den canlı haber çeker.
+        Portföyde bu sınıflardan hiç yoksa (veya hiçbiri haber anahtarına
+        çözülemiyorsa) tool'u HİÇ ÇAĞIRMAZ — gereksiz MCP isteği yok."""
+        symbols = _live_macro_symbols_for_holdings(holdings_data)
+        if not symbols:
+            return []
+
+        news_result = await self.call_mcp_tool("get_macro_news", {"symbols": symbols})
+        if not news_result.get("success"):
+            logger.info(
+                "[AJAN] risk: canlı makro haber sonuçsuz, atlanıyor — semboller=%r, hata=%s",
+                symbols,
+                news_result.get("error"),
+            )
+            return []
+
+        sonuclar: list[dict[str, Any]] = []
+        for sembol, haberler in news_result.get("data", {}).get("news_by_symbol", {}).items():
+            for haber in haberler:
+                sonuclar.append(
+                    {
+                        "tur": "canli_piyasa_haberi",
+                        "baslik": f"[{sembol}] {haber.get('headline')}",
+                        "tarih": haber.get("published_at"),
+                        "kaynak": haber.get("source"),
+                        "icerik": None,
                     }
                 )
         return sonuclar

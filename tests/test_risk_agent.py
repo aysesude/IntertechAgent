@@ -7,7 +7,14 @@ dummy anket puanı eşlemesi, LLM çıktısının JSON'a ayrıştırılması, ha
 verisinin LLM bağlamına dönüştürülmesi. `_assess_signals`'ın kendisi gerçek
 bir LLM çağrısı yaptığı için burada test edilmiyor; ajanın diğer LLM'li
 kısımlarında olduğu gibi (`_summarize`) bu proje deterministik pytest yerine
-manuel/entegrasyon doğrulaması kullanıyor."""
+manuel/entegrasyon doğrulaması kullanıyor.
+
+2026-08-25 eki: aynı ilkeyle `_fetch_macro_context`/`_fetch_live_macro_news`
+de burada test edilmiyor (MCP tool çağrısı yapıyorlar) — yalnızca onların
+girdisini hazırlayan saf fonksiyon `_live_macro_symbols_for_holdings` test
+edilir (bkz. app/providers/universe.py:macro_news_key, MCP tool testi için
+tests/test_mcp_market_tool.py, ingest/servis testleri için
+tests/test_macro_news_ingest.py)."""
 
 import json
 
@@ -19,6 +26,7 @@ from agents.risk_agent import (
     _compact,
     _dummy_survey_score,
     _extract_json_object,
+    _live_macro_symbols_for_holdings,
     _macro_queries_for_holdings,
     _render_signal_prompt,
     _wants_scenarios,
@@ -434,9 +442,14 @@ def test_makro_sorgular_fiyati_eksik_varligi_disliyor():
 
 
 def test_makro_sorgular_birden_fazla_sinif_icin_sirali_uretilir():
-    """Birden fazla makro-kaynaklı sınıf tutuluyorsa hepsi için sorgu
-    üretilmeli, sıra `_MACRO_QUERY_BY_ASSET_CLASS` tanım sırasını izlemeli
-    (deterministik — testte kırılgan küme sıralamasına bağlı kalınmasın)."""
+    """Birden fazla RAG-kaynaklı sınıf (Tahvil/Nakit) tutuluyorsa hepsi için
+    sorgu üretilmeli, sıra `_MACRO_QUERY_BY_ASSET_CLASS` tanım sırasını
+    izlemeli (deterministik — testte kırılgan küme sıralamasına bağlı
+    kalınmasın).
+
+    2026-08-25 eki: Döviz/Kıymetli Maden burada YOK — onlar artık RAG'a değil
+    `_live_macro_symbols_for_holdings` üzerinden `get_macro_news`e (canlı)
+    gidiyor, bkz. aşağıdaki testler."""
     holdings_data = {
         "holdings": [
             {"symbol": "XAU", "asset_class": "precious_metal", "weight_percent": 30.0},
@@ -450,10 +463,82 @@ def test_makro_sorgular_birden_fazla_sinif_icin_sirali_uretilir():
 
     assert sorgular == [
         "faiz kararı tahvil piyasası getiri görünümü",
-        "döviz kuru hareketleri merkez bankası faiz kararı",
-        "altın gümüş kıymetli maden piyasası fiyat görünümü",
         "enflasyon faiz oranı mevduat piyasası görünümü",
     ]
+
+
+def test_canli_makro_semboller_doviz_ve_kiymetli_madeni_kapsar():
+    """2026-08-25 eki: Döviz/Kıymetli Maden RAG'dan değil `get_macro_news`den
+    (canlı) besleniyor. `_live_macro_symbols_for_holdings` portföyde FİİLEN
+    tutulan bu sınıfların "haber anahtarı"nı (bkz.
+    app/providers/universe.py:macro_news_key) döner."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "USDTRY", "asset_class": "currency", "weight_percent": 20.0},
+            {"symbol": "XAUTRY", "asset_class": "precious_metal", "weight_percent": 30.0},
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == ["USDTRY", "XAUTRY"]
+
+
+def test_canli_makro_semboller_turetilmis_varliklari_tabanina_esler_ve_tekillestirir():
+    """CEYREK ve YARIM (ikisi de altın sikkesi, XAUTRY'den türetilmiş) aynı
+    haber anahtarına düşer — aynı haberin iki kez çekilmesini engellemek için
+    tekilleştirilmeli, XAUTRY yalnızca BİR kez görünmeli."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "CEYREK", "asset_class": "precious_metal", "weight_percent": 10.0},
+            {"symbol": "YARIM", "asset_class": "precious_metal", "weight_percent": 10.0},
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == ["XAUTRY"]
+
+
+def test_canli_makro_semboller_bond_cash_stock_disi_atlar():
+    """Tahvil/Nakit/Hisse `_live_macro_symbols_for_holdings` kapsamında
+    değil — onlar RAG'a (bond/cash) ya da get_portfolio_news'e (stock)
+    gider, burada tekrar sorgulanmamalı."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "stock", "weight_percent": 40.0},
+            {"symbol": "APT", "asset_class": "bond", "weight_percent": 30.0},
+            {"symbol": "MEVDUAT-V", "asset_class": "cash", "weight_percent": 30.0},
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == []
+
+
+def test_canli_makro_semboller_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan varlık ağırlık hesabına girmediği gibi canlı haber
+    sorgusuna da girmemeli (bkz. aynı ilkenin `_macro_queries_for_holdings`
+    testi)."""
+    holdings_data = {
+        "holdings": [
+            {
+                "symbol": "XAUTRY",
+                "asset_class": "precious_metal",
+                "weight_percent": None,
+                "price_missing": True,
+            }
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == []
+
+
+def test_canli_makro_semboller_taninmayan_sembolu_sessizce_atlar():
+    """Evrende (SPEC_BY_SYMBOL) olmayan bir sembol (ör. test verisi) çökmeye
+    değil, sessiz atlanmaya yol açmalı — uydurma yok."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "BOYLE-BIR-SEY-YOK", "asset_class": "currency", "weight_percent": 100.0}
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == []
 
 
 def test_sinyal_baglami_makro_gelismeler_varsayilan_bos_liste():

@@ -1,7 +1,11 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastmcp import Client, FastMCP
 
+from app.core.config import AssetClass
 from app.core.exceptions import ProviderUnavailableError
+from app.models import MacroNewsSnapshot
 from mcp_server.tools import market_tools
 from mcp_server.tools._base import DEFAULT_MESSAGES, ToolErrorCode
 
@@ -125,3 +129,78 @@ def test_warm_up_chroma_ayakta_degilse_cokmez(monkeypatch):
     monkeypatch.setattr(market_tools, "_get_retriever", patlat)
 
     market_tools.warm_up()  # istisna firlatmamali
+
+
+# --- get_macro_news: canli makro haber (2026-08-25 eki) ----------------------
+# search_market_news'ten farkli: RAG/Chroma degil, macro_news_snapshot
+# tablosunu okur (bkz. app/services/macro_news_service.py) — bu yuzden
+# _FakeRetriever degil, gercek test DB'si (db_session fixture) kullanilir.
+
+
+async def test_get_macro_news_tool_success(mcp_server, db_session):
+    db_session.add(
+        MacroNewsSnapshot(
+            symbol="XAUTRY",
+            asset_class=AssetClass.PRECIOUS_METAL,
+            headline="Altın rekor seviyeye ulaştı",
+            source="Reuters",
+            url="https://example.com/altin-rekor",
+            published_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            fetched_at=datetime.now(timezone.utc),
+        )
+    )
+    db_session.commit()
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("get_macro_news", {"symbols": ["XAUTRY"]})
+
+    envelope = result.structured_content
+    assert envelope["success"] is True
+    assert envelope["data"]["news_by_symbol"]["XAUTRY"][0]["headline"] == (
+        "Altın rekor seviyeye ulaştı"
+    )
+
+
+async def test_get_macro_news_tool_not_found(mcp_server, db_session):
+    # Bos sembol listesi degil, DB'de o sembol icin hic haber yok — uydurma
+    # yok, standart NOT_FOUND doner.
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("get_macro_news", {"symbols": ["USDTRY"]})
+
+    envelope = result.structured_content
+    assert envelope["success"] is False
+    assert envelope["error"]["code"] == ToolErrorCode.NOT_FOUND.value
+
+
+async def test_get_macro_news_tool_bos_sembol_listesi_invalid_argument(mcp_server):
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("get_macro_news", {"symbols": []})
+
+    envelope = result.structured_content
+    assert envelope["success"] is False
+    assert envelope["error"]["code"] == ToolErrorCode.INVALID_ARGUMENT.value
+
+
+async def test_get_macro_news_tool_bayat_haberi_disliyor(mcp_server, db_session):
+    # Servis katmani (macro_news_service.get_macro_news) settings.
+    # macro_news_max_age_days'ten eski satirlari zaten eliyor; tool bunu
+    # oldugu gibi tasir — burada uctan uca dogrulaniyor.
+    db_session.add(
+        MacroNewsSnapshot(
+            symbol="USDTRY",
+            asset_class=AssetClass.CURRENCY,
+            headline="Çok eski dolar haberi",
+            source="Test",
+            url="https://example.com/eski-dolar",
+            published_at=datetime.now(timezone.utc) - timedelta(days=30),
+            fetched_at=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+    )
+    db_session.commit()
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("get_macro_news", {"symbols": ["USDTRY"]})
+
+    envelope = result.structured_content
+    assert envelope["success"] is False
+    assert envelope["error"]["code"] == ToolErrorCode.NOT_FOUND.value

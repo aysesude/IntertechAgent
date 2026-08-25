@@ -466,6 +466,19 @@ class Settings(BaseSettings):
     # iş analistiyle teyit edilmeli.
     portfolio_news_low_confidence_weight_percent: float = 50.0
 
+    # --- Canlı makro haber önbelleği (macro_news_snapshot, 2026-08-25 eki) ---
+    # bkz. app/models/macro_news_snapshot.py, app/services/macro_news_ingest.py.
+    # Sembol başına döndürülecek en fazla haber sayısı (hem çekimde hem
+    # `get_macro_news` tool'unda tavan).
+    macro_news_per_symbol: int = 3
+    # `get_macro_news` yalnızca bu kadar GÜN içinde YAYIMLANMIŞ haberleri
+    # döner — "canlı" iddiasının karşılığı budur; daha eski bir satır DB'de
+    # dursa bile sorguya girmez.
+    macro_news_max_age_days: int = 3
+    # Batch iş her çalıştığında bu kadar günden eski satırlar silinir —
+    # tablo sınırsız büyümesin diye (bkz. macro_news_ingest.run_macro_news_update).
+    macro_news_retention_days: int = 14
+
     # --- Veri katmanı ---
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
     # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).

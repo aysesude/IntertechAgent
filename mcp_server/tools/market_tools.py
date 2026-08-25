@@ -19,6 +19,7 @@ import anyio.to_thread
 from fastmcp import FastMCP
 
 from app.core.config import settings
+from app.services.macro_news_service import get_macro_news as fetch_macro_news
 from app.services.portfolio_service import get_holdings_valuation as fetch_holdings
 from mcp_server.tools._base import ToolErrorCode, ToolFailure, db_session, tool_handler
 from rag.retriever import NOT_FOUND_MESSAGE, Retriever
@@ -234,4 +235,50 @@ def register(mcp: FastMCP) -> list[str]:
             "confidence": confidence,
         }
 
-    return ["search_market_news", "get_portfolio_news"]
+    @mcp.tool(name="get_macro_news")
+    @tool_handler()
+    def get_macro_news(symbols: list[str]) -> dict[str, Any]:
+        """Verilen sembollerin CANLI (yfinance haber akışından, günlük
+        toplama işiyle çekilmiş) güncel piyasa haberlerini döndürür.
+
+        `search_market_news`'ten farkı: o RAG'daki (statik, donmuş) dokümanı
+        arar; bu ise `macro_news_snapshot`taki, `data/macro_news_update.py`
+        ile periyodik tazelenen GERÇEK/GÜNCEL haberi okur. Yalnızca Döviz ve
+        Kıymetli Maden sembolleri için veri vardır (bkz.
+        app/providers/universe.py:yfinance_news_ticker) — Hisse zaten
+        `get_portfolio_news` ile kapsanıyor, Tahvil/Nakit'in (TEFAS
+        fonları/mevduat) Yahoo'da karşılığı yok.
+
+        Ne zaman kullanılır: risk/strateji ajanının Tahvil/Döviz/Altın/Nakit
+        için makro bağlam ihtiyacı (bkz. risk_signals.md
+        "makro_gelişmeler"). Türetilmiş varlıklar (ör. çeyrek altın)
+        tabanlarının sembolü altında saklanır — çağıran taraf
+        `app.providers.universe.macro_news_key` ile bu eşlemeyi kendisi
+        yapmalıdır, bu tool sembolü OLDUĞU GİBİ arar, eşleme yapmaz.
+
+        Args:
+            symbols: İç sembol listesi (ör. ["XAUTRY", "USDTRY"]). Boş olamaz.
+
+        Returns:
+            Başarılı: {"success": true, "data": {"news_by_symbol":
+            {"XAUTRY": [{"headline", "source", "url", "published_at"}, ...]}}}.
+            Yalnızca haberi bulunan semboller anahtar olarak görünür; hiçbir
+            sembolde güncel haber yoksa NOT_FOUND döner.
+            Hata: {"code": "INVALID_ARGUMENT"} — boş sembol listesi;
+            {"code": "NOT_FOUND"} — hiçbir sembol için (max_age_days içinde
+            yayımlanmış) güncel haber yok.
+        """
+        if not symbols:
+            raise ToolFailure(ToolErrorCode.INVALID_ARGUMENT, "En az bir sembol gerekli.")
+
+        with db_session() as db:
+            grouped = fetch_macro_news(db, symbols)
+
+        if not grouped:
+            raise ToolFailure(
+                ToolErrorCode.NOT_FOUND, "İstenen semboller için güncel canlı haber bulunamadı."
+            )
+
+        return {"news_by_symbol": grouped}
+
+    return ["search_market_news", "get_portfolio_news", "get_macro_news"]
