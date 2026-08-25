@@ -22,7 +22,10 @@ bildirdi.
 piyasanın beklediği 3,5 milyar TL'nin hafif altında kaldı. Net kâr
 yıllık bazda yüzde 5 gerilerken, bir önceki çeyreğe göre yüzde 66 arttı.
 Çeyrek hasılatı 60,8 milyar TL oldu; bu da analist beklentisi olan 62,9
-milyar TL'nin altında kaldı.
+milyar TL'nin altında kaldı. Çeyrek FAVÖK'ü 3,6 milyar TL olarak
+gerçekleşti; segment bazında düz cam 2,1 milyar TL, cam ambalaj 1,8
+milyar TL FAVÖK katkısı sağlarken cam ev eşyası segmenti 759 milyon
+TL'lik negatif katkı verdi.
 
 ## İlk 6 aylık dönem (2026 Ocak-Haziran)
 

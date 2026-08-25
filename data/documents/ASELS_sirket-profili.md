@@ -23,7 +23,8 @@ haberleşme ve bilgi teknolojileri, radar ve elektronik harp,
 elektro-optik, aviyonik, insansız sistemler, kara/deniz/silah
 sistemleri, hava savunma ve füze sistemleri, komuta kontrol sistemleri
 ile ulaştırma, güvenlik, trafik, otomasyon ve sağlık teknolojileri
-alanlarında üretim ve Ar-Ge faaliyetleri yürütmektedir.
+alanlarında üretim ve Ar-Ge faaliyetleri yürütmektedir. Şirket, BIST'te
+Savunma Sanayi sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -36,9 +37,8 @@ açık bir anonim şirkettir.
 ASELSAN'ın çok sayıda bağlı ortaklığı ve iştiraki bulunmaktadır. Öne
 çıkan bir örnek: Aselsan Bakü, 11 Şubat 1998 tarihinde Azerbaycan'da
 kurulmuş olup halen bu ülkede sivil ve askeri el telsizleri
-üretmektedir.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+üretmektedir. Yönetim kurulu başkanı Prof. Dr. İbrahim Özkol'dur. 2026
+yılında hisse başına brüt 0,4276315 TL, net 0,3634867 TL nakit temettü
+dağıtılmasına karar verildi; ödeme tarihi 26 Kasım 2026'dır. Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

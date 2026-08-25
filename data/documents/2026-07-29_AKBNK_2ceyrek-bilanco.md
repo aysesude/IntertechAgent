@@ -27,7 +27,9 @@ geliri ise 36,7 milyar TL olarak gerçekleşti.
 ## İlk yarı (Ocak-Haziran 2026)
 
 Akbank, yılın ilk yarısında 12 milyar 623 milyon TL vergi gideri
-sonrası 34 milyar 333 milyon TL konsolide net kâr elde etti.
+sonrası 34 milyar 333 milyon TL konsolide net kâr elde etti. İlk yarı
+toplam geliri, yıllık bazda yüzde 45 artışla 140,3 milyar TL olarak
+gerçekleşti.
 
 ## Bilanço büyüklükleri
 

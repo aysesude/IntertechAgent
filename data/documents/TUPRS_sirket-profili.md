@@ -20,7 +20,8 @@ olarak kurulmuştur.
 
 Türkiye'nin en büyük sanayi şirketlerinden biri ve Avrupa'nın 7. büyük
 rafineri şirketi olan Tüpraş, ham petrol rafinajı ve akaryakıt üretimi
-alanında faaliyet göstermektedir.
+alanında faaliyet göstermektedir. Şirket, BIST'te Kimya, Petrol,
+Plastik sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -33,9 +34,10 @@ nihai en büyük pay sahibi Koç Holding'dir. Şirket 2006 yılında
 ## Halka arz geçmişi
 
 Tüpraş hisseleri 1991 yılından bu yana Borsa İstanbul'da işlem
-görmektedir; Sermaye Piyasası Kurulu'na kayıtlıdır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+görmektedir; Sermaye Piyasası Kurulu'na kayıtlıdır. Yönetim kurulu
+başkanlığını 2008'den bu yana M. Ömer Koç yürütmektedir; Yıldırım Ali
+Koç başkan vekilidir. 2026 yılında hisse başına toplam net 14,56 TL
+nakit temettü iki taksitte (16 Mart: net 8,82 TL, 30 Eylül: net 5,73
+TL) dağıtılmasına karar verildi. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır.

@@ -1,0 +1,58 @@
+import { useState } from "react";
+import type { InfluenceRow } from "@/types/finance";
+import { Card } from "@/components/common/Card";
+import { formatPct } from "@/utils/format";
+import { POSITIVE, NEGATIVE, LINE2, FIXED_DARK_CHIP } from "@/utils/colors";
+
+interface InfluenceListProps {
+  rows: InfluenceRow[];
+}
+
+export function InfluenceList({ rows }: InfluenceListProps) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const maxWeight = Math.max(...rows.map((r) => r.weightPct));
+
+  return (
+    <Card className="p-[22px]">
+      <h2 className="font-display m-0 mb-4 text-base font-semibold">Portföyünü Etkileyenler</h2>
+      <div className="mb-2 flex items-center gap-3">
+        <span className="w-[58px]" />
+        <span className="flex-1 text-[11px] font-semibold uppercase tracking-[.4px] text-ink-faint">Portföy Ağırlığı</span>
+        <span className="w-[52px]" />
+      </div>
+      <div className="flex flex-col gap-[13px]">
+        {rows.map((row) => {
+          const up = row.changePct >= 0;
+          const widthPct = (row.weightPct / maxWeight) * 100;
+          return (
+            <div
+              key={row.id}
+              className="relative flex items-center gap-3"
+              onMouseEnter={() => setHovered(row.id)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              <span className="font-display w-[58px] text-[13px] font-bold">{row.name}</span>
+              <div className="h-[5px] flex-1 cursor-pointer overflow-hidden rounded-full" style={{ backgroundColor: LINE2 }}>
+                <div
+                  className="h-full"
+                  style={{ width: `${widthPct}%`, background: up ? POSITIVE : NEGATIVE }}
+                />
+              </div>
+              <span className="w-[52px] text-right text-[12.5px] font-semibold" style={{ color: up ? POSITIVE : NEGATIVE }}>
+                {formatPct(row.changePct)}
+              </span>
+              {hovered === row.id && (
+                <div
+                  className="animate-tipIn absolute bottom-[calc(100%+6px)] left-[58px] z-10 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold text-white"
+                  style={{ backgroundColor: FIXED_DARK_CHIP }}
+                >
+                  Portföyün %{row.weightPct}'i
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}

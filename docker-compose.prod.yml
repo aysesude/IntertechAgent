@@ -30,12 +30,17 @@ services:
     restart: always
     ports: []
 
-  frontend:
+  # Bu blok OLMADAN canlı ortamda frontend-v2, docker-compose.yml'deki
+  # geliştirme ayarlarıyla (vite dev sunucusu, kaynak kodu bind mount,
+  # anonim node_modules volume'ü) çalışırdı.
+  frontend-v2:
     build:
-      context: ./frontend
+      context: ./frontend-v2
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        # Ayrı değişken — gerekçesi docker-compose.yml'de (çapraz köken +
+        # basic_auth). Tanımlı değilse ortak değere düşer.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL_V2:-${VITE_API_BASE_URL}}
     command: ["nginx", "-g", "daemon off;"]
     volumes: []
     restart: always

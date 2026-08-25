@@ -26,8 +26,14 @@ olarak gerçekleşti.
 
 İkinci çeyrek geliri 506,7 milyon avroya ulaştı; piyasa beklentisi 472
 milyon avro seviyesindeydi. Gelir, geçen yılın aynı dönemindeki 445
-milyon avroya göre yüzde 14 arttı. FAVÖK 167,2 milyon avro olarak
-gerçekleşti ve 154,5 milyon avroluk piyasa konsensüsünü aştı.
+milyon avroya göre yüzde 14 arttı. Gelirin dağılımı havacılık gelirleri
+197,2 milyon avro (yüzde 20 artış), yiyecek-içecek gelirleri 66,3
+milyon avro (yüzde 22 artış) ve yazılım/donanım gelirleri 7,5 milyon
+avro (yüzde 15 azalış) şeklinde gerçekleşti. FAVÖK 167,2 milyon avro
+olarak gerçekleşti ve 154,5 milyon avroluk piyasa konsensüsünü aştı.
+Faaliyet giderleri tarafında personel giderleri yüzde 21 artışla 151,6
+milyon avroya, jet yakıtı gideri ise yüzde 22 artışla 69,2 milyon
+avroya yükseldi.
 
 ## İlk yarı (Ocak-Haziran 2026)
 

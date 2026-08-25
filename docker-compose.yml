@@ -94,16 +94,47 @@ services:
     depends_on:
       - postgres
 
-  frontend:
+  # VİRA arayüzü — projenin TEK arayüzü.
+  #
+  # Eski `frontend` servisi kaldırıldı: Dashboard dışındaki tüm ekranları
+  # ("TODO: bu ekran henüz uygulanmadı") 11 satırlık iskeletlerdi ve sohbet
+  # ekranı yoktu. v2 her ekranda ya eşit ya üstün olduğu için yan yana
+  # koşmanın bir karşılığı kalmadı.
+  #
+  # Klasör adı `frontend-v2` KALDI. Yeniden adlandırmak yüz küsur dosyayı
+  # taşımak, CI yollarını, Docker bağlamını ve alias yapılandırmasını aynı
+  # anda değiştirmek demek; sunumdan önce alınacak bir risk değil ve
+  # incelemeyi de okunmaz hâle getirir. Ayrı ve kozmetik bir iş.
+  frontend-v2:
     build:
-      context: ./frontend
+      context: ./frontend-v2
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # frontend-v2 KENDİ alan adından servis ediliyor ve o alan adında
+      # Caddy /api/* yolunu backend'e vekilliyor — yani istekler AYNI KÖKENE
+      # gider. Eski `frontend` başka bir alan adında durduğu için ayrı
+      # değişken gerekiyor; ikisi aynı değeri paylaşamaz.
+      #
+      # Bu ayrım şart, sadece derli toplu olsun diye değil: test alan adı
+      # basic_auth ile korunuyor ve tarayıcı ÇAPRAZ KÖKEN isteklerine
+      # basic_auth bilgisini eklemez — arayüz API'yi komşu alan adından
+      # çağırsaydı her istek 401 alırdı.
+      #
+      # Tanımlı değilse ortak değere düşer (tek arayüzün olduğu yerel kurulum).
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL_V2:-${VITE_API_BASE_URL}}
     ports:
-      - "${FRONTEND_PORT_HOST:-5173}:5173"
+      # Sunucudaki host portu `.env` ile veriliyor (test ve prod aynı
+      # makinede koşuyor, çakışmamaları gerekiyor). Yerelde varsayılan 5173:
+      # eski arayüz kalktığı için o port artık boş.
+      #
+      # DİKKAT: sunucuda bu portu değiştirmek Caddy'yi de değiştirmeyi
+      # gerektirir — Caddy konteyner adına değil HOST PORTUNA vekillik ediyor
+      # ve Caddyfile bu depoda değil, sunucuda duruyor.
+      - "${FRONTEND_V2_PORT_HOST:-5173}:5174"
     volumes:
-      - ./frontend:/app
+      - ./frontend-v2:/app
       - /app/node_modules
     depends_on:
       - api

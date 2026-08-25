@@ -26,6 +26,24 @@ def _doc(content: str, distance: float = 0.1, **metadata) -> dict:
     return {"content": content, "metadata": metadata, "distance": distance}
 
 
+class _TopKAwareFakeVectorStore(VectorStore):
+    """Gercek Chroma gibi, mesafeye gore sirali dokumanlari yalnizca ilk
+    top_k tanesini dondurur — aday havuzu buyuklugunun (_MIN_CANDIDATE_POOL)
+    dogru dokumani havuzun disinda birakip birakmadigini test etmek icin."""
+
+    def __init__(self, documents: list[dict]) -> None:
+        self._documents = sorted(documents, key=lambda d: d["distance"])
+
+    def add_documents(self, documents, metadatas) -> None:
+        raise NotImplementedError
+
+    def clear(self) -> None:
+        raise NotImplementedError
+
+    def similarity_search(self, query: str, top_k: int = 5, where: dict | None = None):
+        return self._documents[:top_k]
+
+
 def test_retrieve_sirket_filtresi_where_olarak_gecirilir():
     store = _FakeVectorStore([_doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS")])
     retriever = Retriever(store=store)
@@ -69,7 +87,7 @@ def test_retrieve_son_filtre_yanlis_sirketi_eler():
     )
     retriever = Retriever(store=store)
 
-    results = retriever.retrieve("net kâr bilanço", sirket="ASELS")
+    results = retriever.retrieve("ASELS net kâr bilanço", sirket="ASELS")
 
     assert len(results) == 1
     assert results[0]["metadata"]["sirket"] == "ASELS"
@@ -85,7 +103,7 @@ def test_retrieve_donem_listesi_ile_son_ceyrekler_filtrelenir():
     retriever = Retriever(store=store)
 
     results = retriever.retrieve(
-        "net kâr bilanço", sirket="ASELS", donem_listesi=["2026-Q1", "2026-Q2"]
+        "ASELS net kâr bilanço", sirket="ASELS", donem_listesi=["2026-Q1", "2026-Q2"]
     )
 
     assert len(results) == 1
@@ -111,7 +129,12 @@ def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
         [
             _doc("ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3),
             _doc("THYAO ikinci çeyrek net kâr açıkladı", sirket="THYAO", distance=0.2),
-            _doc("Piyasada ikinci çeyrek net kâr haberleri", sirket="", distance=0.4),
+            _doc(
+                "Piyasada ASELSAN dahil savunma sanayi şirketlerinin ikinci çeyrek "
+                "net kâr haberleri konuşuluyor",
+                sirket="",
+                distance=0.4,
+            ),
         ]
     )
     retriever = Retriever(store=store)
@@ -130,13 +153,21 @@ def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
     sonuçlardan biri gerçekten sorgudaki şirketle eşleştiğinde devreye girer."""
     store = _FakeVectorStore(
         [
-            _doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS", distance=0.3),
-            _doc("THYAO bilançosu net kâr açıklandı", sirket="THYAO", distance=0.4),
+            _doc(
+                "BIST 100 endeksindeki ASELS bilançosu net kâr açıklandı",
+                sirket="ASELS",
+                distance=0.3,
+            ),
+            _doc(
+                "BIST 100 endeksindeki THYAO bilançosu net kâr açıklandı",
+                sirket="THYAO",
+                distance=0.4,
+            ),
         ]
     )
     retriever = Retriever(store=store)
 
-    results = retriever.retrieve("bilanço net kâr açıklamaları")
+    results = retriever.retrieve("BIST 100 endeksindeki şirketlerin net kâr açıklamaları")
 
     assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}
 
@@ -379,3 +410,253 @@ def test_retrieve_is_bankasi_diger_bankalarla_karismaz():
 
     sirketler = {r["metadata"]["sirket"] for r in results}
     assert sirketler == {"ISCTR"}
+
+
+def test_retrieve_dar_aday_havuzunda_disarida_kalan_sirket_bulunur():
+    """31 `sirket_profili` dokumaninin "Ortaklık yapısı" bolumleri birbirine
+    cok benzer bir kaliptla yazildigi icin (hissedar/pay/yuzde gibi ortak
+    kelimeler), sorgulanan sirketin kendi dokumani vektor mesafesine gore
+    havuzun hemen disinda kalabiliyor (olcumle dogrulandi: "Kardemir'in
+    ortaklik yapisi nasil" sorgusunda KRDMD 21. sirada kalip eski havuz
+    boyutu 20 iken elenmis, sirket-eleme guvenlik agi hic devreye girmeden
+    5 alakasiz sirketin profili donmustu). _MIN_CANDIDATE_POOL'un 30'a
+    cikarilmasi, KRDMD'nin kendi dokumaninin havuza girip guvenlik agini
+    tetikleyebilmesini sagliyor."""
+    diger_sirketler = [
+        _doc(
+            f"{ticker} ortaklık yapısı hissedar pay yüzde",
+            baslik=f"{ticker} Şirket Profili",
+            sirket=ticker,
+            distance=0.30 + i * 0.01,
+        )
+        for i, ticker in enumerate(
+            [
+                "SAHOL",
+                "KCHOL",
+                "SISE",
+                "YKBNK",
+                "ARCLK",
+                "AKBNK",
+                "TUPRS",
+                "GARAN",
+                "CCOLA",
+                "ULKER",
+                "TCELL",
+                "TOASO",
+                "VAKBN",
+                "THYAO",
+                "HALKB",
+                "MGROS",
+                "ASELS",
+                "ISCTR",
+                "PETKM",
+                "EKGYO",
+            ]
+        )
+    ]
+    kardemir_dokumani = _doc(
+        "Kardemir ortaklık yapısı hissedar pay yüzde",
+        baslik="Kardemir Şirket Profili",
+        sirket="KRDMD",
+        distance=0.6911,
+    )
+    store = _TopKAwareFakeVectorStore([*diger_sirketler, kardemir_dokumani])
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("Kardemir'in ortaklık yapısı nasıl")
+
+    sirketler = {r["metadata"]["sirket"] for r in results}
+    assert sirketler == {"KRDMD"}
+
+
+def test_retrieve_kesme_isareti_eki_sahte_kelime_uretmez():
+    """\\w+ regex'i kesme isaretini kelime siniri saydigi icin ("XYZ
+    Teknoloji'nin" -> "xyz" + "teknoloji" + "nin"), 2 harften uzun ekler
+    ("nin", "nın", "yle"...) uzunluk barajini gecip jenerik olmayan birer
+    "ayirt edici kelime" gibi davranabiliyordu (olcumle dogrulandi: "XYZ
+    Teknoloji'nin hisse fiyati ne kadar" sorgusunda "nin" bu sekilde
+    THYAO/YKBNK/ISCTR/GARAN'in hedef fiyat raporlarini "bulundu" saydirdi
+    — hicbir gercek sirket adi hic eslesmemesine ragmen). Kesme isareti +
+    eki tokenlestirmeden once tamamen atmak, uydurma bir sirket sorgusunun
+    dogru sekilde "bulunamadi" donmesini sagliyor."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "THY'nin ikinci çeyrek bilançosu sonrası hedef fiyat açıklandı",
+                baslik="THYAO Hedef Fiyat Raporu",
+                sirket="THYAO",
+                distance=0.4,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    results = retriever.retrieve("XYZ Teknoloji'nin hisse fiyatı ne kadar")
+
+    assert results == []
+
+
+def test_retrieve_uydurma_sirket_holding_enerji_kelimeleriyle_bulunmus_sayilmaz():
+    """ "Holding"/"enerji" tek başına aşırı jenerik: onlarca `sirket_profili`
+    dokümanında ya şirket adının parçası ("Koç Holding", "Astor Enerji") ya
+    da faaliyet alanı olarak geçiyor (ölçümle doğrulandı: "ABC Holding'in
+    ikinci çeyrek net kârı nedir" ve "Falanca Enerji'nin ortaklık yapısı
+    nasıl" gibi uydurma şirket sorguları, uydurma kısım hiç eşleşmemesine
+    rağmen salt "holding"/"enerji"/"ikinci"/"net"/"yapısı" gibi kelimeler
+    üzerinden tamamen alakasız gerçek şirketleri "bulundu" saydırdı)."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Koç Holding ikinci çeyrek net kârı açıklandı",
+                baslik="Koç Holding Şirket Profili",
+                sirket="KCHOL",
+                distance=0.3,
+            ),
+            _doc(
+                "Astor Enerji ortaklık yapısı hissedar bilgileri",
+                baslik="Astor Enerji Şirket Profili",
+                sirket="ASTOR",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    assert retriever.retrieve("ABC Holding'in ikinci çeyrek net kârı nedir") == []
+    assert retriever.retrieve("Falanca Enerji'nin ortaklık yapısı nasıl") == []
+
+
+def test_retrieve_uydurma_sirket_temettu_odeme_dagitim_kelimeleriyle_bulunmus_sayilmaz():
+    """ "Temettü"/"ödeme"/"dağıt-" 31 `sirket_profili` dokümanının TAMAMINDA
+    (temettü geçmişi paragrafı eklendikten sonra) geçen jenerik kelimelere
+    dönüştü (ölçümle doğrulandı, 2026-08-24: "ABC Holding'in temettü
+    ödemesi ne kadar" sorgusu "ödemesi" kelimesinin TCELL'in kendi "ödeme
+    tarihi ..." cümlesiyle örtüşmesi yüzünden, "Falanca Enerji'nin temettü
+    dağıtımı nasıl" sorgusu ise "dağıtımı" kelimesinin ASTOR'un "dağıtım
+    sistemleri"/"dağıtılmasına karar verildi" ifadeleriyle örtüşmesi
+    yüzünden, uydurma şirket adı hiç eşleşmemesine rağmen tamamen alakasız
+    gerçek şirketleri "bulundu" saydırdı)."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Turkcell ortaklık yapısı: ödeme tarihi 9 Aralık 2026 net 3,40 TL temettü",
+                baslik="Turkcell Şirket Profili",
+                sirket="TCELL",
+                distance=0.3,
+            ),
+            _doc(
+                "Astor Enerji elektrik dağıtım sistemleri üretimi, temettü dağıtılmasına karar verildi",
+                baslik="Astor Enerji Şirket Profili",
+                sirket="ASTOR",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    assert retriever.retrieve("ABC Holding'in temettü ödemesi ne kadar") == []
+    assert retriever.retrieve("Falanca Enerji'nin temettü dağıtımı nasıl") == []
+
+
+# ---------------------------------------------------------------------------
+# Sirket adiyla anilan sorgu, kelime-ortusme oranindan muaf
+# ---------------------------------------------------------------------------
+
+
+def test_sirketi_adiyla_anan_sorgu_oran_kapisindan_muaf():
+    """Kullanici dokumani olan bir sirketi ADIYLA andiysa sonuc elenmemeli.
+
+    Olculdu (23 Agustos test turu): "ASELS hakkinda ne biliyorsun?" sorgusu
+    0.50 oran aliyordu ve kural `> 0.5` oldugu icin dogru dokuman ELENIYOR,
+    kullaniciya "veritabaninda bulunamadi" donuyordu. Sirket kodu TAM
+    eslesmisti; eleyen sey sorunun geri kalanindaki konusma diliydi
+    ("hakkinda", "ne biliyorsun").
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "ASELSAN 2026 ikinci ceyrekte net kar acikladi. Gelirler artti.",
+                sirket="ASELS",
+                baslik="ASELSAN 2026 2. Ceyrek Finansal Sonuclari",
+                tur="bilanco",
+            )
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("ASELS hakkinda ne biliyorsun?")
+
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["metadata"]["sirket"] == "ASELS"
+
+
+def test_korpus_farkli_kelime_kullansa_da_sirket_eslesmesi_yeterli():
+    """Kullanicinin sozcugu korpusunkinden farkli olabilir.
+
+    "TUPRS'un BILANCOSUNDA one cikan ne var?" sorgusunda dokumanlar
+    "bilanco" demiyor, "finansal sonuclar" diyor. Oran 0.25'e dusuyordu
+    (yalnizca `tuprs` ortusuyordu) ve dogru dokuman eleniyordu.
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Tupras 2026 ikinci ceyrek finansal sonuclarini acikladi.",
+                sirket="TUPRS",
+                baslik="Tupras 2026 2. Ceyrek Finansal Sonuclari",
+                tur="bilanco",
+            )
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("TUPRS'un bilancosunda one cikan ne var?")
+
+    assert len(sonuclar) == 1
+
+
+def test_muafiyet_BASKA_sirketin_dokumanini_kapsamaz():
+    """Muafiyet dar olmali: yalnizca sorguda anilan sirketin dokumani.
+
+    Genis tutulsaydi, iki sirketin neredeyse ayni kalipla yazilmis
+    bilancolari arasinda yanlis sirket de kapidan gecerdi — bu kapinin
+    engellemek icin var oldugu tam olarak o durum.
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "ASELSAN 2026 ikinci ceyrekte net kar acikladi.",
+                sirket="ASELS",
+                baslik="ASELSAN 2026 2. Ceyrek",
+                tur="bilanco",
+            ),
+            _doc(
+                "Turk Hava Yollari 2026 ikinci ceyrekte net kar acikladi.",
+                sirket="THYAO",
+                baslik="THYAO 2026 2. Ceyrek",
+                tur="bilanco",
+            ),
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("ASELS hakkinda ne biliyorsun?")
+
+    donen_sirketler = {r["metadata"]["sirket"] for r in sonuclar}
+    assert donen_sirketler == {"ASELS"}, "THYAO dokumani sizmamali"
+
+
+def test_muafiyet_alakasiz_sorguyu_kapidan_gecirmez():
+    """Hicbir sirketle eslesmeyen sorgu icin kapi AYNEN duruyor.
+
+    Muafiyet oran kuralini gevsetmiyor, yalnizca deterministik olarak
+    alakali oldugu kanitlanmis sonucu kapsam disi birakiyor.
+    """
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "ASELSAN 2026 ikinci ceyrekte net kar acikladi.",
+                sirket="ASELS",
+                baslik="ASELSAN 2026 2. Ceyrek",
+                tur="bilanco",
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("Bitcoin fiyati ne kadar") == []

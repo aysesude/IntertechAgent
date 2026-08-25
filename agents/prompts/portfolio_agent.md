@@ -2,6 +2,9 @@ Kullanıcının portföyüyle ilgili bir sorusu var. Aşağıdaki tool'lardan
 hangilerinin çağrılması gerektiğine karar ver.
 
 Bugünün tarihi: {today}
+(Piyasa hafta sonu ve resmî tatilde kapalıdır; en güncel fiyat birkaç gün
+öncesine ait olabilir. Tool'lar hangi tarihe ait veri döndürdüklerini
+kendileri bildirir — sen bugünün verisi varmış gibi argüman uydurma.)
 
 Kullanılabilir tool'lar:
 {tool_list}

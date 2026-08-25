@@ -1,0 +1,46 @@
+# Canlı ortam için çok aşamalı build.
+# Geliştirmedeki Vite dev sunucusu yerine, derlenmiş statik dosyalar nginx ile sunulur.
+#
+# VITE_ ile başlayan değişkenler DERLEME ANINDA gömülür, çalışma anında okunmaz.
+# Bu yüzden build arg olarak geçilmek zorunda.
+
+FROM node:20-slim AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY . .
+
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+# GECICI: giris ekranindaki "Eski arayuzu ac (test)" baglantisinin hedefi.
+# Bos gecilirse baglanti hic render edilmez (bkz. LoginScreen.tsx).
+ARG VITE_LEGACY_UI_URL
+ENV VITE_LEGACY_UI_URL=$VITE_LEGACY_UI_URL
+
+RUN npm run build
+
+
+FROM nginx:1.27-alpine
+
+# SPA yönlendirmesi: /portfolio gibi bir adres doğrudan açıldığında nginx
+# dosya bulamaz ve 404 döner. index.html'e düşürerek React Router'ın
+# devralmasını sağlıyoruz.
+RUN printf '%s\n' \
+    'server {' \
+    '    listen 5174;' \
+    '    root /usr/share/nginx/html;' \
+    '    index index.html;' \
+    '    location / {' \
+    '        try_files $uri $uri/ /index.html;' \
+    '    }' \
+    '}' > /etc/nginx/conf.d/default.conf
+
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 5174
+
+CMD ["nginx", "-g", "daemon off;"]

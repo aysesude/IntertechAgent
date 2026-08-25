@@ -22,7 +22,8 @@ sonucu oluşmuştur.
 Şirket; gazlı ve gazsız içecekler, meyve ve sebze suları, maden ve
 içme suları, çay, bitki çayları, kahve, kakao/çikolata bazlı içecekler
 ile ayran ve süt bazlı içecekler dahil olmak üzere her türlü alkolsüz
-içeceğin üretim ve dağıtımını yapmaktadır.
+içeceğin üretim ve dağıtımını yapmaktadır. Şirket, BIST'te Gıda, İçecek
+sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -30,9 +31,10 @@ içeceğin üretim ve dağıtımını yapmaktadır.
 (yaklaşık yüzde 43 pay) ve The Coca-Cola Company'nin bir iştiraki olan
 TCCEC'dir (yaklaşık yüzde 1 doğrudan pay; The Coca-Cola Company'nin
 toplam etkin payı daha yüksektir). İki ana ortak, şirketin yönetimi
-konusunda bir Ortaklık Anlaşması imzalamıştır.
-
-## Not
-
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+konusunda bir Ortaklık Anlaşması imzalamıştır. Yönetim kurulu başkanı,
+4 Mayıs 2026 tarihli yönetim kurulu kararıyla atanan Kamilhan Süleyman
+Yazıcı'dır; İlhan Murat Özgel başkan vekilidir. 2026 yılında hisse
+başına brüt 1,43 TL, net 1,2155 TL nakit temettü dağıtılmasına karar
+verildi; kayıt tarihi 12 Mayıs 2026'dır. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
+türü dokümanlarda yer alır.

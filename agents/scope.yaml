@@ -81,13 +81,30 @@ varlik_siniflari:
 # İşlem talebi — varlık ekseninden ÖNCE çalışır
 # ---------------------------------------------------------------------------
 islem_talebi:
-  fiiller: [al, satın al, sat, transfer et, gönder, havale, eft, öde,
-            yatır, çek, aç, kapat, iptal et, emir ver, işlem yap,
+  fiiller: [al, satın al, sat, alım, satım, transfer, transfer et, gönder, havale, eft, öde,
+            yatır, çek, aç, kapat, iptal et, emir, emir ver, işlem yap,
             para gönder, hesap aç, abone ol]
+  # Sonek toleransı UYGULANMAYAN fiiller: yalnızca tam kelime olarak eşleşirler.
+  #
+  # Kelime eşleştirme, 5 harften uzun fiillere 6 karaktere kadar sonek
+  # toleransı tanıyor ("transfer" -> "transferi"). "yatır" tam 5 harf olduğu
+  # için bu toleransı alıyor ve **"yatırım"** kelimesini yutuyordu — bu ürünün
+  # en sık geçen ismini. Ölçülen sonuç (23 Ağustos test turu): "Çok fazla
+  # hisseye mi YATIRIM yapıyorum?" sorusu, yani düpedüz bir risk sorusu,
+  # "Bu işlemi gerçekleştirmeye yetkim bulunmuyor" ile reddediliyordu.
+  #
+  # İstisna kalıplarına "yatırım" eklemek çözüm DEĞİL: o liste tüm işlem
+  # kontrolünü kapatıyor, yani "bana yatırım yap" gibi gerçek bir emir de
+  # kapıdan geçerdi. Doğrusu fiili kendi biçimiyle sınırlamak — "yatır" zaten
+  # emir kipinin tam hâli, ekli biçimlerine ihtiyaç yok.
+  tam_eslesme_fiiller: [yatır]
   # Not: "alayım mı" / "satayım mı" BURAYA GİRMEZ — onlar tavsiye bayrağıdır,
   # işlem talebi değildir. Ayrım kritik: soru soran kullanıcı reddedilmemeli.
   istisna_kaliplari: ["alayım mı", "satayım mı", "alsam mı", "satsam mı",
-                      "almalı mıyım", "satmalı mıyım", "ne zaman alınır"]
+                      "almalı mıyım", "satmalı mıyım", "ne zaman alınır",
+                      "geçmiş", "önce", "önceki", "hangisini", "neler",
+                      "almışım", "satmışım", "aldığım", "sattığım",
+                      "aldıklarım", "sattıklarım", "işlem"]
   sonuc: UNAUTHORIZED_ACTION
 
 # ---------------------------------------------------------------------------
@@ -391,6 +408,17 @@ mesajlar:
       ornek_sorular_gosterilir: false
       # Destek kanalı tanımlandığında yalnızca bu metin güncellenir
 
+  # Gelecek tahmini. Kapsam dışı DEĞİL — soru finansal ve varlık kapsam içinde;
+  # reddedilen şey elimizde olmayan bir bilgiyi üretmek (uydurmama, AK 5.5).
+  # Ayrı bir metin olmasının sebebi bu: "bu konuda yardımcı olamıyorum" demek
+  # soruyu anlamadığımızı ya da konunun kapsam dışı olduğunu ima ederdi.
+  gelecek_tahmini:
+    varsayilan: >
+      Gelecekteki fiyat, kur veya getiri tahmini yapmıyorum — elimdeki veriler
+      geçmişe ve bugüne ait. Geçmiş performansı, güncel durumu ve açıklanmış
+      finansal sonuçları paylaşabilirim.
+    ornek_sorular_gosterilir: false
+
   unauthorized_action:
     varsayilan: >
       İşlem gerçekleştirme yetkim bulunmuyor. Alım, satım, transfer ve benzeri
@@ -410,6 +438,7 @@ mesajlar:
     ornek_sorular_gosterilir: true
 
   smalltalk_meta:
+    etiketler: [merhaba, selam, günaydın, iyi akşamlar, nasılsın, merhaba bot, selamlar]
     varsayilan: >
       Merhaba! Portföyünüz ve piyasalar hakkındaki sorularınızı yanıtlayabilirim.
     ornek_sorular_gosterilir: true

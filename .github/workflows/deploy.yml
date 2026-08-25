@@ -77,7 +77,13 @@ jobs:
             # (bu projede tek ornegi frontend/node_modules) sifirlayip
             # image'in kendi icerigiyle yeniden doldurur; postgres/chroma gibi
             # ISIMLI volume'lere dokunmaz, veritabanini SILMEZ.
-            $COMPOSE up -d --build --force-recreate -V
+            # --remove-orphans SART: compose dosyasindan CIKARILAN bir
+            # servisin konteyneri kendiliginden silinmiyor, "oksuz" olarak
+            # calismaya ve HOST PORTUNU TUTMAYA devam ediyor. Eski `frontend`
+            # servisi kaldirildiginda tam bu olurdu: yeni arayuz ayni porta
+            # baglanmaya calisip "port is already allocated" ile duserdi.
+            # Kapsam proje adiyla (-p) sinirli, komsu ortama dokunmaz.
+            $COMPOSE up -d --build --force-recreate -V --remove-orphans
 
             echo "--> Sema gocu"
             $COMPOSE exec -T api alembic upgrade head

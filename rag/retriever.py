@@ -79,12 +79,27 @@ _PREFIX_MATCH_LEN = (
 
 # Chroma'dan çekilecek en az aday sayısı (top_k'dan bağımsız): ham vektör
 # mesafesi doğru dokümanı her zaman ilk birkaç sıraya koymuyor (ölçümle
-# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır.
-_MIN_CANDIDATE_POOL = 20
+# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır. 31
+# `sirket_profili` dokümanının "Ortaklık yapısı" bölümleri birbirine çok
+# benzer bir kalıpla yazıldığı için (hissedar/pay/yüzde gibi ortak kelimeler),
+# bazı şirketlerin kendi dokümanı havuzun hemen dışında kalabiliyor (ölçümle
+# doğrulandı: "Kardemir'in ortaklık yapısı nasıl" sorgusunda KRDMD 21.
+# sırada kalıp havuz 20 iken elenmiş, bunun yerine şirket-eleme güvenlik ağı
+# hiç devreye girmeden 5 alakasız şirketin profili dönmüştü). Havuz
+# genişletilerek KRDMD'nin kendi dokümanı havuza girip güvenlik ağını
+# (bkz. _sirket_matches_query) tetikleyebiliyor.
+_MIN_CANDIDATE_POOL = 30
 
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
-_TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"})
+# "â" da dahildir ("kâr" -> "kar"): eksikliği ölçümle doğrulandı — "kârı"
+# hiç foldlanmadığı için "net kârı" gibi hemen her bilanço dokümanında
+# geçen evrensel bir ifade, jenerik kelime listesiyle eşleşemeyip uydurma
+# şirket sorgularının (ör. "ABC Holding'in ikinci çeyrek net kârı nedir")
+# yanlışlıkla "bulundu" sayılmasına katkı sağlıyordu.
+_TURKISH_FOLD_MAP = str.maketrans(
+    {"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a", "î": "i", "û": "u"}
+)
 
 
 def _normalize(text: str) -> str:
@@ -106,9 +121,23 @@ def _normalize(text: str) -> str:
 # geçmesini şart koşuyor, tek başına bir şeyi tetiklemiyor.
 _SHORT_KEYWORD_ALLOWLIST = {"is"}
 
+# Türkçe kesme işaretinden sonraki ek ("Kardemir'in", "XYZ Teknoloji'nin"),
+# \w+ regex'i kesme işaretini kelime sınırı saydığı için kendi başına ayrı
+# bir "kelime" haline geliyor. Kısa ekler (2 harf: "in", "de") zaten
+# _MIN_KEYWORD_LEN altında kalıp elenir, ama 3+ harfli ekler ("nin", "nın",
+# "yle", "ndan") uzunluk barajını geçip anlamsız birer "ayırt edici kelime"
+# gibi davranıyordu (ölçümle doğrulandı: "XYZ Teknoloji'nin hisse fiyatı ne
+# kadar" sorgusunda "nin" jenerik olmayan bir eşleşme sayılıp THYAO/YKBNK/
+# ISCTR/GARAN'ın hedef fiyat raporlarını "bulundu" saydırdı — hiçbir gerçek
+# şirket adı hiç eşleşmemesine rağmen). Kesme işareti + sonrasındaki ek,
+# kelimeleştirmeden ÖNCE tamamen atılır; böylece "kardemir'in" yalnızca
+# "kardemir" kelimesini üretir, hiçbir ek kelime türetmez.
+_APOSTROPHE_SUFFIX_RE = re.compile(r"'\w+")
+
 
 def _keywords(text: str) -> set[str]:
-    tokens = _WORD_RE.findall(_normalize(text))
+    normalized = _APOSTROPHE_SUFFIX_RE.sub("", _normalize(text))
+    tokens = _WORD_RE.findall(normalized)
     return {
         t
         for t in tokens
@@ -147,6 +176,50 @@ _GENERIC_FINANCE_TERMS = {
     "artis",
     "ortalama",
     "tavsiye",
+    # "holding"/"enerji" tek başına aşırı jenerik: onlarca `sirket_profili`
+    # dokümanında ya şirket adının parçası ("Koç Holding", "Astor Enerji")
+    # ya da faaliyet/iştirak alanı olarak geçiyor (ölçümle doğrulandı:
+    # "ABC Holding'in ikinci çeyrek net kârı nedir" ve "Falanca Enerji'nin
+    # ortaklık yapısı nasıl" gibi uydurma şirket sorguları, salt "holding"/
+    # "enerji" kelimeleri üzerinden TAV/Şişecam/Koç/Astor/Tüpraş/Enka gibi
+    # tamamen alakasız gerçek şirketlerin verisini "bulundu" saydırdı —
+    # uydurma kısım ("ABC", "Falanca") hiç eşleşmemesine rağmen). Gerçek
+    # "Koç Holding" / "Astor Enerji" sorguları etkilenmez: o sorgularda
+    # "koc"/"astor" gibi ayırt edici bir kelime zaten ayrıca eşleşiyor.
+    "holding",
+    "enerji",
+    # "ikinci çeyrek net kârı" hemen her bilanço dokümanının açılış cümlesi,
+    # "ortaklık yapısı" ise hemen her `sirket_profili` dokümanının başlığı.
+    # "holding"/"enerji" eklendikten SONRA bile "ABC Holding'in ikinci
+    # çeyrek net kârı" ve "Falanca Enerji'nin ortaklık yapısı" sorguları
+    # "ikinci"/"net"/"yapisi" tek başına ayırt edici kelime sayıldığı için
+    # hâlâ alakasız gerçek şirketleri "bulundu" saydırıyordu (ölçümle
+    # doğrulandı). "kari": "â" artık foldlandığı için "kârı" bu köke düşüyor.
+    "ikinci",
+    "net",
+    "kari",
+    "yapisi",
+    "ortaklik",
+    # "temettü" artık 31 `sirket_profili` dokümanının TAMAMINDA geçiyor (her
+    # şirkete 2026 temettü/kurumsal olay bilgisi eklendi) — "holding"/
+    # "enerji" ile aynı sınıfta jenerik bir kelimeye dönüştü. Eklenmeden
+    # önce ölçümle doğrulandı: "XYZ Teknoloji'nin temettüsü ne kadar"
+    # sorgusu, "teknoloji" kelimesinin ASTOR dokümanındaki "teknik" ile
+    # 4 harflik önek çakışması + "temettüsü"nün ASTOR'un kendi temettü
+    # cümlesiyle eşleşmesi yüzünden (2/3 oranı > 0.5) uydurma şirket adı
+    # hiç eşleşmemesine rağmen gerçek ASTOR verisini "bulundu" saydırdı.
+    "temettu",
+    # Temettü paragrafının boyutlu kalıp kelimeleri de aynı gerekçeyle
+    # jenerikleştirildi (ölçümle doğrulandı): "ABC Holding'in temettü
+    # ödemesi ne kadar" sorgusu "ödemesi" kelimesinin TCELL/EREGL gibi
+    # alakasız şirketlerin kendi "ödeme tarihi ..." cümleleriyle eşleşmesi
+    # yüzünden yanlış şirket verisini "bulundu" saydırdı; "Falanca
+    # Enerji'nin temettü dağıtımı nasıl" sorgusu da benzer şekilde
+    # "dağıtımı" kelimesinin ASTOR'daki "dağıtım sistemleri"/"dağıtılmasına
+    # karar verildi" ifadeleriyle eşleşmesiyle ASTOR'u yanlışlıkla
+    # "bulundu" saydırdı.
+    "odeme",
+    "dagit",
 }
 
 
@@ -299,6 +372,16 @@ def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
     return bool(phrases and any(phrase <= query_keywords for phrase in phrases))
 
 
+def _document_date(result: dict) -> str:
+    """Dokümanın `tarih` metadata'sı, sıralamaya uygun metin olarak.
+
+    `tarih` ingest sırasında ISO (YYYY-AA-GG) biçiminde yazılıyor; bu biçimde
+    metin sıralaması kronolojik sıralamaya eşittir, ayrıştırmaya gerek yok.
+    Alan boşsa boş metin döner ve o parça en eskiye düşer — tarihsiz bir
+    doküman "en güncel" sayılmamalı."""
+    return str((result.get("metadata") or {}).get("tarih") or "")
+
+
 def _build_where(
     sirket: str | None, donem: str | None, donem_listesi: list[str] | None, tur: str | None
 ) -> dict | None:
@@ -396,11 +479,31 @@ class Retriever:
         where = _build_where(sirket, donem, donem_listesi, tur)
         results = self._store.similarity_search(query, top_k=candidate_pool, where=where)
 
+        # Sorgu bir şirketi ADIYLA anıyorsa, O ŞİRKETE ait sonuç kelime-örtüşme
+        # oranından MUAFTIR.
+        #
+        # Oran kapısı alakasız sonuçları elemek için var ve o işi yapıyor; ama
+        # kullanıcı elimizde dokümanı bulunan bir şirketi adıyla andığında alaka
+        # zaten deterministik olarak kanıtlanmıştır — şirket kodunu sıradan bir
+        # kelime gibi saymak yanlıştı. Ölçülen (23 Ağustos test turu):
+        #   "ASELS hakkında ne biliyorsun?"          -> 0.50, kural `> 0.5`  ELENDİ
+        #   "TUPRS'un bilançosunda öne çıkan ne var?" -> 0.25                 ELENDİ
+        # İkisinde de şirket kodu TAM eşleşmişti; eleyen şey sorunun geri
+        # kalanındaki konuşma dili ("hakkında", "ne biliyorsun") ve korpusun
+        # farklı sözcük seçimiydi — dokümanlar "bilanço" değil "finansal
+        # sonuçlar" diyor.
+        #
+        # Muafiyet DAR: yalnızca kendi `sirket` alanı sorguyla eşleşen sonucu
+        # kapsıyor. Başka şirketin dokümanı, alakasız sorgu ve mesafe eşiği
+        # aynen eskisi gibi eleniyor.
         filtered = [
             r
             for r in results
             if r.get("distance", 1.0) <= settings.rag_distance_threshold
-            and _shares_a_keyword(query_keywords, _result_keywords(r))
+            and (
+                _shares_a_keyword(query_keywords, _result_keywords(r))
+                or _sirket_matches_query(r, query_keywords)
+            )
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
 
@@ -426,6 +529,78 @@ class Retriever:
         # içinde mesafe sırasını korur.
         filtered.sort(key=lambda r: not _sirket_matches_query(r, query_keywords))
         return filtered[:top_k]
+
+    def retrieve_for_symbols(
+        self,
+        symbols: list[str],
+        *,
+        top_k_per_symbol: int = 2,
+        types: list[str] | None = None,
+        query: str | None = None,
+    ) -> dict[str, list[dict]]:
+        """Verilen semboller için, sembol başına GRUPLANMIŞ ve TARİHE GÖRE
+        yeniden eskiye sıralı doküman parçaları döndürür.
+
+        `retrieve()`'den üç yapısal farkı var ve üçü de kasıtlıdır:
+
+        1. KELİME ÖRTÜŞMESİ ARANMAZ. `retrieve()`, serbest metin sorgusunun
+           alakasız doküman çekmesini kelime örtüşmesiyle engelliyor. Burada
+           öyle bir sorgu yok: arama uzayı `sirket` metadata'sıyla zaten
+           belirli varlıklara kilitli, dolayısıyla dönen her parça tanımı
+           gereği o varlığa ait. Kelime kapısını burada uygulamak
+           "portföyümle ilgili haberler" gibi jenerik bir istekte HER
+           sonucu elerdi (sorgu metni doküman metniyle kelime paylaşmaz).
+
+        2. MESAFE EŞİĞİ UYGULANMAZ. Aynı gerekçe: alaka kararını vektör
+           mesafesi değil, deterministik `sirket` filtresi veriyor. Eşik
+           burada yalnızca doğru şirkete ait gerçek dokümanları eleyebilirdi.
+
+        3. SIRALAMA TARİHE GÖRE. İş analisti "GÜNCEL haber, market bilgileri
+           ve analist yorumları" istiyor; benzerlik sırası güncelliği
+           garanti etmez (2026-04 tarihli bir analiz, 2026-08 tarihlinin
+           önüne geçebiliyor). `tarih` ISO (YYYY-AA-GG) yazıldığı için metin
+           sıralaması kronolojik sıralamaya eşittir.
+
+        Tek bir vektör sorgusu yapılır (sembol başına ayrı sorgu değil):
+        embedding hesabı çağrı başına ~50-100 ms ve 15 varlıklı bir portföy
+        bunu 15 kez ödeyemez. Gruplama Python tarafında yapılır.
+
+        Dokümanı olmayan sembol sonuç sözlüğünde HİÇ yer almaz — çağıran
+        taraf eksikliği görüp kullanıcıya bildirebilsin diye (AK 5.5).
+        """
+        symbols = [s for s in dict.fromkeys(symbols) if s]
+        if not symbols or top_k_per_symbol < 1:
+            return {}
+
+        kosullar: list[dict] = [{"sirket": {"$in": symbols}}]
+        if types:
+            kosullar.append({"tur": {"$in": list(types)}})
+        where = kosullar[0] if len(kosullar) == 1 else {"$and": kosullar}
+
+        # Havuz cömert tutuluyor: Chroma `where` süzgecinden geçen sonuçlar
+        # arasından en yakın n taneyi döndürür. Havuz darsa bir sembolün tüm
+        # parçaları başka sembollerinkinin gerisinde kalıp hiç görünmeyebilir.
+        candidate_pool = max(len(symbols) * top_k_per_symbol * 4, _MIN_CANDIDATE_POOL)
+        results = self._store.similarity_search(
+            query or " ".join(symbols), top_k=candidate_pool, where=where
+        )
+
+        gruplar: dict[str, list[dict]] = {}
+        for result in results:
+            metadata = result.get("metadata") or {}
+            sirket = str(metadata.get("sirket") or "")
+            # Son filtre: Chroma'nın `where`'i doğru uyguladığı varsayılmaz
+            # (bkz. _matches_filters'daki aynı gerekçe).
+            if sirket not in symbols:
+                continue
+            if types and metadata.get("tur") not in types:
+                continue
+            gruplar.setdefault(sirket, []).append(result)
+
+        for sirket, parcalar in gruplar.items():
+            parcalar.sort(key=_document_date, reverse=True)
+            gruplar[sirket] = parcalar[:top_k_per_symbol]
+        return gruplar
 
     def answer(self, query: str, top_k: int | None = None) -> dict:
         """Doğrudan kullanım için: bul ya da 'bulunamadı' söyle. LLM'e ya da

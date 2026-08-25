@@ -1,0 +1,205 @@
+/* Paper boat mark — static logo, loading spinner and "thinking" indicator.
+ *
+ * The hull, the two tails of the top wave and the two lower waves are separate
+ * groups so they can move independently. Every rotation origin below is a real
+ * point in the artwork's coordinate system, so the viewBox must stay "0 0 …":
+ * `transform-box: view-box` measures from the viewBox's min-x/min-y.
+ */
+
+.pb {
+  --pb-amp: 1;      /* motion scale, 0 = still */
+  --pb-dur: 2.6s;   /* one swell cycle */
+  --pb-ink: 0;      /* extra stroke, in CSS px, to hold the fine lines together
+                       at small sizes */
+  display: block;
+  fill: currentColor;
+  flex: none;
+}
+
+.pb--inked path {
+  stroke: currentColor;
+  stroke-width: var(--pb-ink);
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---------------------------------------------------------------- motion -- */
+
+.pb--sailing g {
+  transform-box: view-box;
+  animation-duration: var(--pb-dur);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.pb--sailing .pb-hull {
+  transform-origin: 204px 198px;
+  animation-name: pb-boat;
+}
+
+/* Hinged exactly where each tail was cut off the hull. */
+.pb--sailing .pb-tail-l {
+  transform-origin: 108px 206.11px;
+  animation-name: pb-tail-l;
+}
+
+.pb--sailing .pb-tail-r {
+  transform-origin: 301px 177.15px;
+  animation-name: pb-tail-r;
+}
+
+/* Off-cycle durations so the water never visibly repeats in lockstep. */
+.pb--sailing .pb-swell {
+  transform-origin: 219px 213px;
+  animation-name: pb-wave-2;
+  animation-duration: calc(var(--pb-dur) * 1.27);
+}
+
+.pb--sailing .pb-ripple {
+  transform-origin: 265px 215px;
+  animation-name: pb-wave-3;
+  animation-duration: calc(var(--pb-dur) * 0.83);
+}
+
+@keyframes pb-boat {
+  0% { transform: translate(calc(var(--pb-amp) * 0.79px), calc(var(--pb-amp) * -2.1px)) rotate(calc(var(--pb-amp) * 0deg)); }
+  8.33% { transform: translate(calc(var(--pb-amp) * 1.26px), calc(var(--pb-amp) * -1.82px)) rotate(calc(var(--pb-amp) * 1.5deg)); }
+  16.67% { transform: translate(calc(var(--pb-amp) * 1.4px), calc(var(--pb-amp) * -1.05px)) rotate(calc(var(--pb-amp) * 2.6deg)); }
+  25% { transform: translate(calc(var(--pb-amp) * 1.16px), calc(var(--pb-amp) * 0px)) rotate(calc(var(--pb-amp) * 3deg)); }
+  33.33% { transform: translate(calc(var(--pb-amp) * 0.61px), calc(var(--pb-amp) * 1.05px)) rotate(calc(var(--pb-amp) * 2.6deg)); }
+  41.67% { transform: translate(calc(var(--pb-amp) * -0.11px), calc(var(--pb-amp) * 1.82px)) rotate(calc(var(--pb-amp) * 1.5deg)); }
+  50% { transform: translate(calc(var(--pb-amp) * -0.79px), calc(var(--pb-amp) * 2.1px)) rotate(calc(var(--pb-amp) * 0deg)); }
+  58.33% { transform: translate(calc(var(--pb-amp) * -1.26px), calc(var(--pb-amp) * 1.82px)) rotate(calc(var(--pb-amp) * -1.5deg)); }
+  66.67% { transform: translate(calc(var(--pb-amp) * -1.4px), calc(var(--pb-amp) * 1.05px)) rotate(calc(var(--pb-amp) * -2.6deg)); }
+  75% { transform: translate(calc(var(--pb-amp) * -1.16px), calc(var(--pb-amp) * 0px)) rotate(calc(var(--pb-amp) * -3deg)); }
+  83.33% { transform: translate(calc(var(--pb-amp) * -0.61px), calc(var(--pb-amp) * -1.05px)) rotate(calc(var(--pb-amp) * -2.6deg)); }
+  91.67% { transform: translate(calc(var(--pb-amp) * 0.11px), calc(var(--pb-amp) * -1.82px)) rotate(calc(var(--pb-amp) * -1.5deg)); }
+  100% { transform: translate(calc(var(--pb-amp) * 0.79px), calc(var(--pb-amp) * -2.1px)) rotate(calc(var(--pb-amp) * 0deg)); }
+}
+
+@keyframes pb-tail-l {
+  0% { transform: translate(calc(var(--pb-amp) * 0.79px), calc(var(--pb-amp) * -2.1px)) rotate(calc(var(--pb-amp) * -0.54deg)); }
+  8.33% { transform: translate(calc(var(--pb-amp) * 1.08px), calc(var(--pb-amp) * -4.33px)) rotate(calc(var(--pb-amp) * 0.83deg)); }
+  16.67% { transform: translate(calc(var(--pb-amp) * 1.13px), calc(var(--pb-amp) * -5.41px)) rotate(calc(var(--pb-amp) * 1.98deg)); }
+  25% { transform: translate(calc(var(--pb-amp) * 0.86px), calc(var(--pb-amp) * -5.04px)) rotate(calc(var(--pb-amp) * 2.6deg)); }
+  33.33% { transform: translate(calc(var(--pb-amp) * 0.34px), calc(var(--pb-amp) * -3.31px)) rotate(calc(var(--pb-amp) * 2.52deg)); }
+  41.67% { transform: translate(calc(var(--pb-amp) * -0.29px), calc(var(--pb-amp) * -0.7px)) rotate(calc(var(--pb-amp) * 1.76deg)); }
+  50% { transform: translate(calc(var(--pb-amp) * -0.79px), calc(var(--pb-amp) * 2.1px)) rotate(calc(var(--pb-amp) * 0.54deg)); }
+  58.33% { transform: translate(calc(var(--pb-amp) * -1.02px), calc(var(--pb-amp) * 4.33px)) rotate(calc(var(--pb-amp) * -0.83deg)); }
+  66.67% { transform: translate(calc(var(--pb-amp) * -0.93px), calc(var(--pb-amp) * 5.39px)) rotate(calc(var(--pb-amp) * -1.98deg)); }
+  75% { transform: translate(calc(var(--pb-amp) * -0.6px), calc(var(--pb-amp) * 5.01px)) rotate(calc(var(--pb-amp) * -2.6deg)); }
+  83.33% { transform: translate(calc(var(--pb-amp) * -0.14px), calc(var(--pb-amp) * 3.29px)) rotate(calc(var(--pb-amp) * -2.52deg)); }
+  91.67% { transform: translate(calc(var(--pb-amp) * 0.35px), calc(var(--pb-amp) * 0.69px)) rotate(calc(var(--pb-amp) * -1.76deg)); }
+  100% { transform: translate(calc(var(--pb-amp) * 0.79px), calc(var(--pb-amp) * -2.1px)) rotate(calc(var(--pb-amp) * -0.54deg)); }
+}
+
+@keyframes pb-tail-r {
+  0% { transform: translate(calc(var(--pb-amp) * 0.79px), calc(var(--pb-amp) * -2.1px)) rotate(calc(var(--pb-amp) * 0.73deg)); }
+  8.33% { transform: translate(calc(var(--pb-amp) * 1.77px), calc(var(--pb-amp) * 0.73px)) rotate(calc(var(--pb-amp) * 2.12deg)); }
+  16.67% { transform: translate(calc(var(--pb-amp) * 2.24px), calc(var(--pb-amp) * 3.37px)) rotate(calc(var(--pb-amp) * 2.93deg)); }
+  25% { transform: translate(calc(var(--pb-amp) * 2.11px), calc(var(--pb-amp) * 5.11px)) rotate(calc(var(--pb-amp) * 2.97deg)); }
+  33.33% { transform: translate(calc(var(--pb-amp) * 1.45px), calc(var(--pb-amp) * 5.47px)) rotate(calc(var(--pb-amp) * 2.2deg)); }
+  41.67% { transform: translate(calc(var(--pb-amp) * 0.41px), calc(var(--pb-amp) * 4.36px)) rotate(calc(var(--pb-amp) * 0.85deg)); }
+  50% { transform: translate(calc(var(--pb-amp) * -0.79px), calc(var(--pb-amp) * 2.1px)) rotate(calc(var(--pb-amp) * -0.73deg)); }
+  58.33% { transform: translate(calc(var(--pb-amp) * -1.84px), calc(var(--pb-amp) * -0.71px)) rotate(calc(var(--pb-amp) * -2.12deg)); }
+  66.67% { transform: translate(calc(var(--pb-amp) * -2.44px), calc(var(--pb-amp) * -3.33px)) rotate(calc(var(--pb-amp) * -2.93deg)); }
+  75% { transform: translate(calc(var(--pb-amp) * -2.38px), calc(var(--pb-amp) * -5.05px)) rotate(calc(var(--pb-amp) * -2.97deg)); }
+  83.33% { transform: translate(calc(var(--pb-amp) * -1.65px), calc(var(--pb-amp) * -5.43px)) rotate(calc(var(--pb-amp) * -2.2deg)); }
+  91.67% { transform: translate(calc(var(--pb-amp) * -0.47px), calc(var(--pb-amp) * -4.35px)) rotate(calc(var(--pb-amp) * -0.85deg)); }
+  100% { transform: translate(calc(var(--pb-amp) * 0.79px), calc(var(--pb-amp) * -2.1px)) rotate(calc(var(--pb-amp) * 0.73deg)); }
+}
+
+@keyframes pb-wave-2 {
+  0% { transform: translate(calc(var(--pb-amp) * 3.5px), calc(var(--pb-amp) * 0px)) rotate(calc(var(--pb-amp) * 0.81deg)); }
+  8.33% { transform: translate(calc(var(--pb-amp) * 3.03px), calc(var(--pb-amp) * 1.5px)) rotate(calc(var(--pb-amp) * 0.19deg)); }
+  16.67% { transform: translate(calc(var(--pb-amp) * 1.75px), calc(var(--pb-amp) * 2.6px)) rotate(calc(var(--pb-amp) * -0.48deg)); }
+  25% { transform: translate(calc(var(--pb-amp) * 0px), calc(var(--pb-amp) * 3px)) rotate(calc(var(--pb-amp) * -1.02deg)); }
+  33.33% { transform: translate(calc(var(--pb-amp) * -1.75px), calc(var(--pb-amp) * 2.6px)) rotate(calc(var(--pb-amp) * -1.29deg)); }
+  41.67% { transform: translate(calc(var(--pb-amp) * -3.03px), calc(var(--pb-amp) * 1.5px)) rotate(calc(var(--pb-amp) * -1.21deg)); }
+  50% { transform: translate(calc(var(--pb-amp) * -3.5px), calc(var(--pb-amp) * 0px)) rotate(calc(var(--pb-amp) * -0.81deg)); }
+  58.33% { transform: translate(calc(var(--pb-amp) * -3.03px), calc(var(--pb-amp) * -1.5px)) rotate(calc(var(--pb-amp) * -0.19deg)); }
+  66.67% { transform: translate(calc(var(--pb-amp) * -1.75px), calc(var(--pb-amp) * -2.6px)) rotate(calc(var(--pb-amp) * 0.48deg)); }
+  75% { transform: translate(calc(var(--pb-amp) * 0px), calc(var(--pb-amp) * -3px)) rotate(calc(var(--pb-amp) * 1.02deg)); }
+  83.33% { transform: translate(calc(var(--pb-amp) * 1.75px), calc(var(--pb-amp) * -2.6px)) rotate(calc(var(--pb-amp) * 1.29deg)); }
+  91.67% { transform: translate(calc(var(--pb-amp) * 3.03px), calc(var(--pb-amp) * -1.5px)) rotate(calc(var(--pb-amp) * 1.21deg)); }
+  100% { transform: translate(calc(var(--pb-amp) * 3.5px), calc(var(--pb-amp) * 0px)) rotate(calc(var(--pb-amp) * 0.81deg)); }
+}
+
+@keyframes pb-wave-3 {
+  0% { transform: translate(calc(var(--pb-amp) * -0.81px), calc(var(--pb-amp) * 2.27px)) rotate(calc(var(--pb-amp) * -1.51deg)); }
+  8.33% { transform: translate(calc(var(--pb-amp) * -1.88px), calc(var(--pb-amp) * 1.58px)) rotate(calc(var(--pb-amp) * -1.57deg)); }
+  16.67% { transform: translate(calc(var(--pb-amp) * -2.45px), calc(var(--pb-amp) * 0.46px)) rotate(calc(var(--pb-amp) * -1.22deg)); }
+  25% { transform: translate(calc(var(--pb-amp) * -2.37px), calc(var(--pb-amp) * -0.78px)) rotate(calc(var(--pb-amp) * -0.54deg)); }
+  33.33% { transform: translate(calc(var(--pb-amp) * -1.64px), calc(var(--pb-amp) * -1.81px)) rotate(calc(var(--pb-amp) * 0.29deg)); }
+  41.67% { transform: translate(calc(var(--pb-amp) * -0.48px), calc(var(--pb-amp) * -2.35px)) rotate(calc(var(--pb-amp) * 1.04deg)); }
+  50% { transform: translate(calc(var(--pb-amp) * 0.81px), calc(var(--pb-amp) * -2.27px)) rotate(calc(var(--pb-amp) * 1.51deg)); }
+  58.33% { transform: translate(calc(var(--pb-amp) * 1.88px), calc(var(--pb-amp) * -1.58px)) rotate(calc(var(--pb-amp) * 1.57deg)); }
+  66.67% { transform: translate(calc(var(--pb-amp) * 2.45px), calc(var(--pb-amp) * -0.46px)) rotate(calc(var(--pb-amp) * 1.22deg)); }
+  75% { transform: translate(calc(var(--pb-amp) * 2.37px), calc(var(--pb-amp) * 0.78px)) rotate(calc(var(--pb-amp) * 0.54deg)); }
+  83.33% { transform: translate(calc(var(--pb-amp) * 1.64px), calc(var(--pb-amp) * 1.81px)) rotate(calc(var(--pb-amp) * -0.29deg)); }
+  91.67% { transform: translate(calc(var(--pb-amp) * 0.48px), calc(var(--pb-amp) * 2.35px)) rotate(calc(var(--pb-amp) * -1.04deg)); }
+  100% { transform: translate(calc(var(--pb-amp) * -0.81px), calc(var(--pb-amp) * 2.27px)) rotate(calc(var(--pb-amp) * -1.51deg)); }
+}
+
+/* ---------------------------------------------------------------- status -- */
+
+.pb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+}
+
+.pb-status__label {
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.pb-dots {
+  display: inline-block;
+  margin-left: 0.1em;
+}
+
+.pb-dots i {
+  font-style: normal;
+  animation: pb-dot 1.4s ease-in-out infinite;
+}
+
+.pb-dots i:nth-child(2) { animation-delay: 0.18s; }
+.pb-dots i:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes pb-dot {
+  0%, 60%, 100% { opacity: 0.25; }
+  30%           { opacity: 1; }
+}
+
+.pb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------- reduced motion -- */
+
+@media (prefers-reduced-motion: reduce) {
+  .pb--sailing g,
+  .pb-dots i {
+    animation: none;
+  }
+
+  /* Something still has to say "working", so fade the whole mark instead. */
+  .pb--busy {
+    animation: pb-breathe 2.6s ease-in-out infinite;
+  }
+}
+
+@keyframes pb-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}

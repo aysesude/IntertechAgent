@@ -29,6 +29,28 @@ class InsufficientDataError(AppError):
         super().__init__(message, code=code)
 
 
+class AuthenticationError(AppError):
+    """Kimlik doğrulanamadı: kimlik/şifre eşleşmedi, token yok ya da geçersiz.
+
+    "Kullanıcı bulunamadı" ile "şifre yanlış" ayrımı KASITLI OLARAK
+    yapılmıyor: ayrıştırılırsa hangi T.C. kimlik numaralarının sistemde
+    kayıtlı olduğu tek tek denenerek çıkarılabilir.
+    """
+
+    def __init__(self, message: str, *, code: str = "AUTHENTICATION_ERROR") -> None:
+        super().__init__(message, code=code)
+
+
+class AuthorizationError(AppError):
+    """Kimlik doğrulandı ama bu kaynağa erişim yetkisi yok (AK 5.4).
+
+    401 değil 403 karşılığıdır: yeniden giriş yapmak durumu düzeltmez.
+    """
+
+    def __init__(self, message: str, *, code: str = "AUTHORIZATION_ERROR") -> None:
+        super().__init__(message, code=code)
+
+
 class ProviderUnavailableError(AppError):
     """Dış kaynak (TCMB/yfinance/Chroma/Ollama) yanıt vermiyor."""
 

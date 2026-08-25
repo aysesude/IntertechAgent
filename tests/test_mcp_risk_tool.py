@@ -8,6 +8,7 @@ from fastmcp import Client, FastMCP
 from app.core.config import AssetClass, RiskProfile
 from app.models import Asset, Holding, Portfolio, PriceHistory, User
 from mcp_server.tools import risk_tools
+from mcp_server.tools._base import ToolErrorCode
 
 
 @pytest.fixture()
@@ -52,8 +53,9 @@ def seeded_user(db_session):
 
 
 async def test_get_risk_assessment_tool_success(mcp_server, seeded_user):
-    # risk_tools kendi SessionLocal()'ini acar; conftest'in DATABASE_URL'i
-    # ayarladigi ayni test DB'sine baglanir (bkz. app/core/db.py).
+    # risk_tools `db_session()` (mcp_server/tools/_base.py) uzerinden acar;
+    # conftest'in DATABASE_URL'i ayarladigi ayni test DB'sine baglanir
+    # (bkz. app/core/db.py).
     async with Client(mcp_server) as client:
         result = await client.call_tool("get_risk_assessment", {"user_id": str(seeded_user.id)})
 
@@ -83,4 +85,6 @@ async def test_get_risk_assessment_tool_not_found(mcp_server, db_session):
         result = await client.call_tool("get_risk_assessment", {"user_id": str(uuid.uuid4())})
 
     assert result.structured_content["success"] is False
-    assert result.structured_content["error"]["code"] == "RISK_TARGET_NOT_FOUND"
+    # Ozel bir kod degil, ortak taksonomi (bkz. docs/MCP-TOOLS.md, _base.py'deki
+    # APP_ERROR_CODE_MAP): NotFoundError.code="NOT_FOUND" otomatik eslenir.
+    assert result.structured_content["error"]["code"] == ToolErrorCode.NOT_FOUND.value

@@ -29,7 +29,10 @@ bazda yaklaşık yüzde 93 artışa denk geliyor. Konsolide vergi öncesi kâr
 aynı döneminde bu rakam 8,237 milyar TL idi — yüzde 147 artışa denk
 geliyor. Holding, yılın ilk 6 ayında konsolide bazda yaklaşık 36,4
 milyar dolar gelir elde etti; kombine bazda yaklaşık 1,7 milyar dolarlık
-yatırım gerçekleştirdi.
+yatırım gerçekleştirdi. Segment gelirleri (ilk yarı): enerji 1 trilyon
+TL (yüzde 31 artış), otomotiv 769,8 milyar TL (yüzde 1 artış), dayanıklı
+tüketim 309,7 milyar TL (yüzde 14 azalış), finans 517,8 milyar TL
+(yüzde 2 azalış).
 
 ## Not
 

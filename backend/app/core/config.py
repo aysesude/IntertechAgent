@@ -1,7 +1,7 @@
 """Uygulama genelindeki tüm yapılandırma buradan okunur. Kodun başka hiçbir
 yerinde sabit bağlantı adresi, anahtar veya model adı bulunmamalıdır."""
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from functools import lru_cache
@@ -134,6 +134,44 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
     AssetClass.BOND: Decimal(20),
     AssetClass.CASH: Decimal(5),
 }
+
+# --- Varlık sınıfı uygunluk tablosu (İŞ ANALİSTİ, 2026-08 güncellemesi) ---
+#
+# Şartnamedeki tanım aynen şöyle: "Kullanıcıların çözdüğü anket sonucu 1-7
+# arası bir risk puanı olur. Aşağıdaki risk seviyesi kullanıcının risk
+# seviyesinden büyükse kişi o varlık türünden satın alım ya da yatırım
+# TAVSİYESİ alamaz."
+#
+# Buradaki 1-7, volatiliteden hesaplanan `RiskLevel` ile AYNI ŞEY DEĞİLDİR —
+# ikisi de yedi kademeli olduğu için karıştırılmaya çok müsait. Bu tablo
+# ANKET puanıyla karşılaştırılır; `RiskLevel` ise portföyün ölçülen
+# oynaklığından çıkar. Aynı ölçekte oldukları için değil, tesadüfen ikisi de
+# 1-7 olduğu için benzer görünürler.
+#
+# Sayılar şartnameden birebir alınmıştır, türetilmemiştir. Kıymetli maden
+# ("ALTIN") ve döviz ("DOVIZ") aynı seviyededir (4).
+ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
+    AssetClass.CASH: 1,
+    AssetClass.BOND: 3,
+    AssetClass.CURRENCY: 4,
+    AssetClass.PRECIOUS_METAL: 4,
+    AssetClass.STOCK: 6,
+}
+
+# Anket puanının alabileceği aralık (dahil). Tabloyla karşılaştırma bu
+# aralıkta anlamlıdır; dışında bir değer gelirse çağıran taraf hata verir.
+RISK_SURVEY_SCORE_MIN = 1
+RISK_SURVEY_SCORE_MAX = 7
+
+if set(ASSET_CLASS_ADVICE_RISK_LEVEL) != set(AssetClass):
+    # Yeni bir varlık sınıfı eklenip bu tabloya yazılmazsa, uygunluk kontrolü
+    # o sınıfı sessizce "serbest" sayardı — yani profili tutmayan bir varlık
+    # tavsiye edilebilir hale gelirdi. Açılışta patlaması, sessizce yanlış
+    # davranmasından iyidir.
+    raise ValueError(
+        "ASSET_CLASS_ADVICE_RISK_LEVEL her AssetClass icin bir seviye tanimlamali: "
+        f"eksik={set(AssetClass) - set(ASSET_CLASS_ADVICE_RISK_LEVEL)}"
+    )
 
 # Risk profiline göre hedef varlık sınıfı dağılımı (yüzde, toplamı 100
 # olmalı). Yeniden dengeleme önerisi (risk_service._rebalance_actions) bunu
@@ -361,9 +399,21 @@ class Settings(BaseSettings):
     # toplayıcı. Kod değişmiyor, yalnızca .env değişiyor.
     openai_base_url: str = "https://api.openai.com/v1"
     # Bazı yeni nesil modeller `temperature` parametresini reddediyor
-    # (yalnızca varsayılan değeri kabul ediyorlar). Sağlayıcı 400 dönerse
-    # .env'de OPENAI_TEMPERATURE'ı boş bırak: parametre isteğe hiç eklenmez.
-    openai_temperature: float | None = 0.1
+    # (yalnızca varsayılan değeri kabul ediyorlar) — ölçümle doğrulandı:
+    # gerçek sağlayıcıya karşı canlı çağrıda "gpt-5.6-luna" modeli HEM 0.1
+    # HEM 0.0 için "Only the default (1) value is supported" diyerek 400
+    # döndü. Varsayılan bu yüzden None: temperature isteğe hiç eklenmez
+    # (bkz. OpenAIClient._payload — `if self._temperature is not None`).
+    # Modeliniz temperature'ı destekliyorsa .env'de OPENAI_TEMPERATURE'ı
+    # açıkça bir sayıya ayarlayabilirsiniz (ör. 0.0, deterministik niyet
+    # sınıflandırması için tercih edilir).
+    #
+    # DİKKAT: .env'de bu satırı BOŞ DEĞERLE bırakmak (`OPENAI_TEMPERATURE=`)
+    # pydantic-settings'te float parse hatasıyla TÜM UYGULAMAYI ÇÖKERTİR —
+    # `env_parse_none_str` yapılandırılmadığı için boş dize None'a
+    # dönüşmüyor. "Boş bırakmak" istenen davranış için satırın .env'den
+    # TAMAMEN SİLİNMESİ gerekir, boş değerle bırakılması değil.
+    openai_temperature: float | None = None
 
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
@@ -387,11 +437,62 @@ class Settings(BaseSettings):
     # mertebesindedir; RAG ilk çağrıda embedding modelini ve indeksi yükler.
     mcp_tool_timeout_default: float = 10.0
     mcp_tool_timeout_rag: float = 60.0
+    # KAP canlı bildirim sorgusu: RAG'ın aksine embedding modeli yüklemiyor
+    # ama dış siteye HTTP isteği + sayfa ayrıştırma yapıyor (pykap). 60 sn'lik
+    # RAG payına gerek yok, 10 sn'lik varsayılan ise KAP yavaşladığında dar
+    # gelebilir — ikisi arasında ayrı bir değer.
+    mcp_tool_timeout_live_news: float = 20.0
 
     # --- API ---
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_origins: str = "http://localhost:5173"
+
+    # --- Kimlik doğrulama ---
+    # Koda gömülü bir varsayılanı YOK, bilerek (CLAUDE.md: gizli bilgi yalnızca
+    # .env'de). Boş bırakılırsa uygulama hiç başlamaz — sessizce sabit bir
+    # anahtarla çalışıp herkesin token üretebilmesindense açıkça patlaması
+    # daha iyi. Alan `str = ""` olarak tanımlı ve kontrolü aşağıdaki
+    # doğrulayıcı yapıyor; Pydantic'in ham "Field required" hatası yerine ne
+    # yapılması gerektiğini söyleyen bir mesaj verebilmek için.
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    # Bir demo günü. Yenileme (refresh) token'ı kapsam dışı: süre dolunca
+    # kullanıcı yeniden giriş yapar.
+    jwt_expire_minutes: int = 480
+
+    # Geçiş bayrağı. VARSAYILANI True — yani unutulursa auth AÇIK kalır,
+    # kapalı değil. Token göndermeyen eski `frontend/` ile çalışmayı sürdüren
+    # geliştirici bunu kendi .env'inde False yapar. frontend-v2'nin sohbeti
+    # uçtan uca çalışır hale geldiğinde (Faz 3) bu bayrak silinecek.
+    auth_enforce: bool = True
+
+    # Sentetik demo kullanıcılarının ortak şifresi. GİZLİ DEĞİL ve olmamalı:
+    # `make demo-users` çıktısında kullanıcıların T.C. kimlik numaralarıyla
+    # birlikte zaten basılıyor — sentetik veriye erişim anahtarıdır, gerçek
+    # bir sır değil. Giriş ekranı 6 haneli sayısal şifre bekliyor.
+    # Doğrulama yolu buna rağmen tamamen gerçek (bcrypt); yalnızca seed
+    # verisi tekdüze, çünkü 50 ayrı şifreyi ezberlemenin demoya katkısı yok.
+    demo_user_password: str = "460213"
+
+    # --- Şifre yenileme (DEMO) ---
+    #
+    # AKIŞ TEMSİLİDİR: e-posta GÖNDERİLMEZ, kod sunucuda üretilmez ve
+    # saklanmaz — aşağıdaki sabit kod kabul edilir. Şifre ise GERÇEKTEN
+    # güncellenir.
+    #
+    # GÜVENLİK SINIRI, açıkça: bu uç kimlik doğrulaması istemez. T.C. kimlik
+    # numarasını ve bu kodu bilen biri o hesabın şifresini değiştirebilir —
+    # yani kimlik doğrulamasının etrafından dolaşan bir kapıdır. Sentetik
+    # demo verisiyle çalışan, süreli bir gösterim için kabul edildi.
+    # GERÇEK BİR DAĞITIMDA `DEMO_PASSWORD_RESET_ENABLED=false` yapılmalı;
+    # yerine e-posta doğrulaması, sunucuda üretilen tek kullanımlık kod,
+    # süre ve deneme sınırı gerekir.
+    demo_password_reset_enabled: bool = True
+    demo_reset_code: str = "123456"
+    # Arayüzdeki geri sayımın kaynağı; sunucu şu an süreyi denetlemiyor
+    # (kod saklanmadığı için denetlenecek bir şey yok).
+    password_reset_code_ttl_seconds: int = 180
 
     # --- Chat ---
     # Orchestrator'a bağlam olarak geçilen son mesaj sayısı.
@@ -416,10 +517,40 @@ class Settings(BaseSettings):
     # (_MIN_KEYWORD_OVERLAP_RATIO, rag/retriever.py) engelliyor.
     rag_distance_threshold: float = 0.95
 
+    # --- Portföy bazlı doküman getirme (get_portfolio_news) ---
+    # İŞ ANALİSTİ NOTU (2026-08 güncellemesi): "portföydeki varlıklarla ilgili
+    # güncel haber, market bilgileri ve analist yorumlarını çekip LLM'e
+    # verirsiniz" ve "her bulgu en az bir kaynak dokümana referans verir".
+    # Aşağıdakiler o getirmenin ayar noktalarıdır.
+
+    # Varlık başına kaç doküman parçası döneceği. Küçük tutuluyor: bir
+    # portföyde 15 varlık olabilir, her biri için 5 parça LLM bağlamını
+    # gereksiz şişirir ve asıl bulguyu boğar.
+    portfolio_news_per_asset: int = 2
+    # Portföy dokümanı getirmede dikkate alınan doküman türleri. `makro`
+    # kasıtlı olarak DIŞARIDA: makro dokümanların `sirket` alanı boştur,
+    # belirli bir varlığa bağlanamaz; strateji bölümünün "yalnızca portföyde
+    # fiilen bulunan varlıklar üzerinden kurulur" kuralını ihlal ederdi.
+    portfolio_news_types: list[str] = ["bilanco", "analiz", "haber", "duyuru"]
+    # Güven düzeyi eşiği: dokümanla desteklenen varlıkların portföy ağırlığı
+    # bu yüzdenin altındaysa çıktı "düşük güven" olarak işaretlenir.
+    # KABUL KRİTERİ KARŞILIĞI: "İlgili doküman bulunamadığında güven düzeyi
+    # düşük olarak döner ve durum kullanıcıya açıkça bildirilir."
+    # DİKKAT: 50 değeri bir POLİTİKA TERCİHİDİR, ölçülmüş bir eşik değildir —
+    # iş analistiyle teyit edilmeli.
+    portfolio_news_low_confidence_weight_percent: float = 50.0
+
     # --- Veri katmanı ---
     # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
     # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
     anchor_date: date = date(2026, 8, 1)
+    # Güncel fiyat bu kadar takvim gününden eskiyse "eski" işaretlenir.
+    # 4 gün: piyasa Cuma kapanır, Pazartesi açılır — Pazar günü sorulan bir
+    # fiyat 2 günlüktür ve normaldir. Araya resmî tatil girdiğinde 3-4 güne
+    # çıkabilir. Bunun üstü, günlük toplama işinin durduğu anlamına gelir ve
+    # kullanıcıya söylenmelidir.
+    current_price_stale_days: int = 4
+
     # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
     # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
     evds_api_key: str | None = None
@@ -524,6 +655,23 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @model_validator(mode="after")
+    def _validate_jwt_secret_key(self) -> "Settings":
+        """Anahtar yoksa uygulamayı açılışta durdurur.
+
+        Alan `str = ""` olarak tanımlı ve kontrol burada yapılıyor; Pydantic'in
+        ham "Field required" hatası yerine ne yapılması gerektiğini söyleyen
+        bir mesaj verebilmek için (bkz. jwt_secret_key tanımındaki not).
+        """
+        if not self.jwt_secret_key.strip():
+            raise ValueError(
+                "JWT_SECRET_KEY tanımlı değil. .env dosyanıza ekleyin: "
+                "JWT_SECRET_KEY=<uzun-rastgele-bir-değer>  "
+                '(üretmek için: python -c "import secrets; '
+                'print(secrets.token_urlsafe(48))")'
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_risk_scenario_score_weights(self) -> "Settings":
         total = self.risk_scenario_score_risk_weight + self.risk_scenario_score_turnover_weight
         if abs(total - 1.0) > 1e-9:
@@ -540,3 +688,22 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+# Türkiye 2016'dan beri kalıcı olarak UTC+3; yaz saati uygulaması yok.
+# Sabit fark kullanmak `zoneinfo`'ya (ve Windows'ta `tzdata` paketine)
+# bağımlılığı ortadan kaldırıyor ve bu ülke için sonucu birebir aynı.
+TURKEY_UTC_OFFSET = timezone(timedelta(hours=3))
+
+
+def turkey_today() -> date:
+    """Türkiye saatiyle bugünün tarihi.
+
+    Sunucu UTC çalışıyor. `date.today()` kullanılsaydı gece yarısı ile 03:00
+    arasında ekranda ve sohbette DÜNÜN tarihi görünürdü — Türkçe bir finans
+    ürününde kullanıcının takvimi esas alınmalı.
+
+    `settings.anchor_date` ile KARIŞTIRILMAMALI: o, sentetik verinin donmuş
+    "bugün"üdür ve yalnızca üretim/seed tarafını ilgilendirir. Kullanıcıya
+    bugünün ne olduğunu söyleyen tek doğru kaynak burasıdır.
+    """
+    return datetime.now(TURKEY_UTC_OFFSET).date()
