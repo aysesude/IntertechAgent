@@ -19,6 +19,13 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH}"
 # ihtiyac yok, sadece imzalanan token'in ayni anahtarla cozulebilmesi yeterli.
 os.environ.setdefault("JWT_SECRET_KEY", "test-anahtari-yalnizca-testler-icin")
 
+# Ankraj testlerde SABITLENIR. Uretimde varsayilan olarak bos birakilir ve
+# seed onu gercek fiyat verisinin bittigi gune baglar (bkz. data/anchor.py) —
+# ama testler icin bu yanlis olurdu: uretilen defterin tarihleri fixture'daki
+# fiyatlara, dolayisiyla testin kostugu GUNE bagli hale gelirdi. Sabit tarih,
+# `ANCHOR_DATE` override yolunun da her kosuda sinanmasini sagliyor.
+os.environ.setdefault("ANCHOR_DATE", "2026-08-01")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

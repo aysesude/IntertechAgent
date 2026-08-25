@@ -29,6 +29,7 @@ from app.core.security import hash_password
 from app.models import Asset, PriceHistory, Transaction, TransactionType
 from app.providers.universe import SPEC_BY_SYMBOL
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
+from data.anchor import resolve_anchor_date
 
 SEED = 42
 NUM_USERS = 50
@@ -290,7 +291,7 @@ def seed_ledger(session: Session) -> int:
     for asset_list in assets_by_class.values():
         asset_list.sort(key=lambda a: a.symbol)  # determinizm sözlük sırasına bağlı kalmasın
 
-    anchor = settings.anchor_date
+    anchor = resolve_anchor_date(session)
     tx_count = 0
 
     for user_index in range(NUM_USERS):

@@ -165,8 +165,25 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 
 ## 5. Seed ve determinizm
 
-- `SEED=42`, `ANCHOR_DATE` (.env, varsayılan 2026-08-01) — `date.today()`
-  kullanılmaz; her çalıştırma aynı evreni üretir.
+- `SEED=42` — kullanıcılar, profiller, arketipler, işlem günleri ve miktarlar
+  her çalıştırmada aynı üretilir.
+- **Ankraj (seed'in "bugün"ü) artık sabit değil.** Varsayılan olarak
+  veritabanındaki en son **gerçek** fiyat gününe bağlanır; böylece defter
+  fiyatların bittiği gün biter ve aradaki açık **yapısal olarak sıfır** olur
+  (ölçüldü: 0 gün). Sabit tarih gerekiyorsa `ANCHOR_DATE` her şeyi ezer —
+  testler bunu kullanıyor (`tests/conftest.py`, 2026-08-01).
+
+  Eskiden sabitti (2026-08-01) ve gerçek fiyatlar günlük toplama işiyle
+  ilerlediği için açık **her gün bir gün** büyüyordu: 23 Ağustos'ta 21 güne
+  çıkmıştı, "Son İşlemler" listesindeki her kayıt üç haftalık görünüyordu ve
+  kapatmak için birinin `.env`'i elle güncelleyip yeniden seed etmesi
+  gerekiyordu. Gerekçesi yeniden üretilebilirlikti ama zaten korumuyordu:
+  iki farklı günün seed'i, fiyatlar farklı olduğu için nasılsa aynı çıkmıyor.
+  Ayrıntı ve çözüm sırası: `data/anchor.py`.
+
+  **Sentetik satırlar ankrajı ilerletmez** — onların son günü zaten bir
+  önceki ankrajdan geliyor; ölçüt alınsaydı ankraj kendi kuyruğunu yer ve
+  hiç ilerlemezdi.
 - **Kullanıcı kimlikleri de tohuma bağlıdır.** Model varsayılanı `uuid.uuid4`
   işletim sisteminin rastgeleliğini kullanır ve SEED'den etkilenmez; isimler
   ve portföyler aynı üretilirken kimlikler her seed'de değişiyordu.
