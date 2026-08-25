@@ -430,28 +430,67 @@ def _render(data: dict[str, Any]) -> str:
     return "\n\n".join(blocks) if blocks else "Portföy verisi bulunamadı."
 
 
+def _tr_date(iso_text: Any) -> str:
+    """ISO tarihini GG.AA.YYYY biçimine çevirir; ayrıştırılamazsa olduğu gibi bırakır."""
+    text = str(iso_text or "")[:10]
+    parts = text.split("-")
+    if len(parts) != 3:
+        return text or "—"
+    year, month, day = parts
+    return f"{day}.{month}.{year}"
+
+
 def _render_transactions(payload: dict[str, Any]) -> str:
-    """İşlemleri sembol ve tür bazında toplulaştırır.
+    """İşlemleri sembol ve tür bazında toplulaştırır, KRONOLOJİYİ KORUYARAK.
 
     Ham liste 50 satır olabiliyor; anlatı için gereken "ne kadar aldım/sattım"
     bilgisi birkaç satıra sığıyor. Tam liste `data` içinde duruyor, grafikteki
     işaretçiler onu kullanıyor.
+
+    NEDEN TARİH VAR. İlk sürüm yalnızca toplamları veriyordu ve tarihleri
+    atıyordu; "ilk hangisini almışım", "en son ne zaman altın aldım", "önce mi
+    sonra mı" gibi sorular cevapsız kalıyordu — model elinde tarih olmadığı
+    için özeti döküp geçiyordu. Token tasarrufu doğruydu, kronolojiyi tamamen
+    yok etmek yanlıştı. Her kova artık ilk ve son işlem gününü taşıyor ve
+    kovalar İLK İŞLEM TARİHİNE göre sıralanıyor: "ilk" sorusunun cevabı
+    listenin ilk satırı.
     """
     rows = payload.get("transactions") or []
     if not rows:
         return "İşlemler: seçilen aralıkta işlem yok."
 
-    totals: dict[tuple[str, str], dict[str, float]] = {}
+    totals: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
         key = (row.get("symbol") or "NAKİT", row.get("type") or "?")
-        bucket = totals.setdefault(key, {"count": 0, "amount": 0.0, "quantity": 0.0})
+        gun = str(row.get("transaction_date") or "")[:10]
+        bucket = totals.get(key)
+        if bucket is None:
+            bucket = {"count": 0, "amount": 0.0, "quantity": 0.0, "ilk": gun, "son": gun}
+            totals[key] = bucket
         bucket["count"] += 1
         bucket["amount"] += abs(float(row.get("cash_amount_try") or 0))
         bucket["quantity"] += float(row.get("quantity") or 0)
+        # Servis eskiden yeniye sıralı döndürüyor; yine de sıralamaya
+        # güvenmeden min/max alınıyor (filtre ya da kaynak değişebilir).
+        if gun and (not bucket["ilk"] or gun < bucket["ilk"]):
+            bucket["ilk"] = gun
+        if gun and (not bucket["son"] or gun > bucket["son"]):
+            bucket["son"] = gun
 
-    parts = [
-        f"{symbol} {bucket['count']} {_TX_TYPE_TR.get(tx_type, tx_type)}, "
-        f"{_tr_amount(bucket['quantity'])} adet, toplam {_tr_amount(bucket['amount'])} TL"
-        for (symbol, tx_type), bucket in sorted(totals.items())
-    ]
-    return "İşlemler\n" + "\n".join(parts)
+    # Sıralama ilk işlem tarihine göre: en eski hareket en üstte.
+    sirali = sorted(totals.items(), key=lambda kv: (kv[1]["ilk"], kv[0]))
+
+    parts = []
+    for (symbol, tx_type), bucket in sirali:
+        satir = (
+            f"{symbol} {bucket['count']} {_TX_TYPE_TR.get(tx_type, tx_type)}, "
+            f"{_tr_amount(bucket['quantity'])} adet, "
+            f"toplam {_tr_amount(bucket['amount'])} TL, "
+            f"ilk {_tr_date(bucket['ilk'])}"
+        )
+        if bucket["son"] != bucket["ilk"]:
+            satir += f", son {_tr_date(bucket['son'])}"
+        parts.append(satir)
+
+    baslik = "İşlemler (eskiden yeniye sıralı)"
+    return baslik + "\n" + "\n".join(parts)
