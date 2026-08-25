@@ -55,7 +55,9 @@ const ASSET_CLASS_LABELS: Record<ApiAssetClass, string> = {
   stock: "Hisse Senedi",
   precious_metal: "Kıymetli Madenler",
   currency: "Döviz",
-  bond: "Tahvil",
+  // "Tahvil" DEĞİL: bu sınıfta doğrudan devlet tahvili yok, hepsi TEFAS
+  // borçlanma araçları fonu (ve bir para piyasası fonu).
+  bond: "Borçlanma Araçları",
   cash: "Nakit",
 };
 

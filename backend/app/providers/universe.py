@@ -135,7 +135,18 @@ def _gold_coin(symbol: str, name: str, factor: str, base_price: str) -> AssetSpe
 # enstrümandır, risk motorunda savunma tarafında (BOND+CASH) sayılmalıdır.
 _FUND_ASSET_CLASS: dict[AssetSubType, AssetClass] = {
     AssetSubType.EQUITY_FUND: AssetClass.STOCK,
-    AssetSubType.MONEY_MARKET_FUND: AssetClass.CASH,
+    # Para piyasası fonu artık CASH DEĞİL, BOND.
+    #
+    # `AssetClass.CASH` yalnızca SERBEST NAKDİ (defterdeki bakiye, harcanabilir
+    # para) temsil ediyor. Para piyasası fonu ise bir yatırımdır: fiyatı vardır
+    # ve oynar (ölçülen: İş Portföy para piyasası fonu %1,42 yıllık volatilite),
+    # takas süresi vardır. Nakit dilimine konulması "bu para elimde" demek olur
+    # ki değildir; portföyü olduğundan likit ve güvenli gösterirdi.
+    #
+    # Kısa vadeli borçlanma araçları ve repo tuttuğu için sabit getirili
+    # tarafa, yani BOND'a düşüyor. Risk motorunun savunma tabanı zaten
+    # BOND+CASH toplamına bakıyor, dolayısıyla o taraf etkilenmiyor.
+    AssetSubType.MONEY_MARKET_FUND: AssetClass.BOND,
     AssetSubType.GOLD_FUND: AssetClass.PRECIOUS_METAL,
     AssetSubType.BOND_FUND: AssetClass.BOND,
     AssetSubType.CORPORATE_BOND_FUND: AssetClass.BOND,
@@ -257,42 +268,66 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     ),
     # --- TEFAS fonları ---
     _fund("TI2", "İş Portföy Hisse Senedi Fonu", AssetSubType.EQUITY_FUND, "0.110169"),
-    _fund("TCD", "İş Portföy Değişken Fon", AssetSubType.EQUITY_FUND, "35.646015"),
-    _fund("AFT", "Ak Portföy Yeni Teknolojiler Fonu", AssetSubType.EQUITY_FUND, "0.669568"),
-    # PPF nakit, GTA kıymetli maden sınıfına düşer (bkz. _FUND_ASSET_CLASS).
-    #
-    # PPF sınıf varsayılanını ezer: CASH sınıfının sentetik parametreleri
-    # MEVDUAT için yazılmış (drift 0, volatilite 0 — birim fiyat sabit 1 TL,
-    # getiri INTEREST işlemlerinden gelir). Para piyasası fonu ise getirisini
-    # FİYATI üzerinden biriktirir; sınıf varsayılanıyla çevrimdışı modda düz
-    # çizgi kalıyor ve hiç getiri üretmiyordu.
-    # Günlük drift 0.00159 ≈ yıllık %40 (252 işlem günü); volatilite 0.0004
-    # ≈ yıllık %0,6 — para piyasası fonunun gerçek oynaklığı bu mertebede.
+    # Adlar TEFAS'taki resmî unvanlarla doğrulandı (25 Ağustos 2026).
+    # TCD İş Portföy DEĞİL Tacirler Portföy'ün; AFT ise yurt dışı hisse
+    # senedi fonu — yerli/yabancı ayrımı yapılırken bu fark önemli.
+    _fund("TCD", "Tacirler Portföy Değişken Fon", AssetSubType.EQUITY_FUND, "35.646015"),
     _fund(
-        "PPF",
-        "Para Piyasası Fonu",
+        "AFT",
+        "Ak Portföy Yeni Teknolojiler Yabancı Hisse Senedi Fonu",
+        AssetSubType.EQUITY_FUND,
+        "0.669568",
+    ),
+    # PPF KALDIRILDI, yerine IOO geldi.
+    #
+    # `PPF` kodu "Para Piyasası Fonu" diye okunmuş ama TEFAS kodları anlamlı
+    # kısaltmalar değil, keyfi üç harf: o kod AZİMUT PORTFÖY AKÇE SERBEST
+    # FON'a ait. Yani etiket, alt tür ve sentetik kalibrasyon bir para piyasası
+    # fonunu tarif ederken veri bambaşka bir fondan geliyordu. Ölçüldü:
+    # %5,3 yıllık volatilite — para piyasası fonu ~%1,4 mertebesindedir.
+    #
+    # Serbest fon ayrıca kaldıraç ve türev kullanabilir; `scope.yaml` bu
+    # araçları kapsam dışı sayıyor.
+    #
+    # IOO gerçek bir para piyasası fonu (İş Portföy İkinci Para Piyasası TL).
+    # Ölçülen: 250 günlük kesintisiz veri, SIFIR bozuk satır, %1,42 yıllık
+    # volatilite (SRRI 2), yıllık %45,8 getiri.
+    #
+    # Sentetik parametreler çevrimdışı mod içindir: getirisini FİYATI üzerinden
+    # biriktirir, sınıf varsayılanıyla düz çizgi kalırdı.
+    # Günlük drift 0.00152 ≈ yıllık %46; volatilite 0.0009 ≈ yıllık %1,4.
+    _fund(
+        "IOO",
+        "İş Portföy İkinci Para Piyasası (TL) Fonu",
         AssetSubType.MONEY_MARKET_FUND,
-        "3.502603",
-        synthetic_daily_drift=0.00159,
-        synthetic_daily_volatility=0.0004,
+        # Uydurma değil, ölçülmüş: serinin ilk gerçek günü 25.08.2025 kapanışı.
+        "3.154068",
+        synthetic_daily_drift=0.00152,
+        synthetic_daily_volatility=0.0009,
     ),
     _fund("GTA", "Garanti Portföy Altın Fonu", AssetSubType.GOLD_FUND, "1.078670"),
-    # --- Nakit (birim fiyatı 1 TL sabit varlık olarak modellenir; mevduat
-    #     faizi INTEREST işlemiyle deftere yazılır) ---
-    AssetSpec(
-        symbol="MEVDUAT-VS",
-        name="Vadesiz Mevduat",
-        asset_class=AssetClass.CASH,
-        base_price=Decimal("1.00"),
-        sub_type=AssetSubType.DEMAND_DEPOSIT,
-    ),
-    AssetSpec(
-        symbol="MEVDUAT-V",
-        name="Vadeli Mevduat",
-        asset_class=AssetClass.CASH,
-        base_price=Decimal("1.00"),
-        sub_type=AssetSubType.TIME_DEPOSIT,
-    ),
+    # --- Nakit ---
+    #
+    # `AssetClass.CASH` altında VARLIK YOK, bilerek. Nakit artık yalnızca
+    # defterdeki serbest bakiyedir: alım/satım için elde duran para. O bakiye
+    # `ledger_service.cash_balance_as_of` ile hesaplanıp portföy özetinde
+    # doğrudan nakit dilimine ekleniyor (portfolio_service), yani temsil etmek
+    # için sentetik bir varlığa gerek yok.
+    #
+    # Mevduat varlıkları (MEVDUAT-V / MEVDUAT-VS) kaldırıldı. Birim fiyatı
+    # sabit 1 TL olan, çekilecek piyasa fiyatı bulunmayan bu iki kayıt
+    # evrendeki SON sentetik varlıklardı; kaldırılmalarıyla evren tamamen
+    # gerçek kaynaklı hâle geldi (AK 5.1).
+    #
+    # KAPSAM NOTU: `gerek.md` §2 varlık sınıfları arasında "Nakit (Vadeli,
+    # Vadesiz mevduat)" diyor, dolayısıyla bu bir sapmadır ve analist onayına
+    # sunulmalıdır. Kararın dayanağı: `scope.yaml` mevduatı ZATEN iki ayrı
+    # listede kapsam dışı sayıyor (`sabit_getirili` ve `bankacilik_urunleri`),
+    # yani sohbet "vadeli mevduat nedir" sorusunu reddederken portföy mevduat
+    # tutuyordu. Kaldırma bu çelişkiyi gideriyor.
+    #
+    # Bedeli: `TransactionType.INTEREST` demoda yalnızca mevduat faizinden
+    # üretiliyordu, artık üretilmiyor.
 ]
 
 SPEC_BY_SYMBOL: dict[str, AssetSpec] = {spec.symbol: spec for spec in ASSET_UNIVERSE}

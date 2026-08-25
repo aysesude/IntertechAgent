@@ -146,35 +146,27 @@ def test_fully_synthetic_asset_is_untouched(db_session):
 
 
 def test_varlik_bazli_drift_sinif_varsayilanini_ezer():
-    """Para piyasası fonu CASH sınıfındadır ama sabit durmaz.
+    """Para piyasası fonu, BOND sınıf varsayılanıyla yetinmez.
 
-    CASH sınıfının sentetik parametreleri MEVDUAT için yazılmış (drift 0,
-    volatilite 0 — birim fiyat sabit 1 TL, getiri INTEREST işlemlerinden
-    gelir). PPF getirisini FİYATI üzerinden biriktirir; sınıf varsayılanıyla
-    çevrimdışı modda düz çizgi kalıyor ve hiç getiri üretmiyordu.
+    Getirisini FİYATI üzerinden biriktirir ve gerçek oynaklığı borçlanma
+    fonlarınınkinden düşüktür (ölçülen: %1,42 yıllık). Sınıf varsayılanı
+    kullanılsaydı çevrimdışı modda yanlış mertebede bir seri üretilirdi.
     """
     from app.core.config import PriceSource
     from app.providers.universe import SPEC_BY_SYMBOL
     from data.seed_prices_synthetic import generate_synthetic_series, trading_days
 
-    ppf = SPEC_BY_SYMBOL["PPF"]
-    mevduat = SPEC_BY_SYMBOL["MEVDUAT-V"]
+    ioo = SPEC_BY_SYMBOL["IOO"]
 
-    assert ppf.synthetic_daily_drift is not None, "PPF sınıf varsayılanını ezmeli"
-    assert mevduat.synthetic_daily_drift is None, "mevduat sınıf varsayılanında kalmalı"
-    assert ppf.data_source is PriceSource.TEFAS
+    assert ioo.synthetic_daily_drift is not None, "para piyasası fonu sınıf varsayılanını ezmeli"
+    assert ioo.data_source is PriceSource.TEFAS
 
     days = trading_days(date(2026, 8, 3), history_days=200)
     market_path = [0.0] * (len(days) - 1)
 
-    ppf_series = generate_synthetic_series(ppf, days, market_path)
-    mevduat_series = generate_synthetic_series(mevduat, days, market_path)
+    seri = generate_synthetic_series(ioo, days, market_path)
 
-    ppf_first, ppf_last = ppf_series[days[0]], ppf_series[days[-1]]
-    assert ppf_last > ppf_first, "para piyasası fonu getiri biriktirmeli"
-
-    # Mevduat sabit kalmalı (drift ve volatilite sıfır).
-    assert mevduat_series[days[0]] == mevduat_series[days[-1]]
+    assert seri[days[-1]] > seri[days[0]], "para piyasası fonu getiri biriktirmeli"
 
 
 def test_bond_sinifi_kusuratli_adet_alir():
@@ -217,7 +209,7 @@ def test_fon_base_price_gercek_fiyatla_ayni_mertebede():
         "APT": "0.122145",
         "AYR": "0.095774",
         "GTA": "1.078670",
-        "PPF": "3.502603",
+        "IOO": "3.154068",
         "TCD": "35.646015",
         "TI2": "0.110169",
     }
