@@ -76,8 +76,27 @@ def sirket_tespit_et(query: str) -> str | None:
     (`\\b`) aranır — aksi hâlde "thy" gibi kısa kodlar başka kelimelerin
     içinde sahte eşleşme üretir.
     """
-    normalized = _normalize(query)
     eslemeler = _sirket_eslemesi()
+
+    # 1) BÜYÜK HARF ticker taraması — küçültmeden ÖNCE.
+    #
+    # Bazı borsa kodları gündelik Türkçe kelimelerle çakışıyor: MAVI (renk),
+    # ESEN, EFOR, BERA. Hepsi küçültülüp eşleştirildiğinde "grafikteki mavi
+    # çizgi" sorgusu Mavi Giyim'e gidiyordu (ölçüldü). Kodlar teamülen BÜYÜK
+    # yazıldığı için büyük harf duyarlı bir tarama ikisini ayırıyor: "MAVI"
+    # şirkettir, "mavi" renktir.
+    #
+    # Yalnızca tickerın kendisi aranır, ad varyantları değil — "Mavi Giyim"
+    # zaten aşağıdaki normal taramada bulunuyor.
+    for ticker in sorted(set(eslemeler.values()), key=len, reverse=True):
+        if re.search(rf"\b{re.escape(ticker)}\b", query):
+            return ticker
+
+    # 2) Normal tarama: küçültülmüş ve aksansız, uzun adlar önce.
+    #
+    # Uzun adlar önce denenir: "garanti bankası" ile "garan" aynı sorguda
+    # eşleşebilir, uzun olan daha spesifik olduğu için öncelikli.
+    normalized = _normalize(query)
     for ad in sorted(eslemeler, key=len, reverse=True):
         if re.search(rf"\b{re.escape(ad)}\b", normalized):
             return eslemeler[ad]
