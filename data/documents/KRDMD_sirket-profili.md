@@ -28,9 +28,9 @@ Kardemir, 58 yıl boyunca bir Kamu İktisadi Devlet Teşekkülü olarak
 faaliyet gösterdikten sonra 30 Mart 1995 tarihinde özelleştirilmiştir.
 Özelleştirme sonrasında Sabancı Grubu ile ortaklık kurulmuştur.
 Hisseleri Borsa İstanbul'da "KRDMD" (ve ayrıca A/B grup hisseler
-için farklı kodlarla) işlem görmektedir. Güncel ortaklık pay dağılımına
-ilişkin ayrıntı için şirketin resmi ortaklık yapısı sayfasına
-başvurulmalıdır. Yönetim kurulu başkanı, Eylül 2025'te İsmail Demir'in
+için farklı kodlarla) işlem görmektedir; ortaklık pay dağılımının tam
+yüzdeleri şirketin resmi sayfasında güncel tutulmaktadır. Yönetim
+kurulu başkanı, Eylül 2025'te İsmail Demir'in
 yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Bu doküman şirketin
 kimlik ve yapısal bilgilerini özetler, dönemsel finansal sonuçlar ayrı
 `bilanco` türü dokümanlarda yer alır.
