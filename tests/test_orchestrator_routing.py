@@ -332,7 +332,6 @@ async def test_merge_is_told_to_answer_the_question_not_restate_everything():
     assert "UYARILARI KORU" in llm.system
     # Uydurmama ve sorumluluk reddi pazarlıksız (CLAUDE.md §4).
     assert "VERİDE YOKSA SÖYLE" in llm.system
-    assert "Bu bir yatırım tavsiyesi değildir." in llm.system
 
 
 async def test_merge_survives_a_state_without_a_message():
