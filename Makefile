@@ -38,4 +38,4 @@ test:
 lint:
 	docker compose exec api ruff check .
 	docker compose exec api black --check .
-	docker compose exec frontend npm run lint
+	docker compose exec frontend-v2 npm run lint

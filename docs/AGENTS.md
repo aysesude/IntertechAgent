@@ -96,14 +96,26 @@ profili, referans). Güncel bilgi ayrı bir yoldan, soru anında çekilir ve
 `summary_text`'in sonuna **kendi etiketli bloğu** olarak eklenir. İki blok
 birbirini dışlar:
 
-| Koşul | Tool | Blok başlığı |
-|---|---|---|
-| Şirket tespit edildi **ve** güncellik isteniyor | `get_live_kap_disclosures` | `Güncel KAP Bildirimleri:` |
-| Şirket tespit edilMEdi **ve** gündem isteniyor | `get_live_market_headlines` | `Güncel Piyasa Başlıkları:` |
+| Koşul | Tool | RAG | Blok başlığı |
+|---|---|---|---|
+| Şirket var **ve** güncellik isteniyor | `get_live_kap_disclosures` | çalışır, blok üstüne eklenir | `Güncel KAP Bildirimleri:` |
+| Şirket yok **ve** gündem **ve** güncellik | `get_live_market_headlines` | **hiç çağrılmaz** | `Güncel Piyasa Başlıkları:` |
 
 Karar `agents/market_query.py`'de kural tabanlı verilir. Şirket sorulduğunda
 genel gündem eklenmez (sorulmayan bilgiyle cevabı seyreltir), şirket
 sorulmadığında KAP'a hangi şirketi soracağımız belirsizdir.
+
+**Gündem sorusu RAG'e hiç gitmez.** Arşivde haber yok; yine de aramaya
+gidildiğinde en yakın belge dönüp kaynak listesine yazılıyordu — "son piyasa
+haberleri neler" sorusunun cevabında hiç geçmeyen "Doğuş Otomotiv 2. Çeyrek
+Sonuçları", sanki cevabı destekleyen bir kaynakmış gibi listeleniyordu
+(ölçüldü, 24 Ağustos). Kullanılmayan bir kaynağı göstermek, kaynak
+göstermenin amacını tersine çevirir.
+
+Koşulda gündem kelimesi **tek başına yetmez**, güncellik de aranır: aksi
+hâlde "piyasa değeri ne demek" gibi bir kavram sorusu da bu dala düşüp
+arşive hiç bakmazdı. Canlı kaynağa ulaşılamazsa RAG yoluna düşülür — bu dal
+bir kestirme, çıkmaz sokak değil.
 
 **Bloklar LLM'den geçmez.** RAG özetiyle aynı cümlede eritilirse hangi
 bilginin arşivden hangisinin canlı kaynaktan geldiği bulanıklaşır. Bu
