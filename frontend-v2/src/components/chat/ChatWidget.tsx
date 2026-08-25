@@ -3,7 +3,7 @@ import { AssistantIcon } from "@/components/chat/AssistantAvatar";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatWidgetTitle } from "@/components/chat/ChatWidgetTitle";
 import { BotIcon, SendIcon, SparkleIcon, XIcon } from "@/components/icons";
-import { mockWidgetStarterPrompts } from "@/data/mockData";
+import { INVESTMENT_DISCLAIMER, mockWidgetStarterPrompts } from "@/data/mockData";
 import { useChat } from "@/chat/ChatProvider";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -110,6 +110,16 @@ export function ChatWidget() {
               <SendIcon size={16} />
             </button>
           </div>
+
+          {/* CLAUDE.md §4: her finansal çıktı bu ibareyi taşımak zorunda.
+              Kural SUNUM katmanında karşılanıyor — her mesajın sonuna
+              gömülmüyor (orchestrator o talimatı bilerek kaldırdı, tekrar
+              gürültüydü). Ama widget, Portföy ve Piyasa ekranlarında TEK
+              sohbet yüzeyi ve burada hiçbir ibare yoktu: o sayfalarda
+              kullanıcı finansal yanıt alıp uyarıyı hiç görmüyordu. */}
+          <p className="m-0 shrink-0 px-[18px] pb-3 text-center text-[10.5px] italic leading-tight text-ink-faint">
+            {INVESTMENT_DISCLAIMER}
+          </p>
         </div>
       )}
 
