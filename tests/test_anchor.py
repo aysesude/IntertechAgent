@@ -97,3 +97,49 @@ class TestAnkrajCozumleme:
         assert sonuc.weekday() < 5, "hafta sonu ankraj olamaz"
         # Bugüne yakın olmalı; tam eşitlik testin koştuğu güne bağlı olurdu.
         assert abs((date.today() - sonuc).days) <= 4
+
+
+class TestBosAnkrajDegeri:
+    """`.env` "boş bırakın" diyor; kod bunu kabul etmek zorunda.
+
+    Boş bir ortam değişkeni pydantic'e `None` değil BOŞ STRING olarak
+    geliyordu ve tarih olarak ayrıştırılamayıp uygulamayı hiç
+    başlatmıyordu — sunucuda tam olarak bu oldu:
+
+        ValidationError: anchor_date
+          Input should be a valid date or datetime, input is too short
+
+    Hata mesajı da çözümü söylemiyordu (satırı yorum satırı yapmak).
+    """
+
+    def test_bos_string_none_sayilir(self, monkeypatch):
+        from app.core.config import Settings
+
+        monkeypatch.setenv("ANCHOR_DATE", "")
+        assert Settings().anchor_date is None
+
+    def test_yalnizca_bosluk_da_none_sayilir(self, monkeypatch):
+        """`.env` düzenlerken sonda kalan boşluk yaygın."""
+        from app.core.config import Settings
+
+        monkeypatch.setenv("ANCHOR_DATE", "   ")
+        assert Settings().anchor_date is None
+
+    def test_gecerli_tarih_bozulmadan_gecer(self, monkeypatch):
+        from datetime import date
+
+        from app.core.config import Settings
+
+        monkeypatch.setenv("ANCHOR_DATE", "2026-08-01")
+        assert Settings().anchor_date == date(2026, 8, 1)
+
+    def test_gecersiz_tarih_HALA_reddedilir(self, monkeypatch):
+        """Boş değeri kabul etmek, hatalı değeri de kabul etmek demek değil."""
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from app.core.config import Settings
+
+        monkeypatch.setenv("ANCHOR_DATE", "yirmi-bir-agustos")
+        with _pytest.raises(ValidationError):
+            Settings()

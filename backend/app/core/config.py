@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import Enum
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -550,6 +550,26 @@ class Settings(BaseSettings):
     #
     # Çözüm mantığı ve neden sabit tarihten vazgeçildiği: data/anchor.py
     anchor_date: date | None = None
+
+    @field_validator("anchor_date", mode="before")
+    @classmethod
+    def _bos_ankraj_none_sayilir(cls, deger: object) -> object:
+        """`ANCHOR_DATE=` (boş) -> `None`.
+
+        `.env.example` "boş bırakın" diyor ama boş bir ortam değişkeni
+        pydantic'e `None` değil BOŞ STRING olarak geliyor ve tarih olarak
+        ayrıştırılamayıp uygulamayı hiç başlatmıyordu. Belge bir kullanımı
+        tarif ediyorsa kod onu kabul etmek zorunda; kullanıcıyı satırı yorum
+        satırı yapmaya zorlamak, üstelik hata mesajı bunu hiç söylemezken,
+        gereksiz bir tuzak.
+
+        Yalnızca boşluk içeren değer de aynı sayılır: `.env` düzenlerken
+        sonda kalan boşluk yaygın.
+        """
+        if isinstance(deger, str) and not deger.strip():
+            return None
+        return deger
+
     # Güncel fiyat bu kadar takvim gününden eskiyse "eski" işaretlenir.
     # 4 gün: piyasa Cuma kapanır, Pazartesi açılır — Pazar günü sorulan bir
     # fiyat 2 günlüktür ve normaldir. Araya resmî tatil girdiğinde 3-4 güne
