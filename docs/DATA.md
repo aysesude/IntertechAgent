@@ -94,17 +94,34 @@ bozmaz; `make seed` de birikmiş gerçek veriyi silemez (öncelik kuralı).
 
 | Sınıf | Adet | Kaynak |
 |---|---|---|
-| Hisse | 18 | yfinance (15 BIST) + TEFAS (3 hisse fonu) |
+| Hisse | 19 | yfinance (15 BIST + BIST 100 endeksi) + TEFAS (3 hisse fonu) |
 | Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
 | Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
-| Tahvil | 4 | TEFAS borçlanma araçları fonları |
-| Nakit | 3 | TEFAS (para piyasası fonu) + 2 mevduat (**sentetik**) |
+| Borçlanma Araçları | 5 | TEFAS (4 borçlanma fonu + 1 para piyasası fonu) |
+| Nakit | **0** | varlık yok — serbest bakiye (aşağıya bakın) |
 
-Sentetik kalan tek grup mevduattır ve bu kasıtlıdır: birim fiyatı sabit
-1,00 TL'dir (`ASSET_CLASS_DAILY_DRIFT_VOLATILITY[CASH] = (0.0, 0.0)`),
-getirisi fiyattan değil `INTEREST` işlemlerinden gelir.
+**Evrende sentetik varlık YOK.** Tamamı gerçek kaynaklı (AK 5.1).
+`test_no_asset_is_synthetic` bunu kilitliyor.
 
-Tahvil tarafı fonlarla temsil edilir: Türk tahvillerinin ücretsiz güvenilir
+### Nakit bir varlık DEĞİL
+`AssetClass.CASH` altında hiçbir varlık yoktur ve olmamalıdır
+(`test_cash_class_has_no_assets`). Nakit, defterdeki **serbest bakiyedir**:
+alım/satım için elde duran para. `portfolio_service` onu
+`ledger_service.cash_balance_as_of` ile okuyup toplam değere ve nakit
+dilimine ekler; temsil etmek için bir varlığa gerek yoktur.
+
+Eskiden o dilim ÜÇ ayrı şeyi topluyordu — serbest bakiye, iki mevduat
+varlığı ve bir "para piyasası fonu" — ve portföyleri olduğundan likit ve
+güvenli gösteriyordu. Mevduat kaldırıldı (kapsam notu: `gerek.md` §2 onu
+varlık sınıfı sayıyor, `scope.yaml` ise iki ayrı listede kapsam dışı
+sayıyor; karar bu çelişkiyi giderme yönünde alındı, analist onayı bekliyor).
+Para piyasası fonu ise bir yatırımdır — fiyatı oynar (ölçülen %1,42 yıllık)
+— ve borçlanma araçlarına taşındı.
+
+Bunun bedeli: `TransactionType.INTEREST` demoda yalnızca mevduat faizinden
+üretiliyordu, artık üretilmiyor.
+
+Borçlanma tarafı fonlarla temsil edilir: Türk tahvillerinin ücretsiz güvenilir
 bir fiyat kaynağı yok, uydurma ISIN'ler ise hiçbir sağlayıcıdan çekilemediği
 için sonsuza kadar bayat kalıyordu. Fon tahvil değildir (vade/kupon yok) ama
 tahvil riski taşır ve gerçek fiyatlanır.
@@ -127,9 +144,13 @@ başındaki not içinde. `test_fon_base_price_gercek_fiyatla_ayni_mertebede`
 
 **Varlık sınıfının tipik davranışından ayrılıyorsa** `synthetic_daily_drift`
 ve `synthetic_daily_volatility` ile sınıf varsayılanı ezilir. Tek örneği
-`PPF`: `CASH` sınıfındadır ama sınıfın parametreleri mevduat için yazılmış
-(drift 0, volatilite 0), oysa para piyasası fonu getirisini fiyatı üzerinden
-biriktirir.
+`IOO` (para piyasası fonu): borçlanma fonlarıyla aynı sınıftadır ama
+oynaklığı belirgin biçimde düşüktür (ölçülen %1,42 yıllık).
+
+**TEFAS kodları anlamlı kısaltma DEĞİLDİR.** Bir kez tam bu yüzden yanlış
+varlık evrene girdi: `PPF` kodu "Para Piyasası Fonu" diye okunmuştu, oysa o
+kod *Azimut Portföy Akçe Serbest Fon*'a ait ve ölçülen oynaklığı %5,3.
+Fon eklerken kodu TEFAS'tan doğrulayın, adından çıkarmayın.
 
 **Fon eklerken sınıfı elle vermeyin:** `_fund()` varlık sınıfını alt türden
 türetir (`_FUND_ASSET_CLASS`). Fonun ekonomik riski neyse sınıfı odur — para

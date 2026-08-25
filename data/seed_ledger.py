@@ -5,6 +5,8 @@ Eski üreticiden temel farklar:
   Defter her an dengelidir (nakit = SUM(cash_amount_try) >= 0).
 - İşlem tarihleri fiyatın gerçekten VAR OLDUĞU günlere hizalanır (işlem
   günleri); hafta sonuna denk alım artık mümkün değildir.
+- NAKİT satın alınmaz: bütçenin nakit payı harcanmadan defterde serbest
+  bakiye olarak kalır (bkz. providers/universe.py — CASH altında varlık yok).
 - Fiyatlar price_history'den OKUNUR (kaynağı ne olursa olsun); maliyet
   bugünkü fiyattan geriye türetilmez — zarardaki portföyler de doğal olarak
   oluşur.
@@ -39,8 +41,6 @@ MAX_HOLDINGS_PER_USER = 15
 
 # Hisse alım/satım komisyonu (brüt tutarın oranı); diğer sınıflarda 0.
 STOCK_FEE_RATE = Decimal("0.0015")
-# Vadeli mevduat aylık faizi (INTEREST kaydı olarak deftere işlenir).
-TIME_DEPOSIT_MONTHLY_RATE = Decimal("0.03")
 
 # Alım/satımda adet yuvarlaması. Hisse ve döviz tam sayı (lot/birim), diğerleri
 # küsuratlı. BOND tam sayıydı — doğrudan tahvil adet bazlı alınır — ama sınıfın
@@ -336,14 +336,26 @@ def seed_ledger(session: Session) -> int:
         )
         tx_count += 1
 
-        time_deposit_events: list[tuple] = []  # (alım günü, yatırılan tutar)
-
         for asset_class, (weight, pick_count) in archetype.items():
+            # NAKİT SATIN ALINMAZ — harcanmayan bakiyedir.
+            #
+            # `AssetClass.CASH` altında artık varlık yok (bkz. universe.py):
+            # bütçenin nakit payı hiç harcanmaz ve defterdeki serbest bakiye
+            # olarak kalır. Portföy özeti onu `cash_balance_as_of` ile okuyup
+            # nakit dilimine ekliyor, yani temsil için bir varlığa gerek yok.
+            if asset_class is AssetClass.CASH:
+                continue
             candidates = assets_by_class.get(asset_class, [])
             if not candidates:
                 continue
             picked = rng.sample(candidates, min(pick_count, len(candidates)))
-            class_budget = budget * Decimal(str(weight)) * Decimal("0.9")  # %10 pay: komisyon+nakit
+            # Ağırlığın TAMAMI harcanır. Eskiden 0.9 ile çarpılıyordu ("%10 pay:
+            # komisyon+nakit") çünkü nakit de bir varlık gibi satın alınıyordu
+            # ve ayrıca pay ayırmak gerekiyordu. Artık nakit payı arketipte
+            # açıkça yazılı, dolayısıyla ikinci bir kesintiye gerek yok —
+            # ağırlıklar toplamı 1.0 ve ekrandaki dağılım arketiple birebir
+            # örtüşüyor. Komisyonlar nakit bakiyesinden karşılanır.
+            class_budget = budget * Decimal(str(weight))
             per_asset = class_budget / len(picked)
 
             for asset in picked:
@@ -385,32 +397,6 @@ def seed_ledger(session: Session) -> int:
                         fee_try=fee,
                     )
                     tx_count += 1
-                    if asset.symbol == "MEVDUAT-V":
-                        time_deposit_events.append((buy_day, quantity * price))
-
-        # Vadeli mevduat: aylık faiz, INTEREST kaydı olarak (varlığa bağlı değil).
-        for start_day, principal in time_deposit_events:
-            payment_days = [
-                d for d in window if d > start_day and d.day <= 7 and d.month != start_day.month
-            ]
-            seen_months: set[tuple[int, int]] = set()
-            for pay_day in payment_days:
-                key = (pay_day.year, pay_day.month)
-                if key in seen_months:
-                    continue
-                seen_months.add(key)
-                interest = (principal * TIME_DEPOSIT_MONTHLY_RATE).quantize(
-                    _TRY_QUANT, rounding=ROUND_HALF_UP
-                )
-                record_transaction(
-                    session,
-                    portfolio.id,
-                    TransactionType.INTEREST,
-                    transaction_date=_tx_datetime(pay_day),
-                    cash_amount_try=interest,
-                    note="Vadeli mevduat faizi",
-                )
-                tx_count += 1
 
         # --- Kısmi satışlar: pencerenin TAMAMINA yayılır -------------------
         #
@@ -423,11 +409,7 @@ def seed_ledger(session: Session) -> int:
                 kac = rng.randint(1, MAX_SELLS_PER_USER)
                 for sell_day in sorted(rng.sample(aday_gunler, min(kac, len(aday_gunler)))):
                     quantities = position_as_of(session, portfolio.id, sell_day)
-                    sellable = [
-                        (asset_id, qty)
-                        for asset_id, qty in quantities.items()
-                        if qty > 0 and asset_id != assets["MEVDUAT-V"].id
-                    ]
+                    sellable = [(asset_id, qty) for asset_id, qty in quantities.items() if qty > 0]
                     if not sellable:
                         continue
                     asset_id, quantity = sellable[rng.randrange(len(sellable))]

@@ -317,7 +317,10 @@ _ASSET_CLASS_TR = {
     "stock": "Hisse Senedi",
     "precious_metal": "Kıymetli Maden",
     "currency": "Döviz",
-    "bond": "Tahvil",
+    # "Tahvil" DEĞİL: bu sınıfta doğrudan devlet tahvili yok, hepsi TEFAS
+    # borçlanma araçları fonu. "Tahvil" demek olmayan bir enstrümanı ima
+    # ediyordu; üstelik scope.yaml "tahvil"i kapsam dışı sayıyor.
+    "bond": "Borçlanma Araçları",
     "cash": "Nakit",
 }
 

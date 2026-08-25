@@ -542,7 +542,11 @@ def test_fund_asset_class_follows_economic_risk():
         "TI2": AssetClass.STOCK,  # hisse senedi fonu
         "TCD": AssetClass.STOCK,  # değişken fon
         "AFT": AssetClass.STOCK,  # teknoloji hisse fonu
-        "PPF": AssetClass.CASH,  # para piyasası fonu
+        # Para piyasası fonu artık CASH DEĞİL: `AssetClass.CASH` yalnızca
+        # serbest nakdi (defter bakiyesi) temsil ediyor. Bu bir yatırımdır,
+        # fiyatı oynar (ölçülen %1,42 yıllık volatilite) ve kısa vadeli
+        # borçlanma araçları tutar.
+        "IOO": AssetClass.BOND,  # para piyasası fonu
         "GTA": AssetClass.PRECIOUS_METAL,  # altın fonu
         "AK2": AssetClass.BOND,  # uzun vadeli borçlanma araçları
         "APT": AssetClass.BOND,  # orta vadeli borçlanma araçları
@@ -557,15 +561,32 @@ def test_fund_asset_class_follows_economic_risk():
         ), f"{symbol}: {funds[symbol].asset_class.value} bekleniyordu {asset_class.value}"
 
 
-def test_only_deposits_remain_synthetic():
-    """Mevduat dışında canlı kaynağı olmayan varlık kalmamalı (AK 5.1).
+def test_no_asset_is_synthetic():
+    """HİÇBİR varlığın sentetik kaynağı olmamalı (AK 5.1).
 
-    Mevduat kasıtlı istisna: birim fiyatı sabit 1,00 TL, getirisi INTEREST
-    işlemlerinden gelir. Buraya yeni bir sembol düşerse o varlık sonsuza kadar
-    bayat fiyatla değerlenir ve portföy özetinin as_of tarihi yanıltıcı olur.
+    Eskiden mevduat (MEVDUAT-V / MEVDUAT-VS) kasıtlı istisnaydı: birim fiyatı
+    sabit 1,00 TL olan, çekilecek piyasa fiyatı bulunmayan iki kayıt. Nakit
+    artık bir VARLIK değil, defterdeki serbest bakiye olduğu için o istisnaya
+    gerek kalmadı ve evren tamamen gerçek kaynaklı hâle geldi.
+
+    Buraya yeni bir sembol düşerse o varlık sonsuza kadar bayat fiyatla
+    değerlenir ve portföy özetinin as_of tarihi yanıltıcı olur.
     """
     synthetic = {s.symbol for s in ASSET_UNIVERSE if s.data_source is PriceSource.SYNTHETIC}
-    assert synthetic == {"MEVDUAT-V", "MEVDUAT-VS"}, f"beklenmeyen sentetik varlık: {synthetic}"
+    assert synthetic == set(), f"sentetik kaynaklı varlık: {synthetic}"
+
+
+def test_cash_class_has_no_assets():
+    """`AssetClass.CASH` altında varlık OLMAMALI.
+
+    Nakit yalnızca serbest bakiyedir (alım/satım için elde duran para) ve
+    `portfolio_service` onu defterden okuyup dilime ekliyor. Buraya bir varlık
+    düşerse nakit dilimi yine iki farklı şeyi karıştırmaya başlar — daha önce
+    tam olarak bu oldu: mevduat, para piyasası fonu ve serbest bakiye aynı
+    dilimde toplanıyor, portföyler olduğundan likit ve güvenli görünüyordu.
+    """
+    nakit = {s.symbol for s in ASSET_UNIVERSE if s.asset_class is AssetClass.CASH}
+    assert nakit == set(), f"nakit sınıfında varlık var: {nakit}"
 
 
 def test_fx_conversion_has_a_subject():
