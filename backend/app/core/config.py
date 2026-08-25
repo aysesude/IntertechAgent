@@ -541,9 +541,15 @@ class Settings(BaseSettings):
     portfolio_news_low_confidence_weight_percent: float = 50.0
 
     # --- Veri katmanı ---
-    # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
-    # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
-    anchor_date: date = date(2026, 8, 1)
+    # Sentetik üretimin "bugün"ü — SABİT DEĞİL, override.
+    #
+    # Boş bırakılırsa (varsayılan) seed ankrajı gerçek verinin bittiği güne
+    # bağlar; böylece "son işlem" ile "son fiyat" arasında açık kalmaz.
+    # Sabit bir tarih yazılırsa her şeyi ezer: testler ve yeniden üretilebilir
+    # koşular bunu kullanır.
+    #
+    # Çözüm mantığı ve neden sabit tarihten vazgeçildiği: data/anchor.py
+    anchor_date: date | None = None
     # Güncel fiyat bu kadar takvim gününden eskiyse "eski" işaretlenir.
     # 4 gün: piyasa Cuma kapanır, Pazartesi açılır — Pazar günü sorulan bir
     # fiyat 2 günlüktür ve normaldir. Araya resmî tatil girdiğinde 3-4 güne

@@ -32,11 +32,12 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import AssetClass, PriceSource, settings
+from app.core.config import AssetClass, PriceSource
 from app.models import Asset, PriceHistory
 from app.providers.base import PricePoint
 from app.providers.universe import ASSET_UNIVERSE, AssetSpec
 from app.services.price_ingest import upsert_prices
+from data.anchor import resolve_anchor_date
 
 SEED = 42
 HISTORY_DAYS = 365  # takvim günü; içinden hafta içi günler kullanılır
@@ -152,7 +153,7 @@ def seed_prices_synthetic(session: Session, assets_by_symbol: dict[str, Asset]) 
     Türetilmiş varlıkların (sikke) sentetiği, kaynağının sentetiğinden
     katsayıyla hesaplanır ki sentetik evren kendi içinde tutarlı olsun.
     """
-    anchor = settings.anchor_date
+    anchor = resolve_anchor_date(session)
     days = trading_days(anchor)
 
     # Yeniden üretim: yalnızca sentetik satırlar silinir (gerçek veri korunur).
