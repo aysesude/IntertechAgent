@@ -87,8 +87,27 @@ make seed                  # ZORUNLU son adım — aşağıya bakın
    fiyatlardan alınmış görünür: maliyet bir evrenden, değerleme başka
    evrenden gelir. Ölçülen sonuç 20 Ağustos 2026'da 151 işlem / 48 portföyde
    sahte kâr-zarardı (bir varlıkta +%292).
+
+**Yeni varlık eklediyseniz ekstra bir şey yapmanıza gerek YOK.** `backfill` ve
+`daily-update` çalışmaya başlamadan önce varlık kataloğunu kendileri hizalıyor
+(`seed_assets`). Bir süre öyle değildi: fiyat yazmak için varlığın DB kaydı
+gerekiyor ve kayıt yoksa sembol sessizce atlanıyordu ("varlık DB'de yok"),
+dolayısıyla yeni varlıkta sıra `seed → backfill → seed` olmak zorundaydı —
+yani prosedür varlığın yaşına göre değişiyordu. Artık her durumda aynı.
+
 Sonuçlar `data_ingest_log`'a yazılır. Başarısız kaynak DB'deki son veriyi
 bozmaz; `make seed` de birikmiş gerçek veriyi silemez (öncelik kuralı).
+
+### Sunucuda çalışırken iki tuzak
+
+**`docker compose restart` `.env`'i YENİDEN OKUMAZ.** Konteyneri mevcut
+ortamıyla yeniden başlatır. Ayar değiştirdiyseniz `up -d` gerekiyor
+(konteyneri yeniden yaratır). Bir kez tam bu yüzden `ANCHOR_DATE`
+değişikliği geçmedi ve seed eski ankrajla koştu.
+
+**`0 satır` başarısızlık değildir.** `rows_upserted` YAZILAN satır sayısıdır,
+çekilen değil. Geçmişi zaten tam olan bir sembol `0` yazar ve bu doğrudur;
+işarete bakın: `+` başarılı, `-` atlandı, `!` başarısız, `~` kısmi.
 
 ### Varlık evreni (37 varlık)
 
