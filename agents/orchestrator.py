@@ -370,8 +370,6 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Para ve oranlarda Türkçe biçim kullan: 1.234,56 TL ve +%8,41 "
         "(yüzde işareti sayıdan ÖNCE, artı/eksi en başta).\n"
         "\n"
-        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi "
-        "değildir.' uyarısını ekle.\n"
         "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme "
         "senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', "
         "'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca "
