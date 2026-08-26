@@ -127,6 +127,20 @@ def sirket_tespit_et(query: str) -> str | None:
     return None
 
 
+def sirket_sayisi(query: str) -> int:
+    """Sorguda geçen FARKLI şirket sayısını döndürür.
+
+    Çoklu şirket karşılaştırma sorgularında ("Akbank, İş Bankası ve Yapı
+    Kredi'nin ... karşılaştır") sabit `top_k=5` yetersiz kalıyordu: korpus
+    büyüdükçe (kurumsal olaylar/nakit akış içeriği eklendikçe) her şirketin
+    kendi ilgili chunk'ı için rekabet arttı, 3 şirketten biri (ör. Yapı
+    Kredi) üst-5'in dışına düşüp sorgunun cevabından tamamen kayboluyordu
+    (ölçümle doğrulandı, 2026-08-26). market_agent bu sayıyı kullanarak
+    top_k'yı şirket sayısına göre genişletir.
+    """
+    return len(_tum_sirketleri_tespit_et(query))
+
+
 def sirket_gecer_mi(query: str) -> bool:
     """Sorguda bilinen bir BIST şirketi (adıyla ya da koduyla) geçiyor mu?
 
