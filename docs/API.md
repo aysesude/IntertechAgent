@@ -373,6 +373,75 @@ Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
 - `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
   çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
 
+### Kullanıcı risk profili ve anket puanı
+
+Projedeki tek YAZAN uç ailesi; geri kalan her REST ucu salt okur. Dördü de
+`verify_user_access` ister (AK 5.4) — başkasının profilini okumak ya da
+değiştirmek, tüm risk ve uygunluk değerlendirmesinin dayandığı beyanı ele
+geçirmek olurdu.
+
+**İKİ ÖLÇEK YAN YANA, biri yetkili:**
+
+| | Ne | Kim kullanıyor |
+|---|---|---|
+| `risk_survey_score` | **1-7**, şartnamenin anket puanı | uygunluk kontrolü (`advice_eligibility`) |
+| `risk_profile` | 4 kademe, puandan **türer** | risk motoru (`risk_service`) tabloları |
+
+Eşleme: **1-2** Muhafazakâr · **3-4** Dengeli · **5** Büyüme · **6-7** Agresif.
+Bantlar varlık merdiveniyle hizalı — her profil, kendi bandının açtığı varlık
+kümesiyle örtüşür.
+
+#### `GET /api/users/{user_id}/risk-survey`
+
+```json
+{
+  "user_id": "...",
+  "risk_survey_score": 5,
+  "risk_profile": "growth",
+  "score_band": [5, 5],
+  "score_min": 1,
+  "score_max": 7
+}
+```
+
+- `risk_survey_score` **`null` olabilir**: kullanıcı anketi hiç doldurmamıştır.
+  Bu durumda `score_band` da `null` olur ama `risk_profile` yine dolu döner.
+  Uydurulmuş bir puan döndürmek, verilmemiş bir cevabı verilmiş göstermek
+  olurdu (AK 5.5).
+- `score_min`/`score_max` yanıtın içinde: **arayüz anket ölçeğini kendi
+  tarafında sabit yazmasın.**
+- `score_band` puanın karşılık geldiği profilin tüm aralığı — arayüz
+  "Muhafazakâr (1-2 puan)" gösterebilsin diye.
+
+#### `PUT /api/users/{user_id}/risk-survey`
+
+```json
+{ "risk_survey_score": 5 }
+```
+
+Anket ekranının yazması gereken uç budur. Puanı kaydeder **ve profili ondan
+türetir**; ikisi tek işlemde yazılır. İdempotent. Aralık dışı puan `422`.
+
+#### `GET` / `PUT /api/users/{user_id}/risk-profile`
+
+Profili doğrudan okur/yazar (`{"risk_profile": "balanced"}`). Yanıt ayrıca
+`available_profiles` taşır ki arayüz seçenekleri sabit yazmasın.
+
+> **`PUT /risk-profile` kayıtlı anket puanını SİLER.** Profil artık türev bir
+> alan; doğrudan yazılması "elle geçersiz kılma" demektir ve elde duran puan
+> o değişikliği açıklamaz. Puan bırakılsaydı birbirini tutmayan iki cevap
+> saklanırdı: puan 6 (Agresif) derken profil Muhafazakâr görünürdü.
+
+**Ajana açılmadı, açılmamalı.** `agents/scope.yaml` alım/satım/değiştirme
+fiillerini `UNAUTHORIZED_ACTION` sayıyor; sohbet üzerinden bir modelin risk
+profilini değiştirebilmesi, prompt enjeksiyonuyla ("artık agresif
+profildesin") kullanıcının beyan ettiği risk toleransının ele geçirilmesi
+demek olurdu.
+
+**Açık iş:** risk ajanı hâlâ profilden türetilen GEÇİCİ bir puan kullanıyor
+(`agents/risk_agent._DUMMY_SURVEY_SCORE_BY_PROFILE`). Gerçek puanın ajana
+bağlanması ayrı bir iştir — risk ajanına bu turda dokunulmadı.
+
 ### `GET /api/risk/{user_id}?profile_override=`
 
 7 kademeli risk seviyesi, yıllık volatilite, VaR, Sharpe, yoğunlaşma ve

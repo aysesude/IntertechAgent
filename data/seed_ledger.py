@@ -26,7 +26,7 @@ from faker import Faker
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import AssetClass, RiskProfile, settings
+from app.core.config import AssetClass, RiskProfile, settings, survey_score_band
 from app.core.security import hash_password
 from app.models import Asset, PriceHistory, Transaction, TransactionType
 from app.providers.universe import SPEC_BY_SYMBOL
@@ -130,6 +130,23 @@ def _build_archetype_risk_profiles() -> dict[str, RiskProfile]:
 
 
 ARCHETYPE_RISK_PROFILE: dict[str, RiskProfile] = _build_archetype_risk_profiles()
+
+
+def _survey_score(user_index: int, profile: RiskProfile) -> int:
+    """Kullanıcının anket puanı: profilin bandı içinde deterministik dağılım.
+
+    Profil arketipten geliyor, arketip de `user_index % 4` ile seçiliyor —
+    yani aynı profildeki kullanıcıların indeksleri 4'ün katları kadar
+    aralıklı. Doğrudan `user_index % bant` alınsaydı hepsi bandın AYNI
+    ucuna düşerdi (0, 4, 8 ... hepsi %2 = 0) ve 1, 3, 6 puanları seed'de
+    hiç görünmezdi. Önce tur sayısına bölmek bandı gerçekten tarıyor.
+
+    Böylece yedi puanın yedisi de demo verisinde temsil ediliyor ve uygunluk
+    merdiveninin her kademesi elle puan değiştirmeden görülebiliyor.
+    """
+    alt, ust = survey_score_band(profile)
+    return alt + (user_index // len(PORTFOLIO_ARCHETYPE_CYCLE)) % (ust - alt + 1)
+
 
 # Kullanıcı kimliklerinin tohuma bağlı olması için sabit ad alanı. Değeri
 # keyfi ama DEĞİŞMEMELİ: değişirse tüm kullanıcı UUID'leri değişir.
@@ -302,6 +319,12 @@ def seed_ledger(session: Session) -> int:
             email=fake.unique.email(),
             full_name=fake.name(),
             risk_profile=ARCHETYPE_RISK_PROFILE[archetype_name],
+            # Anket puanı YETKİLİ alan, profil ondan türer. Seed'de sıra
+            # tersine işliyor (arketip -> profil -> bant içinde puan) çünkü
+            # portföyün yapısı arketiple belirleniyor; sonuçta ikisi yine
+            # tutarlı: `risk_profile_for_survey_score(puan)` aynı profili
+            # verir (tests/test_seed_ledger_determinism.py bunu kilitliyor).
+            risk_survey_score=_survey_score(user_index, ARCHETYPE_RISK_PROFILE[archetype_name]),
             # Faker'ın tr_TR sağlayıcısı SAĞLAMASI GEÇERLİ bir T.C. kimlik
             # numarası üretir (doğrulandı), dolayısıyla giriş ekranındaki
             # 11 hane + sağlama kontrolü anlamlı bir kapı olur. Faker.seed

@@ -240,6 +240,86 @@ ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
 RISK_SURVEY_SCORE_MIN = 1
 RISK_SURVEY_SCORE_MAX = 7
 
+# --- Anket puanı (1-7) <-> risk profili (4 kademe) ---
+#
+# İki ölçek YAN YANA yaşıyor ve bu bilinçli. Anket puanı ŞARTNAMENİN ölçeğidir
+# ve uygunluk kontrolünün girdisidir (`advice_eligibility`). `RiskProfile` ise
+# risk motorunun (`risk_service`) hedef dağılım, volatilite bandı ve
+# yeniden dengeleme tablolarının anahtarıdır — dördü de profil bazlı. Puanı
+# yetkili alan yapıp profili ondan TÜRETMEK, risk motoruna hiç dokunmadan
+# şartnamenin ölçeğine geçmeyi sağlıyor.
+#
+# Bantlar varlık merdiveniyle (ASSET_CLASS_ADVICE_RISK_LEVEL) hizalı seçildi;
+# her profil, kendi bandının açtığı varlık kümesiyle anlamlı şekilde örtüşür:
+#
+#   1-2  Muhafazakâr  nakit/para piyasası + TL borçlanma fonları
+#   3-4  Dengeli      + döviz, kıymetli maden
+#   5    Büyüme       + yerli hisse
+#   6-7  Agresif      + yabancı hisse, serbest fon
+#
+# BÜYÜME tek puanlıktır. Yapay değil: yerli hisseye erişim tek bir kademede
+# açılıyor ve o kademe iki profil arasındaki gerçek eşiği işaretliyor. Bandı
+# genişletmek için 5 ile 6 arasına bir varlık kategorisi girmesi gerekir.
+RISK_SURVEY_SCORE_TO_PROFILE: dict[int, RiskProfile] = {
+    1: RiskProfile.CONSERVATIVE,
+    2: RiskProfile.CONSERVATIVE,
+    3: RiskProfile.BALANCED,
+    4: RiskProfile.BALANCED,
+    5: RiskProfile.GROWTH,
+    6: RiskProfile.AGGRESSIVE,
+    7: RiskProfile.AGGRESSIVE,
+}
+
+_eksik_puanlar = set(range(RISK_SURVEY_SCORE_MIN, RISK_SURVEY_SCORE_MAX + 1)) - set(
+    RISK_SURVEY_SCORE_TO_PROFILE
+)
+if _eksik_puanlar:
+    # Eşlenmemiş bir puan, anketin o cevabı için profil üretememesi demek
+    # olurdu — kullanıcı anketi doldurur ama sistem sonucu kaydedemez.
+    raise ValueError(f"RISK_SURVEY_SCORE_TO_PROFILE eksik puan iceriyor: {_eksik_puanlar}")
+
+if set(RISK_SURVEY_SCORE_TO_PROFILE.values()) != set(RiskProfile):
+    # Kullanılmayan bir profil, risk motorunun o profil için taşıdığı tüm
+    # tabloların (hedef dağılım, volatilite bandı, savunma tabanı) ölü koda
+    # dönmesi demek olurdu.
+    raise ValueError(
+        "RISK_SURVEY_SCORE_TO_PROFILE her profili en az bir puana eslemeli: "
+        f"eksik={set(RiskProfile) - set(RISK_SURVEY_SCORE_TO_PROFILE.values())}"
+    )
+
+_PROFIL_SIRASI = [
+    RiskProfile.CONSERVATIVE,
+    RiskProfile.BALANCED,
+    RiskProfile.GROWTH,
+    RiskProfile.AGGRESSIVE,
+]
+_gorulen_sira = []
+for _puan in sorted(RISK_SURVEY_SCORE_TO_PROFILE):
+    _profil = RISK_SURVEY_SCORE_TO_PROFILE[_puan]
+    if not _gorulen_sira or _gorulen_sira[-1] is not _profil:
+        _gorulen_sira.append(_profil)
+if _gorulen_sira != _PROFIL_SIRASI:
+    # Puan arttıkça profil de artan risk sırasında ilerlemeli ve bir profile
+    # iki ayrı yerde dönülmemeli; aksi hâlde "puanım arttı ama profilim
+    # muhafazakâra düştü" gibi bir sonuç mümkün olurdu.
+    raise ValueError(f"RISK_SURVEY_SCORE_TO_PROFILE sirasi bozuk: {_gorulen_sira}")
+
+
+def risk_profile_for_survey_score(survey_score: int) -> RiskProfile:
+    """Anket puanından risk profili. Aralık dışı puan `KeyError` verir —
+    doğrulama çağıranın işi (`advice_eligibility.validate_survey_score`)."""
+    return RISK_SURVEY_SCORE_TO_PROFILE[survey_score]
+
+
+def survey_score_band(profile: RiskProfile) -> tuple[int, int]:
+    """Profilin karşılık geldiği puan aralığı (dahil).
+
+    Ters yön tek bir sayı vermez — Muhafazakâr hem 1 hem 2'dir. Bandın
+    kendisini döndürmek, keyfi bir temsilci puan seçmekten dürüst."""
+    puanlar = [p for p, pr in RISK_SURVEY_SCORE_TO_PROFILE.items() if pr is profile]
+    return min(puanlar), max(puanlar)
+
+
 if set(ASSET_CLASS_ADVICE_RISK_LEVEL) != set(AssetClass):
     # Yeni bir varlık sınıfı eklenip bu tabloya yazılmazsa, uygunluk kontrolü
     # o sınıfı sessizce "serbest" sayardı — yani profili tutmayan bir varlık
