@@ -5,17 +5,74 @@ Not: Yahoo resmî/onaylı kaynak değildir (AK 5.1). Hisse için pratik tek
 ücretsiz kaynak olduğundan kullanılır; kur için yalnızca EVDS anahtarı yoksa
 yedektir. Kaynak her satırda `source` olarak işaretlendiği için bu ayrım
 sonradan SQL ile denetlenebilir.
+
+2026-08-25 eki — `fetch_news`: aynı sağlayıcı, aynı ücretsiz/anahtarsız
+erişimle Yahoo Finance'in haber akışını da sunuyor. `app/services/
+macro_news_ingest.py` bunu Döviz ve Kıymetli Maden sınıfları için canlı,
+portföye göre kişiselleştirilmiş makro haber kaynağı olarak kullanır (bkz. o
+dosyanın docstring'i — neden RAG değil, neden istek anında değil batch).
 """
 
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.core.config import PriceSource
-from app.providers.base import PricePoint, ProviderError
+from app.providers.base import NewsItem, PricePoint, ProviderError
 from app.providers.universe import TROY_OUNCE_GRAMS
 
 _PRICE_QUANT = Decimal("0.000001")
+
+# yfinance>=0.2.43 haber şemasını "content" altında iç içe döner (title,
+# pubDate ISO metin, provider.displayName, canonicalUrl.url). Sürüm
+# geçişinde eski düz şema (title, providerPublishTime unix saniye, publisher,
+# link) da görülebiliyor — ikisi de desteklenir, hiçbiri varsayılmaz; alan
+# eksikse o haber öğesi ATLANIR (uydurma yok, bkz. CLAUDE.md §4).
+
+
+def _parse_news_item(raw: dict) -> "NewsItem | None":
+    """Tek bir ham yfinance haber öğesini `NewsItem`'e çevirir. Zorunlu dört
+    alandan (başlık, url, yayın tarihi, kaynak) biri bile çıkarılamazsa
+    `None` döner — çağıran taraf bunu sessizce atlar."""
+    content = raw.get("content") if isinstance(raw.get("content"), dict) else None
+
+    if content is not None:
+        title = content.get("title")
+        provider = content.get("provider") or {}
+        publisher = provider.get("displayName") if isinstance(provider, dict) else None
+        url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
+        url = url_obj.get("url") if isinstance(url_obj, dict) else None
+        pub_date_raw = content.get("pubDate") or content.get("displayTime")
+        published_at = _parse_iso_timestamp(pub_date_raw) if pub_date_raw else None
+    else:
+        title = raw.get("title")
+        publisher = raw.get("publisher")
+        url = raw.get("link")
+        provider_publish_time = raw.get("providerPublishTime")
+        published_at = (
+            datetime.fromtimestamp(provider_publish_time, tz=timezone.utc)
+            if isinstance(provider_publish_time, int | float)
+            else None
+        )
+
+    if not title or not url or not published_at:
+        return None
+    return NewsItem(
+        headline=title,
+        source=publisher or "Yahoo Finance",
+        url=url,
+        published_at=published_at,
+    )
+
+
+def _parse_iso_timestamp(value: str) -> datetime | None:
+    """ISO 8601 metnini `datetime`'a çevirir. `Z` soneki `fromisoformat`
+    tarafından desteklenmez (Python < 3.11'de kesin, 3.11'de bile bazı
+    varyantlarda sorunlu) — `+00:00`'a çevrilir."""
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
 
 
 class YFinanceProvider:
@@ -31,6 +88,23 @@ class YFinanceProvider:
         frame = self._history(symbol, period="5d")
         points = self._frame_to_points(symbol, frame)
         return points[-1] if points else None
+
+    def fetch_news(self, symbol: str, limit: int = 5) -> list[NewsItem]:
+        """Sembol için son haber başlıklarını çeker (bkz.
+        app/services/macro_news_ingest.py). Boş liste "haber yok" anlamına
+        gelir; bu bir hata değildir. Sağlayıcı çağrısı başarısız olursa
+        `ProviderError` fırlatılır — `fetch_series`/`fetch_latest` ile aynı
+        kalıp."""
+        import yfinance
+
+        try:
+            raw_items = yfinance.Ticker(symbol).news or []
+        except Exception as exc:  # yfinance kendi iç hatalarını çeşitli tiplerle atar
+            raise ProviderError("yfinance", symbol, f"haber istegi basarisiz: {exc}") from exc
+
+        items = [item for raw in raw_items if (item := _parse_news_item(raw)) is not None]
+        items.sort(key=lambda item: item.published_at, reverse=True)
+        return items[:limit]
 
     def _history(self, symbol: str, **kwargs):
         import yfinance
