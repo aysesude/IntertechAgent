@@ -554,6 +554,10 @@ def test_fund_asset_class_follows_economic_risk():
         "APT": AssetClass.BOND,  # orta vadeli borçlanma araçları
         "AKE": AssetClass.BOND,  # eurobond
         "AYR": AssetClass.BOND,  # özel sektör borçlanma araçları
+        # Serbest fonun SINIFI da içeriğinden çıkar: BHE hisse senedi yoğun,
+        # dolayısıyla STOCK. "Serbest" olması uygunluk SEVİYESİNİ belirler
+        # (risk_level=7), sınıfını değil — ikisi ayrı alanlarda durur.
+        "BHE": AssetClass.STOCK,  # hisse senedi yoğun serbest fon
     }
     funds = {s.symbol: s for s in ASSET_UNIVERSE if s.data_source is PriceSource.TEFAS}
     assert set(funds) == set(expected), "TEFAS fon listesi değişti; beklenen tabloyu güncelleyin"
