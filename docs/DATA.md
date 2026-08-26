@@ -280,7 +280,28 @@ kullanıcısının hepsini dolduruyor ve **yedi puanın yedisini de** temsil
 ediyor. Yazma yolu `services/user_service.set_user_risk_survey`; uçlar
 `docs/API.md` → "Kullanıcı risk profili ve anket puanı".
 
-Okuma noktası `advice_eligibility.asset_risk_level(symbol, asset_class)`;
+#### Seviye DB'de de var: `assets.risk_level`
+Sütun 1-7 tutar, CHECK'li, `seed_assets` her koşuda **koddan yeniden yazar**.
+Böylece seviye SQL'den sorgulanabiliyor ve JOIN'e girebiliyor:
+
+```sql
+-- puanı 3 olan kullanıcıya yasak varlıklar
+SELECT symbol, risk_level FROM assets WHERE is_active AND risk_level > 3;
+```
+
+**TÜREV KOPYADIR, ikinci bir gerçek değil.** Tanım noktası hâlâ
+`universe.py` + `config.py`; sütuna elle yazılan değeri bir sonraki
+seed/backfill üzerine yazar. Ayrışma olursa `scripts/data_doctor` §7
+bildirir ("risk seviyesi DB ile kod arasinda ayrismis").
+
+Neden kopya tutuluyor: alım/satım engeli ve risk ajanı bu bilgiye **DB
+üzerinden** bakacak. Yalnızca kodda kaldığı sürece `assets` tablosuna bakan
+biri alanın var olduğunu bile göremiyordu.
+
+`NULL` yalnızca **pasif** (evrenden çıkarılmış) varlıklarda olabilir; aktif
+varlıkta NULL bir kusurdur ve testle korunur.
+
+Okuma noktası (kod tarafı) `advice_eligibility.asset_risk_level(symbol, asset_class)`;
 sınıf sürümü (`is_advice_allowed`) kaba görünüm içindir ve şartname metnine
 bire bir karşılık geldiği için korunuyor. Bir varlığa karar verirken
 **varlık sürümü** kullanılmalı.
@@ -410,7 +431,7 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 ## 7. Şema özeti (migration zinciri)
 
 `60bf3d7b4c54 → abe38b185ff1 → 9c31e7a0d2b4 → 4e8b2f6c1a53 → d17f3b9e5c28 →
-6a92d4c8e0f1 → b26e8dab6ef9 → c5d81a3f7b60 → f18c4a2e7b90`
+6a92d4c8e0f1 → b26e8dab6ef9 → c5d81a3f7b60 → f18c4a2e7b90 → a3d75e1c9f04`
 
 - `users` +risk_profile · `assets` +sub_type/is_active/data_source/
   provider_symbol/derived_from/derived_factor
@@ -421,6 +442,7 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 - `risk_profile` enum'una `growth` (`b26e8dab6ef9`)
 - `users` +national_id/password_hash/last_login_at (`c5d81a3f7b60`)
 - `users` +risk_survey_score, 1-7 CHECK'li, nullable (`f18c4a2e7b90`)
+- `assets` +risk_level, 1-7 CHECK'li; migration mevcut satırları da doldurur (`a3d75e1c9f04`)
 
 ## 8. Sık düşülen tuzaklar
 

@@ -284,6 +284,35 @@ def main() -> int:
         else:
             print("  temiz")
 
+        # --- 7. risk_level: DB ile kod ayrismis mi ---------------------------
+        # `assets.risk_level` TUREV bir kopyadir; tanimi providers/universe.py
+        # icinde durur ve seed_assets her kosuda yeniden yazar. Ayrisma
+        # yalnizca iki yolla olur: kod degisti ama seed/backfill kosmadi, ya
+        # da sutuna elle yazildi. Ikisi de sessiz; sorgular eski seviyeye
+        # gore filtreler ve kimse fark etmez.
+        _baslik("7. Varlik risk seviyesi (DB <-> kod)")
+        from app.services.advice_eligibility import asset_risk_level
+
+        ayrisan: list[str] = []
+        bos: list[str] = []
+        for asset in db.execute(select(Asset).where(Asset.is_active)).scalars():
+            beklenen = asset_risk_level(asset.symbol, asset.asset_class)
+            if asset.risk_level is None:
+                bos.append(asset.symbol)
+            elif asset.risk_level != beklenen:
+                ayrisan.append(f"{asset.symbol}: DB {asset.risk_level} != kod {beklenen}")
+        if bos:
+            print(f"  seviyesi BOS aktif varlik: {len(bos)} -> {', '.join(sorted(bos)[:8])}")
+            bulgular.append(f"{len(bos)} aktif varligin risk seviyesi bos (seed kosmamis)")
+            sira_hatasi = True
+        for satir in ayrisan[:8]:
+            print(f"  {satir}")
+        if ayrisan:
+            bulgular.append(f"{len(ayrisan)} varligin risk seviyesi DB ile kod arasinda ayrismis")
+            sira_hatasi = True
+        if not bos and not ayrisan:
+            print("  temiz")
+
         # --- Karar -------------------------------------------------------------
         _baslik("KARAR")
         print(

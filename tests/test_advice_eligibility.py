@@ -10,6 +10,7 @@ yanlışlıkla değiştirilirse test bunu yakalamalı, sessizce uyum sağlamamal
 """
 
 import pytest
+from sqlalchemy import select
 
 from app.core.config import AssetClass
 from app.services.advice_eligibility import (
@@ -221,3 +222,131 @@ def test_her_puan_bir_oncekinden_farkli_kume_acar():
     assert len(set(kumeler)) == 7, "yedi puan yedi farkli varlik kumesi acmali"
     for onceki, sonraki in zip(kumeler, kumeler[1:]):
         assert onceki < sonraki, "puan arttikca kume GERCEKTEN buyumeli"
+
+
+class TestVeritabaninaYazilmasi:
+    """`assets.risk_level` — kodun DB'deki TÜREV kopyası.
+
+    Seviye uzun süre yalnızca kodda yaşadı ve bunun bedeli SQL'den
+    görünmemesiydi: `assets` tablosuna bakan biri alanın varlığını bile
+    anlamıyor, "puanının üstünde varlık tutanlar" sorgusu SQL ile
+    yazılamıyordu. Alım/satım engeli ve risk ajanı bu bilgiye DB üzerinden
+    bakacağı için sütun eklendi.
+
+    Tanım noktası hâlâ `universe.py`; bu testler kopyanın ondan
+    AYRIŞMADIĞINI koruyor.
+    """
+
+    def test_seed_her_aktif_varliga_seviye_yazar(self, db_session):
+        from app.models import Asset
+        from data.seed_assets import seed_assets
+
+        seed_assets(db_session)
+
+        bos = [
+            a.symbol
+            for a in db_session.execute(select(Asset).where(Asset.is_active)).scalars()
+            if a.risk_level is None
+        ]
+        assert not bos, f"seviyesi boş aktif varlık: {bos[:10]}"
+
+    def test_db_degeri_kodla_BIREBIR_ayni(self, db_session):
+        """Ayrışma sessizdir: sorgular eski seviyeye göre filtreler ve kimse
+        fark etmez. Bu yüzden 141 varlığın tamamı tek tek karşılaştırılıyor."""
+        from app.models import Asset
+        from data.seed_assets import seed_assets
+
+        seed_assets(db_session)
+
+        ayrisan = [
+            f"{a.symbol}: DB {a.risk_level} != kod {asset_risk_level(a.symbol, a.asset_class)}"
+            for a in db_session.execute(select(Asset).where(Asset.is_active)).scalars()
+            if a.risk_level != asset_risk_level(a.symbol, a.asset_class)
+        ]
+        assert not ayrisan, ayrisan[:10]
+
+    def test_seed_TEKRAR_kosunca_elle_yazilan_deger_duzeltilir(self, db_session):
+        """Sütun türev; tek yazma kapısı `seed_assets`.
+
+        Elle yazılan bir değer kalıcı olsaydı DB ile kod kalıcı olarak
+        ayrışır ve `universe.py`'nin "tek tanım noktası" sözleşmesi bozulurdu.
+        """
+        from app.models import Asset
+        from data.seed_assets import seed_assets
+
+        seed_assets(db_session)
+        ioo = db_session.execute(select(Asset).where(Asset.symbol == "IOO")).scalar_one()
+        assert ioo.risk_level == 1
+        ioo.risk_level = 7
+        db_session.flush()
+
+        seed_assets(db_session)
+
+        db_session.refresh(ioo)
+        assert ioo.risk_level == 1
+
+    def test_aralik_disi_seviye_veritabani_duzeyinde_reddedilir(self, db_session):
+        from sqlalchemy.exc import IntegrityError
+
+        from app.models import Asset
+        from data.seed_assets import seed_assets
+
+        seed_assets(db_session)
+        with pytest.raises(IntegrityError):
+            db_session.execute(
+                Asset.__table__.update().where(Asset.symbol == "IOO").values(risk_level=9)
+            )
+            db_session.flush()
+
+    def test_migration_ve_model_ayni_kisiti_tasiyor(self):
+        """`docs/DATA.md` §8: testler migration koşmaz, dolayısıyla kısıt iki
+        yere de yazılmalı; ayrıştıklarında kimse fark etmez."""
+        from pathlib import Path
+
+        from app.models import Asset
+
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "backend"
+            / "alembic"
+            / "versions"
+            / "a3d75e1c9f04_asset_risk_level.py"
+        ).read_text(encoding="utf-8")
+
+        kisit = next(
+            c for c in Asset.__table__.constraints if c.name == "ck_assets_risk_level_range"
+        )
+        assert kisit.name in migration
+        assert str(kisit.sqltext) in migration
+
+    def test_migrationdaki_degerler_kodla_ayni(self):
+        """Migration bir anlık görüntüdür ve değerleri SABİT yazılıdır.
+
+        Kod ile o an ayrışırsa deploy sonrası DB yanlış seviyelerle dolar ve
+        `seed_assets` çalışana kadar öyle kalır. Bu test migration YAZILDIĞI
+        andaki tabloyu kilitler; kod ileride değişirse migration
+        güncellenmez, yeni bir migration da gerekmez — beklenen davranış
+        `seed_assets`'in üzerine yazmasıdır. O yüzden burada yalnızca
+        migration'ın KENDİ İÇİNDE tutarlı olduğu doğrulanıyor.
+        """
+        import importlib.util
+        from pathlib import Path
+
+        yol = (
+            Path(__file__).resolve().parents[1]
+            / "backend"
+            / "alembic"
+            / "versions"
+            / "a3d75e1c9f04_asset_risk_level.py"
+        )
+        spec = importlib.util.spec_from_file_location("mig_risk_level", yol)
+        modul = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modul)
+
+        tum_seviyeler = set(modul._SINIF_SEVIYELERI.values()) | set(modul._VARLIK_ISTISNALARI)
+        assert tum_seviyeler <= set(range(1, 8)), "migration aralık dışı seviye içeriyor"
+
+        # Aynı sembol iki farklı seviyeye yazılmamalı — son UPDATE kazanırdı
+        # ve hangisi olduğu sözlük sırasına bağlı kalırdı.
+        semboller = [s for liste in modul._VARLIK_ISTISNALARI.values() for s in liste]
+        assert len(semboller) == len(set(semboller)), "migration'da tekrarlanan sembol var"
