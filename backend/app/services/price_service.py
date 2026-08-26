@@ -42,12 +42,30 @@ TARGET_POINT_MAX = 120
 
 # Pencere -> gün sayısı. AUTO çözünürlük seçimi buradan türer: 30/90/180 gün
 # günlük (~22/65/130 nokta), 365 gün haftalık (~52 nokta).
+# SABİT uzunluklu pencereler. YTD burada YOKTUR — uzunluğu bugüne bağlı;
+# başlangıç hesabı için `window_start_date` kullanın, bu sözlüğü doğrudan
+# indekslemeyin (YTD ile KeyError verir).
 WINDOW_DAYS: dict[TimeWindow, int] = {
     TimeWindow.M1: 30,
     TimeWindow.M3: 90,
     TimeWindow.M6: 180,
     TimeWindow.M12: 365,
 }
+
+
+def window_start_date(window: TimeWindow, end_date: date) -> date:
+    """Pencerenin başlangıç günü.
+
+    Üç ayrı çağıran (performans serisi, kıyaslama, fiyat serisi) aynı hesabı
+    yapıyordu; YTD eklenince üçünün de dallanması gerekecekti. Tek yerde
+    durması, bir sonraki pencere tipinde de tek bir yerin değişmesi demek.
+
+    YTD `1 Ocak`tan başlar — geriye sabit gün saymaz.
+    """
+    if window is TimeWindow.YTD:
+        return date(end_date.year, 1, 1)
+    return end_date - timedelta(days=WINDOW_DAYS[window])
+
 
 _TWO_DECIMALS = Decimal("0.01")
 
@@ -62,7 +80,9 @@ def resolve_granularity(window: TimeWindow, granularity: Granularity) -> Granula
     """
     if granularity is not Granularity.AUTO:
         return granularity
-    return Granularity.WEEKLY if window is TimeWindow.M12 else Granularity.DAILY
+    # YTD de M12 gibi uzun olabilir (aralıkta ~365 gün); günlük çözünürlükle
+    # grafik gereksiz yere kalabalıklaşır.
+    return Granularity.WEEKLY if window in (TimeWindow.M12, TimeWindow.YTD) else Granularity.DAILY
 
 
 def bucket_key(day: date, granularity: Granularity):
@@ -124,7 +144,7 @@ def get_asset_price_history(
     Args:
         db: Veritabanı oturumu.
         symbols: Sembol listesi. Boş olamaz.
-        window: Pencere; başlangıç `as_of - WINDOW_DAYS[window]`.
+        window: Pencere; başlangıç `window_start_date(window, as_of)`.
         granularity: AUTO ise `resolve_granularity` ile somutlaşır.
         currency: TRY (o günün kuruyla çevrilmiş) veya NATIVE.
 
@@ -174,7 +194,7 @@ def get_asset_price_history(
         raise InsufficientDataError(f"No price history for {known_symbols}")
 
     effective_granularity = resolve_granularity(window, granularity)
-    requested_start = as_of - timedelta(days=WINDOW_DAYS[window])
+    requested_start = window_start_date(window, as_of)
 
     # Kur serisi pencerenin tamamını kapsamalı; ayrı bir aralık sorgusu yerine
     # tek seferde okunup PriceBook'un carry-forward'ına bırakılıyor.

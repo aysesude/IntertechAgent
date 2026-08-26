@@ -13,7 +13,14 @@ import { apiGet } from "./client";
  */
 
 export type ApiAssetClass = "stock" | "precious_metal" | "currency" | "bond" | "cash";
-export type ApiWindow = "1m" | "3m" | "6m" | "12m";
+/**
+ * Kıyaslama/performans penceresi.
+ *
+ * `ytd` diğerlerinin aksine SABİT UZUNLUKTA DEĞİL: 1 Ocak'tan bugüne, yani
+ * uzunluğu yılın kaçıncı ayında olduğumuza göre değişir. Backend tarafında
+ * `price_service.window_start_date` bu ayrımı yapar.
+ */
+export type ApiWindow = "1m" | "3m" | "6m" | "12m" | "ytd";
 
 export interface ApiAllocationItem {
   asset_class: ApiAssetClass;
@@ -148,4 +155,38 @@ export function fetchPerformance(userId: string, window: ApiWindow) {
 
 export function fetchTransactions(userId: string) {
   return apiGet<ApiTransactionList>(`/api/portfolio/${userId}/transactions`);
+}
+
+// ---------------------------------------------------------------------------
+// Kıyaslama (Varlıklar Arası Karşılaştırmalı Getiri kartı)
+// ---------------------------------------------------------------------------
+
+export interface ApiBenchmarkEntry {
+  symbol: string;
+  name: string;
+  /** Hesaplanamadıysa `null` — 0 DEĞİL (AK 5.5). */
+  return_percent: number | null;
+}
+
+export interface ApiBenchmarkComparison {
+  user_id: string;
+  window: ApiWindow;
+  start_date: string;
+  end_date: string;
+  /**
+   * Portföy pencereden gençse başlangıç ilk VARLIK ALIMINA kırpıldı demektir.
+   * Arayüz bunu söylemeli: "son 1 yıl" yazıp 4 aylık getiri göstermek
+   * yanıltıcı olurdu.
+   */
+  truncated_to_inception: boolean;
+  portfolio_return_percent: number | null;
+  benchmarks: ApiBenchmarkEntry[];
+  /** Pencere başında fiyatı olmayan, hesaba katılmayan semboller. */
+  excluded_symbols: string[];
+}
+
+export function fetchBenchmark(userId: string, window: ApiWindow) {
+  return apiGet<ApiBenchmarkComparison>(
+    `/api/portfolio/${userId}/benchmark?window=${window}`,
+  );
 }

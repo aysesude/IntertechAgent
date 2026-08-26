@@ -32,6 +32,11 @@ class TimeWindow(str, Enum):
     M3 = "3m"
     M6 = "6m"
     M12 = "12m"
+    # Yılbaşından bugüne. Diğerlerinin aksine SABİT UZUNLUKTA DEĞİL: uzunluğu
+    # bugünün tarihine göre değişir (ocakta birkaç gün, aralıkta bir yıl).
+    # Bu yüzden `WINDOW_DAYS` içinde yoktur; başlangıcı
+    # `price_service.window_start_date` hesaplar.
+    YTD = "ytd"
 
 
 class Granularity(str, Enum):

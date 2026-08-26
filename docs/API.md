@@ -442,6 +442,44 @@ demek olurdu.
 (`agents/risk_agent._DUMMY_SURVEY_SCORE_BY_PROFILE`). Gerçek puanın ajana
 bağlanması ayrı bir iştir — risk ajanına bu turda dokunulmadı.
 
+### `GET /api/portfolio/{user_id}/benchmark?window=`
+
+Arayüzdeki **"Varlıklar Arası Karşılaştırmalı Getiri"** kartının kaynağı.
+Portföyün ve dört kıyas enstrümanının seçili dönemdeki toplam **fiyat**
+getirisi.
+
+```json
+{
+  "window": "12m", "start_date": "2025-09-08", "end_date": "2026-08-26",
+  "truncated_to_inception": true,
+  "portfolio_return_percent": 91.7,
+  "benchmarks": [
+    { "symbol": "XU100",  "name": "BIST 100 Endeksi", "return_percent": 39.8 },
+    { "symbol": "USDTRY", "name": "Amerikan Doları",  "return_percent": 16.8 },
+    { "symbol": "EURTRY", "name": "Euro",             "return_percent": 16.6 },
+    { "symbol": "XAUTRY", "name": "Gram Altın",       "return_percent": 49.0 }
+  ],
+  "excluded_symbols": []
+}
+```
+
+- `window`: **`1m | 3m | 6m | 12m | ytd`**. `ytd` diğerlerinin aksine sabit
+  uzunlukta değildir — 1 Ocak'tan bugüne.
+- **Miktarlar dönem başında dondurulur**; dönem içindeki alım/satım, temettü
+  ve komisyon hesaba katılmaz. Endeks de saf fiyat getirisi olduğu için ancak
+  böyle aynı ölçekte olurlar — yoksa "portföyüm endeksi yendi" cümlesi
+  aslında sadece yeni para yatırıldığı anlamına gelirdi.
+- **Başlangıç, ilk VARLIK ALIMIDIR**, ilk işlem değil. Portföyler önce
+  nakitle fonlanıp varlık günler sonra alınabiliyor; `min(transaction_date)`
+  alındığında o gün hiç pozisyon olmadığı için uç `InsufficientDataError`
+  veriyordu (ölçülen: 12 aylık pencerede seed'li 50 kullanıcının 50'si).
+- `truncated_to_inception: true` → portföy pencereden genç, başlangıç ilk
+  alıma çekildi. **Arayüz bunu söylemeli**; "Yıllık" yazıp dört aylık getiri
+  göstermek kıyası olduğundan iyi ya da kötü gösterir.
+- `excluded_symbols`: dönem başında fiyatı olmayan varlıklar hesaba
+  katılmaz — eksik maliyetle bölmek yanlış getiri üretirdi.
+- Getiriler hesaplanamıyorsa **`null`**, `0` değil (AK 5.5).
+
 ### `GET /api/risk/{user_id}?profile_override=`
 
 7 kademeli risk seviyesi, yıllık volatilite, VaR, Sharpe, yoğunlaşma ve

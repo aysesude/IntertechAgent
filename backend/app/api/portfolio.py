@@ -103,7 +103,7 @@ def read_holdings(
 @router.get("/{user_id}/performance", response_model=PerformanceResult)
 def read_performance(
     user_id: UUID,
-    window: TimeWindow = Query(TimeWindow.M1, description="1m | 3m | 6m | 12m"),
+    window: TimeWindow = Query(TimeWindow.M1, description="1m | 3m | 6m | 12m | ytd"),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ) -> PerformanceResult:
@@ -147,7 +147,7 @@ def read_transactions(
 @router.get("/{user_id}/benchmark", response_model=BenchmarkComparison)
 def read_benchmark(
     user_id: UUID,
-    window: TimeWindow = Query(TimeWindow.M3, description="1m | 3m | 6m | 12m"),
+    window: TimeWindow = Query(TimeWindow.M3, description="1m | 3m | 6m | 12m | ytd"),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ) -> BenchmarkComparison:
