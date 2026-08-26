@@ -10,7 +10,11 @@ interface InfluenceListProps {
 
 export function InfluenceList({ rows }: InfluenceListProps) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const maxWeight = Math.max(...rows.map((r) => r.weightPct));
+  // Ağırlığı bilinmeyen satır (fiyatı bulunamamış varlık) ölçeğe girmez;
+  // hiç ağırlık yoksa `1` ile bölünüp tüm çubuklar boş kalır — `Math.max()`
+  // boş dizide `-Infinity` döndürüp NaN genişlik üretiyordu.
+  const agirliklar = rows.map((r) => r.weightPct).filter((w): w is number => w !== null);
+  const maxWeight = agirliklar.length > 0 ? Math.max(...agirliklar) : 1;
 
   return (
     <Card className="p-[22px]">
@@ -22,8 +26,11 @@ export function InfluenceList({ rows }: InfluenceListProps) {
       </div>
       <div className="flex flex-col gap-[13px]">
         {rows.map((row) => {
-          const up = row.changePct >= 0;
-          const widthPct = (row.weightPct / maxWeight) * 100;
+          // Değişim bilinmiyorsa çubuk nötr çizilir; yukarı/aşağı rengi
+          // vermek olmayan bir yön iddia etmek olurdu.
+          const up = row.changePct !== null && row.changePct >= 0;
+          const yonRengi = row.changePct === null ? LINE2 : up ? POSITIVE : NEGATIVE;
+          const widthPct = ((row.weightPct ?? 0) / maxWeight) * 100;
           return (
             <div
               key={row.id}
@@ -33,15 +40,15 @@ export function InfluenceList({ rows }: InfluenceListProps) {
             >
               <span className="font-display w-[58px] text-[13px] font-bold">{row.name}</span>
               <div className="h-[5px] flex-1 cursor-pointer overflow-hidden rounded-full" style={{ backgroundColor: LINE2 }}>
-                <div
-                  className="h-full"
-                  style={{ width: `${widthPct}%`, background: up ? POSITIVE : NEGATIVE }}
-                />
+                <div className="h-full" style={{ width: `${widthPct}%`, background: yonRengi }} />
               </div>
-              <span className="w-[52px] text-right text-[12.5px] font-semibold" style={{ color: up ? POSITIVE : NEGATIVE }}>
-                {formatPct(row.changePct)}
+              <span
+                className="w-[52px] text-right text-[12.5px] font-semibold"
+                style={{ color: yonRengi }}
+              >
+                {row.changePct === null ? "—" : formatPct(row.changePct)}
               </span>
-              {hovered === row.id && (
+              {hovered === row.id && row.weightPct !== null && (
                 <div
                   className="animate-tipIn absolute bottom-[calc(100%+6px)] left-[58px] z-10 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold text-white"
                   style={{ backgroundColor: FIXED_DARK_CHIP }}

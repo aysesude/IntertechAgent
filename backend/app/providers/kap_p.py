@@ -53,6 +53,9 @@ _BILDIRIM_URL_SABLONU = "https://www.kap.org.tr/tr/Bildirim/{disclosure_index}"
 _VARSAYILAN_GUN_PENCERESI = 60
 
 
+_PENCERE_TARIHI_BICIMI = "%d.%m.%Y"
+
+
 @dataclass(frozen=True)
 class KapDisclosure:
     ticker: str
@@ -60,6 +63,33 @@ class KapDisclosure:
     tarih: datetime | None
     url: str | None
     ham: dict[str, Any]  # loglama/hata ayıklama için ham kayıt korunur
+
+
+@dataclass(frozen=True)
+class KapExpectedDisclosure:
+    """Bir şirketin YAKLAŞAN bildirim penceresi.
+
+    `KapDisclosure`'dan farkı: bu bir yayın değil, bir TAKVİM kaydı. KAP tek
+    bir tarih değil, dosyalamanın yapılabileceği bir aralık yayımlıyor
+    (ölçüldü, 2026-08-24 ASELS):
+
+        {'kapTitle': 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.',
+         'subject': 'Finansal Rapor', 'ruleTypeTerm': '9 Aylık',
+         'startDate': '01.10.2026', 'endDate': '09.11.2026',
+         'stockCode': None, 'year': 2026, ...}
+
+    `stockCode` NULL geliyor — hisse kodu yanıtta yok, sorguyu attığımız
+    ticker'dan taşınıyor. `son_tarih` (endDate) sunulur: kullanıcı için
+    bağlayıcı olan gün odur.
+    """
+
+    ticker: str
+    sirket: str
+    konu: str
+    donem: str | None
+    baslangic: date | None
+    son_tarih: date | None
+    ham: dict[str, Any]
 
 
 def _baslik_olustur(row: dict[str, Any]) -> str:
@@ -114,6 +144,31 @@ def satiri_bildirime_cevir(ticker: str, row: dict[str, Any]) -> KapDisclosure:
     )
 
 
+def _pencere_tarihi(ham: Any) -> date | None:
+    """`"09.11.2026"` -> `date(2026, 11, 9)`. Ayrıştırılamazsa `None`."""
+    if not ham:
+        return None
+    try:
+        return datetime.strptime(str(ham), _PENCERE_TARIHI_BICIMI).date()
+    except ValueError:
+        logger.warning("kap_p: pencere tarihi ayrıştırılamadı: %r", ham)
+        return None
+
+
+def satiri_beklenene_cevir(ticker: str, row: dict[str, Any]) -> KapExpectedDisclosure:
+    """Ham pykap satırını `KapExpectedDisclosure`'a çevirir. Saf fonksiyon —
+    gerçek örnek satırla ağsız test edilir (tests/test_kap_provider.py)."""
+    return KapExpectedDisclosure(
+        ticker=ticker,
+        sirket=str(row.get("kapTitle") or ticker),
+        konu=str(row.get("subject") or "Bildirim"),
+        donem=str(row["ruleTypeTerm"]) if row.get("ruleTypeTerm") else None,
+        baslangic=_pencere_tarihi(row.get("startDate")),
+        son_tarih=_pencere_tarihi(row.get("endDate")),
+        ham=row,
+    )
+
+
 class KapProvider:
     """`pykap` opsiyonel bir bağımlılıktır (`backend/requirements.txt`'e
     eklendi); import burada, sınıf seviyesinde değil — bu sağlayıcı hiç
@@ -147,3 +202,46 @@ class KapProvider:
         # sona atılır, listeden düşürülmez.
         bildirimler.sort(key=lambda b: b.tarih or datetime.min, reverse=True)
         return bildirimler[:limit]
+
+    def fetch_expected_disclosures(
+        self, tickers: list[str], *, limit: int = 5, sirket_basina: int = 3
+    ) -> list[KapExpectedDisclosure]:
+        """Verilen şirketlerin YAKLAŞAN bildirim takvimi, son tarihe göre sıralı.
+
+        ŞİRKET BAŞINA BİR İSTEK: pykap'ın arayüzü tek tek ticker alıyor, toplu
+        sorgu yok. Bu yüzden çağıran taraf listeyi dar tutmalı (kullanıcının
+        hisse pozisyonları); otuz şirket için otuz istek atmak bir ekran
+        kartına değmez.
+
+        BİR ŞİRKETİN DÜŞMESİ DİĞERLERİNİ DÜŞÜRMEZ: tek tek yakalanır ve
+        loglanır. Hepsi düşerse boş liste döner — çağıran taraf bunu "takvim
+        alınamadı" olarak sunar.
+
+        Geçmiş pencereler ELENİR: son tarihi bugünden önce olan kayıt takvimde
+        işi yok. Tarihi ayrıştırılamayan kayıt da elenir; tarihsiz bir takvim
+        satırı kullanıcıya hiçbir şey söylemez.
+        """
+        try:
+            from pykap.bist import BISTCompany
+        except ImportError as exc:
+            raise ProviderError(
+                "kap", ",".join(tickers), "pykap kurulu değil (`pip install pykap`)"
+            ) from exc
+
+        bugun = date.today()
+        kayitlar: list[KapExpectedDisclosure] = []
+
+        for ticker in tickers:
+            try:
+                sonuc = BISTCompany(ticker=ticker).get_expected_disclosure_list(count=sirket_basina)
+            except Exception as exc:  # pykap hatalarını çeşitli tiplerle atıyor
+                logger.warning("kap_p: %s icin beklenen bildirim alinamadi: %s", ticker, exc)
+                continue
+
+            for row in _kayitlara_cevir(sonuc):
+                kayit = satiri_beklenene_cevir(ticker, row)
+                if kayit.son_tarih is not None and kayit.son_tarih >= bugun:
+                    kayitlar.append(kayit)
+
+        kayitlar.sort(key=lambda k: k.son_tarih or date.max)
+        return kayitlar[:limit]

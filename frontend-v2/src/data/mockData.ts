@@ -432,12 +432,16 @@ export const mockPortfolioPage: PortfolioPageData = {
   assetClassCount: ASSET_CLASS_COUNT,
 };
 
+// TASARIM VERİSİ. Yalnızca API yapılandırılmamışken gösterilir ve o durumda
+// ekranda "tasarım verisi" uyarısı çıkar (bkz. MarketPage).
+const MOCK_FIYAT_TARIHI = "22.08.2026";
+
 export const mockMarketIndicators: MarketIndicator[] = [
-  { id: "bist100", label: "BIST 100", value: "11.284", changePct: 1.24 },
-  { id: "usdtry", label: "USD/TRY", value: "41,86", changePct: -0.32 },
-  { id: "gold", label: "Gram Altın", value: "₺4.312", changePct: 0.87 },
-  { id: "bond2y", label: "2Y Tahvil", value: "%38,4", changePct: 0 },
-  { id: "brent", label: "Brent", value: "$71,20", changePct: -1.05 },
+  { id: "bist100", label: "BIST 100", value: "11.284", changePct: 1.24, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "usdtry", label: "USD/TRY", value: "41,86", changePct: -0.32, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "gold", label: "Gram Altın", value: "₺4.312", changePct: 0.87, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "bond2y", label: "2Y Tahvil", value: "%38,4", changePct: 0, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "brent", label: "Brent", value: "$71,20", changePct: -1.05, priceDate: MOCK_FIYAT_TARIHI, stale: false },
 ];
 
 export const mockNews: NewsItem[] = [
