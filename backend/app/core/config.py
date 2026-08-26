@@ -1,12 +1,12 @@
 """Uygulama genelindeki tüm yapılandırma buradan okunur. Kodun başka hiçbir
 yerinde sabit bağlantı adresi, anahtar veya model adı bulunmamalıdır."""
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -148,20 +148,177 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
 # oynaklığından çıkar. Aynı ölçekte oldukları için değil, tesadüfen ikisi de
 # 1-7 olduğu için benzer görünürler.
 #
-# Sayılar şartnameden birebir alınmıştır, türetilmemiştir. Kıymetli maden
-# ("ALTIN") ve döviz ("DOVIZ") aynı seviyededir (4).
+# --- Tablo 26 Ağustos 2026'da yeniden kalibre edildi ---
+#
+# Önceki hâli şartnameden birebir alınmıştı (CASH 1, BOND 3, CURRENCY 4,
+# PRECIOUS_METAL 4, STOCK 6). ÖLÇÜLDÜ: yedi puan yalnızca DÖRT farklı sonuç
+# üretiyordu — 2, 5 ve 7 puanları bir öncekine hiçbir şey eklemiyordu:
+#
+#     1 -> nakit          2 -> nakit           (aynı)
+#     3 -> +tahvil        4 -> +döviz, maden
+#     5 -> (aynı)         6 -> +hisse          7 -> (aynı)
+#
+# Yani anket 1-7 arası puan verirken sistemin ayırt edebildiği yalnızca dört
+# kademe vardı; aradaki puanları kazanmak ya da kaybetmek kullanıcı için
+# hiçbir şeyi değiştirmiyordu. Yeni tablo her kademeyi bir kategoriye
+# karşılık getiriyor (7 hariç, bilerek boş — aşağıya bakın).
+#
+# BU ÖLÇEK SRRI DEĞİLDİR. İkisi de 1-7 olduğu için benzer görünür ama SRRI
+# volatilite bandından hesaplanır; bu tablo UYGUNLUK (suitability) sıralaması,
+# yani "hangi ürün hangi yatırımcıya sunulabilir" sorusunun cevabı. Volatilite
+# sıralamayı doğrularken kullanıldı, sıralamayı BELİRLEMEDİ — ölçümle
+# ayrıştığı iki yer aşağıda açıkça yazılı.
+#
+#   1  Serbest nakit, para piyasası fonu     (ölçülen: %0 / IOO %1,42)
+#   2  TL borçlanma araçları fonu            (AYR %1,5 · APT %7,1 · AK2 %10,0)
+#   3  Döviz, eurobond fonu                  (USDTRY ~%1 · AKE %4,6)
+#   4  Kıymetli maden, altın fonu            (gram altın %24 · GTA %25,6)
+#   5  Yerli hisse, yerli hisse fonu         (BIST ort. %38,6)
+#   6  Yabancı hisse, yabancı hisse fonu     (ABD ort. %28,8)
+#   7  Serbest fon (SPK III-52.1)            (BHE %22,8)
+#
+# ÖLÇÜMLE AYRIŞAN İKİ YER, ikisi de bilinçli:
+#
+# (a) Döviz (3) TL tahvil fonundan (2) YÜKSEK, oysa ölçülen volatilitesi çok
+#     daha düşük (~%1'e karşı %10'a kadar). Dövizin TL cinsinden düşük
+#     oynaklığı düşük risk değil, TL'nin düzenli değer kaybının yan ürünüdür:
+#     seri neredeyse tek yönlü tırmandığı için standart sapma küçük çıkar.
+#     Döviz TL'li yatırımcı için yönlü bir kur bahsidir. `gerek.md` de dövizi
+#     tahvilin üstünde ("Orta-Yüksek") sıralıyor.
+#
+# (b) Yabancı hisse (6) yerli hisseden (5) YÜKSEK, oysa ABD ortalaması
+#     BIST'in ALTINDA (%28,8'e karşı %38,6). Gerekçe volatilite değil ERİŞİM
+#     ve KARMAŞIKLIK: kur maruziyeti, sınır ötesi saklama, yerel yatırımcı
+#     korumasının bulunmaması, farklı vergi rejimi. Bunu "daha oynak" diye
+#     yazmak rakamlara bakan ilk kişi tarafından yakalanırdı.
+#
+# ŞARTNAMEDEN SAPMA — analist onayına sunulacak:
+#   - BOND 3 -> 2, CURRENCY 4 -> 3, STOCK 6 -> 5 (kademelerin yayılması).
+#   - Kıymetli maden 4'te KALDI; şartnamede döviz ile aynı seviyedeydi, artık
+#     dövizin bir üstünde. `gerek.md` §2 ise tersini söylüyor (maden "Orta",
+#     döviz "Orta-Yüksek") — ölçüm bizim sıralamamızı destekliyor
+#     (altın %24 > döviz ~%1), bu çelişki analiste bildirildi.
+#
+# SEVİYE 7 — SERBEST FON. Ölçüt yine yapı, volatilite değil. Serbest fonlar
+# yalnızca NİTELİKLİ YATIRIMCIYA satılır, diğer fon türlerine uygulanan
+# portföy sınırlamalarının çoğundan MUAFTIR ve izahnameleri kaldıraç, açığa
+# satış ve türev kullanımına izin verir. Sıradan bir fonun tabi olduğu
+# sınırlar olmadığı için yönetici stratejiyi serbestçe değiştirebilir —
+# uygunluk sorusunun ("bu ürün acemi yatırımcıya sunulabilir mi") cevabı
+# fonun BUGÜNKÜ içeriğinden bağımsız olarak hayırdır.
+#
+# Kural buradan çıkıyor: serbest fon = 7, ne tutuyor olursa olsun. Para
+# piyasası serbest fonu da 7'dir; muafiyet ortak, içerik değişkendir.
+#
+# 700 TEFAS fonu tarandı (26 Ağustos 2026): kaldıraçlı, ters (inverse) ve
+# girişim sermayesi fonu SIFIR. Yani 7'nin ilk tanımı ("türev/kaldıraçlı
+# ürün") TEFAS'ta karşılığı olmayan bir tanımdı; serbest fon bu boşluğu
+# doldurabilen tek gerçek araç ve `scope.yaml` onu kapsam içi sayıyor.
+#
+# Eleme kayıtları: GMI (Ak Portföy Gümüş Serbest) %61,4 ile en oynak adaydı
+# ama kaldıraçlı DEĞİL — spot gümüşün kendisi %63,1 (ölçüldü), yani rakam
+# emtiadan geliyor, yapıdan değil. THV %137 ölçtü ama üst üste +%67 ve +%90
+# sıçraması var, veri kusuru. On istatistiksel arbitraj fonu %2,1-4,7
+# aralığında: yapıca en karmaşık ürünler ama piyasa nötr oldukları için
+# ölçekte tepeye konurlarsa "risk 7 ama hiç oynamıyor" görüntüsü doğardı.
+#
+# Bu tablo TİPİK varlık içindir ve varlık düzeyinde ezilebilir: bkz.
+# `providers/universe.AssetSpec.risk_level` ve
+# `services/advice_eligibility.asset_risk_level`. Bir varlık sınıfının
+# altında da (IOO para piyasası fonu: sınıfı BOND=2, kendisi 1) üstünde de
+# (AAPL: sınıfı STOCK=5, kendisi 6) olabilir.
 ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
     AssetClass.CASH: 1,
-    AssetClass.BOND: 3,
-    AssetClass.CURRENCY: 4,
+    AssetClass.BOND: 2,
+    AssetClass.CURRENCY: 3,
     AssetClass.PRECIOUS_METAL: 4,
-    AssetClass.STOCK: 6,
+    AssetClass.STOCK: 5,
 }
 
 # Anket puanının alabileceği aralık (dahil). Tabloyla karşılaştırma bu
 # aralıkta anlamlıdır; dışında bir değer gelirse çağıran taraf hata verir.
 RISK_SURVEY_SCORE_MIN = 1
 RISK_SURVEY_SCORE_MAX = 7
+
+# --- Anket puanı (1-7) <-> risk profili (4 kademe) ---
+#
+# İki ölçek YAN YANA yaşıyor ve bu bilinçli. Anket puanı ŞARTNAMENİN ölçeğidir
+# ve uygunluk kontrolünün girdisidir (`advice_eligibility`). `RiskProfile` ise
+# risk motorunun (`risk_service`) hedef dağılım, volatilite bandı ve
+# yeniden dengeleme tablolarının anahtarıdır — dördü de profil bazlı. Puanı
+# yetkili alan yapıp profili ondan TÜRETMEK, risk motoruna hiç dokunmadan
+# şartnamenin ölçeğine geçmeyi sağlıyor.
+#
+# Bantlar varlık merdiveniyle (ASSET_CLASS_ADVICE_RISK_LEVEL) hizalı seçildi;
+# her profil, kendi bandının açtığı varlık kümesiyle anlamlı şekilde örtüşür:
+#
+#   1-2  Muhafazakâr  nakit/para piyasası + TL borçlanma fonları
+#   3-4  Dengeli      + döviz, kıymetli maden
+#   5    Büyüme       + yerli hisse
+#   6-7  Agresif      + yabancı hisse, serbest fon
+#
+# BÜYÜME tek puanlıktır. Yapay değil: yerli hisseye erişim tek bir kademede
+# açılıyor ve o kademe iki profil arasındaki gerçek eşiği işaretliyor. Bandı
+# genişletmek için 5 ile 6 arasına bir varlık kategorisi girmesi gerekir.
+RISK_SURVEY_SCORE_TO_PROFILE: dict[int, RiskProfile] = {
+    1: RiskProfile.CONSERVATIVE,
+    2: RiskProfile.CONSERVATIVE,
+    3: RiskProfile.BALANCED,
+    4: RiskProfile.BALANCED,
+    5: RiskProfile.GROWTH,
+    6: RiskProfile.AGGRESSIVE,
+    7: RiskProfile.AGGRESSIVE,
+}
+
+_eksik_puanlar = set(range(RISK_SURVEY_SCORE_MIN, RISK_SURVEY_SCORE_MAX + 1)) - set(
+    RISK_SURVEY_SCORE_TO_PROFILE
+)
+if _eksik_puanlar:
+    # Eşlenmemiş bir puan, anketin o cevabı için profil üretememesi demek
+    # olurdu — kullanıcı anketi doldurur ama sistem sonucu kaydedemez.
+    raise ValueError(f"RISK_SURVEY_SCORE_TO_PROFILE eksik puan iceriyor: {_eksik_puanlar}")
+
+if set(RISK_SURVEY_SCORE_TO_PROFILE.values()) != set(RiskProfile):
+    # Kullanılmayan bir profil, risk motorunun o profil için taşıdığı tüm
+    # tabloların (hedef dağılım, volatilite bandı, savunma tabanı) ölü koda
+    # dönmesi demek olurdu.
+    raise ValueError(
+        "RISK_SURVEY_SCORE_TO_PROFILE her profili en az bir puana eslemeli: "
+        f"eksik={set(RiskProfile) - set(RISK_SURVEY_SCORE_TO_PROFILE.values())}"
+    )
+
+_PROFIL_SIRASI = [
+    RiskProfile.CONSERVATIVE,
+    RiskProfile.BALANCED,
+    RiskProfile.GROWTH,
+    RiskProfile.AGGRESSIVE,
+]
+_gorulen_sira = []
+for _puan in sorted(RISK_SURVEY_SCORE_TO_PROFILE):
+    _profil = RISK_SURVEY_SCORE_TO_PROFILE[_puan]
+    if not _gorulen_sira or _gorulen_sira[-1] is not _profil:
+        _gorulen_sira.append(_profil)
+if _gorulen_sira != _PROFIL_SIRASI:
+    # Puan arttıkça profil de artan risk sırasında ilerlemeli ve bir profile
+    # iki ayrı yerde dönülmemeli; aksi hâlde "puanım arttı ama profilim
+    # muhafazakâra düştü" gibi bir sonuç mümkün olurdu.
+    raise ValueError(f"RISK_SURVEY_SCORE_TO_PROFILE sirasi bozuk: {_gorulen_sira}")
+
+
+def risk_profile_for_survey_score(survey_score: int) -> RiskProfile:
+    """Anket puanından risk profili. Aralık dışı puan `KeyError` verir —
+    doğrulama çağıranın işi (`advice_eligibility.validate_survey_score`)."""
+    return RISK_SURVEY_SCORE_TO_PROFILE[survey_score]
+
+
+def survey_score_band(profile: RiskProfile) -> tuple[int, int]:
+    """Profilin karşılık geldiği puan aralığı (dahil).
+
+    Ters yön tek bir sayı vermez — Muhafazakâr hem 1 hem 2'dir. Bandın
+    kendisini döndürmek, keyfi bir temsilci puan seçmekten dürüst."""
+    puanlar = [p for p, pr in RISK_SURVEY_SCORE_TO_PROFILE.items() if pr is profile]
+    return min(puanlar), max(puanlar)
+
 
 if set(ASSET_CLASS_ADVICE_RISK_LEVEL) != set(AssetClass):
     # Yeni bir varlık sınıfı eklenip bu tabloya yazılmazsa, uygunluk kontrolü
@@ -216,6 +373,17 @@ for _profile, _targets in RISK_PROFILE_TARGET_ALLOCATION.items():
 # --- Senaryo üretimi kısıtları (profil bağımlı) ---
 # Analist notu: tüm değerler Risk/Strateji Ajanı belgesindeki tablolarla
 # birebir aynıdır (Korumacı/Dengeli/Büyüme/Agresif).
+#
+# ÜRÜN SAHİBİ NOTU (2026-08): Bu tablolar (özellikle RISK_MAX_ASSET_WEIGHT ve
+# RISK_MAX_CATEGORY_WEIGHT) şu an yalnızca risk_service.py'nin OKUMA tarafında
+# (kök neden teşhisi, is_within_profile) kullanılıyor. PO kararına göre asıl
+# hedef, kullanıcının profiliyle uyuşmayan bir varlığı zaten SATIN ALAMAMASI
+# — profil önce (anket ile) belirlenir, portföy ona göre kurulur, tersi değil.
+# Bunu şu an burada uygulamıyoruz çünkü projede henüz canlı bir işlem/alım
+# (BUY) endpoint'i yok (yalnızca okuma amaçlı MCP tool'ları var). O endpoint
+# eklendiğinde, işlem kaydı oluşturmadan önce bu tablolara karşı bir doğrulama
+# eklenmesi gerekir (bkz. app/services/ledger_service.record_transaction) —
+# bilinen, kasıtlı bir eksik, şimdilik yalnızca not olarak duruyor.
 
 # Tek varlığın portföy içindeki üst sınırı (oran, 0.20 = %20).
 RISK_MAX_ASSET_WEIGHT: dict[RiskProfile, Decimal] = {
@@ -349,6 +517,7 @@ class AssetSubType(str, Enum):
     TIME_DEPOSIT = "time_deposit"
     DEMAND_DEPOSIT = "demand_deposit"
     GOLD_COIN = "gold_coin"
+    HEDGE_FUND = "hedge_fund"  # SPK "serbest fon" — bkz. universe._FUND_ASSET_CLASS
 
 
 class IngestStatus(str, Enum):
@@ -388,9 +557,21 @@ class Settings(BaseSettings):
     # toplayıcı. Kod değişmiyor, yalnızca .env değişiyor.
     openai_base_url: str = "https://api.openai.com/v1"
     # Bazı yeni nesil modeller `temperature` parametresini reddediyor
-    # (yalnızca varsayılan değeri kabul ediyorlar). Sağlayıcı 400 dönerse
-    # .env'de OPENAI_TEMPERATURE'ı boş bırak: parametre isteğe hiç eklenmez.
-    openai_temperature: float | None = 0.1
+    # (yalnızca varsayılan değeri kabul ediyorlar) — ölçümle doğrulandı:
+    # gerçek sağlayıcıya karşı canlı çağrıda "gpt-5.6-luna" modeli HEM 0.1
+    # HEM 0.0 için "Only the default (1) value is supported" diyerek 400
+    # döndü. Varsayılan bu yüzden None: temperature isteğe hiç eklenmez
+    # (bkz. OpenAIClient._payload — `if self._temperature is not None`).
+    # Modeliniz temperature'ı destekliyorsa .env'de OPENAI_TEMPERATURE'ı
+    # açıkça bir sayıya ayarlayabilirsiniz (ör. 0.0, deterministik niyet
+    # sınıflandırması için tercih edilir).
+    #
+    # DİKKAT: .env'de bu satırı BOŞ DEĞERLE bırakmak (`OPENAI_TEMPERATURE=`)
+    # pydantic-settings'te float parse hatasıyla TÜM UYGULAMAYI ÇÖKERTİR —
+    # `env_parse_none_str` yapılandırılmadığı için boş dize None'a
+    # dönüşmüyor. "Boş bırakmak" istenen davranış için satırın .env'den
+    # TAMAMEN SİLİNMESİ gerekir, boş değerle bırakılması değil.
+    openai_temperature: float | None = None
 
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
@@ -414,11 +595,62 @@ class Settings(BaseSettings):
     # mertebesindedir; RAG ilk çağrıda embedding modelini ve indeksi yükler.
     mcp_tool_timeout_default: float = 10.0
     mcp_tool_timeout_rag: float = 60.0
+    # KAP canlı bildirim sorgusu: RAG'ın aksine embedding modeli yüklemiyor
+    # ama dış siteye HTTP isteği + sayfa ayrıştırma yapıyor (pykap). 60 sn'lik
+    # RAG payına gerek yok, 10 sn'lik varsayılan ise KAP yavaşladığında dar
+    # gelebilir — ikisi arasında ayrı bir değer.
+    mcp_tool_timeout_live_news: float = 20.0
 
     # --- API ---
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_origins: str = "http://localhost:5173"
+
+    # --- Kimlik doğrulama ---
+    # Koda gömülü bir varsayılanı YOK, bilerek (CLAUDE.md: gizli bilgi yalnızca
+    # .env'de). Boş bırakılırsa uygulama hiç başlamaz — sessizce sabit bir
+    # anahtarla çalışıp herkesin token üretebilmesindense açıkça patlaması
+    # daha iyi. Alan `str = ""` olarak tanımlı ve kontrolü aşağıdaki
+    # doğrulayıcı yapıyor; Pydantic'in ham "Field required" hatası yerine ne
+    # yapılması gerektiğini söyleyen bir mesaj verebilmek için.
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    # Bir demo günü. Yenileme (refresh) token'ı kapsam dışı: süre dolunca
+    # kullanıcı yeniden giriş yapar.
+    jwt_expire_minutes: int = 480
+
+    # Geçiş bayrağı. VARSAYILANI True — yani unutulursa auth AÇIK kalır,
+    # kapalı değil. Token göndermeyen eski `frontend/` ile çalışmayı sürdüren
+    # geliştirici bunu kendi .env'inde False yapar. frontend-v2'nin sohbeti
+    # uçtan uca çalışır hale geldiğinde (Faz 3) bu bayrak silinecek.
+    auth_enforce: bool = True
+
+    # Sentetik demo kullanıcılarının ortak şifresi. GİZLİ DEĞİL ve olmamalı:
+    # `make demo-users` çıktısında kullanıcıların T.C. kimlik numaralarıyla
+    # birlikte zaten basılıyor — sentetik veriye erişim anahtarıdır, gerçek
+    # bir sır değil. Giriş ekranı 6 haneli sayısal şifre bekliyor.
+    # Doğrulama yolu buna rağmen tamamen gerçek (bcrypt); yalnızca seed
+    # verisi tekdüze, çünkü 50 ayrı şifreyi ezberlemenin demoya katkısı yok.
+    demo_user_password: str = "460213"
+
+    # --- Şifre yenileme (DEMO) ---
+    #
+    # AKIŞ TEMSİLİDİR: e-posta GÖNDERİLMEZ, kod sunucuda üretilmez ve
+    # saklanmaz — aşağıdaki sabit kod kabul edilir. Şifre ise GERÇEKTEN
+    # güncellenir.
+    #
+    # GÜVENLİK SINIRI, açıkça: bu uç kimlik doğrulaması istemez. T.C. kimlik
+    # numarasını ve bu kodu bilen biri o hesabın şifresini değiştirebilir —
+    # yani kimlik doğrulamasının etrafından dolaşan bir kapıdır. Sentetik
+    # demo verisiyle çalışan, süreli bir gösterim için kabul edildi.
+    # GERÇEK BİR DAĞITIMDA `DEMO_PASSWORD_RESET_ENABLED=false` yapılmalı;
+    # yerine e-posta doğrulaması, sunucuda üretilen tek kullanımlık kod,
+    # süre ve deneme sınırı gerekir.
+    demo_password_reset_enabled: bool = True
+    demo_reset_code: str = "123456"
+    # Arayüzdeki geri sayımın kaynağı; sunucu şu an süreyi denetlemiyor
+    # (kod saklanmadığı için denetlenecek bir şey yok).
+    password_reset_code_ttl_seconds: int = 180
 
     # --- Chat ---
     # Orchestrator'a bağlam olarak geçilen son mesaj sayısı.
@@ -480,9 +712,42 @@ class Settings(BaseSettings):
     macro_news_retention_days: int = 14
 
     # --- Veri katmanı ---
-    # Sentetik üretimin "bugün"ü. date.today() KULLANILMAZ: her seed geçmişi
-    # kaydırırsa "o tarihten bugüne" izlenemez hale gelir (plan kararı 8.5).
-    anchor_date: date = date(2026, 8, 1)
+    # Sentetik üretimin "bugün"ü — SABİT DEĞİL, override.
+    #
+    # Boş bırakılırsa (varsayılan) seed ankrajı gerçek verinin bittiği güne
+    # bağlar; böylece "son işlem" ile "son fiyat" arasında açık kalmaz.
+    # Sabit bir tarih yazılırsa her şeyi ezer: testler ve yeniden üretilebilir
+    # koşular bunu kullanır.
+    #
+    # Çözüm mantığı ve neden sabit tarihten vazgeçildiği: data/anchor.py
+    anchor_date: date | None = None
+
+    @field_validator("anchor_date", mode="before")
+    @classmethod
+    def _bos_ankraj_none_sayilir(cls, deger: object) -> object:
+        """`ANCHOR_DATE=` (boş) -> `None`.
+
+        `.env.example` "boş bırakın" diyor ama boş bir ortam değişkeni
+        pydantic'e `None` değil BOŞ STRING olarak geliyor ve tarih olarak
+        ayrıştırılamayıp uygulamayı hiç başlatmıyordu. Belge bir kullanımı
+        tarif ediyorsa kod onu kabul etmek zorunda; kullanıcıyı satırı yorum
+        satırı yapmaya zorlamak, üstelik hata mesajı bunu hiç söylemezken,
+        gereksiz bir tuzak.
+
+        Yalnızca boşluk içeren değer de aynı sayılır: `.env` düzenlerken
+        sonda kalan boşluk yaygın.
+        """
+        if isinstance(deger, str) and not deger.strip():
+            return None
+        return deger
+
+    # Güncel fiyat bu kadar takvim gününden eskiyse "eski" işaretlenir.
+    # 4 gün: piyasa Cuma kapanır, Pazartesi açılır — Pazar günü sorulan bir
+    # fiyat 2 günlüktür ve normaldir. Araya resmî tatil girdiğinde 3-4 güne
+    # çıkabilir. Bunun üstü, günlük toplama işinin durduğu anlamına gelir ve
+    # kullanıcıya söylenmelidir.
+    current_price_stale_days: int = 4
+
     # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
     # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
     evds_api_key: str | None = None
@@ -544,6 +809,16 @@ class Settings(BaseSettings):
     risk_cause_hhi_low_threshold: float = 0.25
 
     # --- Senaryo üretim motoru ---
+    # ÜRÜN SAHİBİ KARARI (2026-08): yeniden dengeleme senaryo önerisi ürün
+    # kapsamından çıkarıldı — "risk kişinin kendi yatırım eylemidir, profil
+    # uyuşmuyorsa sistem yalnızca uyarır, ne yapılacağını önermez" (bkz. PO
+    # notları). Motor kod olarak DURUYOR (ileride fikir değişirse tek satırla
+    # geri açılabilsin diye) ama bu bayrak False olduğu sürece
+    # get_risk_assessment hiçbir zaman senaryo üretmez — `include_scenarios`
+    # çağıran tarafından True verilse bile. Aksiyon A/B/C mantığına
+    # dokunulmadı, yalnızca bu tek nokta ekiplendi.
+    risk_scenarios_enabled: bool = False
+
     # STEP: her transferin büyüklüğü (puan).
     risk_scenario_step_percent: float = 5.0
     # Yeni açılan bir kategoriye ilk transferde verilecek en az pay (puan).
@@ -577,6 +852,23 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @model_validator(mode="after")
+    def _validate_jwt_secret_key(self) -> "Settings":
+        """Anahtar yoksa uygulamayı açılışta durdurur.
+
+        Alan `str = ""` olarak tanımlı ve kontrol burada yapılıyor; Pydantic'in
+        ham "Field required" hatası yerine ne yapılması gerektiğini söyleyen
+        bir mesaj verebilmek için (bkz. jwt_secret_key tanımındaki not).
+        """
+        if not self.jwt_secret_key.strip():
+            raise ValueError(
+                "JWT_SECRET_KEY tanımlı değil. .env dosyanıza ekleyin: "
+                "JWT_SECRET_KEY=<uzun-rastgele-bir-değer>  "
+                '(üretmek için: python -c "import secrets; '
+                'print(secrets.token_urlsafe(48))")'
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_risk_scenario_score_weights(self) -> "Settings":
         total = self.risk_scenario_score_risk_weight + self.risk_scenario_score_turnover_weight
         if abs(total - 1.0) > 1e-9:
@@ -593,3 +885,22 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+# Türkiye 2016'dan beri kalıcı olarak UTC+3; yaz saati uygulaması yok.
+# Sabit fark kullanmak `zoneinfo`'ya (ve Windows'ta `tzdata` paketine)
+# bağımlılığı ortadan kaldırıyor ve bu ülke için sonucu birebir aynı.
+TURKEY_UTC_OFFSET = timezone(timedelta(hours=3))
+
+
+def turkey_today() -> date:
+    """Türkiye saatiyle bugünün tarihi.
+
+    Sunucu UTC çalışıyor. `date.today()` kullanılsaydı gece yarısı ile 03:00
+    arasında ekranda ve sohbette DÜNÜN tarihi görünürdü — Türkçe bir finans
+    ürününde kullanıcının takvimi esas alınmalı.
+
+    `settings.anchor_date` ile KARIŞTIRILMAMALI: o, sentetik verinin donmuş
+    "bugün"üdür ve yalnızca üretim/seed tarafını ilgilendirir. Kullanıcıya
+    bugünün ne olduğunu söyleyen tek doğru kaynak burasıdır.
+    """
+    return datetime.now(TURKEY_UTC_OFFSET).date()

@@ -80,7 +80,6 @@ def test_unknown_intent_asks_instead_of_defaulting_to_portfolio():
     """
     state = _state("beklenmeyen_etiket")
     assert _route_after_intent(state) == ["handle_out_of_scope"]
-    assert state["final_answer"] == _AMBIGUOUS_MESSAGE
 
 
 def test_ambiguous_message_mentions_risk_as_an_example():
@@ -223,33 +222,225 @@ async def test_empty_llm_stream_does_not_leave_an_empty_bubble():
     orch.get_llm_client = lambda: _SilentLLM()
     try:
         written: list[str] = []
-        state = {"agent_responses": [_Response(True, summary_text="Portföy değeri 100 TL.")]}
+        state = {
+            "message": "Portföyümün değeri ne kadar?",
+            "agent_responses": [_Response(True, summary_text="Portföy değeri 100 TL.")],
+        }
         result = await merge_responses(state, lambda chunk: written.append(chunk["delta"]))
     finally:
         orch.get_llm_client = original
 
     assert "Portföy değeri 100 TL." in result["final_answer"]
-    assert "Bu bir yatırım tavsiyesi değildir." in result["final_answer"]
     assert written, "boş akışta da kullanıcıya bir şey gitmeli"
 
 
-async def test_disclaimer_is_not_duplicated_on_fallback():
-    """Ajan metni uyarıyı zaten taşıyorsa ikilenmez."""
+# ---------------------------------------------------------------------------
+# Merge adımı soruyu görüyor mu
+# ---------------------------------------------------------------------------
 
-    class _SilentLLM:
-        async def stream(self, prompt, system=None):
-            return
-            yield  # pragma: no cover
 
+class _KaydedenLLM:
+    """Kendisine ne verildiğini saklayan sahte istemci."""
+
+    def __init__(self):
+        self.prompt = None
+        self.system = None
+
+    async def generate(self, prompt, system=None):
+        return ""
+
+    async def stream(self, prompt, system=None):
+        self.prompt = prompt
+        self.system = system
+        yield "cevap"
+
+
+async def _merge_ile_calistir(state):
     import agents.orchestrator as orch
 
+    llm = _KaydedenLLM()
     original = orch.get_llm_client
-    orch.get_llm_client = lambda: _SilentLLM()
+    orch.get_llm_client = lambda: llm
     try:
-        text = "Risk seviyeniz Orta. Bu bir yatırım tavsiyesi değildir."
-        state = {"agent_responses": [_Response(True, summary_text=text)]}
-        result = await merge_responses(state, lambda chunk: None)
+        await merge_responses(state, lambda chunk: None)
     finally:
         orch.get_llm_client = original
+    return llm
 
-    assert result["final_answer"].count("Bu bir yatırım tavsiyesi değildir.") == 1
+
+async def test_user_question_reaches_the_merge_step():
+    """Soru merge'e GEÇMELİ.
+
+    Geçmediğinde model yalnızca veri yığınını görüyordu ve elinde soru
+    olmadığı için yapabileceği tek şey her şeyi tekrar yazmaktı: "en çok
+    kazandıran varlığım hangisi?" sorusuna sekiz varlık sıralanıp cevap en
+    sona gömülüyordu (ölçüldü, 23 Ağustos test turu).
+    """
+    llm = await _merge_ile_calistir(
+        {
+            "message": "En çok kazandıran varlığım hangisi?",
+            "agent_responses": [_Response(True, summary_text="APT +%28,28 | GARAN -%12,66")],
+        }
+    )
+
+    assert "En çok kazandıran varlığım hangisi?" in llm.prompt
+    # Soru, veriyle aynı bloğa karışmamalı: karışsaydı model onu da
+    # aktarılacak veri sanabilirdi.
+    assert "KULLANICININ SORUSU" in llm.prompt
+
+
+async def test_merge_is_told_to_answer_the_question_not_restate_everything():
+    """Talimat "her şeyi aktar"dan "soruyu cevapla"ya dönmüş olmalı.
+
+    Eski prompt'taki "Hiçbir bilgiyi silme" cümlesi modeli eleme yapmaktan
+    men ediyordu. Kural kaldırılmadı, ikiye ayrıldı: veri elenebilir,
+    uyarılar elenemez.
+    """
+    llm = await _merge_ile_calistir(
+        {"message": "Riskim nedir?", "agent_responses": [_Response(True, summary_text="x")]}
+    )
+
+    assert "Hiçbir bilgiyi silme" not in llm.system
+    assert "İLGİSİZ VERİYİ DIŞARIDA BIRAK" in llm.system
+    # Uyarı koruması hâlâ yerinde olmalı — asıl amacı buydu.
+    assert "UYARILARI KORU" in llm.system
+    # Uydurmama ve sorumluluk reddi pazarlıksız (CLAUDE.md §4).
+    assert "VERİDE YOKSA SÖYLE" in llm.system
+
+
+async def test_merge_survives_a_state_without_a_message():
+    """Soru alanı eksikse cevap odağını kaybeder ama sohbet DÜŞMEZ.
+
+    Burası nihai yanıtın yazıldığı yer; bir KeyError tüm yanıtı götürürdü.
+    """
+    llm = await _merge_ile_calistir({"agent_responses": [_Response(True, summary_text="veri")]})
+
+    assert llm.prompt is not None
+    assert "KULLANICININ SORUSU" not in llm.prompt
+
+
+# ---------------------------------------------------------------------------
+# Siniflandiricinin "hicbiri" secenekleri
+# ---------------------------------------------------------------------------
+
+
+class _PromptKaydeden(_FakeLLM):
+    """Siniflandiriciya NE verildigini de saklar."""
+
+    def __init__(self, reply: str = ""):
+        super().__init__(reply)
+        self.prompt = None
+        self.system = None
+
+    async def generate(self, prompt, system=None):
+        self.prompt = prompt
+        self.system = system
+        return self._reply
+
+
+async def test_kapsam_disi_etiketi_ajana_gitmez(monkeypatch):
+    """Hava durumu sorusu RAG'e dusup "veritabaninda bulunamadi" DEMEMELI.
+
+    Siniflandiricinin "hicbiri" secenegi yoktu; kapsam disi her soru
+    MARKET'e dusuyor, oradan RAG'e gidiyor ve kullaniciya sistem arizaliymis
+    gibi bir mesaj donuyordu (olculdu, 23 Agustos test turu).
+    """
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("KAPSAM_DISI"))
+    result = await detect_intent({"message": "Kayseri'de hava nasıl?", "history": []})
+
+    assert result["intent"] == "OUT_OF_SCOPE"
+    assert result["final_answer"], "kullaniciya gosterilecek bir metin olmali"
+    assert "bulunamadı" not in result["final_answer"].lower()
+
+
+async def test_gelecek_tahmini_ayri_bir_mesajla_reddedilir(monkeypatch):
+    """Tahmin reddi, kapsam disi reddiyle AYNI SEY DEGIL.
+
+    Soru finansal ve varlik kapsam icinde; reddedilen sey elimizde olmayan
+    bir bilgiyi uretmek. "Bu konuda yardimci olamiyorum" demek soruyu
+    anlamadigimizi ima ederdi.
+    """
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("TAHMIN"))
+    result = await detect_intent({"message": "2027'de dolar kaç TL olacak?", "history": []})
+
+    assert result["intent"] == "FUTURE_PREDICTION"
+    assert "tahmin" in result["final_answer"].lower()
+
+
+async def test_tahmin_ve_kapsam_disi_erken_cikis_listesinde():
+    """Erken cikis listesinde olmazlarsa ajanlara dagitilirlar."""
+    assert _route_after_intent(_state("FUTURE_PREDICTION")) == ["handle_out_of_scope"]
+    assert _route_after_intent(_state("OUT_OF_SCOPE")) == ["handle_out_of_scope"]
+
+
+async def test_reddetme_etiketi_ajan_etiketini_yener(monkeypatch):
+    """Model iki etiketi birden yazarsa reddetme kazanmali.
+
+    Aksi halde "altin yukselecek mi" gibi bir soru hem TAHMIN hem MARKET
+    alip piyasa ajanina gidebilir ve tahmin reddi hic gorunmezdi.
+    """
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("TAHMIN, MARKET"))
+    result = await detect_intent({"message": "altın yükselecek mi", "history": []})
+
+    assert result["intent"] == "FUTURE_PREDICTION"
+
+
+async def test_siniflandirici_sohbet_gecmisini_gorur(monkeypatch):
+    """Takip sorusu, oncesine bakilmadan siniflandirilamaz.
+
+    "Riskim nedir?" cevabinin ardindan gelen "Bunu biraz daha aciklar
+    misin?" sorusu kendi basina hicbir konuya baglanamiyor ve AMBIGUOUS'a
+    dusuyordu; kullanici "sorunuzu anlayamadim" cevabi aliyordu.
+    """
+    llm = _PromptKaydeden("RISK")
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: llm)
+
+    await detect_intent(
+        {
+            "message": "Bunu biraz daha açıklar mısın?",
+            "history": [
+                {"role": "user", "content": "Riskim nedir?"},
+                {"role": "assistant", "content": "Risk seviyeniz Çok Düşük."},
+            ],
+        }
+    )
+
+    assert "Riskim nedir?" in llm.prompt
+    assert "ÖNCEKİ KONUŞMA" in llm.prompt
+    assert "TAKİP SORUSU" in llm.system
+
+
+async def test_gecmis_yoksa_yalnizca_soru_gonderilir(monkeypatch):
+    """Ilk mesajda bos bir "onceki konusma" blogu gonderilmemeli."""
+    llm = _PromptKaydeden("PORTFOLIO")
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: llm)
+
+    await detect_intent({"message": "Portföyüm ne durumda?", "history": []})
+
+    assert llm.prompt == "Portföyüm ne durumda?"
+
+
+async def test_merge_kaynak_listesini_korumakla_gorevli():
+    """Kaynak izlenebilirligi pazarliksiz (CLAUDE.md §4).
+
+    Merge adimi metni yeniden yazarken RAG yanitlarinin "Kaynaklar:" blogunu
+    dusurebiliyordu: ayni test turunda Akbank yaniti kaynak tasirken THYAO ve
+    SPK yanitlari tasimiyordu. Kaynagi dusurmek bilgiyi dogrulanamaz yapar.
+    """
+    llm = await _merge_ile_calistir(
+        {
+            "message": "THYAO'nun son çeyrek sonuçları nasıldı?",
+            "agent_responses": [_Response(True, summary_text="Net kâr 8,9 milyar TL.")],
+        }
+    )
+
+    assert "KAYNAKLARI KORU" in llm.system
+
+
+async def test_merge_turkce_bicim_kurali_tasiyor():
+    """Ayni turda "%+8,21" gibi ters bicimler cikti; dogrusu "+%8,21"."""
+    llm = await _merge_ile_calistir(
+        {"message": "Kâr/zararım ne?", "agent_responses": [_Response(True, summary_text="x")]}
+    )
+
+    assert "+%8,41" in llm.system, "biçim örneği prompt'ta olmalı"

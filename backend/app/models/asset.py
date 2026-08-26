@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import AssetClass, PriceSource
@@ -22,6 +22,10 @@ class Asset(UUIDMixin, CreatedAtMixin, Base):
             "(data_source = 'derived') = "
             "(derived_from_asset_id IS NOT NULL AND derived_factor IS NOT NULL)",
             name="ck_assets_derived_consistency",
+        ),
+        CheckConstraint(
+            "risk_level IS NULL OR (risk_level BETWEEN 1 AND 7)",
+            name="ck_assets_risk_level_range",
         ),
     )
 
@@ -59,6 +63,23 @@ class Asset(UUIDMixin, CreatedAtMixin, Base):
         ForeignKey("assets.id"), nullable=True
     )
     derived_factor: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    # --- Uygunluk risk seviyesi (1-7) ---
+    #
+    # Anket puanı bu seviyenin ALTINDA kalan kullanıcı bu varlığı ne tavsiye
+    # alabilir ne de uyumlu biçimde tutabilir
+    # (`services/advice_eligibility`). İleride alım/satım engeli ve risk
+    # ajanı bu bilgiyi kullanacak; ikisi de veriye DB üzerinden bakıyor.
+    #
+    # TÜREV KOPYA. Tanım noktası `providers/universe.py`
+    # (`AssetSpec.risk_level` + sınıf varsayılanı); `seed_assets` her koşuda
+    # bu sütunu koddan yeniden yazar. Buraya elle yazmayın — bir sonraki
+    # seed/backfill üzerine yazar. Ayrışma olursa `scripts/data_doctor`
+    # bildirir.
+    #
+    # NULLABLE: evrenden çıkarılıp pasife çekilmiş eski semboller için
+    # anlamlı bir seviye yok. AKTİF varlıkta NULL olmaması bir değişmezdir
+    # ve testle korunur (kısıtla değil — pasif satırlar aynı sütunda).
+    risk_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     price_history: Mapped[list["PriceHistory"]] = relationship(back_populates="asset")
     holdings: Mapped[list["Holding"]] = relationship(back_populates="asset")

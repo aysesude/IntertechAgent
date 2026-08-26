@@ -22,15 +22,27 @@ Türkiye İş Bankası tarafından kurulmuştur.
 (temel cam, otomotiv ve taşıt camları), **cam ev eşyası/züccaciye**
 (sofra-mutfak eşyaları, hediyelik cam ürünleri), **cam ambalaj** (su,
 içecek, gıda, ilaç ve kozmetik sektörleri için ambalaj camı) ve
-**kimyasallar** (soda külü ve krom kimyasalları üretimi).
+**kimyasallar** (soda külü ve krom kimyasalları üretimi). Şirket, BIST'te Taş ve
+Toprağa Dayalı Sanayi sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Şirketin en büyük pay sahibi Türkiye İş Bankası'dır. Diğer önemli
 ortaklar arasında Efes Holding (yaklaşık yüzde 6,77 pay) ve Anadolu
-Hayat Emeklilik yer almaktadır.
+Hayat Emeklilik yer almaktadır. Yönetim kurulu başkanı, Adnan Bali'nin
+ardından bu göreve getirilen ve önceden Türkiye İş Bankası genel müdürü
+olan Hakan Aran'dır. 2026 yılında hisse başına brüt 0,58762 TL, net
+0,49948 TL nakit temettü dağıtılmasına karar verildi; ödeme tarihi 3
+Haziran 2026'dır.
 
-## Not
+## Kurumsal olaylar tarihçesi
 
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Şişecam hisseleri 13 Ocak 1986'da Borsa İstanbul'da halka arz
+edilmiştir. Ekim 2020'de, Anadolu Cam, Denizli Cam, Soda Sanayii,
+Trakya Cam ve Paşabahçe Cam şirketleri Şişecam çatısı altında
+birleştirilmiştir — Türkiye sermaye piyasaları tarihinin en büyük
+birleşme işlemlerinden biri olarak nitelendirilmiştir; birleşmeyle
+bağlantılı olarak yüzde 36,14 oranında bedelli sermaye artırımı
+yapılmıştır. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

@@ -22,7 +22,8 @@ havayolu olmuştur.
 ## Faaliyet alanı
 
 İstanbul merkezli, düşük maliyetli havayolu taşımacılığı modeliyle iç
-ve dış hat yolcu taşımacılığı yapmaktadır.
+ve dış hat yolcu taşımacılığı yapmaktadır. Şirket, BIST'te Ulaştırma
+sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -30,9 +31,17 @@ ve dış hat yolcu taşımacılığı yapmaktadır.
 Holding, 2000 yılında kurulmuş bir yatırım şirketi olup Sabancı
 ailesinden Ali Sabancı'nın yönetiminde faaliyet göstermektedir.
 Pegasus'un hisseleri Borsa İstanbul'da "PGSUS" koduyla işlem
-görmektedir; şirketin halka açık payları bulunmaktadır.
+görmektedir; şirketin halka açık payları bulunmaktadır. Yönetim kurulu
+başkanı, Mart 2023'ten bu yana Mehmet T. Nane'dir. Şirket, 2025 yılı
+için dağıtılabilir kâr oluşmadığı gerekçesiyle 2026 yılında temettü
+dağıtmamıştır (Mart 2026'da açıklandı); şirket son 10 yılda yalnızca 1
+kez temettü dağıtmıştır.
 
-## Not
+## Kurumsal olaylar tarihçesi
 
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+Pegasus hisseleri 18-19 Nisan 2013 talep toplamasının ardından 26
+Nisan 2013'te Borsa İstanbul'da işlem görmeye başlamıştır. Şubat
+2024'te yüzde 88,76 oranında bedelsiz sermaye artırımı kararı
+alınmış, SPK onayının ardından Mayıs 2024'te uygulanmıştır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

@@ -1,7 +1,131 @@
 # API Sözleşmesi
 
 Şemaların tanımlı olduğu yer: `backend/app/schemas/`. Frontend tipleri
-(`frontend/src/types/`) bunlarla birebir eşleşmelidir.
+(`frontend-v2/src/api/`) bunlarla birebir eşleşmelidir.
+
+## Kimlik doğrulama (FR-0 / AK 5.4)
+
+`/health` ve `POST /api/auth/login` DIŞINDAKİ tüm uçlar `Authorization: Bearer
+<token>` başlığı ister. Kullanıcıya özel uçlar ayrıca yoldaki/gövdedeki
+`user_id`'nin token sahibiyle aynı olmasını şart koşar.
+
+| Kod | Anlamı | Arayüz ne yapmalı |
+|---|---|---|
+| `401` | Token yok, bozuk ya da süresi dolmuş | Giriş ekranına dön |
+| `403` | Token geçerli ama bu veri başkasının | "Erişim yetkiniz yok" göster |
+
+Kimlik, yol imzalarını değiştirmedi (`/api/portfolio/{user_id}` aynı kaldı):
+`/me` kalıbına geçmek MCP tool'larını, ajanları ve bu dokümanı topluca
+kırardı. Yoldaki değer artık yalnızca **doğrulanan bir iddiadır**.
+
+### `POST /api/auth/login`
+
+```json
+{ "national_id": "20433218148", "password": "460213" }
+```
+
+```json
+{
+  "access_token": "<imzalı JWT>",
+  "token_type": "bearer",
+  "expires_in": 28800,
+  "user": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "full_name": "Elif Yıldırım",
+    "risk_profile": "balanced"
+  }
+}
+```
+
+Örnekte gerçek bir token yok: gitleaks JWT biçimli dizeleri sızmış kimlik
+bilgisi sayıp CI'ı kırıyor (ölçüldü, `.github/workflows/ci.yml`).
+
+- **Hatalı kimlik ile hatalı şifre AYNI 401'i döner** (`"T.C. kimlik numarası
+  veya şifre hatalı."`). Ayrıştırılsaydı hangi numaraların kayıtlı olduğu tek
+  tek denenerek çıkarılabilirdi. Kullanıcı bulunamadığında bile bir kukla
+  bcrypt doğrulaması yapılır — yanıt süresinden de bilgi sızmasın diye.
+- `expires_in` saniyedir ve sunucudan gelir; istemci kendi süre hesabını
+  yapmamalıdır.
+- `user` aynı yanıtta döner ki arayüz giriş sonrası ikinci bir istek atmasın.
+- Yanıt **e-posta ve T.C. kimlik numarası içermez**: arayüzün ikisine de
+  ihtiyacı yok.
+- 11 haneden farklı bir numara `422` ile reddedilir. Sağlama (checksum)
+  doğrulaması BİLEREK yapılmaz — geçersiz numara zaten eşleşmez ve ayrı bir
+  hata "bu numara kayıtlı mı" sorusuna dolaylı cevap verirdi.
+
+**Demo kullanıcıları:** T.C. kimlik numaraları `make seed` ile deterministik
+olarak üretilir (sağlaması geçerli), şifre `.env`'deki `DEMO_USER_PASSWORD`'dür
+ve hepsinde aynıdır. Listeyi görmek için: `make demo-users`.
+
+Kayıt, şifre değiştirme ve şifre sıfırlama uçları **yoktur**. Çıkış (logout)
+ucu da yoktur ve gerekmez: token durumsuzdur, çıkış istemcinin token'ı
+silmesidir.
+
+### Şifre yenileme (DEMO akışı)
+
+**TEMSİLİ olan:** e-posta gönderilmez, kod sunucuda üretilmez ve saklanmaz —
+`DEMO_RESET_CODE` ile eşleşen sabit kod kabul edilir.
+**GERÇEK olan:** şifre bcrypt ile özetlenip veritabanına yazılır; kullanıcı
+bundan sonra yeni şifresiyle giriş yapar, eskisiyle yapamaz.
+
+#### `POST /api/auth/password-reset/request`
+
+```json
+{ "national_id": "20433218148" }
+```
+
+```json
+{ "code_length": 6, "expires_in_seconds": 180 }
+```
+
+- Kimliğin **kayıtlı olup olmadığına bakmadan** aynı yanıtı döner; aksi halde
+  bu uç, hangi numaraların sistemde olduğunu tek tek denemeye açık bir araca
+  dönüşürdü (giriş ucundaki gerekçenin aynısı).
+- **Kodun kendisi dönmez.** Yanıt yalnızca arayüzün alan uzunluğunu ve geri
+  sayımı sabit yazmaması için bu iki değeri taşır.
+
+#### `POST /api/auth/password-reset/complete`
+
+```json
+{ "national_id": "20433218148", "code": "123456", "new_password": "778899" }
+```
+
+Başarıda `204` (gövde yok). Hatalı kimlik ile hatalı kod **aynı `401`'i** döner.
+
+- `new_password` **6 haneli ve yalnızca rakam** olmak zorunda: giriş ekranının
+  kabul ettiği biçim bu. Aksi halde kullanıcı, sonradan giriş yapamayacağı bir
+  şifre belirlerdi.
+- Kod karşılaştırması sabit zamanlı (`secrets.compare_digest`).
+
+**⚠️ GÜVENLİK SINIRI.** Bu uçlar kimlik doğrulaması İSTEMEZ: T.C. kimlik
+numarasını ve kodu bilen biri o hesabın şifresini değiştirebilir — kimlik
+doğrulamasının etrafından dolaşan bir kapıdır. Sentetik demo verisiyle çalışan,
+süreli bir gösterim için kabul edildi. Gerçek bir dağıtımda
+`DEMO_PASSWORD_RESET_ENABLED=false` yapılmalı (uçlar `404` döner).
+
+**Bilinen sınır:** yenileme sonrası eski token'lar geçersizleşmez. Bunun için
+token kara listesi ya da özete bağlı bir doğrulama gerekir; 8 saatlik demo
+token'ı için karşılığı olmayan bir karmaşıklık.
+
+### `GET /api/auth/me`
+
+Token'ın hâlâ geçerli olup olmadığını ve kime ait olduğunu döner (`AuthUser`
+gövdesi, yukarıdaki `user` alanıyla aynı). Arayüz sayfa yenilendiğinde bunu
+çağırır. Token yoksa `401` + `WWW-Authenticate: Bearer`.
+
+### Geçiş bayrağı: `AUTH_ENFORCE`
+
+Varsayılanı `true` — unutulursa auth **açık** kalır. `false` iken token
+GÖNDERMEYEN istekler geçer (token gönderilirse yine doğrulanır).
+
+**Bu bayrağın varlık sebebi kalmadı.** Tek gerekçesi, token göndermeyen eski
+`frontend/` ile çalışmayı sürdürebilmekti; o arayüz kaldırıldı ve tek arayüz
+olan `frontend-v2` her istekte token gönderiyor.
+
+Silinmesi AYRI bir iş olarak bırakıldı, arayüz kaldırma işine eklenmedi:
+bayrak güvenlik davranışını değiştiriyor ve bir ortamın `.env`'inde `false`
+duruyorsa silmek o ortamda auth'u aniden zorunlu kılar. Kaldırmadan önce her
+ortamda değerinin `true` olduğu doğrulanmalı.
 
 ## REST
 
@@ -34,6 +158,13 @@ değerler, dolayısıyla tek bir tarih tüm portföyü tarif etmez. `as_of` en
 yenisini, `oldest_price_date` en eskisini verir. **İkisi farklıysa arayüz
 bunu belirtmelidir** — yalnızca `as_of` gösterilirse özet olduğundan taze
 görünür. Hiç fiyatlı varlık yoksa `oldest_price_date` `null` döner.
+
+**`oldest_price_date` yalnızca PİYASA fiyatı olan varlıkları sayar.** Mevduatın
+birim fiyatı tanımı gereği 1 TL'dir ve hiç güncellenmez; hesaba katıldığında
+tazelik uyarısı HER kullanıcıda kalıcı olarak çıkıyordu (ölçüldü: `as_of`
+21.08 iken `oldest` 31.07). Mevduat eskimiyor, sabit — uyarının anlamlı
+kalması için yalnızca gerçekten geride kalabilecek varlıklara bakılıyor
+(`assets.sub_type` ile ayırt ediliyor).
 
 **İki taban vardır, karıştırılmamalıdır:**
 
@@ -241,6 +372,124 @@ Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
   raporlanır. Hepsi birden boşsa `409`.
 - `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
   çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
+
+### Kullanıcı risk profili ve anket puanı
+
+Projedeki tek YAZAN uç ailesi; geri kalan her REST ucu salt okur. Dördü de
+`verify_user_access` ister (AK 5.4) — başkasının profilini okumak ya da
+değiştirmek, tüm risk ve uygunluk değerlendirmesinin dayandığı beyanı ele
+geçirmek olurdu.
+
+**İKİ ÖLÇEK YAN YANA, biri yetkili:**
+
+| | Ne | Kim kullanıyor |
+|---|---|---|
+| `risk_survey_score` | **1-7**, şartnamenin anket puanı | uygunluk kontrolü (`advice_eligibility`) |
+| `risk_profile` | 4 kademe, puandan **türer** | risk motoru (`risk_service`) tabloları |
+
+Eşleme: **1-2** Muhafazakâr · **3-4** Dengeli · **5** Büyüme · **6-7** Agresif.
+Bantlar varlık merdiveniyle hizalı — her profil, kendi bandının açtığı varlık
+kümesiyle örtüşür.
+
+#### `GET /api/users/{user_id}/risk-survey`
+
+```json
+{
+  "user_id": "...",
+  "risk_survey_score": 5,
+  "risk_profile": "growth",
+  "score_band": [5, 5],
+  "score_min": 1,
+  "score_max": 7
+}
+```
+
+- `risk_survey_score` **`null` olabilir**: kullanıcı anketi hiç doldurmamıştır.
+  Bu durumda `score_band` da `null` olur ama `risk_profile` yine dolu döner.
+  Uydurulmuş bir puan döndürmek, verilmemiş bir cevabı verilmiş göstermek
+  olurdu (AK 5.5).
+- `score_min`/`score_max` yanıtın içinde: **arayüz anket ölçeğini kendi
+  tarafında sabit yazmasın.**
+- `score_band` puanın karşılık geldiği profilin tüm aralığı — arayüz
+  "Muhafazakâr (1-2 puan)" gösterebilsin diye.
+
+#### `PUT /api/users/{user_id}/risk-survey`
+
+```json
+{ "risk_survey_score": 5 }
+```
+
+Anket ekranının yazması gereken uç budur. Puanı kaydeder **ve profili ondan
+türetir**; ikisi tek işlemde yazılır. İdempotent. Aralık dışı puan `422`.
+
+#### `GET` / `PUT /api/users/{user_id}/risk-profile`
+
+Profili doğrudan okur/yazar (`{"risk_profile": "balanced"}`). Yanıt ayrıca
+`available_profiles` taşır ki arayüz seçenekleri sabit yazmasın.
+
+> **`PUT /risk-profile` kayıtlı anket puanını SİLER.** Profil artık türev bir
+> alan; doğrudan yazılması "elle geçersiz kılma" demektir ve elde duran puan
+> o değişikliği açıklamaz. Puan bırakılsaydı birbirini tutmayan iki cevap
+> saklanırdı: puan 6 (Agresif) derken profil Muhafazakâr görünürdü.
+
+**Ajana açılmadı, açılmamalı.** `agents/scope.yaml` alım/satım/değiştirme
+fiillerini `UNAUTHORIZED_ACTION` sayıyor; sohbet üzerinden bir modelin risk
+profilini değiştirebilmesi, prompt enjeksiyonuyla ("artık agresif
+profildesin") kullanıcının beyan ettiği risk toleransının ele geçirilmesi
+demek olurdu.
+
+**Açık iş:** risk ajanı hâlâ profilden türetilen GEÇİCİ bir puan kullanıyor
+(`agents/risk_agent._DUMMY_SURVEY_SCORE_BY_PROFILE`). Gerçek puanın ajana
+bağlanması ayrı bir iştir — risk ajanına bu turda dokunulmadı.
+
+### `GET /api/risk/{user_id}?profile_override=`
+
+7 kademeli risk seviyesi, yıllık volatilite, VaR, Sharpe, yoğunlaşma ve
+çeşitlendirme metrikleri; volatilite profilin beklenen bandının üzerindeyse
+kök neden teşhisi (`causes`) da gelir.
+
+```json
+{
+  "risk_level": "medium_high",
+  "is_within_profile": false,
+  "risk_profile": "conservative",
+  "risk_profile_source": "user",
+  "risk_survey_score": 2,
+  "metrics": {
+    "annualized_volatility_percent": 24.31,
+    "value_at_risk_try": 6968.0, "value_at_risk_percent": 0.44,
+    "value_at_risk_confidence": 95.0, "value_at_risk_horizon_days": 1,
+    "sharpe_ratio": -6.74, "risk_free_rate_percent": 37.0,
+    "max_asset_symbol": "PPF", "max_asset_weight_percent": 24.17,
+    "price_points_used": 260
+  },
+  "warnings": [],
+  "disclaimer": "Bu bir yatırım tavsiyesi değildir. …"
+}
+```
+
+- **0-100 kompozit skor YOK.** Risk v2 onu bilerek kaldırdı; seviye yalnızca
+  volatiliteden gelir, yoğunlaşma/çeşitlendirme skora karışmaz (onlar teşhiste
+  kullanılır). Arayüz skor uydurmamalı.
+- `risk_survey_score` kullanıcının anket puanıdır (1-7) ve `risk_profile`
+  ondan türer; arayüzün "Risk Profili" kartı bunu gösteriyor, bu yüzden ayrı
+  bir uç çağırmasın diye burada taşınıyor. **`null` olabilir:** anket
+  doldurulmamıştır ya da sonuç `profile_override` ile hesaplanmıştır — o
+  senaryoda profil kullanıcının beyanı olmadığı için puan bilerek düşürülür.
+- **Yeterli fiyat geçmişi yoksa `risk_level` ve metrikler `null` döner**,
+  tahmini bir değerle doldurulmaz (AK 2.7 / 5.5). Sebep `warnings`'te yazar.
+  Arayüz bu durumda "hesaplanamadı" göstermeli — `0` göstermek "riskiniz yok"
+  demek olurdu.
+- `profile_override` "ya agresif olsaydım?" senaryosudur: hesap o profile göre
+  yapılır ama kullanıcının **kayıtlı profili değişmez** (`risk_profile_source`
+  `override` döner).
+- `scenarios` ürün sahibi kararıyla kapalıdır: risk yalnızca tespit/uyarı
+  içindir, ne yapılacağını önermek kapsam dışı.
+- Bu uç da **ajan çağırmaz**, servisi doğrudan okur.
+
+**Bilinen konu:** risksiz faiz %37 olduğu için muhafazakâr portföylerde Sharpe
+sistematik olarak negatif çıkıyor. Analist onayı bekliyor; arayüzde bağlamsız
+gösterilmemeli.
 
 ### `POST /api/chat` (SSE, `text/event-stream`)
 

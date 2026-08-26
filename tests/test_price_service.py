@@ -101,3 +101,61 @@ def test_resolve_granularity_follows_window_but_respects_explicit_choice():
     assert resolve_granularity(TimeWindow.M12, Granularity.AUTO) is Granularity.WEEKLY
     # Risk tarafi DAILY istemek zorunda; acik secim ezilmez.
     assert resolve_granularity(TimeWindow.M12, Granularity.DAILY) is Granularity.DAILY
+
+
+# ---------------------------------------------------------------------------
+# get_current_prices — "dolar ne kadar?" sorusunun kaynagi
+# ---------------------------------------------------------------------------
+
+
+def test_guncel_fiyat_son_kapanisi_kaynagiyla_birlikte_dondurur(price_fixture, db_session):
+    from app.services.price_service import get_current_prices
+
+    sonuc = get_current_prices(db_session, ["TST"])
+
+    assert len(sonuc.prices) == 1
+    fiyat = sonuc.prices[0]
+    assert fiyat.symbol == "TST"
+    # Serideki EN SON gun (2026-01-09), ilk gun degil.
+    assert fiyat.price_date == GUNLER[-1]
+    # Kaynak yazilmali: kullanici rakamin resmi mi uretilmis mi oldugunu
+    # gorebilmeli (AK 5.1).
+    assert fiyat.source
+
+
+def test_eski_fiyat_GIZLENMEZ_eskiligi_soylenir(price_fixture, db_session):
+    """Zarif dusus: eldeki en iyi veriyi eskiligini soyleyerek vermek,
+    hic vermemekten iyidir. Fiyat gizlenseydi kullanici "veri yok" sanardi.
+    """
+    from app.services.price_service import get_current_prices
+
+    fiyat = get_current_prices(db_session, ["TST"]).prices[0]
+
+    # Fixture 2026 Ocak tarihli; bugunden cok eski.
+    assert fiyat.stale is True
+    assert fiyat.age_days > 0
+    assert fiyat.price is not None, "eski fiyat yine de DONMELI"
+
+
+def test_taninmayan_sembol_digerlerini_engellemez(price_fixture, db_session):
+    """Kismi sonuc hata degil — ama eksik olan SOYLENIR (AK 5.5)."""
+    from app.services.price_service import get_current_prices
+
+    sonuc = get_current_prices(db_session, ["TST", "YOKBOYLEBIRSEY"])
+
+    assert [f.symbol for f in sonuc.prices] == ["TST"]
+    assert sonuc.unknown_symbols == ["YOKBOYLEBIRSEY"]
+
+
+def test_hicbir_sembol_taninmazsa_not_found(price_fixture, db_session):
+    from app.services.price_service import get_current_prices
+
+    with pytest.raises(NotFoundError):
+        get_current_prices(db_session, ["YOK1", "YOK2"])
+
+
+def test_bos_sembol_listesi_reddedilir(price_fixture, db_session):
+    from app.services.price_service import get_current_prices
+
+    with pytest.raises(ValidationAppError):
+        get_current_prices(db_session, [])

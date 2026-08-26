@@ -18,7 +18,8 @@ BİM Birleşik Mağazalar A.Ş., 1995 yılında kurulmuştur. Şirket merkezi
 ## Faaliyet alanı
 
 Türkiye merkezli bir indirim marketleri zinciri olarak gıda ve temel
-tüketim ürünlerinin perakende ticaretini yapmaktadır.
+tüketim ürünlerinin perakende ticaretini yapmaktadır. Şirket, BIST'te
+Perakende Ticaret sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -31,9 +32,16 @@ olarak işlem görmektedir.
 ## Halka arz geçmişi
 
 Şirket 2005 yılında halka açılmış, o tarihten bu yana Borsa İstanbul'da
-işlem görmektedir.
+işlem görmektedir. Yönetim kurulu başkanı, 5 Mayıs 2026 tarihli olağan
+genel kurul toplantısı sonrası atanan Mahmud Muhammed Topbaş'tır. 2026
+yılında hisse başına toplam brüt 14 TL, net 11,9 TL nakit temettü üç
+taksitte (17 Haziran, 16 Eylül, 16 Aralık) dağıtılmasına karar verildi.
 
-## Not
+## Kurumsal olaylar tarihçesi
 
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+19-20 Şubat 2026'da yönetim kurulu yüzde 100 oranında bedelsiz sermaye
+artırımı kararı almış (600 milyon TL'den 1,2 milyar TL'ye); SPK onayı
+7 Mayıs 2026'da, hak kullanım başlangıcı ise 14 Mayıs 2026'da
+gerçekleşmiştir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

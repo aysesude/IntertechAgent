@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AuthorizationError, NotFoundError
 from app.models import MessageRole, MessageStatus, User
 from app.services import chat_service
 
@@ -56,3 +56,47 @@ def test_message_flow_persists_in_chronological_order(db_session, user):
 def test_get_session_messages_raises_not_found_for_unknown_session(db_session):
     with pytest.raises(NotFoundError):
         chat_service.get_session_messages(db_session, uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# Veri izolasyonu (AK 5.4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def baska_kullanici(db_session):
+    u = User(email="baskasi@example.com", full_name="Baska Kullanici")
+    db_session.add(u)
+    db_session.commit()
+    return u
+
+
+def test_ak_5_4_cannot_continue_another_users_session(db_session, user, baska_kullanici):
+    """Oturum kimliğini ele geçiren kişi o sohbete YAZAMAZ.
+
+    Sahiplik kontrolü olmasa, saldırgan başkasının oturumuna kendi mesajını
+    ekleyip geçmişi bağlam olarak ajana okutabilirdi — yani kurbanın portföy
+    konuşmasını okuyabilirdi. Kontrol servis katmanında, çünkü bu bir HTTP
+    kuralı değil defterin bütünlük kuralı.
+    """
+    oturum = chat_service.get_or_create_session(db_session, user.id, None)
+
+    with pytest.raises(AuthorizationError):
+        chat_service.get_or_create_session(db_session, baska_kullanici.id, oturum.id)
+
+
+def test_ak_5_4_cannot_read_another_users_session_messages(db_session, user, baska_kullanici):
+    """Başkasının sohbet geçmişi okunamaz.
+
+    Bu kontrol eklenene kadar gerçek bir açıktı: `GET /api/chat/sessions/{id}/
+    messages` oturumun kime ait olduğuna hiç bakmıyordu.
+    """
+    oturum = chat_service.get_or_create_session(db_session, user.id, None)
+    chat_service.create_user_message(db_session, oturum.id, "Gizli soru")
+
+    with pytest.raises(AuthorizationError):
+        chat_service.get_session_messages(db_session, oturum.id, owner_id=baska_kullanici.id)
+
+    # Sahibi okuyabilmeli — kontrol yanlış tarafa kapanmasın.
+    mesajlar = chat_service.get_session_messages(db_session, oturum.id, owner_id=user.id)
+    assert len(mesajlar) == 1

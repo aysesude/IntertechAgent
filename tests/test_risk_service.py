@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.core.config import AssetClass, RiskLevel, RiskProfile
+from app.core.config import AssetClass, RiskLevel, RiskProfile, settings
 from app.core.exceptions import NotFoundError
 from app.models import Asset, Holding, Portfolio, PriceHistory, Transaction, TransactionType, User
 from app.services.risk_service import _risk_level_from_volatility, get_risk_assessment
@@ -343,11 +343,65 @@ def test_get_risk_assessment_includes_cash_in_category_weight(db_session):
     assert cash_metrics.annualized_volatility_percent == Decimal("0.00")
 
 
-def test_get_risk_assessment_generates_scenarios_when_include_scenarios_true(db_session):
-    """include_scenarios=True VE profil disi bir portfoyde en az bir
-    yeniden dengeleme senaryosu uretilmeli — Aksiyon A (Hisse'nin Korumaci
-    kategori sinirini asmasi) icin gecerli bir alici (Tahvil, zaten elde
-    tutuluyor ve limitin cok altinda) mevcut."""
+def test_get_risk_assessment_scenarios_disabled_by_default(db_session, monkeypatch):
+    """URUN SAHIBI KARARI (2026-08): senaryo motoru urun kapsaminda degil.
+    settings.risk_scenarios_enabled varsayilan olarak False'tur; caller
+    include_scenarios=True verse BILE scenarios her zaman bos donmeli."""
+    monkeypatch.setattr(settings, "risk_scenarios_enabled", False)
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=RiskProfile.CONSERVATIVE)
+    stock = Asset(symbol="TST", name="Test Hisse", asset_class=AssetClass.STOCK, currency="TRY")
+    bond = Asset(symbol="TVL", name="Test Tahvil", asset_class=AssetClass.BOND, currency="TRY")
+    db_session.add_all([stock, bond])
+    db_session.flush()
+
+    start = date(2026, 1, 1)
+    rows = []
+    for i in range(40):
+        day = start + timedelta(days=i)
+        rows.append(
+            PriceHistory(asset_id=stock.id, price_date=day, close_price=Decimal(100 + (i % 5) - 2))
+        )
+        rows.append(
+            PriceHistory(
+                asset_id=bond.id,
+                price_date=day,
+                close_price=Decimal("20") + Decimal("0.01") * i,
+            )
+        )
+    db_session.add_all(rows)
+    db_session.add_all(
+        [
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=stock.id,
+                quantity=Decimal(10),
+                avg_cost_price=Decimal(95),
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=bond.id,
+                quantity=Decimal(20),
+                avg_cost_price=Decimal(18),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assessment = get_risk_assessment(db_session, user.id, include_scenarios=True)
+
+    assert assessment.is_within_profile is False  # kok neden teshisi hala calisiyor
+    assert assessment.causes is not None
+    assert assessment.scenarios == []  # ama senaryo hicbir zaman uretilmiyor
+
+
+def test_get_risk_assessment_generates_scenarios_when_flag_enabled(db_session, monkeypatch):
+    """Motor kod olarak duruyor: settings.risk_scenarios_enabled=True
+    yapilirsa (ornegin ileride PO karari degisirse) VE include_scenarios=True
+    ise, profil disi bir portfoyde en az bir yeniden dengeleme senaryosu
+    uretilmeli — Aksiyon A (Hisse'nin Korumaci kategori sinirini asmasi)
+    icin gecerli bir alici (Tahvil, zaten elde tutuluyor ve limitin cok
+    altinda) mevcut."""
+    monkeypatch.setattr(settings, "risk_scenarios_enabled", True)
     user, portfolio = _make_user_and_portfolio(db_session, risk_profile=RiskProfile.CONSERVATIVE)
     stock = Asset(symbol="TST", name="Test Hisse", asset_class=AssetClass.STOCK, currency="TRY")
     bond = Asset(symbol="TVL", name="Test Tahvil", asset_class=AssetClass.BOND, currency="TRY")

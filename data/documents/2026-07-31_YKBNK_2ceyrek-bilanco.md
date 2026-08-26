@@ -24,7 +24,9 @@ konsensüsü olan 10,8 milyar TL ile uyumlu. Net kâr yıllık bazda yüzde
 5, çeyreklik bazda ise yüzde 47 geriledi. Net faaliyet kârı, 2025'in
 aynı çeyreğindeki 26,958 milyar TL'den 41,547 milyar TL'ye yükseldi.
 Net ücret ve komisyon gelirleri 52,154 milyar TL'den 65,755 milyar
-TL'ye çıktı.
+TL'ye çıktı. Net faiz marjı ikinci çeyrekte yüzde 2,67 olarak
+gerçekleşirken (önceki çeyreğe göre 50 baz puan daralma), faaliyet
+giderleri çeyreklik bazda yüzde 5 artışla 38 milyar TL'ye yükseldi.
 
 ## İlk 6 aylık dönem (2026 Ocak-Haziran)
 

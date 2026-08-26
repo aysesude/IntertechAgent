@@ -69,6 +69,20 @@ _STOPWORDS = {
     # aynı anda çözüyor.
     "turkiye",
     "turk",
+    # "durumda"/"uygulanır" — TFRS/TMS referans dokümanı eklendikten sonra
+    # ölçümle doğrulandı: "TMS 29 nedir, hangi durumda uygulanır?" sorgusunda
+    # tek ayırt edici kelime "tms" iken ("29" 2 harf olduğu için zaten
+    # eleniyor), bu iki jenerik soru-kalıbı kelimesi query_keywords'ün
+    # 2/3'ünü oluşturup oranı (1/3) `> 0.5` barajının altına düşürüyordu —
+    # doğru dokümanın kendisi havuzda ve mesafe eşiğinin altındaydı ama
+    # salt oran yüzünden elendi. "nasıl"/"nedir"/"hangi" gibi zaten var olan
+    # soru-kalıbı stopword'leriyle aynı sınıf.
+    "durumda",
+    "uygulanir",
+    # "zaman" ("ne zaman" -> "when") aynı gerekçeyle: kurumsal olaylar
+    # tarihçesi turu sonrası ölçümle doğrulandı, "ne" zaten stopword ama
+    # "zaman" değildi.
+    "zaman",
 }
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -79,12 +93,38 @@ _PREFIX_MATCH_LEN = (
 
 # Chroma'dan çekilecek en az aday sayısı (top_k'dan bağımsız): ham vektör
 # mesafesi doğru dokümanı her zaman ilk birkaç sıraya koymuyor (ölçümle
-# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır.
-_MIN_CANDIDATE_POOL = 20
+# doğrulandı), bu yüzden süzme daha geniş bir havuz üzerinde yapılır. 31
+# `sirket_profili` dokümanının "Ortaklık yapısı" bölümleri birbirine çok
+# benzer bir kalıpla yazıldığı için (hissedar/pay/yüzde gibi ortak kelimeler),
+# bazı şirketlerin kendi dokümanı havuzun hemen dışında kalabiliyor (ölçümle
+# doğrulandı: "Kardemir'in ortaklık yapısı nasıl" sorgusunda KRDMD 21.
+# sırada kalıp havuz 20 iken elenmiş, bunun yerine şirket-eleme güvenlik ağı
+# hiç devreye girmeden 5 alakasız şirketin profili dönmüştü). Havuz
+# genişletilerek KRDMD'nin kendi dokümanı havuza girip güvenlik ağını
+# (bkz. _sirket_matches_query) tetikleyebiliyor.
+#
+# 30'dan 130'a yükseltildi (2026-08-24, temettü geçmişi eklendikten sonra
+# ölçüldü): 31 profilin TAMAMINA aynı kalıpta temettü cümlesi eklenince
+# aynı sorun çok daha yaygınlaştı — 31 şirketin 12'sinde ("[Şirket]'in
+# temettü ödemesi ne kadar" sorgusuyla ölçüldü) kendi dokümanı 30'luk
+# havuzun dışında kaldı, en kötü durumda (ARCLK) 108. sırada. Korpus
+# toplam ~150 parça olduğu için (küçük, sabit boyutlu bir demo korpusu)
+# havuzu neredeyse tüm korpusu kapsayacak şekilde genişletmenin performans
+# maliyeti ihmal edilebilir; asıl doğruluk güvencesi zaten mesafe eşiği +
+# kelime-örtüşme kapısı, havuz yalnızca "adaya bile giremeden elenme"
+# riskini azaltıyor.
+_MIN_CANDIDATE_POOL = 130
 
 # Türkçe klavyesi olmayan / aksan girmeyen kullanıcılar için: "FAVOK" ile
 # "FAVÖK", "sirket" ile "şirket" aynı kelime sayılsın diye ASCII'ye katlanır.
-_TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"})
+# "â" da dahildir ("kâr" -> "kar"): eksikliği ölçümle doğrulandı — "kârı"
+# hiç foldlanmadığı için "net kârı" gibi hemen her bilanço dokümanında
+# geçen evrensel bir ifade, jenerik kelime listesiyle eşleşemeyip uydurma
+# şirket sorgularının (ör. "ABC Holding'in ikinci çeyrek net kârı nedir")
+# yanlışlıkla "bulundu" sayılmasına katkı sağlıyordu.
+_TURKISH_FOLD_MAP = str.maketrans(
+    {"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a", "î": "i", "û": "u"}
+)
 
 
 def _normalize(text: str) -> str:
@@ -106,9 +146,23 @@ def _normalize(text: str) -> str:
 # geçmesini şart koşuyor, tek başına bir şeyi tetiklemiyor.
 _SHORT_KEYWORD_ALLOWLIST = {"is"}
 
+# Türkçe kesme işaretinden sonraki ek ("Kardemir'in", "XYZ Teknoloji'nin"),
+# \w+ regex'i kesme işaretini kelime sınırı saydığı için kendi başına ayrı
+# bir "kelime" haline geliyor. Kısa ekler (2 harf: "in", "de") zaten
+# _MIN_KEYWORD_LEN altında kalıp elenir, ama 3+ harfli ekler ("nin", "nın",
+# "yle", "ndan") uzunluk barajını geçip anlamsız birer "ayırt edici kelime"
+# gibi davranıyordu (ölçümle doğrulandı: "XYZ Teknoloji'nin hisse fiyatı ne
+# kadar" sorgusunda "nin" jenerik olmayan bir eşleşme sayılıp THYAO/YKBNK/
+# ISCTR/GARAN'ın hedef fiyat raporlarını "bulundu" saydırdı — hiçbir gerçek
+# şirket adı hiç eşleşmemesine rağmen). Kesme işareti + sonrasındaki ek,
+# kelimeleştirmeden ÖNCE tamamen atılır; böylece "kardemir'in" yalnızca
+# "kardemir" kelimesini üretir, hiçbir ek kelime türetmez.
+_APOSTROPHE_SUFFIX_RE = re.compile(r"'\w+")
+
 
 def _keywords(text: str) -> set[str]:
-    tokens = _WORD_RE.findall(_normalize(text))
+    normalized = _APOSTROPHE_SUFFIX_RE.sub("", _normalize(text))
+    tokens = _WORD_RE.findall(normalized)
     return {
         t
         for t in tokens
@@ -147,10 +201,167 @@ _GENERIC_FINANCE_TERMS = {
     "artis",
     "ortalama",
     "tavsiye",
+    # "holding"/"enerji" tek başına aşırı jenerik: onlarca `sirket_profili`
+    # dokümanında ya şirket adının parçası ("Koç Holding", "Astor Enerji")
+    # ya da faaliyet/iştirak alanı olarak geçiyor (ölçümle doğrulandı:
+    # "ABC Holding'in ikinci çeyrek net kârı nedir" ve "Falanca Enerji'nin
+    # ortaklık yapısı nasıl" gibi uydurma şirket sorguları, salt "holding"/
+    # "enerji" kelimeleri üzerinden TAV/Şişecam/Koç/Astor/Tüpraş/Enka gibi
+    # tamamen alakasız gerçek şirketlerin verisini "bulundu" saydırdı —
+    # uydurma kısım ("ABC", "Falanca") hiç eşleşmemesine rağmen). Gerçek
+    # "Koç Holding" / "Astor Enerji" sorguları etkilenmez: o sorgularda
+    # "koc"/"astor" gibi ayırt edici bir kelime zaten ayrıca eşleşiyor.
+    "holding",
+    "enerji",
+    # "ikinci çeyrek net kârı" hemen her bilanço dokümanının açılış cümlesi,
+    # "ortaklık yapısı" ise hemen her `sirket_profili` dokümanının başlığı.
+    # "holding"/"enerji" eklendikten SONRA bile "ABC Holding'in ikinci
+    # çeyrek net kârı" ve "Falanca Enerji'nin ortaklık yapısı" sorguları
+    # "ikinci"/"net"/"yapisi" tek başına ayırt edici kelime sayıldığı için
+    # hâlâ alakasız gerçek şirketleri "bulundu" saydırıyordu (ölçümle
+    # doğrulandı). "kari": "â" artık foldlandığı için "kârı" bu köke düşüyor.
+    "ikinci",
+    "net",
+    "kari",
+    "yapisi",
+    "ortaklik",
+    # "temettü" artık 31 `sirket_profili` dokümanının TAMAMINDA geçiyor (her
+    # şirkete 2026 temettü/kurumsal olay bilgisi eklendi) — "holding"/
+    # "enerji" ile aynı sınıfta jenerik bir kelimeye dönüştü. Eklenmeden
+    # önce ölçümle doğrulandı: "XYZ Teknoloji'nin temettüsü ne kadar"
+    # sorgusu, "teknoloji" kelimesinin ASTOR dokümanındaki "teknik" ile
+    # 4 harflik önek çakışması + "temettüsü"nün ASTOR'un kendi temettü
+    # cümlesiyle eşleşmesi yüzünden (2/3 oranı > 0.5) uydurma şirket adı
+    # hiç eşleşmemesine rağmen gerçek ASTOR verisini "bulundu" saydırdı.
+    "temettu",
+    # Temettü paragrafının boyutlu kalıp kelimeleri de aynı gerekçeyle
+    # jenerikleştirildi (ölçümle doğrulandı): "ABC Holding'in temettü
+    # ödemesi ne kadar" sorgusu "ödemesi" kelimesinin TCELL/EREGL gibi
+    # alakasız şirketlerin kendi "ödeme tarihi ..." cümleleriyle eşleşmesi
+    # yüzünden yanlış şirket verisini "bulundu" saydırdı; "Falanca
+    # Enerji'nin temettü dağıtımı nasıl" sorgusu da benzer şekilde
+    # "dağıtımı" kelimesinin ASTOR'daki "dağıtım sistemleri"/"dağıtılmasına
+    # karar verildi" ifadeleriyle eşleşmesiyle ASTOR'u yanlışlıkla
+    # "bulundu" saydırdı.
+    "odeme",
+    "dagit",
+    # "tarih" (hak kullanım tarihi, ödeme tarihi, kayıt tarihi, kesim
+    # tarihi) temettü paragrafının en sık tekrarlanan kelimesi haline geldi
+    # — 31 profilin neredeyse tamamında birden fazla kez geçiyor (ölçümle
+    # doğrulandı: "Sahte Sanayi'nin temettü dağıtım tarihi nedir" sorgusu,
+    # uydurma kısım hiç eşleşmemesine rağmen salt "tarihi" + "temettü" +
+    # "dağıtım" kelimeleri üzerinden BIMAS/KCHOL/DOAS/ISCTR/ASTOR gibi
+    # tamamen alakasız şirketleri "bulundu" saydırdı).
+    "tarih",
+    # Temettü cümlesinin geri kalan kalıp kelimeleri de aynı gerekçeyle
+    # jenerikleştirildi (ölçümle doğrulandı, 40 uydurma-şirket sorgusundan
+    # oluşan bir tarama ile): "2026" ve "yılında" hemen her bilanço/temettü
+    # cümlesinde geçen yıl ifadesi; "başına" ("hisse başına brüt/net ...")
+    # pay-birimi klişesi. Bunlar tek başına eskiden de jenerikti ama artık
+    # temettü/tarih/ödeme/dağıt ile birlikte havuzda ikinci-üçüncü jenerik
+    # eşleşme olarak oranı dolduruyor, geriye kalan TEK ayırt edici kelime
+    # de (ör. "bankası", "otomotiv") sektör düzeyinde bir kelime olabiliyor
+    # ve yine tamamen alakasız gerçek şirketleri "bulundu" saydırıyor.
+    "2026",
+    "yilinda",
+    "yili",
+    "basina",
+    # "bankası"/"otomotiv" zaten _SIRKET_ALIASES tasarımında "aşırı jenerik"
+    # kabul edilip takma ad listesine hiç alınmamıştı (bkz. FROTO/DOAS
+    # yorumları) — aynı gerekçe burada da geçerli, iki yerde tutarsız
+    # davranmamak için jenerik listeye de eklendi.
+    "bankasi",
+    "otomotiv",
+    # BIST sektör sınıflandırması (ayrı bir turda eklendi) BİRDEN FAZLA
+    # şirketin paylaştığı sektörler için de aynı "aşırı jenerik" sorununu
+    # taşıyor — ölçümle doğrulandı (40 uydurma-şirket sorgusu taraması):
+    # "sanayi" (hem sektör adı hem de "... Sanayi ve Ticaret A.Ş." gibi
+    # yaygın bir hukuki ek), "metal" (Metal Ana Sanayi: EREGL+KRDMD),
+    # "gıda" (Gıda, İçecek: CCOLA+ULKER) tek başına ayırt edici kelime
+    # sayılıp tamamen alakasız uydurma şirket sorgularını gerçek şirket
+    # verisiyle eşleştirdi. Yalnızca TEK bir şirkete özgü sektör kelimeleri
+    # (ör. "savunma", "inşaat", "imalat") bilinçli olarak burada DEĞİL —
+    # bu korpusta hâlâ gerçekten ayırt edici.
+    "sanayi",
+    "metal",
+    "gida",
+    "kimya",
+    "petrol",
+    "plastik",
+    "bankacilik",
+    "ulastirma",
+    "telekomunikasyon",
+    "perakende",
+    "ticaret",
+    "yatirim",
+    "gayrimenkul",
+    # Kurumsal olaylar tarihçesi turu (2026-08-24) sonrası ölçümle
+    # doğrulandı: "halka arz edildi" ifadesi 15'ten fazla profile halka
+    # arz tarihi olarak eklenince "halka"/"arz"/"edildi" aynı sınıfta
+    # jenerikleşti — "Sahte Sanayi ne zaman halka arz edildi" sorgusu bu
+    # üç kelime üzerinden SISE/GARAN/DOAS/KCHOL gibi tamamen alakasız
+    # şirketleri "bulundu" saydırdı (uydurma kısım hiç eşleşmemesine
+    # rağmen oran 4/6 > 0.5'i geçti). Ayrıca "HALKB" tickerının "halka"
+    # ile 4 harflik önek çakışması ayrı bir güvenlik açığıydı — bkz.
+    # _SIRKET_ONEK_ISTISNALARI.
+    "halka",
+    "arz",
+    "edildi",
+    # Aynı turda "sermaye artırımı" ifadesi 10'dan fazla profile eklendi —
+    # ölçümle doğrulandı: "ABC Holding'in sermaye artırımı ne zaman oldu"
+    # sorgusu "sermaye"/"artırımı" üzerinden AKBNK/ULKER/TUPRS/ASELS gibi
+    # tamamen alakasız şirketleri "bulundu" saydırdı. "bedelsiz"/"birleşme"/
+    # "devralma" da aynı turda birden fazla profile eklenen, tek başına
+    # ayırt edici olmayan kurumsal-olay klişeleri.
+    "sermaye",
+    "artirimi",
+    "bedelsiz",
+    "birlesme",
+    "devralma",
+    # "satın al-" (M&A anlatımının standart fiili) ve "geçmişi" ("... tarihçesi/
+    # geçmişi" başlık kalıbı) aynı turda kanıtlandı: "[Uydurma Şirket] hangi
+    # şirketi satın aldı" sorgusu neredeyse HER şirketin M&A cümlesindeki
+    # "satın al-" fiili üzerinden rastgele bir gerçek şirketi "bulundu"
+    # saydırdı.
+    "satin",
+    "aldi",
+    "gecmisi",
+    # "oldu" ("... ne zaman oldu") — jenerik geçmiş zaman soru-kalıbı, "sermaye
+    # artırımı ne zaman oldu" gibi sorgularda sermaye/artırımı jenerikleştikten
+    # SONRA tek kalan ayırt edici kelime oluyordu.
+    "oldu",
+    # "KAP" (Kamuyu Aydınlatma Platformu) hemen her dokümanın kaynak alanında
+    # veya metninde geçiyor — 31 profilin/bilançonun neredeyse tamamı KAP'a
+    # atıf yapıyor. "gelişme" de aynı sınıfta genel bir haber/olay kelimesi.
+    # Ölçümle doğrulandı (2026-08-26, analist canlı test turu): "KAP'a göre
+    # deniz bank hakkında güncel bir gelişme var mı?" sorgusu — DenizBank
+    # RAG'da hiç yok — "kap"+"gelişme" üzerinden İş Bankası/Halkbank/Garanti
+    # BBVA gibi tamamen alakasız bankaları "bulundu" saydırıp "Kaynaklar"
+    # listesine soktu (asıl soru "bilgi yok" dese bile).
+    "kap",
+    "gelisme",
 }
 
 
+# "altın" (gold, "altin") 4 harflik önekte ("alti") "alt" kökünün HEMEN
+# TÜM çekimli hâlleriyle çakışıyor — "altı" (six, "altı aylık"/"ilk altı
+# ay" hemen her bilanço dokümanında geçiyor) VE "altında"/"altına"/
+# "altından" (below/under — "beklentilerin altında" gibi ifadeler de aynı
+# derecede yaygın). Bunlar ayrı ayrı istisna olarak elenemeyecek kadar
+# çok ve üretken bir aile (vurgu/hâl ekleriyle çoğalıyor); tek tek
+# istisna eklemek yerine "altin" için önek yerine TAM eşleşme zorunlu
+# kılındı. Ölçümle doğrulandı (2026-08-26, analist canlı test turu):
+# "Altın piyasasında ne oluyor" sorgusu, RAG'da altın fiyatına dair hiç
+# içerik olmamasına rağmen ("alti"-önekli çakışma yüzünden) TOASO/SISE
+# gibi tamamen alakasız şirketleri "bulundu" saydırıp "Kaynaklar"
+# listesine sokuyordu. Şirket adı/ticker çakışmalarıyla aynı sınıf (bkz.
+# _SIRKET_ONEK_ISTISNALARI) ama genel kelime düzeyinde.
+_TAM_ESLESME_GEREKEN_KELIMELER = {"altin"}
+
+
 def _query_keyword_matches(qk: str, candidate_keywords: set[str]) -> bool:
+    if qk in _TAM_ESLESME_GEREKEN_KELIMELER:
+        return qk in candidate_keywords
     prefix_len = min(len(qk), _PREFIX_MATCH_LEN)
     qk_prefix = qk[:prefix_len]
     return any(len(ck) >= prefix_len and ck[:prefix_len] == qk_prefix for ck in candidate_keywords)
@@ -262,6 +473,22 @@ _SIRKET_ALIAS_PHRASES: dict[str, list[set[str]]] = {
 }
 
 
+# Bazı tickerlar, kendileriyle anlamsal hiçbir ilgisi olmayan çok yaygın bir
+# Türkçe kelimeyle salt 4 harflik önek çakışması yaşıyor. "HALKB" (Halkbank)
+# "halka" (kamuya — "halka arz"/"halka açık" ifadelerinde) ile "halk" önekini
+# paylaşıyor — ölçümle doğrulandı (2026-08-24, kurumsal olaylar tarihçesi
+# turu): "Sahte Sanayi ne zaman halka arz edildi" ve "Ülker ne zaman halka
+# arz edildi" gibi sorgular, sorguda Halkbank'a dair hiçbir gerçek referans
+# yokken salt bu çakışma yüzünden HALKB'yi "adıyla anıldı" sayıp güvenlik
+# ağını (aşağıdaki fonksiyon) yanlışlıkla tetikledi ve tamamen alakasız
+# sonuçları öne çıkardı. Bu, "Aselsan"->"ASELS" gibi ANLAMLI önek
+# örtüşmelerinden farklı — "halka" hiçbir bağlamda Halkbank'a işaret etmez,
+# bu yüzden yalnızca bu ticker için açıkça hariç tutulur.
+_SIRKET_ONEK_ISTISNALARI: dict[str, set[str]] = {
+    "HALKB": {"halka"},
+}
+
+
 def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
     """İki farklı şirketin bilançosu neredeyse aynı jenerik kalıpla
     yazıldığında ("ikinci çeyrek net kâr açıklandı") ikisi de aynı kelime-
@@ -290,7 +517,11 @@ def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
         return False
     ticker = str(sirket).upper()
     sirket_keywords = _keywords(str(sirket))
-    if any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords):
+    onek_istisnalari = _SIRKET_ONEK_ISTISNALARI.get(ticker) or set()
+    if any(
+        qk not in onek_istisnalari and _query_keyword_matches(qk, sirket_keywords)
+        for qk in query_keywords
+    ):
         return True
     aliases = _SIRKET_ALIASES.get(ticker)
     if aliases and query_keywords & aliases:
@@ -406,11 +637,31 @@ class Retriever:
         where = _build_where(sirket, donem, donem_listesi, tur)
         results = self._store.similarity_search(query, top_k=candidate_pool, where=where)
 
+        # Sorgu bir şirketi ADIYLA anıyorsa, O ŞİRKETE ait sonuç kelime-örtüşme
+        # oranından MUAFTIR.
+        #
+        # Oran kapısı alakasız sonuçları elemek için var ve o işi yapıyor; ama
+        # kullanıcı elimizde dokümanı bulunan bir şirketi adıyla andığında alaka
+        # zaten deterministik olarak kanıtlanmıştır — şirket kodunu sıradan bir
+        # kelime gibi saymak yanlıştı. Ölçülen (23 Ağustos test turu):
+        #   "ASELS hakkında ne biliyorsun?"          -> 0.50, kural `> 0.5`  ELENDİ
+        #   "TUPRS'un bilançosunda öne çıkan ne var?" -> 0.25                 ELENDİ
+        # İkisinde de şirket kodu TAM eşleşmişti; eleyen şey sorunun geri
+        # kalanındaki konuşma dili ("hakkında", "ne biliyorsun") ve korpusun
+        # farklı sözcük seçimiydi — dokümanlar "bilanço" değil "finansal
+        # sonuçlar" diyor.
+        #
+        # Muafiyet DAR: yalnızca kendi `sirket` alanı sorguyla eşleşen sonucu
+        # kapsıyor. Başka şirketin dokümanı, alakasız sorgu ve mesafe eşiği
+        # aynen eskisi gibi eleniyor.
         filtered = [
             r
             for r in results
             if r.get("distance", 1.0) <= settings.rag_distance_threshold
-            and _shares_a_keyword(query_keywords, _result_keywords(r))
+            and (
+                _shares_a_keyword(query_keywords, _result_keywords(r))
+                or _sirket_matches_query(r, query_keywords)
+            )
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
 

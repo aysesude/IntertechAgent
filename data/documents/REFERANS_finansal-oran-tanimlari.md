@@ -43,10 +43,9 @@ gösterir.
 **FAVÖK (Faiz, Amortisman ve Vergi Öncesi Kâr):** Şirketin operasyonel
 faaliyetlerinden elde ettiği kârı, faiz gideri, amortisman ve vergi
 etkisi hariç gösterir; operasyonel kârlılığı, finansman yapısından
-bağımsız karşılaştırmayı sağlar.
-
-**FAVÖK Marjı:** FAVÖK'ün net satışlara (hasılata) oranıdır;
-şirketin operasyonel kârlılık yüzdesini gösterir.
+bağımsız karşılaştırmayı sağlar. **FAVÖK Marjı**, FAVÖK'ün net
+satışlara (hasılata) oranıdır ve şirketin operasyonel kârlılık
+yüzdesini gösterir.
 
 ## Likidite ve borçluluk oranları
 

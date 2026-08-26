@@ -20,7 +20,8 @@ Mayıs 1960 tarihinde resmen tescil edilmiştir.
 
 Erdemir, yassı haddelenmiş çelik ürünleri üretimi ve satışı
 yapmaktadır. Ürün yelpazesi levha, sıcak ve soğuk haddelenmiş sac ile
-tenekeyi kapsamaktadır.
+tenekeyi kapsamaktadır. Şirket, BIST'te Metal Ana Sanayi sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -28,8 +29,16 @@ tenekeyi kapsamaktadır.
 Maden Metalürji) devredilmiştir. Güncel ortaklık yapısında Ataer
 Holding A.Ş. yaklaşık yüzde 49,54 paya sahiptir; kalan pay dağınık
 diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır.
+Yönetim kurulu başkanı, OYTAŞ İç ve Dış Ticaret A.Ş.'yi temsilen Murat
+Yalçıntaş'tır. 2026 yılında hisse başına brüt 0,55 TL, net 0,4675 TL
+nakit temettü dağıtılmasına karar verildi; ödeme tarihi 3 Haziran
+2026'dır.
 
-## Not
+## Kurumsal olaylar tarihçesi
 
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+Erdemir hisseleri 13 Ocak 1986'da Borsa İstanbul'da halka arz
+edilmiştir. 2002 yılında İskenderun Demir Çelik (İsdemir) satın
+alınmıştır. Kasım 2024'te yüzde 100 oranında bedelsiz sermaye
+artırımıyla sermaye 3,5 milyar TL'den 7 milyar TL'ye çıkarılmıştır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

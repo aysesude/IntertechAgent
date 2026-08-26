@@ -14,6 +14,7 @@ from fastmcp import FastMCP
 
 from app.core.config import Granularity, PriceCurrency, TimeWindow
 from app.services.price_service import get_asset_price_history as fetch_price_history
+from app.services.price_service import get_current_prices as fetch_current_prices
 from mcp_server.tools._base import db_session, tool_handler
 
 
@@ -76,4 +77,41 @@ def register(mcp: FastMCP) -> list[str]:
                 db, symbols, window=window, granularity=granularity, currency=currency
             ).model_dump(mode="json")
 
-    return ["get_asset_price_history"]
+    @mcp.tool(name="get_current_prices")
+    @tool_handler()
+    def get_current_prices(symbols: list[str]) -> dict[str, Any]:
+        """Verilen sembollerin GÜNCEL (en son kapanış) fiyatını döndürür.
+
+        Ne zaman kullanılır: "dolar ne kadar", "gram altın kaç TL", "euro kuru
+        nedir", "THYAO'nun fiyatı ne" gibi ANLIK fiyat soruları. Kullanıcının
+        o varlığa sahip olması gerekmez.
+
+        Ne zaman kullanılmaz: fiyatın zaman içindeki seyri soruluyorsa
+        (get_asset_price_history), kullanıcının o varlıktan kazancı
+        soruluyorsa (get_holdings), haber/bilanço soruluyorsa
+        (search_market_news).
+
+        Args:
+            symbols: Sembol listesi, ör. ["USDTRY", "XAUTRY"]. Boş olamaz.
+                Kur için USDTRY/EURTRY/GBPTRY/CHFTRY, altın için XAUTRY
+                (gram), CEYREK/YARIM/TAMALTIN/CUMHUR kullanılır.
+
+        Returns:
+            Başarılı: data.prices = [{symbol, name, asset_class, currency,
+            price, price_date, source, age_days, stale}] ve data.as_of.
+            `price_date` fiyatın ait olduğu gündür — BUGÜN OLMAK ZORUNDA
+            DEĞİL: piyasa hafta sonu ve tatilde kapalıdır, o yüzden yanıtta
+            tarih mutlaka belirtilmelidir. `stale` true ise fiyat beklenenden
+            eskidir ve bu kullanıcıya söylenmelidir. `source` fiyatın hangi
+            kaynaktan geldiğini verir (tcmb, yfinance, tefas, synthetic).
+
+            Tanınmayan semboller unknown_symbols, tanınıp fiyatı olmayanlar
+            symbols_without_data ile raporlanır; biri diğerini engellemez.
+
+            Hata: INVALID_ARGUMENT (boş liste) · NOT_FOUND (hiçbir sembol
+            tanınmadı).
+        """
+        with db_session() as db:
+            return fetch_current_prices(db, symbols).model_dump(mode="json")
+
+    return ["get_asset_price_history", "get_current_prices"]

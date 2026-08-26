@@ -12,16 +12,21 @@ Vurgu üç noktada:
 import uuid
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.config import RiskProfile
-from app.main import app
 from app.models import User
 
 
 @pytest.fixture()
-def client():
-    return TestClient(app)
+def client(client_for, profil_kullanicisi):
+    """`profil_kullanicisi` adına kimlik doğrulanmış istemci.
+
+    Risk profili uçları artık token istiyor ve yalnızca kişinin KENDİ
+    profiline erişmesine izin veriyor (AK 5.4) — başkasının risk beyanını
+    değiştirebilmek, tüm risk değerlendirmesinin dayandığı girdiyi ele
+    geçirmek olurdu.
+    """
+    return client_for(profil_kullanicisi)
 
 
 @pytest.fixture()
@@ -112,18 +117,33 @@ def test_missing_body_field_returns_422(client, profil_kullanicisi):
     assert response.status_code == 422
 
 
-def test_unknown_user_returns_404_on_read_and_write(client, db_session):
-    """Kullanıcı yoksa 404 — "veri yetersiz" (409) ile karıştırılmamalı."""
+def test_ak_5_4_another_users_profile_returns_403_on_read_and_write(client):
+    """Başkasının risk profili okunamaz ve YAZILAMAZ (AK 5.4).
+
+    Veri izolasyonundan sonra bu uçlarda 404 erişilebilir değil: yoldaki
+    kimlik token sahibiyle eşleşmek zorunda. Yazma tarafı okumadan daha
+    kritik — profil, risk değerlendirmesinin tamamının dayandığı kullanıcı
+    beyanıdır (bkz. schemas/user.py, Ürün Sahibi notu).
+    """
     eksik = uuid.uuid4()
 
     okuma = client.get(f"/api/users/{eksik}/risk-profile")
-    assert okuma.status_code == 404
+    assert okuma.status_code == 403
 
     yazma = client.put(
         f"/api/users/{eksik}/risk-profile",
         json={"risk_profile": next(iter(RiskProfile)).value},
     )
-    assert yazma.status_code == 404
+    assert yazma.status_code == 403
+
+
+def test_ak_5_4_profile_write_without_token_returns_401(client_for, profil_kullanicisi):
+    """Kimliksiz istek profili değiştiremez."""
+    response = client_for().put(
+        f"/api/users/{profil_kullanicisi.id}/risk-profile",
+        json={"risk_profile": next(iter(RiskProfile)).value},
+    )
+    assert response.status_code == 401
 
 
 def test_profile_write_does_not_touch_other_fields(client, db_session, profil_kullanicisi):

@@ -1,0 +1,51 @@
+---
+baslik: Kardemir Şirket Profili
+kaynak: Kardemir Kurumsal / Subcon Turkey
+kaynak_url: https://www.kardemir.com/ortaklik_yapisi
+tarih: 2026-08-21
+sirket: KRDMD
+tur: sirket_profili
+dil: tr
+---
+
+# Kardemir Şirket Profili
+
+## Kuruluş
+
+Türkiye'nin ilk entegre demir çelik fabrikası olan Kardemir'in
+temelleri 3 Nisan 1937 tarihinde atılmıştır. İlk yüksek fırın 9 Eylül
+1939'da ateşlenmiş, 10 Eylül 1939'da ilk Türk demiri üretilmiştir.
+
+## Faaliyet alanı
+
+Şirketin faaliyet alanı, her çeşit ham demir ve çelik mamullerinin
+ile kok ve kok yan ürünlerinin imalatı ve satışıdır. Şirket, BIST'te
+Metal Ana Sanayi sektöründe sınıflandırılmaktadır.
+
+## Özelleştirme ve ortaklık yapısı
+
+Kardemir, 58 yıl boyunca bir Kamu İktisadi Devlet Teşekkülü olarak
+faaliyet gösterdikten sonra 30 Mart 1995 tarihinde özelleştirilmiştir.
+Özelleştirme sonrasında Sabancı Grubu ile ortaklık kurulmuştur.
+Hisseleri Borsa İstanbul'da "KRDMD" (ve ayrıca A/B grup hisseler
+için farklı kodlarla) işlem görmektedir; ortaklık pay dağılımının tam
+yüzdeleri şirketin resmi sayfasında güncel tutulmaktadır. Yönetim
+kurulu başkanı, Eylül 2025'te İsmail Demir'in
+yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler, dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.
+
+## Halka arz
+
+Kardemir hisseleri, 1-5 Haziran 1998 talep toplamasının ardından 8
+Haziran 1998'de Borsa İstanbul'da işlem görmeye başlamıştır — bu,
+1995'teki özelleştirmeden ayrı, borsaya kotasyon tarihidir.
+
+## Temettü geçmişi
+
+Kardemir son 6 yıldır düzenli (genellikle Haziran ve Kasım aylarında)
+temettü dağıtma geleneğine sahiptir, ancak dağıtım oranı 2019'daki
+yüzde 4,5-4,8 seviyesinden 2022'de yüzde 2,6-3,1'e, 2023'te yüzde
+0,4-0,5'e gerileyen bir düşüş trendindedir; 2026 yılına ait kesin
+temettü tutarı araştırma tarihi itibarıyla KAP'ta henüz
+açıklanmamıştı.

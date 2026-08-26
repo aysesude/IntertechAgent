@@ -142,10 +142,83 @@ def test_seeded_user_ids_are_stable(seeded):
 
 
 def test_cash_never_negative(seeded):
+    """Nakit HER GÜN sıfırın üstünde kalmalı, yalnızca sonda değil.
+
+    Test önceden tek bir `cash_balance_as_of(...)` çağrısıyla yalnızca SON
+    bakiyeye bakıyordu. Bir portföy dönem ortasında elinde olmayan parayı
+    harcayıp sonradan gelen faiz/satışla toparlansaydı, defter o gün fiilen
+    eksideyken test yeşil yanardı. Nakit hareketleri (WITHDRAW) seed'e
+    eklenirken bu boşluk gerçek bir risk hâline geldi, o yüzden değişmez
+    her işlem gününde denetleniyor.
+    """
     with Session(seeded) as session:
         for portfolio in session.execute(select(Portfolio)).scalars().all():
-            balance = cash_balance_as_of(session, portfolio.id)
-            assert balance >= 0, f"negatif nakit: {portfolio.id} -> {balance}"
+            gunler = (
+                session.execute(
+                    select(func.date(Transaction.transaction_date))
+                    .where(Transaction.portfolio_id == portfolio.id)
+                    .distinct()
+                )
+                .scalars()
+                .all()
+            )
+            for gun in gunler:
+                if isinstance(gun, str):  # SQLite `date()` metin döndürür
+                    gun = date.fromisoformat(gun)
+                balance = cash_balance_as_of(session, portfolio.id, gun)
+                assert balance >= 0, f"negatif nakit: {portfolio.id} @ {gun} -> {balance}"
+
+
+def test_write_guard_alone_cannot_keep_the_ledger_solvent(seeded):
+    """Yazma anındaki nakit koruması TARİH BİLMİYOR — bu testin sebebi o.
+
+    `record_transaction`, negatif nakit ayağını `cash_balance_as_of(db,
+    portfolio_id)` ile denetliyor: gün parametresi YOK, yani defterin
+    TOPLAMINA bakıyor. Tarihi geride olan bir çekim, kendisinden SONRA
+    tarihlenmiş bir yatırma sayesinde bu kapıdan geçebiliyor ve defter aradaki
+    günlerde eksiye düşüyor.
+
+    Bu bir `record_transaction` hatası değil, sınırı: tek bir satırı yazarken
+    tüm zaman çizgisini yeniden denetlemek pahalı olurdu. Sınır bilindiği için
+    üreten taraf (seed) çekimi `_cash_floor_from` ile boyutlandırıyor ve I2
+    her işlem gününü ayrı ayrı denetliyor. Bu test o iş bölümünü kayda
+    geçiriyor: koruma tek başına yetseydi ikisine de gerek olmazdı.
+    """
+    with Session(seeded) as session:
+        user = User(email="tarih-sirasi@example.com", full_name="Sira Testi")
+        session.add(user)
+        session.flush()
+        portfolio = Portfolio(user_id=user.id)
+        session.add(portfolio)
+        session.flush()
+
+        gec_gun = datetime(2026, 3, 31, 10, tzinfo=timezone.utc)
+        erken_gun = datetime(2026, 3, 1, 10, tzinfo=timezone.utc)
+
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.DEPOSIT,
+            transaction_date=gec_gun,
+            cash_amount_try=Decimal("100000"),
+        )
+        # Yatırmadan ÖNCEKİ bir güne çekim: toplam bakiye 100.000 olduğu için
+        # yazma koruması buna izin veriyor.
+        record_transaction(
+            session,
+            portfolio.id,
+            TransactionType.WITHDRAW,
+            transaction_date=erken_gun,
+            cash_amount_try=Decimal("-80000"),
+        )
+        session.flush()
+
+        # Son bakiye sağlıklı: I2'nin ESKİ hâli (yalnızca son bakiye) bunu
+        # yakalayamazdı.
+        assert cash_balance_as_of(session, portfolio.id) == Decimal("20000")
+
+        # Oysa çekim gününde defter 80.000 TL ekside.
+        assert cash_balance_as_of(session, portfolio.id, erken_gun.date()) == Decimal("-80000")
 
 
 def test_record_transaction_rejects_overdraft(seeded):
@@ -291,8 +364,10 @@ def test_ak_5_7_fx_conversion(seeded):
         session.add(portfolio)
         session.flush()
 
-        # AKE = eurobond fonu; evrendeki tek TRY dışı varlık, bu yüzden AK 5.7
-        # kur dönüşümünü egzersiz eden tek enstrüman (bkz. providers/universe).
+        # AKE = eurobond fonu, USD fiyatlanır. Evrende 21 ABD hissesi
+        # eklendikten sonra tek TRY dışı varlık DEĞİL, ama dönüşümü izole
+        # eden en sade örnek: tek varlıklı bir portföyde tutulup elde edilen
+        # TRY değerinin `fiyat * kur` olduğu doğrudan doğrulanabiliyor.
         eurobond = session.execute(select(Asset).where(Asset.symbol == "AKE")).scalar_one()
         assert eurobond.currency == "USD"
 
@@ -469,12 +544,20 @@ def test_fund_asset_class_follows_economic_risk():
         "TI2": AssetClass.STOCK,  # hisse senedi fonu
         "TCD": AssetClass.STOCK,  # değişken fon
         "AFT": AssetClass.STOCK,  # teknoloji hisse fonu
-        "PPF": AssetClass.CASH,  # para piyasası fonu
+        # Para piyasası fonu artık CASH DEĞİL: `AssetClass.CASH` yalnızca
+        # serbest nakdi (defter bakiyesi) temsil ediyor. Bu bir yatırımdır,
+        # fiyatı oynar (ölçülen %1,42 yıllık volatilite) ve kısa vadeli
+        # borçlanma araçları tutar.
+        "IOO": AssetClass.BOND,  # para piyasası fonu
         "GTA": AssetClass.PRECIOUS_METAL,  # altın fonu
         "AK2": AssetClass.BOND,  # uzun vadeli borçlanma araçları
         "APT": AssetClass.BOND,  # orta vadeli borçlanma araçları
         "AKE": AssetClass.BOND,  # eurobond
         "AYR": AssetClass.BOND,  # özel sektör borçlanma araçları
+        # Serbest fonun SINIFI da içeriğinden çıkar: BHE hisse senedi yoğun,
+        # dolayısıyla STOCK. "Serbest" olması uygunluk SEVİYESİNİ belirler
+        # (risk_level=7), sınıfını değil — ikisi ayrı alanlarda durur.
+        "BHE": AssetClass.STOCK,  # hisse senedi yoğun serbest fon
     }
     funds = {s.symbol: s for s in ASSET_UNIVERSE if s.data_source is PriceSource.TEFAS}
     assert set(funds) == set(expected), "TEFAS fon listesi değişti; beklenen tabloyu güncelleyin"
@@ -484,15 +567,32 @@ def test_fund_asset_class_follows_economic_risk():
         ), f"{symbol}: {funds[symbol].asset_class.value} bekleniyordu {asset_class.value}"
 
 
-def test_only_deposits_remain_synthetic():
-    """Mevduat dışında canlı kaynağı olmayan varlık kalmamalı (AK 5.1).
+def test_no_asset_is_synthetic():
+    """HİÇBİR varlığın sentetik kaynağı olmamalı (AK 5.1).
 
-    Mevduat kasıtlı istisna: birim fiyatı sabit 1,00 TL, getirisi INTEREST
-    işlemlerinden gelir. Buraya yeni bir sembol düşerse o varlık sonsuza kadar
-    bayat fiyatla değerlenir ve portföy özetinin as_of tarihi yanıltıcı olur.
+    Eskiden mevduat (MEVDUAT-V / MEVDUAT-VS) kasıtlı istisnaydı: birim fiyatı
+    sabit 1,00 TL olan, çekilecek piyasa fiyatı bulunmayan iki kayıt. Nakit
+    artık bir VARLIK değil, defterdeki serbest bakiye olduğu için o istisnaya
+    gerek kalmadı ve evren tamamen gerçek kaynaklı hâle geldi.
+
+    Buraya yeni bir sembol düşerse o varlık sonsuza kadar bayat fiyatla
+    değerlenir ve portföy özetinin as_of tarihi yanıltıcı olur.
     """
     synthetic = {s.symbol for s in ASSET_UNIVERSE if s.data_source is PriceSource.SYNTHETIC}
-    assert synthetic == {"MEVDUAT-V", "MEVDUAT-VS"}, f"beklenmeyen sentetik varlık: {synthetic}"
+    assert synthetic == set(), f"sentetik kaynaklı varlık: {synthetic}"
+
+
+def test_cash_class_has_no_assets():
+    """`AssetClass.CASH` altında varlık OLMAMALI.
+
+    Nakit yalnızca serbest bakiyedir (alım/satım için elde duran para) ve
+    `portfolio_service` onu defterden okuyup dilime ekliyor. Buraya bir varlık
+    düşerse nakit dilimi yine iki farklı şeyi karıştırmaya başlar — daha önce
+    tam olarak bu oldu: mevduat, para piyasası fonu ve serbest bakiye aynı
+    dilimde toplanıyor, portföyler olduğundan likit ve güvenli görünüyordu.
+    """
+    nakit = {s.symbol for s in ASSET_UNIVERSE if s.asset_class is AssetClass.CASH}
+    assert nakit == set(), f"nakit sınıfında varlık var: {nakit}"
 
 
 def test_fx_conversion_has_a_subject():

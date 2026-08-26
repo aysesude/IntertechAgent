@@ -20,6 +20,7 @@ cp .env.example .env                 # ilk kurulumda
 docker compose up -d postgres        # lokal DB (herkes kendi lokalinde)
 docker compose exec api alembic upgrade head
 make seed                            # sentetik evren + işlem defteri
+make demo-users                      # demo kullanıcıların giriş bilgileri
 make backfill                        # gerçek fiyat geçmişi (ağ gerekir)
 make daily-update                    # günün gerçek fiyatları
 make test / make lint                # pytest + ruff + black (+ eslint)
@@ -40,7 +41,8 @@ data/                    seed betikleri + backfill/daily_update CLI
 agents/                  ajanlar + orchestrator (yeniden yazılacak — bkz. Durum)
 mcp_server/              MCP tool'ları
 rag/                     RAG pipeline (iskelet)
-frontend/                React + TS + Tailwind
+frontend-v2/             VİRA arayüzü (React + TS + Tailwind) — TEK arayüz;
+                         eski `frontend/` kaldırıldı, bkz. kendi README'si
 tests/                   pytest; test adları kabul kriterine bağlanır
 ```
 
@@ -56,6 +58,9 @@ tests/                   pytest; test adları kabul kriterine bağlanır
   Türkçe** (₺/%, tutarlı biçim).
 - **Finansal çıktılara** "Bu bir yatırım tavsiyesi değildir." uyarısı (sunum
   katmanında; tool çıktısına gömülmez).
+- **Veri izolasyonu (AK 5.4):** kullanıcıya özel her uç `Depends(get_current_user)`
+  + `verify_user_access(user_id, current_user)` ister (`app/api/deps.py`).
+  Yeni bir `{user_id}` ucu yazıyorsan bu iki satır olmadan merge etme.
 - **Uydurmama:** kaynağı olmayan değer üretme — eksik veriyi varsayımla
   doldurmak yerine `None`/uyarı döndür (AK 5.5, 5.10).
 - **Zarif düşüş:** dış servis/DB hatasında çökme yok; anlamlı hata + son

@@ -22,15 +22,21 @@ sermayenin yüzde 25'i bizzat Mustafa Kemal Atatürk tarafından
 
 Türkiye'nin en büyük özel bankalarından biri olarak bireysel, kurumsal
 ve ticari bankacılık, yatırım bankacılığı ve varlık yönetimi
-alanlarında hizmet vermektedir.
+alanlarında hizmet vermektedir. Şirket, BIST'te Bankacılık sektöründe
+sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
 Banka halka açıktır; Atatürk'e ait hisselerin (yaklaşık yüzde 28,09)
 temettü hakları, Atatürk'ün vasiyeti gereği Cumhuriyet Halk Partisi'ne
-(CHP) tahsis edilmiştir.
+(CHP) tahsis edilmiştir. Yönetim kurulu başkanı Adnan Bali'dir. 2026 yılında (C grubu payları
+için) hisse başına brüt 0,53952 TL, net 0,45859 TL nakit temettü
+dağıtılmasına karar verildi; hak kullanım tarihi 1 Nisan 2026'dır.
 
-## Not
+## Kurumsal olaylar tarihçesi
 
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+İş Bankası hisseleri 8 Ocak 1986'da Borsa İstanbul'da halka arz
+edilmiştir. Şubat 2024'te yüzde 150 oranında sermaye artırımı
+gerçekleştirilmiştir. Bu doküman şirketin kimlik ve yapısal
+bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
+dokümanlarda yer alır.

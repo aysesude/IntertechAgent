@@ -20,10 +20,11 @@ from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
 from agents.orchestrator import stream_orchestrator
+from app.api.deps import get_current_user, verify_user_access
 from app.core.config import settings
 from app.core.db import SessionLocal, get_db
-from app.core.exceptions import NotFoundError
-from app.models import MessageStatus
+from app.core.exceptions import AuthorizationError, NotFoundError
+from app.models import MessageStatus, User
 from app.schemas.chat import ChatRequest, MessageOut
 from app.services import chat_service
 
@@ -35,13 +36,22 @@ def _sse(event: str, data: dict) -> dict:
 
 
 @router.post("")
-async def chat(request: ChatRequest) -> EventSourceResponse:
+async def chat(
+    request: ChatRequest,
+    current_user: User | None = Depends(get_current_user),
+) -> EventSourceResponse:
+    # Gövdedeki user_id artık doğrulanan bir iddia: ajanlara ve oradan MCP
+    # tool'larına giden kimlik budur, dolayısıyla zincirin tamamı bu tek
+    # kontrole dayanır (AK 5.4).
+    verify_user_access(request.user_id, current_user)
     db = SessionLocal()
     try:
         try:
             session = chat_service.get_or_create_session(db, request.user_id, request.session_id)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=exc.message) from exc
+        except AuthorizationError as exc:
+            raise HTTPException(status_code=403, detail=exc.message) from exc
 
         history_rows = chat_service.get_recent_messages(
             db, session.id, settings.chat_context_message_limit
@@ -107,8 +117,21 @@ async def chat(request: ChatRequest) -> EventSourceResponse:
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageOut])
-def read_session_messages(session_id: UUID, db: Session = Depends(get_db)) -> list[MessageOut]:
+def read_session_messages(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+) -> list[MessageOut]:
+    """Oturum geçmişi.
+
+    Sahiplik kontrolü servis katmanında yapılır: buradaki `user_id` yoldan
+    gelmiyor, oturumun kendi kaydından okunuyor — bu yüzden `verify_user_access`
+    değil `owner_id` kullanılıyor.
+    """
+    owner_id = current_user.id if current_user else None
     try:
-        return chat_service.get_session_messages(db, session_id)
+        return chat_service.get_session_messages(db, session_id, owner_id=owner_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=exc.message) from exc
+    except AuthorizationError as exc:
+        raise HTTPException(status_code=403, detail=exc.message) from exc

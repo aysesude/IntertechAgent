@@ -3,6 +3,8 @@ from pathlib import Path
 
 import yaml
 
+from agents.market_query import sirket_gecer_mi
+
 # Config yolunu dinamik al
 CONFIG_PATH = Path(__file__).parent / "scope.yaml"
 
@@ -25,24 +27,24 @@ def _normalize(text: str) -> str:
     return text.translate(_UPPER_DOTTED_I).lower().strip()
 
 
-def _matches_word(query: str, phrase: str) -> bool:
+_SUFFIX_SAFE_MIN = 5  # bu uzunluktan itibaren sonek toleransı güvenli
+
+
+def _matches_word(query: str, phrase: str, *, exact: bool = False) -> bool:
     """Kelime sınırıyla eşleşme (alt dize DEĞİL).
-
-    Alt dize araması sessizce yanlış eşleşiyordu: `bug` etiketi "**bug**ün"
-    içinde, `al` fiili "**al**tın"/"an**al**iz" içinde. Sonuç, meşru soruların
-    reddedilmesiydi — "bugün portföyüm ne durumda" müşteri hizmetlerine
-    yönlendiriliyordu.
-
-    ÖDÜNLEŞME: Türkçe çekim ekleri yakalanmaz (`destekten`, `alabilir`). Yön
-    bilinçli — meşru bir soruyu reddetmek, kapsam dışı bir soruyu ajana
-    göndermekten daha maliyetli (PR #40'ta alınan karar).
-
-    KURAL: eşleşmesi kullanıcıyı REDDEDEN kontroller bunu kullanır. Yalnızca
-    bayrak ekleyen kontroller (`tavsiye_bayragi`) alt dize aramasında kalır;
-    orada çekim ekini yakalamak istenen davranıştır ve yanlış pozitifin
-    bedeli yok.
+    ...
     """
-    return re.search(r"\b" + re.escape(phrase) + r"\b", query) is not None
+    if exact:
+        # Sonek toleransının zararlı olduğu fiiller için: "yatır" ile
+        # "yatırım" ayrı kelimelerdir, ilki emir kipi ikincisi isim.
+        return re.search(r"\b" + re.escape(phrase) + r"\b", query) is not None
+    if len(phrase) >= _SUFFIX_SAFE_MIN:
+        # "transfer" → "transferi", "kaldıraç" → "kaldıraçlı"
+        pattern = r"\b" + re.escape(phrase) + r"[a-zçğıöşü]{0,6}\b"
+    else:
+        # "al", "sat", "aç", "çek", "öde" → tam eşleşme kalır
+        pattern = r"\b" + re.escape(phrase) + r"\b"
+    return re.search(pattern, query) is not None
 
 
 def check_scope(query: str) -> dict:
@@ -91,8 +93,15 @@ def check_scope(query: str) -> dict:
             )
 
         for kategori, liste in varyantlar.items():
-            if any(_matches_word(query_lower, k) for k in liste):
-                return {"intent": "INJECTION_ATTEMPT", "message": varsayilan_mesaj, "flags": flags}
+            for k in liste:
+                parts = [re.escape(w) for w in k.split()]
+                pattern = r".{0,30}".join(parts)
+                if re.search(pattern, query_lower):
+                    return {
+                        "intent": "INJECTION_ATTEMPT",
+                        "message": varsayilan_mesaj,
+                        "flags": flags,
+                    }
 
     # 2.2 Destek Talebi
     destek = scope_config.get("destek_talebi", {})
@@ -116,9 +125,13 @@ def check_scope(query: str) -> dict:
     # geniş eşleşme burada güvenli yönde hata yapar, alt dize kalıyor.
     is_istisna = any(istisna in query_lower for istisna in istisnalar)
 
+    # Sonek toleransı bazı fiiller için zararlı: bkz. scope.yaml
+    # `tam_eslesme_fiiller` — "yatır" toleransla "yatırım"ı yutuyordu.
+    tam_eslesme = {_normalize(f) for f in islem_talebi.get("tam_eslesme_fiiller", [])}
+
     if not is_istisna:
         for fiil in fiiller:
-            if _matches_word(query_lower, fiil):
+            if _matches_word(query_lower, fiil, exact=_normalize(fiil) in tam_eslesme):
                 return {
                     "intent": "UNAUTHORIZED_ACTION",
                     "message": "Bu işlemi gerçekleştirmeye yetkim bulunmuyor. Yalnızca portföy durumunuzu ve piyasa haberlerini analiz edebilirim.",
@@ -130,7 +143,13 @@ def check_scope(query: str) -> dict:
     # Çekim ekli biçimleri ("önerin", "tavsiyeniz") yakalamak istenen davranış.
     tavsiye_config = scope_config.get("tavsiye_bayragi", {})
     tavsiye_tetikleyiciler = tavsiye_config.get("tetikleyiciler", [])
-    if any(t in query_lower for t in tavsiye_tetikleyiciler):
+
+    karisik_config = scope_config.get("karisik_varlik", {})
+    karsilastirma_kaliplari = karisik_config.get("karsilastirma_kaliplari", [])
+
+    tum_tavsiye_tetikleyiciler = tavsiye_tetikleyiciler + karsilastirma_kaliplari
+
+    if any(t in query_lower for t in tum_tavsiye_tetikleyiciler):
         flags.append("advice_seeking")
 
     # 5. Varlık Ekseni (Kapsam Dışı Varlık)
@@ -151,6 +170,33 @@ def check_scope(query: str) -> dict:
         for etiket in v_sinif.get("etiketler", [])
     )
 
+    # Bazı BIST şirketlerinin ADI, tamamen alakasız bir kapsam-dışı varlık
+    # sınıfının etiketiyle kelime düzeyinde çakışıyor: "Emlak Konut" ->
+    # gayrimenkul sınıfındaki "konut", "Yapı Kredi" -> bankacılık ürünleri
+    # sınıfındaki "kredi". Kullanıcı "hisse"/"BIST" demeden direkt şirket
+    # adını yazınca kapsam_ici hiç eşleşmiyor ve sorgu KESİN olarak (rastgele
+    # değil — ölçümle doğrulandı, check_scope() deterministik) yanlışlıkla
+    # reddediliyordu: "Emlak Konut'un temettü ödemesi ne zaman?" ve "Yapı
+    # Kredi'nin 2026 temettüsü ne kadar?" ikisi de OUT_OF_SCOPE dönüyordu,
+    # oysa RAG'de bu şirketlerin verisi doğru ve eksiksiz duruyor.
+    #
+    # `market_query.sirket_gecer_mi` zaten test edilmiş, deterministik bir
+    # fonksiyon (RAG'in kendi filtre çıkarımı da aynı modülü kullanıyor) —
+    # burada yeni bir eşleme listesi yazmak yerine o kullanılır. Sorguda
+    # bilinen bir BIST şirketi tespit edilirse, sanki `bist_hisse` etiketi
+    # eşleşmiş gibi kapsam içi sayılır. "konut kredisi ne kadar" gibi GERÇEK
+    # kapsam-dışı sorular etkilenmez: bunlarda hiçbir şirket adı geçmiyor.
+    #
+    # BİLEREK `sirket_tespit_et` (tek/None) DEĞİL `sirket_gecer_mi`
+    # (en az bir tane mi) kullanılıyor: "Akbank, İş Bankası ve Yapı Kredi'nin
+    # ... karşılaştır" gibi 3 şirketli bir sorguda `sirket_tespit_et`
+    # belirsizlik yüzünden None dönüyor (bkz. o fonksiyonun docstring'i) ve
+    # "Yapı Kredi" bankacılık-ürünleri sınıfındaki "kredi" etiketiyle
+    # çakışıp sorguyu yanlışlıkla OUT_OF_SCOPE'a düşürüyordu (ölçüldü,
+    # 2026-08-26, analist canlı test turu).
+    if not kapsam_ici_bulundu:
+        kapsam_ici_bulundu = sirket_gecer_mi(query)
+
     if kapsam_disi_bulundu and not kapsam_ici_bulundu:
         return {
             "intent": "OUT_OF_SCOPE",
@@ -160,6 +206,19 @@ def check_scope(query: str) -> dict:
 
     if kapsam_disi_bulundu and kapsam_ici_bulundu:
         flags.append("kismi_kapsam")
+
+    # 6. Smalltalk / Selamlaşma
+    smalltalk = scope_config.get("mesajlar", {}).get("smalltalk_meta", {})
+    smalltalk_etiketler = smalltalk.get("etiketler", [])
+    if any(_matches_word(query_lower, etiket) for etiket in smalltalk_etiketler):
+        return {
+            "intent": "SMALLTALK_META",
+            "message": smalltalk.get(
+                "varsayilan",
+                "Merhaba! Portföyünüz ve piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
+            ),
+            "flags": flags,
+        }
 
     # Hiçbir kural motora takılmadıysa LLM'e devret
     return {"intent": "pass_to_llm", "flags": flags}

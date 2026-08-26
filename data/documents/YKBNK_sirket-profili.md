@@ -19,7 +19,8 @@ ulusal çaplı özel bankasıdır.
 ## Faaliyet alanı
 
 Bireysel, kurumsal ve ticari bankacılık, yatırım bankacılığı ile
-sigorta/emeklilik alanlarında hizmet vermektedir.
+sigorta/emeklilik alanlarında hizmet vermektedir. Şirket, BIST'te
+Bankacılık sektöründe sınıflandırılmaktadır.
 
 ## Ortaklık yapısı
 
@@ -31,9 +32,17 @@ ortaklık 2000'de başlamış, Koç Finansal Hizmetler çatısı altında 2002
 yılında resmileşmiştir. 2019 yılında UniCredit hisselerini satarak
 ortaklıktan çıkmış, bankanın tam kontrolü Koç Holding'e geçmiştir.
 Günümüzde Yapı Kredi, Koç Holding'in Koç Finansal Hizmetler iştiraki
-aracılığıyla kontrol ettiği bir bankadır.
+aracılığıyla kontrol ettiği bir bankadır. Yönetim kurulu başkanı Ali
+Koç'tur. Bankanın en son doğrulanabilen temettü ödemesi 2024 yılına
+aittir (hisse başına net 1,21 TL, temettü verimi yaklaşık yüzde 4,2);
+2026 yılına ait kesin temettü tutarı güvenilir kaynaklarda
+netleştirilememiştir.
 
-## Not
+## Kurumsal olaylar tarihçesi
 
-Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
-finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+Yapı Kredi hisseleri 28 Mayıs 1987'de Borsa İstanbul'da halka arz
+edilmiştir. Mart 2006'da, Koçbank ile birleşmenin bir parçası olarak
+sermaye yaklaşık 2,5 kat (yüzde 65,7) artırılarak 1,897 milyar YTL'den
+3,143 milyar YTL'ye çıkarılmıştır. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

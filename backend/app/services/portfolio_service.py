@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.config import AssetClass, Granularity, TimeWindow, settings
+from app.core.config import AssetClass, AssetSubType, Granularity, TimeWindow, settings
 from app.core.exceptions import InsufficientDataError, NotFoundError, ValidationAppError
 from app.models import Asset, Holding, Portfolio, PriceHistory, Transaction, TransactionType
 from app.schemas.portfolio import (
@@ -61,6 +61,13 @@ def _period_change(series: list[tuple[date, Decimal, Decimal]], days: int) -> De
     ((son_değer − aradaki_dış_akış) / eski_değer − 1) × 100. Yeterli gün veya
     pozitif başlangıç sermayesi yoksa None döner — 0 yazmak "hiç değişmedi"
     demek olurdu ki bu bilgi elimizde yok.
+
+    GÜN = TAKVİM GÜNÜ. Buraya gelen seri `value_series` çıktısıdır ve HER
+    takvim gününü içerir (hafta sonları yalnızca GRAFİK noktalarından
+    ayıklanır, bkz. `weekdays`). Dolayısıyla `days` kadar geri gitmek gerçekten
+    `days` takvim günü geri gitmektir. Bu ayrım gözden kaçmaya çok müsait:
+    döndürülen `series` alanı hafta sonlarını içermediği için, oraya bakıp
+    "nokta sayıyor" sanmak kolay.
     """
     if len(series) <= days:
         return None
@@ -69,6 +76,28 @@ def _period_change(series: list[tuple[date, Decimal, Decimal]], days: int) -> De
         return None
     flows = sum((point[2] for point in series[-days:]), Decimal(0))
     return _round2(((series[-1][1] - flows) / base_value - 1) * 100)
+
+
+# Fiyatı NOMİNAL olan enstrümanlar: birim değeri tanımı gereği 1 TL'dir ve
+# değişmez. Getirileri fiyattan değil, deftere işlenen faiz hareketlerinden
+# gelir (bkz. ledger_service).
+_NOMINAL_PRICE_SUB_TYPES = frozenset(
+    {AssetSubType.TIME_DEPOSIT.value, AssetSubType.DEMAND_DEPOSIT.value}
+)
+
+
+def _has_market_price(asset: Asset) -> bool:
+    """Varlığın fiyatı bir PİYASADAN mı geliyor?
+
+    Mevduatın fiyatı nominaldir; "eski fiyat" kavramının dışındadır —
+    güncellenmediği için değil, güncellenecek bir şey olmadığı için.
+
+    NEDEN `data_source` DEĞİL de `sub_type`: `data_source` varsayılanı
+    `synthetic`, yani sağlayıcısı yazılmamış HER varlık sessizce "piyasa
+    fiyatı yok" sayılırdı — gerçekten geride kalmış bir hisse de uyarı
+    üretmezdi. `sub_type` tam olarak kastettiğimiz şeyi söylüyor.
+    """
+    return asset.sub_type not in _NOMINAL_PRICE_SUB_TYPES
 
 
 def _latest_prices(db: Session, asset_ids: list[UUID]) -> dict[UUID, tuple[Decimal, date]]:
@@ -156,6 +185,9 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
     total_cost_basis = Decimal(0)
     class_values: dict[AssetClass, Decimal] = {}
     as_of_dates: list[date] = []
+    # Yalnızca PİYASA fiyatı olan varlıkların tarihleri. Tazelik uyarısı buna
+    # bakar; gerekçe aşağıda, `oldest_price_date` yanında.
+    market_price_dates: list[date] = []
 
     for holding in holdings:
         price, price_date = latest_prices.get(holding.asset_id, (holding.avg_cost_price, None))
@@ -180,6 +212,8 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         )
         if price_date is not None:
             as_of_dates.append(price_date)
+            if _has_market_price(holding.asset):
+                market_price_dates.append(price_date)
 
     # Serbest nakit (defterden): toplam değere ve 'cash' dilimine eklenir.
     cash_balance = cash_balance_as_of(db, portfolio.id)
@@ -238,7 +272,14 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         # birbirinden farklı olabilir. `as_of` en yenisini yazar, yani özet
         # olduğundan taze görünebilir. En eskisi de raporlanır ki sunum
         # katmanı ikisi ayrıştığında bunu söyleyebilsin (CLAUDE.md §4).
-        oldest_price_date=min(as_of_dates) if as_of_dates else None,
+        #
+        # PİYASA FİYATI OLMAYAN VARLIKLAR BU HESABA GİRMEZ. Mevduatın birim
+        # fiyatı tanımı gereği 1 TL'dir ve hiç güncellenmez; son fiyat tarihi
+        # seed'in çapasında donar. Hesaba katıldığında uyarı HER kullanıcıda,
+        # kalıcı olarak çıkıyordu (ölçüldü: as_of 21.08 iken oldest 31.07) —
+        # oysa mevduat "eskimiyor", sabit. Uyarının anlamlı kalması için
+        # yalnızca gerçekten geride kalabilecek varlıklara bakılıyor.
+        oldest_price_date=min(market_price_dates) if market_price_dates else None,
         total_value=_round2(total_value),
         total_cost_basis=_round2(total_cost_basis),
         net_invested=_round2(net_invested),
@@ -540,6 +581,10 @@ def get_portfolio_performance(db: Session, user_id: UUID, window: TimeWindow) ->
         realized_pnl=realized_pnl(db, portfolio.id, start, as_of),
         unrealized_pnl=unrealized_pnl(db, portfolio.id, as_of),
         changes=PeriodChanges(
+            # `series` (ham) kullanılıyor, `points` (hafta sonu ayıklanmış)
+            # değil: dönemler takvim günü cinsindendir. Hafta sonunda değer
+            # Cuma kapanışıyla taşındığı için Pazartesi bakan kullanıcı
+            # Cuma→Pazartesi değişimini görür — istenen davranış budur.
             daily=_period_change(series, 1),
             weekly=_period_change(series, 7),
             monthly=_period_change(series, 30),
@@ -565,6 +610,7 @@ def get_transactions(
     start_date: date | None = None,
     end_date: date | None = None,
     symbols: list[str] | None = None,
+    asset_class: AssetClass | None = None,
 ) -> TransactionList:
     """İşlem defterini filtreleyerek döndürür.
 
@@ -575,6 +621,13 @@ def get_transactions(
 
     `symbols` verilmezse nakit hareketleri (DEPOSIT/WITHDRAW/FEE/INTEREST) de
     listeye girer; verilirse yalnızca o sembollere ait BUY/SELL/DIVIDEND döner.
+
+    `asset_class` "hangi HİSSELERİ aldım" gibi sınıf bazlı sorular içindir.
+    Sembol süzgeciyle aynı şeyi yapamaz: çağıran taraf (ajanın planlayıcısı)
+    kullanıcının hangi sembollerinin hisse olduğunu bilmiyor. Süzgeç yokken
+    "Temmuz'da hangi hisseleri aldım?" sorusuna bir TAHVİL fonu dönüyordu
+    (ölçüldü, 23 Ağustos test turu). Sınıf süzgeci de sembol süzgeci gibi
+    nakit hareketlerini listeden çıkarır.
 
     SIRALAMA: eskiden yeniye. Grafikteki işaretçiler zaman ekseninde soldan
     sağa diziliyor; `position_after` da ancak bu sırada anlamlı.
@@ -633,6 +686,10 @@ def get_transactions(
             continue
 
         symbol = tx.asset.symbol if tx.asset is not None else None
+        if asset_class is not None and (
+            tx.asset is None or tx.asset.asset_class is not asset_class
+        ):
+            continue
         if wanted_symbols is not None:
             # Sembol süzgeci verildiğinde nakit hareketleri (DEPOSIT/WITHDRAW/
             # FEE/INTEREST) listeye girmez: "TUPRS'ta ne yaptım" sorusunun

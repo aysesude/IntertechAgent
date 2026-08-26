@@ -1027,6 +1027,7 @@ def _empty_assessment(
     source: RiskProfileSource,
     risk_free_rate: float,
     rf_is_live: bool,
+    survey_score: int | None = None,
 ) -> RiskAssessment:
     """Boş portföy: çökmek veya sıfır risk iddia etmek yerine nötr bir sonuç
     ve açık bir uyarı döner (CLAUDE.md §4)."""
@@ -1035,6 +1036,7 @@ def _empty_assessment(
         as_of=date.today(),
         risk_profile=profile,
         risk_profile_source=source,
+        risk_survey_score=survey_score,
         total_value=_ZERO,
         risk_level=None,
         is_within_profile=None,
@@ -1077,15 +1079,26 @@ def get_risk_assessment(
 
     `profile_override` verilirse hesaplama o profile göre yapılır ama
     kullanıcının DB'deki kalıcı profili değişmez — "ya agresif olsaydım?"
-    senaryosu için. `include_scenarios=True` VE volatilite profilin hedef
-    bandının üzerindeyse yeniden dengeleme senaryoları da üretilir (maliyetli
-    olduğu için varsayılan olarak kapalıdır)."""
+    senaryosu için.
+
+    `include_scenarios`: ÜRÜN SAHİBİ KARARIYLA (2026-08) devre dışı — bu
+    parametre True verilse bile `settings.risk_scenarios_enabled=False`
+    olduğu sürece `scenarios` her zaman boş liste döner. Risk artık yalnızca
+    tespit/uyarı içindir ("profilinize göre riskiniz yüksek"); ne yapılması
+    gerektiğini önermek kapsam dışı bırakıldı — kullanıcının kendi yatırım
+    kararı. Motor kod olarak duruyor, ileride ürün kararı değişirse
+    `risk_scenarios_enabled=True` yapmak yeterli."""
     user = db.get(User, user_id)
     if user is None:
         raise NotFoundError(f"User not found for user_id {user_id}")
 
     profile = profile_override or user.risk_profile
     source = RiskProfileSource.OVERRIDE if profile_override is not None else RiskProfileSource.USER
+    # Anket puanı yalnızca profil KULLANICININ kendi beyanıysa taşınır.
+    # `profile_override` ("ya agresif olsaydım?") senaryosunda profil beyanla
+    # ilgisizdir; puanı yanına koymak, kullanıcının o puanı verdiğini
+    # söylemek olurdu.
+    survey_score = user.risk_survey_score if profile_override is None else None
 
     portfolio = db.execute(
         select(Portfolio).where(Portfolio.user_id == user_id)
@@ -1106,7 +1119,7 @@ def get_risk_assessment(
     risk_free_rate, rf_is_live = _resolve_risk_free_rate()
 
     if not holdings:
-        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live)
+        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live, survey_score)
 
     asset_ids = [h.asset_id for h in holdings]
     currency_by_asset = {h.asset_id: h.asset.currency for h in holdings}
@@ -1183,7 +1196,7 @@ def get_risk_assessment(
         class_values[AssetClass.CASH] = class_values.get(AssetClass.CASH, _ZERO) + cash_balance
 
     if total_value <= 0:
-        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live)
+        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live, survey_score)
 
     # v2: ağırlıklar TOPLAM portföy üzerinden (nakit dahil) — nakit de bir
     # kategoridir (RISK_MAX_CATEGORY_WEIGHT[CASH], RISK_DEFENSE_FLOOR), v1'in
@@ -1326,7 +1339,12 @@ def get_risk_assessment(
                     correlations=correlations,
                     diversification_ratio=diversification_ratio_value,
                 )
-                if include_scenarios:
+                # ÜRÜN SAHİBİ KARARI (2026-08): senaryo önerisi ürün
+                # kapsamından çıkarıldı (bkz. Settings.risk_scenarios_enabled
+                # yanındaki not). Motor kod olarak duruyor ama bu bayrak
+                # False olduğu sürece hiçbir zaman tetiklenmez — çağıran
+                # include_scenarios=True verse bile.
+                if include_scenarios and settings.risk_scenarios_enabled:
                     scenarios = _generate_rebalance_scenarios(
                         profile,
                         category_weights,
@@ -1361,6 +1379,7 @@ def get_risk_assessment(
         as_of=max(as_of_dates) if as_of_dates else date.today(),
         risk_profile=profile,
         risk_profile_source=source,
+        risk_survey_score=survey_score,
         total_value=_round2(total_value),
         risk_level=risk_level,
         is_within_profile=is_within_profile,
