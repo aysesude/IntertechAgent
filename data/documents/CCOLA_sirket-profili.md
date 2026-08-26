@@ -35,6 +35,15 @@ konusunda bir Ortaklık Anlaşması imzalamıştır. Yönetim kurulu başkanı,
 4 Mayıs 2026 tarihli yönetim kurulu kararıyla atanan Kamilhan Süleyman
 Yazıcı'dır; İlhan Murat Özgel başkan vekilidir. 2026 yılında hisse
 başına brüt 1,43 TL, net 1,2155 TL nakit temettü dağıtılmasına karar
-verildi; kayıt tarihi 12 Mayıs 2026'dır. Bu doküman şirketin kimlik ve
-yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
-türü dokümanlarda yer alır.
+verildi; kayıt tarihi 12 Mayıs 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+Coca-Cola İçecek hisseleri 12 Mayıs 2006'da Borsa İstanbul'da halka
+arz edilmiştir. 2024 yılında The Coca-Cola Company'den Coca-Cola
+Bangladesh Beverages Limited devralınarak Bangladeş pazarına
+girilmiştir; aynı yıl Ağustos ayında yüzde 1000 oranında bedelsiz
+sermaye artırımıyla sermaye 254,4 milyon TL'den 2,798 milyar TL'ye
+çıkarılmıştır (öncesinde 18 yıl artırım yapılmamıştı). Bu doküman
+şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
+sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

@@ -35,6 +35,12 @@ yerine bu göreve getirilen Muhammed Ali Oflaz'dır. Bu doküman şirketin
 kimlik ve yapısal bilgilerini özetler, dönemsel finansal sonuçlar ayrı
 `bilanco` türü dokümanlarda yer alır.
 
+## Halka arz
+
+Kardemir hisseleri, 1-5 Haziran 1998 talep toplamasının ardından 8
+Haziran 1998'de Borsa İstanbul'da işlem görmeye başlamıştır — bu,
+1995'teki özelleştirmeden ayrı, borsaya kotasyon tarihidir.
+
 ## Temettü geçmişi
 
 Kardemir son 6 yıldır düzenli (genellikle Haziran ve Kasım aylarında)

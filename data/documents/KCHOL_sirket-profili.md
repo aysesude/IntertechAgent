@@ -47,6 +47,15 @@ bir oran için KAP'taki resmi ortaklık yapısı bildirimine bakılmalıdır).
 Yönetim kurulu başkanı, 18 Mart 2026 tarihli 62. Olağan Genel Kurul
 Toplantısı'nda onaylanan Ömer M. Koç'tur. 2026 yılında (2025 kârından)
 hisse başına brüt 6,83 TL, net 5,8055 TL nakit temettü dağıtılmasına
-karar verildi; hak kullanım tarihi 25 Mart 2026'dır. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+karar verildi; hak kullanım tarihi 25 Mart 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+2005 yılında Koç Holding, Yapı Kredi Bankası'nın çoğunluk hissesini
+devralmış, 2006'da Koçbank ile birleştirerek Türk bankacılık
+tarihinin en büyük birleşmelerinden birini gerçekleştirmiştir (bkz.
+Yapı Kredi Bankası Şirket Profili). 30 Nisan 2025'te Tofaş'ın
+Stellantis Otomotiv Pazarlama A.Ş. paylarını devralma işlemi
+tamamlanmıştır. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

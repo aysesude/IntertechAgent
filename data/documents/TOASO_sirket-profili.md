@@ -35,6 +35,10 @@ endekslerinde işlem görmektedir. Yönetim kurulu başkanı, 16 Mart 2026
 tarihli olağan genel kurul sonrası atanan Levent Çakıroğlu'dur; Samir
 Cherfan başkan vekilidir. 2026 yılında hisse başına brüt 20 TL, net 17
 TL nakit temettü dağıtılmasına karar verildi; hak kullanım tarihi 23
-Mart 2026'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır.
+Mart 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+Tofaş hisseleri 1 Temmuz 1991'de Borsa İstanbul'da halka arz
+edilmiştir. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
+dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

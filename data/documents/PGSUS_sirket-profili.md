@@ -35,6 +35,13 @@ görmektedir; şirketin halka açık payları bulunmaktadır. Yönetim kurulu
 başkanı, Mart 2023'ten bu yana Mehmet T. Nane'dir. Şirket, 2025 yılı
 için dağıtılabilir kâr oluşmadığı gerekçesiyle 2026 yılında temettü
 dağıtmamıştır (Mart 2026'da açıklandı); şirket son 10 yılda yalnızca 1
-kez temettü dağıtmıştır. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+kez temettü dağıtmıştır.
+
+## Kurumsal olaylar tarihçesi
+
+Pegasus hisseleri 18-19 Nisan 2013 talep toplamasının ardından 26
+Nisan 2013'te Borsa İstanbul'da işlem görmeye başlamıştır. Şubat
+2024'te yüzde 88,76 oranında bedelsiz sermaye artırımı kararı
+alınmış, SPK onayının ardından Mayıs 2024'te uygulanmıştır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

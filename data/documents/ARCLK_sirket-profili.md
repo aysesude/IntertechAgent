@@ -33,6 +33,12 @@ kararı almıştır (18 Şubat 2026, Olağan Genel Kurul onayına sunuldu).
 Europe" adlı ortak bir şirket çatısında birleşmiştir; bu yeni yapıda
 sermayenin yüzde 75'i Arçelik'in Beko markasına, yüzde 25'i
 Whirlpool'a aittir. Arçelik ayrıca kendi hisselerinin yüzde 2,9'unu
-Whirlpool'a satmıştır. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+Whirlpool'a satmıştır.
+
+## Kurumsal olaylar tarihçesi
+
+Arçelik hisseleri 21 Ocak 1986'da Borsa İstanbul'da halka arz
+edilmiştir. 2021 yılında Japon Hitachi Global Life Solutions ile
+"Arçelik Hitachi Home Appliances" adlı bir ortak girişim kurulmuştur.
+Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

@@ -34,5 +34,14 @@ Devleti'nin resmi petrol şirketi SOCAR'ın Türkiye iştiraki SOCAR
 Türkiye Enerji A.Ş.'dir. Yönetim kurulu başkanı Anar Mammadov, başkan
 vekili Kanan Najafov'dur. Şirket, 20 Nisan 2026'da KAP'a yaptığı
 bildirimde 2025 yılı kârı için temettü dağıtmama kararı aldığını
-duyurmuştur. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
-dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+duyurmuştur.
+
+## Kurumsal olaylar tarihçesi
+
+Petkim hisseleri 9 Temmuz 1990'da Borsa İstanbul'da halka arz
+edilmiştir. Ocak 2018'de, STAR Rafineri'nin sahibi Rafineri Holding
+A.Ş.'nin yüzde 30 hissesinin 720 milyon dolara satın alınmasına
+ilişkin anlaşma imzalanmıştır (STAR Rafineri'de dolaylı yaklaşık
+yüzde 18 pay). Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.
