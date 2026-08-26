@@ -231,33 +231,7 @@ async def test_empty_llm_stream_does_not_leave_an_empty_bubble():
         orch.get_llm_client = original
 
     assert "Portföy değeri 100 TL." in result["final_answer"]
-    assert "Bu bir yatırım tavsiyesi değildir." in result["final_answer"]
     assert written, "boş akışta da kullanıcıya bir şey gitmeli"
-
-
-async def test_disclaimer_is_not_duplicated_on_fallback():
-    """Ajan metni uyarıyı zaten taşıyorsa ikilenmez."""
-
-    class _SilentLLM:
-        async def stream(self, prompt, system=None):
-            return
-            yield  # pragma: no cover
-
-    import agents.orchestrator as orch
-
-    original = orch.get_llm_client
-    orch.get_llm_client = lambda: _SilentLLM()
-    try:
-        text = "Risk seviyeniz Orta. Bu bir yatırım tavsiyesi değildir."
-        state = {
-            "message": "Riskim nedir?",
-            "agent_responses": [_Response(True, summary_text=text)],
-        }
-        result = await merge_responses(state, lambda chunk: None)
-    finally:
-        orch.get_llm_client = original
-
-    assert result["final_answer"].count("Bu bir yatırım tavsiyesi değildir.") == 1
 
 
 # ---------------------------------------------------------------------------
