@@ -858,3 +858,31 @@ def test_nakit_akis_tablosu_kelimeleri_jenerik_sayilir():
     )
 
     assert Retriever(store=store).retrieve("BİM'in nakit akış tablosu nasıl?") == []
+
+
+def test_referans_dokumani_kelime_ortusme_kapisindan_muaf():
+    """ "tur: referans" dokümanları (TFRS/finansal oran/kurumsal olay
+    terimleri sözlüğü) jenerik kelime kapısından muaf: bir kavramı
+    TANIMLAYAN doküman, tanımladığı kelimeleri sıkça kullanır ama bu
+    kelimeler bilanço dokümanlarının boilerplate açılışında da geçtiği
+    için jenerik sayılmak zorunda kalıyor (bkz. "nakit"/"tablosu"/"kap").
+    İkisi çakışınca kavramı tanımlayan TEK doğru kaynak da elenip sorgu
+    tamamen boş dönüyordu (ölçümle doğrulandı, 2026-08-26): "Konsolide
+    finansal tablo ne demek?" sorgusu. Şirket dokümanlarının aksine burada
+    "yanlış şirket" riski yok, muafiyet güvenli."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "TFRS 10, bir ana ortaklığın kontrol ettiği bağlı ortaklıklarla "
+                "birlikte konsolide finansal tablo sunmasını düzenler.",
+                baslik="TFRS Temel Standartlar Sözlüğü",
+                tur="referans",
+                distance=0.335,
+            )
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("Konsolide finansal tablo ne demek?")
+
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["metadata"]["tur"] == "referans"
