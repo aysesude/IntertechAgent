@@ -39,6 +39,7 @@ def tr_percent(value: Any, *, signed: bool = False) -> str:
     isaret = "+" if float(value) >= 0 else "-"
     return f"{isaret}%{sayi}"
 
+
 def tr_date(value: Any) -> str:
     """ISO tarihini GG.AA.YYYY biçimine çevirir: '2025-09-08T10:00:00Z' -> '08.09.2025'.
 

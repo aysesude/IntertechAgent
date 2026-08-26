@@ -29,6 +29,7 @@ from agents.market_agent import MarketAgent
 from agents.portfolio_agent import PortfolioAgent
 from agents.risk_agent import RiskAgent
 from agents.scope_checker import check_scope
+from agents.web_research_agent import WebResearchAgent
 from app.core.config import settings
 from app.core.llm_client import get_llm_client
 
@@ -53,12 +54,13 @@ class OrchestratorState(TypedDict):
 # (OUT_OF_SCOPE, AMBIGUOUS vb.) ya da bunlardan bir veya birkaçının "+" ile
 # birleşmiş hâlidir ("risk", "portfolio+risk"). Alan orchestrator dışına
 # çıkmıyor; tek tüketicisi _route_after_intent.
-AGENT_INTENTS = ("portfolio", "market", "risk")
+AGENT_INTENTS = ("portfolio", "market", "risk", "web_research")
 
 AGENT_NODES = {
     "portfolio": "portfolio_agent",
     "market": "market_agent",
     "risk": "risk_agent",
+    "web_research": "web_research_agent",
 }
 
 # Merge prompt'u bu metni istiyor; LLM düşerse kod tarafından garanti edilir
@@ -116,12 +118,11 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "PORTFOLIO — kullanıcının kendi varlıkları: değeri, dağılımı, getirisi, "
         "işlem geçmişi, tek tek pozisyonları.\n"
         "  Örnek: 'portföyüm ne durumda', 'geçen ay ne aldım', 'varlıklarımı listele'\n"
-        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz, "
-        "ayrıca finansal kavram/oran ve muhasebe standardı tanımları (F/K oranı, "
-        "TFRS/TMS muhasebe standartları, konsolide/solo finansal tablo farkı gibi).\n"
+        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz; "
+        "ayrıca ARŞİVDE BELGESİ OLAN teknik konular: muhasebe standartları ve "
+        "finansal tablo terimleri.\n"
         "  Örnek: 'Aselsan haberleri', 'dolar kuru ne durumda', 'BIST bugün nasıl', "
-        "'TFRS 16 nedir', 'F/K oranı nasıl hesaplanır', 'konsolide finansal tablo ne "
-        "demek'\n"
+        "'TFRS 16 nedir', 'konsolide finansal tablo ne demek'\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -130,6 +131,13 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
         "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
         "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
+        "WEB_RESEARCH — genel finans kavramlarının ne anlama geldiği, nasıl "
+        "işlediği, nasıl hesaplandığı; yaygın uygulamalar ve süreçler. "
+        "Kullanıcının kendi verisiyle ya da güncel bir piyasa değeriyle ilgisi "
+        "yoktur, arşivde de belgesi yoktur.\n"
+        "  Örnek: 'lot ne demek', 'temettü nedir', 'halka arz nasıl olur', "
+        "'borsa saat kaçta kapanır', 'şirketler ne sıklıkla temettü verir', "
+        "'portföy kârı nasıl hesaplanır', 'hisse ile fon arasındaki fark ne'\n\n"
         "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı.\n"
         "  Örnek: '2027de dolar kaç TL olur', 'altın yükselecek mi', "
         "'bu hisse gelecek yıl ne kadar olur'\n"
@@ -142,6 +150,10 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
         "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
         "'riskim nedir' → sadece RISK.\n"
+        "TANIM mı DEĞER mi: bir kavramın ne olduğu soruluyorsa WEB_RESEARCH, "
+        "aynı kavramın kullanıcıdaki değeri soruluyorsa ilgili ajan. "
+        "'temettü nedir' → WEB_RESEARCH, 'ne kadar temettü aldım' → PORTFOLIO. "
+        "'kâr nasıl hesaplanır' → WEB_RESEARCH, 'ne kadar kâr ettim' → PORTFOLIO.\n"
         "TAHMIN ve KAPSAM_DISI TEK BAŞINA yazılır, başka etiketle birlikte değil.\n"
         "TAKİP SORUSU: Soru kendi başına anlaşılmıyorsa ('bunu açıkla', 'peki "
         "ya', 'neden böyle') ÖNCEKİ KONUŞMA'da neyin konuşulduğuna bak ve o "
@@ -254,6 +266,12 @@ async def run_market_agent(state: OrchestratorState) -> dict:
 
 async def run_risk_agent(state: OrchestratorState) -> dict:
     agent = RiskAgent(mcp_server_url=settings.mcp_server_url)
+    response = await agent.execute(_build_request(state), on_token=None)
+    return {"agent_responses": [response]}
+
+
+async def run_web_research_agent(state: OrchestratorState) -> dict:
+    agent = WebResearchAgent(mcp_server_url=settings.mcp_server_url)
     response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
@@ -443,6 +461,7 @@ def _build_graph():
     graph.add_node("portfolio_agent", run_portfolio_agent)
     graph.add_node("market_agent", run_market_agent)
     graph.add_node("risk_agent", run_risk_agent)
+    graph.add_node("web_research_agent", run_web_research_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
@@ -455,6 +474,7 @@ def _build_graph():
             "portfolio_agent": "portfolio_agent",
             "market_agent": "market_agent",
             "risk_agent": "risk_agent",
+            "web_research_agent": "web_research_agent",
         },
     )
 
@@ -462,6 +482,7 @@ def _build_graph():
     graph.add_edge("portfolio_agent", "merge")
     graph.add_edge("market_agent", "merge")
     graph.add_edge("risk_agent", "merge")
+    graph.add_edge("web_research_agent", "merge")
     graph.add_edge("merge", END)
 
     return graph.compile()

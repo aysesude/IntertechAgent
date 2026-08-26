@@ -124,8 +124,28 @@ tavsiye_bayragi:
 # KATMAN 1 — Kavram kapsamı (Bilgi Ajanı / RAG)
 # ---------------------------------------------------------------------------
 kavram_kapsami:
+  # Beş soru biçimi: tanım, hesaplama, işleyiş/yaygın uygulama, karşılaştırma,
+  # süreç/zamanlama. Kapsam yalnızca "x nedir" ile sınırlı DEĞİL — kullanıcı
+  # aynı konuyu "nasıl hesaplanır" ya da "ne sıklıkla olur" diye de soruyor
+  # ve ikisi de kavram sorusudur.
   soru_kaliplari: [nedir, ne demek, ne anlama gelir, nasıl hesaplanır,
-                   nasıl çalışır, farkı nedir, ne işe yarar]
+                   nasıl bulunur, nasıl çalışır, nasıl olur, nasıl yapılır,
+                   farkı nedir, ne işe yarar,
+                   ne sıklıkla, ne zaman verilir, ne zaman geçer,
+                   kaç günde, ne kadar sürer, zorunlu mu, kimler]
+
+  # "Nasıl hesaplanır" sorusunun cevabı, hesap BU UYGULAMADA yapılıyorsa
+  # uygulamanın kendi tanımıdır; ders kitabı formülü değil. Aksi halde açıklama
+  # ile ekrandaki rakam birbirini yalanlar. Tanımlar
+  # agents/prompts/web_research_agent.md içindeki EV KURALLARI bölümünde,
+  # kaynakları docs/API.md ve portfolio_service'te.
+  ev_kurallari_gerektiren: [kar orani, kar zarar, getiri, donem getirisi,
+                            endeks kiyaslamasi, varlik agirligi]
+
+  # "Ne sıklıkla / genelde nasıl olur" cevapları şirkete, kuruma ve alınan
+  # karara göre değişir; tek bir sayı evrensel kural gibi sunulmamalı.
+  degiskenlik_uyarisi_gerektiren: [ne sıklıkla, genelde, genellikle, kaç günde,
+                                   ne zaman verilir, ne kadar sürer]
 
   kapsam_ici_konular:
     - hisse_temelleri      # halka arz, temettü, F/K, piyasa değeri, lot, tavan/taban
