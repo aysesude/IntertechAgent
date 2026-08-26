@@ -361,7 +361,7 @@ export function LoginScreen({
         type="button"
         onClick={() => setTheme(isDark ? "light" : "dark")}
         aria-label={isDark ? "Açık temaya geç" : "Koyu temaya geç"}
-        className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/80 text-[#0B2653] shadow-[0_6px_20px_-12px_rgba(11,38,83,0.5)] backdrop-blur-sm transition-colors hover:bg-white lg:right-8 lg:top-7 dark:border-white/15 dark:bg-white/10 dark:text-[#DCE6FA] dark:hover:bg-white/20"
+        className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/80 text-[#0B2653] shadow-[0_6px_20px_-12px_rgba(11,38,83,0.5)] backdrop-blur-sm transition-colors hover:bg-white lg:right-8 lg:top-7 dark:border-transparent dark:bg-white/10 dark:text-[#DCE6FA] dark:hover:bg-white/20"
         style={{ zIndex: Z_LAYER.toggle }}
       >
         {isDark ? <Sun size={18} /> : <Moon size={18} />}
@@ -432,7 +432,7 @@ export function LoginScreen({
             {notice && (
               <p
                 role="status"
-                className="mt-4 rounded-xl border border-[#DCE3EC] bg-white/70 px-3.5 py-2.5 text-[12.5px] text-[#5A7292] dark:border-white/12 dark:bg-white/[0.06] dark:text-[#B9C4DC]"
+                className="mt-4 rounded-xl border border-[#DCE3EC] bg-white/70 px-3.5 py-2.5 text-[12.5px] text-[#5A7292] dark:border-transparent dark:bg-white/[0.06] dark:text-[#B9C4DC]"
               >
                 {notice}
               </p>
@@ -487,7 +487,7 @@ export function LoginScreen({
                     /* INPUT_CLASS ile aynı, tek farkı sağdaki göz butonuna yer
                        açan `pr-11` dolgusu — Tailwind'de sınıf sırası çakışmayı
                        çözmediği için burada tam sınıf yazılıyor. */
-                    className="h-11 w-full rounded-xl border border-[#DCE3EC] bg-white pl-3.5 pr-11 text-[14px] tracking-[0.04em] text-[#0B2653] outline-none transition placeholder:tracking-normal placeholder:text-[#9AA9BC] focus:border-[#2557E8] focus:ring-4 focus:ring-[#2557E8]/12 dark:border-white/12 dark:bg-[rgba(250,240,230,0.05)] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#B04A5E] dark:focus:ring-[#B04A5E]/20"
+                    className="h-11 w-full rounded-xl border border-[#DCE3EC] bg-white pl-3.5 pr-11 text-[14px] tracking-[0.04em] text-[#0B2653] outline-none transition placeholder:tracking-normal placeholder:text-[#9AA9BC] focus:border-[#2557E8] focus:ring-4 focus:ring-[#2557E8]/12 dark:border-transparent dark:bg-[rgba(250,240,230,0.05)] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#B04A5E] dark:focus:ring-[#B04A5E]/20"
                   />
                   <button
                     type="button"

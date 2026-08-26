@@ -51,14 +51,14 @@ export function ChatPage() {
             onClick={() => downloadTranscript(messages, user.name)}
             disabled={messages.length === 0}
             title="Bu sohbetteki tüm soru ve yanıtları .txt olarak indir"
-            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft dark:text-ink-muted dark:disabled:hover:text-ink-muted"
+            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft dark:border-transparent dark:bg-white/5 dark:text-ink-muted dark:disabled:hover:text-ink-muted"
           >
             <DownloadIcon size={14} />
             Dökümü İndir
           </button>
           <button
             onClick={resetSession}
-            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand dark:text-ink-muted"
+            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand dark:border-transparent dark:bg-white/5 dark:text-ink-muted"
           >
             <PlusIcon size={14} />
             Yeni Sohbet
@@ -70,7 +70,7 @@ export function ChatPage() {
           ve çalışmayan bir liste göstermek demoda soru işareti yaratır.
           Uç eklendiğinde geri gelecek. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-white dark:border-transparent dark:bg-surface-elevated dark:shadow-[0_8px_28px_-18px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)]">
-        <div className="flex shrink-0 items-center gap-[11px] border-b border-line2 px-[22px] py-4">
+        <div className="flex shrink-0 items-center gap-[11px] border-b border-line2 px-[22px] py-4 dark:border-transparent">
           <AssistantAvatar />
           <div className="flex-1">
             <div className="text-sm font-semibold">AI Asistan</div>
@@ -105,7 +105,7 @@ export function ChatPage() {
               key={prompt}
               onClick={() => handleSend(prompt)}
               disabled={sending}
-              className="min-h-10 rounded-full border-[1.5px] border-brand-border bg-white px-[15px] py-[9px] text-[12.5px] font-semibold text-brand transition-colors hover:bg-brand-tint disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-elevated"
+              className="min-h-10 rounded-full border-[1.5px] border-brand-border bg-white px-[15px] py-[9px] text-[12.5px] font-semibold text-brand transition-colors hover:bg-brand-tint disabled:cursor-not-allowed disabled:opacity-50 dark:border-transparent dark:bg-surface-elevated"
             >
               {prompt}
             </button>
@@ -114,14 +114,14 @@ export function ChatPage() {
 
         {/* Giriş kutusunun üstünde duran maskot KALDIRILDI: kartın sağ alt
             köşesinde, yanıt akarken dikkati metinden çekiyordu. */}
-        <div className="flex shrink-0 gap-2.5 border-t border-line2 px-[22px] pb-5 pt-3.5">
+        <div className="flex shrink-0 gap-2.5 border-t border-line2 px-[22px] pb-5 pt-3.5 dark:border-transparent">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             disabled={sending}
             placeholder="Portföyün hakkında bir soru sor…"
-            className="h-[46px] flex-1 rounded-[10px] border border-line px-4 text-sm outline-none transition-shadow focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,87,232,.1)] disabled:opacity-60 dark:border-white/[0.12] dark:bg-white/[0.06] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#C4485A] dark:focus:shadow-[0_0_0_3px_rgba(196,72,90,.2)]"
+            className="h-[46px] flex-1 rounded-[10px] border border-line px-4 text-sm outline-none transition-shadow focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,87,232,.1)] disabled:opacity-60 dark:border-transparent dark:bg-white/[0.06] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#C4485A] dark:focus:shadow-[0_0_0_3px_rgba(196,72,90,.2)]"
           />
           <button
             onClick={() => handleSend()}

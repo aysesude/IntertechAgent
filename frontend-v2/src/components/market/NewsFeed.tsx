@@ -25,7 +25,7 @@ export function NewsFeed({ news }: NewsFeedProps) {
             <span
               className={
                 "rounded-md px-[9px] py-1 text-[11px] font-bold uppercase tracking-[.6px] " +
-                (item.isPortfolioRelevant ? "border border-brand-border bg-brand-tint text-brand" : "bg-line2 text-ink-muted")
+                (item.isPortfolioRelevant ? "border border-brand-border bg-brand-tint text-brand dark:border-transparent" : "bg-line2 text-ink-muted")
               }
             >
               {item.tag}

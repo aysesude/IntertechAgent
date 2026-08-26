@@ -14,7 +14,7 @@ function PerformerTile({ label, performer, positive }: { label: string; performe
   const Icon = positive ? TrendingUp : TrendingDown;
   const hasData = performer != null;
   return (
-    <div className="flex items-center gap-3.5 rounded-[10px] border border-line p-4">
+    <div className="flex items-center gap-3.5 rounded-[10px] border border-line p-4 dark:border-transparent dark:bg-white/5">
       <span
         className={`grid h-10 w-10 shrink-0 place-items-center rounded-[9px] ${hasData ? (positive ? "bg-brand-tint text-brand dark:bg-[rgba(70,199,154,0.14)] dark:text-[#46C79A]" : "bg-danger-tint text-danger dark:bg-[rgba(255,107,114,0.14)] dark:text-[#FF6B72]") : "bg-line2 text-ink-faint"}`}
       >

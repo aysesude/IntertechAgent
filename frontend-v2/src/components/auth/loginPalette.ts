@@ -28,4 +28,4 @@ export const ACCENT_DARK_ICON = "#C25668";
 
 /** Form alanlarının ortak sınıfı: iki kartta da aynı görünsün. */
 export const INPUT_CLASS =
-  "h-11 w-full rounded-xl border border-[#DCE3EC] bg-white px-3.5 text-[14px] tracking-[0.04em] text-[#0B2653] outline-none transition placeholder:tracking-normal placeholder:text-[#9AA9BC] focus:border-[#2557E8] focus:ring-4 focus:ring-[#2557E8]/12 dark:border-white/12 dark:bg-[rgba(240,220,200,0.05)] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#B04A5E] dark:focus:ring-[#B04A5E]/20";
+  "h-11 w-full rounded-xl border border-[#DCE3EC] bg-white px-3.5 text-[14px] tracking-[0.04em] text-[#0B2653] outline-none transition placeholder:tracking-normal placeholder:text-[#9AA9BC] focus:border-[#2557E8] focus:ring-4 focus:ring-[#2557E8]/12 dark:border-transparent dark:bg-[rgba(240,220,200,0.05)] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#B04A5E] dark:focus:ring-[#B04A5E]/20";

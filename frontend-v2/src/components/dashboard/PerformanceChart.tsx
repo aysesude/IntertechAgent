@@ -181,7 +181,7 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
               onClick={() => onRangeChange(key)}
               className={
                 "rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors " +
-                (key === activeRange ? "bg-brand text-white" : "border border-line text-ink-muted")
+                (key === activeRange ? "bg-brand text-white" : "border border-line text-ink-muted dark:border-transparent dark:bg-white/5")
               }
             >
               {key}
@@ -230,7 +230,7 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
         />
       </div>
 
-      <div className="flex gap-5 border-t border-line2 px-0.5 pb-3.5 pt-3.5">
+      <div className="flex gap-5 border-t border-line2 px-0.5 pb-3.5 pt-3.5 dark:border-transparent">
         <div className="flex items-center gap-2 text-[12.5px] text-ink-muted">
           {/* Koyu temada buildChartOptions'taki brandColor (#EB5265, brand-bright)
               ile birebir aynı literal değer — bg-brand (düz brand, #C4485A)
@@ -265,7 +265,7 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
 
 function StatBlock({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="rounded-[10px] border border-line px-4 py-3.5">
+    <div className="rounded-[10px] border border-line px-4 py-3.5 dark:border-transparent dark:bg-white/5">
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[.4px] text-ink-faint">{label}</div>
       <div className="font-display text-[19px] font-bold tracking-[-0.4px]" style={{ color }}>
         {value}

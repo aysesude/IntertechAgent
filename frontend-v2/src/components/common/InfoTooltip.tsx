@@ -95,11 +95,11 @@ export function InfoTooltip({ text }: InfoTooltipProps) {
             ref={tooltipRef}
             role="tooltip"
             style={{ top: coords.top, left: coords.left, width: WIDTH_PX }}
-            className="animate-tipIn fixed z-[300] rounded-xl border border-line bg-white p-3 text-[12.5px] leading-[1.55] text-ink-soft shadow-pop dark:bg-surface-elevated"
+            className="animate-tipIn fixed z-[300] rounded-xl border border-line bg-white p-3 text-[12.5px] leading-[1.55] text-ink-soft shadow-pop dark:border-transparent dark:bg-surface-elevated"
           >
             {text}
             <div
-              className="absolute -top-[5px] h-2.5 w-2.5 rotate-45 border-l border-t border-line bg-white dark:bg-surface-elevated"
+              className="absolute -top-[5px] h-2.5 w-2.5 rotate-45 border-l border-t border-line bg-white dark:border-transparent dark:bg-surface-elevated"
               style={{ left: coords.caretLeft - 5 }}
             />
           </div>,

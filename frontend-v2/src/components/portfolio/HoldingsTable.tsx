@@ -47,7 +47,7 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
               onClick={() => setFilter(f)}
               className={
                 "min-h-10 rounded-lg px-[13px] py-[7px] text-xs font-semibold transition-colors " +
-                (f === filter ? "bg-brand text-white" : "border border-line text-ink-muted")
+                (f === filter ? "bg-brand text-white" : "border border-line text-ink-muted dark:border-transparent dark:bg-white/5")
               }
             >
               {f}
@@ -81,7 +81,7 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
                 aria-label={`${h.name} için getiri detaylarını aç`}
                 onClick={() => setSelected(h)}
                 onKeyDown={(e) => handleRowKeyDown(e, h)}
-                className="cursor-pointer border-t border-line2 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.04]"
+                className="cursor-pointer border-t border-line2 transition-colors hover:bg-black/[0.02] dark:border-transparent dark:hover:bg-white/[0.04]"
               >
                 <td className="py-3.5">
                   <div className="text-sm font-semibold">{h.name}</div>

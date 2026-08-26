@@ -37,7 +37,7 @@ function ilkAd(tamAd: string): string {
 
 export function DashboardPage({ introSequence = false }: DashboardPageProps) {
   const [range, setRange] = useState<RangeKey>("1Y");
-  const { data, loading, rangeLoading, error, isDemoData, freshnessWarning, chartRange, refetch } =
+  const { data, loading, rangeLoading, error, isDemoData, chartRange, refetch } =
     useDashboardData(range);
   const { user } = useAuth();
   const shouldReduceMotion = useReducedMotion();
@@ -70,20 +70,11 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             gösteriliyor. */}
         {error && <ErrorBanner message={error} onDismiss={refetch} />}
 
-        {/* Özet her varlığı KENDİ son fiyatıyla değerliyor; tek bir tarih tüm
-            portföyü tarif etmiyor. Bir kısmı eskiyse söylenmesi zorunlu,
-            yoksa özet olduğundan taze görünür. */}
-        {freshnessWarning && (
-          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
-            {freshnessWarning}
-          </div>
-        )}
-
         {/* Gösterilen veri sunucudan gelmediyse bunu SÖYLEMEK zorundayız;
             uydurma rakamı gerçek sanmak bir finans ürününde en kötü hata
             modu (CLAUDE.md §4). */}
         {isDemoData && !loading && !error && (
-          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
+          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted dark:border-transparent">
             Bu ekranda <strong className="font-semibold">tasarım verisi</strong> gösteriliyor —
             sunucuya bağlanılamadı.
           </div>

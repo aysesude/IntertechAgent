@@ -27,7 +27,6 @@ import type {
   RiskSummaryRow,
   SharpeRatio,
   StrategyRecommendation,
-  TargetVsActualRow,
   Transaction,
   User,
   ValueAtRisk,
@@ -291,9 +290,6 @@ export const mockAssetClasses: AssetClassSummary[] = [
   { id: "fx", name: "Döviz", value: 512_518, formattedValue: "₺512.518", returnPct: -1.85, weightPct: 18, icon: "fx" },
   { id: "bond", name: "Tahvil", value: 341_678, formattedValue: "₺341.678", returnPct: 2.04, weightPct: 12, icon: "bond" },
   { id: "cash", name: "Nakit", value: 170_840, formattedValue: "₺170.840", returnPct: 0, weightPct: 6, icon: "cash" },
-  // Portföyde pozisyonu bulunmayan bir sınıf örneği (AK-1.2) — kart listeden
-  // düşmek yerine 0/"—" ile açıkça görünür kalır.
-  { id: "crypto", name: "Kripto Varlık", value: 0, formattedValue: "—", returnPct: 0, weightPct: 0, icon: "crypto" },
 ];
 
 // Holding.value/formattedValue/quantity/returnPct artık lots'tan TÜRETİLİR
@@ -422,18 +418,10 @@ export const mockRiskSummary: RiskSummaryRow[] = [
   { id: "fx", label: "Kur açıklığı", status: "Nötr", valuePct: 18, color: "#C7CBD4", trend: "neutral", trendColor: "#8A8F98" },
 ];
 
-export const mockTargetVsActual: TargetVsActualRow[] = [
-  { id: "stocks", label: "Hisse", targetPct: 38, actualPct: 42, diff: 4 },
-  { id: "gold", label: "Altın", targetPct: 15, actualPct: 22, diff: 7 },
-  { id: "fx", label: "Döviz", targetPct: 20, actualPct: 18, diff: -2 },
-  { id: "bond", label: "Tahvil", targetPct: 12, actualPct: 12, diff: 0 },
-];
-
 export const mockPortfolioPage: PortfolioPageData = {
   assetClasses: mockAssetClasses,
   holdings: mockHoldings,
   riskSummary: mockRiskSummary,
-  targetVsActual: mockTargetVsActual,
   instrumentCount: INSTRUMENT_COUNT,
   assetClassCount: ASSET_CLASS_COUNT,
 };
@@ -615,7 +603,11 @@ export const mockChatMessages: ChatMessage[] = [
 export const mockChatPage: ChatPageData = {
   threads: mockChatThreads,
   messages: mockChatMessages,
-  suggestedPrompts: ["Portföyümü nasıl dengelerim?", "Bu ay en riskli varlığım hangisi?", "Altın almalı mıyım?"],
+  suggestedPrompts: [
+    "Portföyümün dağılımı nasıl?",
+    "Portföyüm ne kadar riskli?",
+    "Enflasyon haberi portföyümü nasıl etkiler?",
+  ],
 };
 
 export const INVESTMENT_DISCLAIMER = "Yatırım tavsiyesi değildir.";
