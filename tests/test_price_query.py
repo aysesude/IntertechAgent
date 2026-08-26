@@ -58,6 +58,19 @@ class TestFiyatNiyeti:
         assert niyet == {"symbols": ["XAUTRY"], "history": True}
         assert fiyat_niyeti("Dolar son bir yılda ne yaptı?")["history"] is True
 
+    def test_araya_sayi_giren_sure_kaliplari_da_gecmis_sayilir(self):
+        """ "son ay"/"son bir yıl" gibi sabit kalıplar araya bir SAYI
+        girdiğinde ("son 1 ayda") eşleşmiyordu (ölçümle doğrulandı,
+        2026-08-26): neredeyse aynı anlama gelen "altın yükseldi mi son bir
+        ayda" doğru şekilde geçmiş sayılırken "altın nasıl bir yükseklik
+        gösterdi son 1 ayda" RAG'a düşüp başarısız oluyordu."""
+        assert fiyat_niyeti("altın nasıl bir yükseklik gösterdi son 1 ayda") == {
+            "symbols": ["XAUTRY"],
+            "history": True,
+        }
+        assert fiyat_niyeti("dolar son 6 ayda nasıl gitti")["history"] is True
+        assert fiyat_niyeti("gümüş son 2 haftada ne oldu")["history"] is True
+
     def test_iki_sart_birlikte_aranir(self):
         """Tek başına fiyat kalıbı ya da tek başına varlık adı YETMEZ."""
         # Fiyat kalıbı var, varlık yok -> portföy sorusu olabilir.

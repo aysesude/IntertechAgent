@@ -219,6 +219,16 @@ def varlik_tespit_et(query: str) -> list[str]:
     return bulunan
 
 
+# "son ay"/"son 3 ay"/"son bir yıl" gibi SABİT ifadeler _GECMIS_KALIPLARI'nda
+# var ama araya bir SAYI giren biçimi ("son 1 ayda") hiçbiriyle eşleşmiyordu
+# (ölçümle doğrulandı, 2026-08-26: "altın nasıl bir yükseklik gösterdi son 1
+# ayda" RAG'a düşüp başarısız oluyordu, neredeyse aynı anlama gelen "altın
+# yükseldi mi son bir ayda" ise "yükseldi" kalıbı üzerinden doğru şekilde
+# fiyat geçmişi yoluna gidiyordu). Sabit ifadelere tek tek "son 1 ay", "son 2
+# ay" ... eklemek yerine genel bir "son <sayı> gün/hafta/ay/yıl" kalıbı.
+_SURE_KALIP_RE = re.compile(r"\bson\s+\d+\s+(gun|hafta|ay|yil)\w*")
+
+
 def _icerir(normalized: str, kaliplar: tuple[str, ...]) -> bool:
     return any(k in normalized for k in kaliplar)
 
@@ -236,7 +246,7 @@ def fiyat_niyeti(query: str) -> dict | None:
     if not semboller:
         return None
 
-    gecmis = _icerir(normalized, _GECMIS_KALIPLARI)
+    gecmis = _icerir(normalized, _GECMIS_KALIPLARI) or bool(_SURE_KALIP_RE.search(normalized))
     if not gecmis and not _icerir(normalized, _FIYAT_KALIPLARI):
         return None
 
