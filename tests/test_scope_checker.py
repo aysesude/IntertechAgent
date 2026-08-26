@@ -199,3 +199,47 @@ def test_satin_alma_tavsiye_sorusu_hala_gecer():
     assert "advice_seeking" in result["flags"]
     assert _intent("ev almak için ne kadar kredi çekebilirim") == "OUT_OF_SCOPE"
     assert _intent("kredi kartı limitim ne kadar") == "OUT_OF_SCOPE"
+
+
+# ---------------------------------------------------------------------------
+# Coklu sirket gecen sorguda "Yapi Kredi" -> "kredi" cakismasi
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "gümüş son 2 haftada ne oldu",
+        "gümüş ne kadar",
+        "platin fiyatı nedir",
+    ],
+)
+def test_gumus_ve_platin_artik_kapsam_ici(query):
+    """Karar K-1 (gümüşün v1'de kapsam dışı bırakılması) 2026-08-26'da geri
+    alındı: `price_query.py` gümüş/platini XAGTRY/XPTTRY ile zaten tam
+    destekliyordu, scope_checker'ın reddetmesi bir tutarsızlıktı."""
+    assert _intent(query) == "pass_to_llm"
+
+
+def test_gercek_kapsam_disi_diger_emtialar_hala_reddedilir():
+    """Yalnızca gümüş/platin kapsama alındı; petrol gibi diğer emtialar
+    hâlâ kapsam dışı kalmalı."""
+    assert _intent("petrol fiyatı ne kadar") == "OUT_OF_SCOPE"
+
+
+def test_coklu_sirketli_sorguda_yapi_kredi_kredi_etiketiyle_cakissa_bile_gecer():
+    """Ölçümle doğrulandı (2026-08-26, analist canlı test turu): "Akbank, İş
+    Bankası ve Yapı Kredi'nin ... karşılaştır" gibi 3 şirketli bir sorguda
+    `market_query.sirket_tespit_et` (tek/None) belirsizlik yüzünden None
+    dönüyordu, kapsam-dışı-etiket istisnası hiç tetiklenmiyordu ve "Yapı
+    Kredi" bankacılık-ürünleri sınıfındaki "kredi" etiketiyle çakışıp
+    sorguyu yanlışlıkla OUT_OF_SCOPE'a düşürüyordu. `sirket_gecer_mi`
+    kullanılarak düzeltildi (şirket SAYISına değil, en az bir tane geçip
+    geçmediğine bakar)."""
+    assert (
+        _intent(
+            "Akbank, İş Bankası ve Yapı Kredi'nin son çeyrek net kârlarını "
+            "karşılaştır, en yüksekten düşüğe sırala."
+        )
+        == "pass_to_llm"
+    )
