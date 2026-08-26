@@ -62,7 +62,6 @@ AGENT_NODES = {
 }
 
 
-
 def _mesaj(anahtar: str, varsayilan: str) -> str:
     """Kullanıcıya gösterilen metni scope.yaml'dan okur.
 
