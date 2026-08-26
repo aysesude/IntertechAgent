@@ -258,8 +258,29 @@ def main() -> int:
                     )
         if asiri:
             print(f"  toplam: {asiri} pozisyon")
-            bulgular.append(f"{asiri} pozisyonda |K/Z| > %{ASIRI_KZ_ESIGI}")
-            sira_hatasi = True
+            # Aşırı K/Z tek başına SIRA HATASI DEĞİLDİR.
+            #
+            # Bu kontrol, maliyetin bir evrenden değerlemenin başka evrenden
+            # geldiği durumu yakalamak için eklendi. Ama aynı belirti gerçek
+            # bir piyasa hareketinden de doğabilir: TL'de bir yılda üçe
+            # katlanan hisse olağandışı değil, ayrıca sermaye artırımı
+            # (bölünme) ham fiyat serisinde kopukluk bırakıyor.
+            #
+            # Ayırt edici olan 3. KONTROL: işlem fiyatları o günün
+            # `price_history` kaydıyla uyuşuyorsa maliyet ve değerleme aynı
+            # evrendendir ve yeniden seed hiçbir şeyi değiştirmez. Yalnızca
+            # ikisi BİRLİKTE görüldüğünde sıra hatasından söz edilebilir.
+            if sapmalar:
+                bulgular.append(
+                    f"{asiri} pozisyonda |K/Z| > %{ASIRI_KZ_ESIGI} "
+                    "(islem fiyatlari da uyumsuz - sira hatasi)"
+                )
+                sira_hatasi = True
+            else:
+                bulgular.append(
+                    f"{asiri} pozisyonda |K/Z| > %{ASIRI_KZ_ESIGI} "
+                    "(islem fiyatlari UYUMLU - piyasa hareketi ya da bolunme)"
+                )
         else:
             print("  temiz")
 

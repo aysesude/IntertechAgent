@@ -109,11 +109,11 @@ değişikliği geçmedi ve seed eski ankrajla koştu.
 çekilen değil. Geçmişi zaten tam olan bir sembol `0` yazar ve bu doğrudur;
 işarete bakın: `+` başarılı, `-` atlandı, `!` başarısız, `~` kısmi.
 
-### Varlık evreni (37 varlık)
+### Varlık evreni (119 varlık)
 
 | Sınıf | Adet | Kaynak |
 |---|---|---|
-| Hisse | 19 | yfinance (15 BIST + BIST 100 endeksi) + TEFAS (3 hisse fonu) |
+| Hisse | 102 | yfinance (BIST 100'den 98 hisse + endeks) + TEFAS (3 hisse fonu) |
 | Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
 | Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
 | Borçlanma Araçları | 5 | TEFAS (4 borçlanma fonu + 1 para piyasası fonu) |
