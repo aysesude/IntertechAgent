@@ -35,6 +35,11 @@ Holding ve Yatırım sektöründe sınıflandırılmaktadır. Yönetim kurulu
 başkanlığını, 27 Mart 2025'te Güler Sabancı'dan bu görevi devralan
 Hayri Çulhacı yürütmektedir. 2026 yılında hisse başına brüt 1,41356 TL,
 net 1,33897 TL nakit temettü dağıtılmasına karar verildi; hak kullanım
-tarihi 1 Nisan 2026'dır. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+tarihi 1 Nisan 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+Sabancı Holding hisseleri 8 Temmuz 1997'de Borsa İstanbul'da halka
+arz edilmiştir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

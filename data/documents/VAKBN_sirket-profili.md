@@ -33,7 +33,13 @@ başkanı, 9 Nisan 2026'daki 72. Olağan Genel Kurul'da onaylanan Mustafa
 Saydam'dır; Cemil Ragıp Ertem başkan vekilidir. Banka, 12 Mart 2026'da
 KAP'a yaptığı bildirimde 2025 yılı kârı için temettü dağıtmama
 kararı aldığını duyurmuş, bu karar 9 Nisan 2026 genel kurulunda
-onaylanmıştır. Bu doküman şirketin kimlik ve yapısal bilgilerini
-özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
-yer alır, daha ayrıntılı pay dağılımı için bankanın resmi faaliyet
-raporlarına başvurulmalıdır.
+onaylanmıştır.
+
+## Kurumsal olaylar tarihçesi
+
+VakıfBank hisseleri, 9-11 Kasım 2005 talep toplamasının ardından 18
+Kasım 2005'te Borsa İstanbul'da işlem görmeye başlamış, hisselerin
+yaklaşık yüzde 25,18'i halka arz edilmiştir. Bu doküman şirketin
+kimlik ve yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır, daha ayrıntılı pay dağılımı için
+bankanın resmi faaliyet raporlarına başvurulmalıdır.
