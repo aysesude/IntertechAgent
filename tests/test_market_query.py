@@ -202,3 +202,41 @@ class TestBelirsizTickerlar:
         assert sirket_tespit_et("Migros bilançosu") == "MGROS"
         assert sirket_tespit_et("Otokar hakkında bilgi") == "OTKAR"
         assert sirket_tespit_et("Kardemir ortaklık yapısı") == "KRDMD"
+
+
+# ---------------------------------------------------------------------------
+# Sorguda birden fazla farkli sirket gecince filtre KONULMAMALI
+# ---------------------------------------------------------------------------
+
+
+class TestBirdenFazlaSirket:
+    """M&A/ortaklık sorularında iki şirket adı aynı anda geçebilir: "Tüpraş'ın
+    tam sahipliği ne zaman Koç Holding'e geçti" gibi. Eskiden en uzun eşleşen
+    ad ("Koç Holding") kazanıp filtreyi TEK şirkete (KCHOL) daraltıyordu;
+    soru asıl Tüpraş hakkında olsa bile arama KCHOL dokümanlarıyla sınırlanıp
+    doğru cevap (TUPRS profilindeki "Kurumsal olaylar tarihçesi" bölümü) aday
+    havuzuna hiç girmiyordu — canlı testte ölçüldü (2026-08-26). Modülün
+    kendi tasarım kuralı zaten bunu söylüyor: belirsizlikte filtre koymamak
+    yanlış filtre koymaktan iyidir."""
+
+    def test_iki_sirket_gecen_sorguda_filtre_konulmaz(self):
+        from agents.market_query import filtre_cikar, sirket_tespit_et
+
+        query = "Tüpraş'ın tam sahipliği ne zaman Koç Holding'e geçti"
+        assert sirket_tespit_et(query) is None
+        assert filtre_cikar(query) == {}
+
+    def test_ayni_sirketin_farkli_yazimlari_tek_sirket_sayilir(self):
+        """ "Türk Hava Yolları" ve "THY" aynı şirkete (THYAO) çıkıyor; bu
+        birden fazla farklı şirket sayılmamalı, filtre yine konulmalı."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("Türk Hava Yolları (THY) bilançosu") == "THYAO"
+
+    def test_petkim_falanca_satin_alma_sorusu_petkime_daralir(self):
+        """ "Falanca Enerji" eşleme dosyasında yok (uydurma şirket), yalnızca
+        Petkim gerçek bir eşleşme — tek gerçek eşleşme olduğu için filtre
+        yine konulmalı."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("Petkim hangi şirketi satın aldı?") == "PETKM"

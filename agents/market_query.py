@@ -69,14 +69,26 @@ def _sirket_eslemesi() -> dict[str, str]:
 
 
 def sirket_tespit_et(query: str) -> str | None:
-    """Sorguda geçen ilk şirketin borsa kodunu döndürür ("ASELS"), yoksa None.
+    """Sorguda geçen TEK şirketin borsa kodunu döndürür ("ASELS"); sorguda
+    hiç şirket geçmiyorsa veya BİRDEN FAZLA FARKLI şirket geçiyorsa None
+    döner.
 
-    Uzun adlar önce denenir: "garanti bankası" ile "garan" aynı sorguda
-    eşleşebilir, uzun olan daha spesifik olduğu için öncelikli. Kelime sınırı
-    (`\\b`) aranır — aksi hâlde "thy" gibi kısa kodlar başka kelimelerin
-    içinde sahte eşleşme üretir.
+    Kelime sınırı (`\\b`) aranır — aksi hâlde "thy" gibi kısa kodlar başka
+    kelimelerin içinde sahte eşleşme üretir.
+
+    İki-şirketli sorgularda filtre KONULMAMALI: "Tüpraş'ın tam sahipliği ne
+    zaman Koç Holding'e geçti" gibi bir M&A/ortaklık sorusu hem TUPRS hem
+    KCHOL'ü doğal olarak barındırır. Eskiden en uzun eşleşen ad (burada
+    "Koç Holding") kazanıp filtreyi TEK şirkete daraltıyordu — soru asıl
+    Tüpraş hakkında olsa bile arama KCHOL dokümanlarıyla sınırlanıp doğru
+    cevap (TUPRS profilindeki "Kurumsal olaylar tarihçesi" bölümü) aday
+    havuzuna hiç girmiyordu (ölçüldü, 2026-08-26). Modülün kendi tasarım
+    kuralı zaten bunu söylüyor: belirsizlikte filtre koymamak yanlış filtre
+    koymaktan iyidir — serbest metin araması iki şirketi de bulur (bkz.
+    modül başlığı).
     """
     eslemeler = _sirket_eslemesi()
+    bulunanlar: set[str] = set()
 
     # 1) BÜYÜK HARF ticker taraması — küçültmeden ÖNCE.
     #
@@ -88,18 +100,18 @@ def sirket_tespit_et(query: str) -> str | None:
     #
     # Yalnızca tickerın kendisi aranır, ad varyantları değil — "Mavi Giyim"
     # zaten aşağıdaki normal taramada bulunuyor.
-    for ticker in sorted(set(eslemeler.values()), key=len, reverse=True):
+    for ticker in set(eslemeler.values()):
         if re.search(rf"\b{re.escape(ticker)}\b", query):
-            return ticker
+            bulunanlar.add(ticker)
 
-    # 2) Normal tarama: küçültülmüş ve aksansız, uzun adlar önce.
-    #
-    # Uzun adlar önce denenir: "garanti bankası" ile "garan" aynı sorguda
-    # eşleşebilir, uzun olan daha spesifik olduğu için öncelikli.
+    # 2) Normal tarama: küçültülmüş ve aksansız.
     normalized = _normalize(query)
-    for ad in sorted(eslemeler, key=len, reverse=True):
+    for ad, ticker in eslemeler.items():
         if re.search(rf"\b{re.escape(ad)}\b", normalized):
-            return eslemeler[ad]
+            bulunanlar.add(ticker)
+
+    if len(bulunanlar) == 1:
+        return next(iter(bulunanlar))
     return None
 
 
