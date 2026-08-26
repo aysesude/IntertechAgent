@@ -330,10 +330,38 @@ _GENERIC_FINANCE_TERMS = {
     # artırımı ne zaman oldu" gibi sorgularda sermaye/artırımı jenerikleştikten
     # SONRA tek kalan ayırt edici kelime oluyordu.
     "oldu",
+    # "KAP" (Kamuyu Aydınlatma Platformu) hemen her dokümanın kaynak alanında
+    # veya metninde geçiyor — 31 profilin/bilançonun neredeyse tamamı KAP'a
+    # atıf yapıyor. "gelişme" de aynı sınıfta genel bir haber/olay kelimesi.
+    # Ölçümle doğrulandı (2026-08-26, analist canlı test turu): "KAP'a göre
+    # deniz bank hakkında güncel bir gelişme var mı?" sorgusu — DenizBank
+    # RAG'da hiç yok — "kap"+"gelişme" üzerinden İş Bankası/Halkbank/Garanti
+    # BBVA gibi tamamen alakasız bankaları "bulundu" saydırıp "Kaynaklar"
+    # listesine soktu (asıl soru "bilgi yok" dese bile).
+    "kap",
+    "gelisme",
 }
 
 
+# "altın" (gold, "altin") 4 harflik önekte ("alti") "alt" kökünün HEMEN
+# TÜM çekimli hâlleriyle çakışıyor — "altı" (six, "altı aylık"/"ilk altı
+# ay" hemen her bilanço dokümanında geçiyor) VE "altında"/"altına"/
+# "altından" (below/under — "beklentilerin altında" gibi ifadeler de aynı
+# derecede yaygın). Bunlar ayrı ayrı istisna olarak elenemeyecek kadar
+# çok ve üretken bir aile (vurgu/hâl ekleriyle çoğalıyor); tek tek
+# istisna eklemek yerine "altin" için önek yerine TAM eşleşme zorunlu
+# kılındı. Ölçümle doğrulandı (2026-08-26, analist canlı test turu):
+# "Altın piyasasında ne oluyor" sorgusu, RAG'da altın fiyatına dair hiç
+# içerik olmamasına rağmen ("alti"-önekli çakışma yüzünden) TOASO/SISE
+# gibi tamamen alakasız şirketleri "bulundu" saydırıp "Kaynaklar"
+# listesine sokuyordu. Şirket adı/ticker çakışmalarıyla aynı sınıf (bkz.
+# _SIRKET_ONEK_ISTISNALARI) ama genel kelime düzeyinde.
+_TAM_ESLESME_GEREKEN_KELIMELER = {"altin"}
+
+
 def _query_keyword_matches(qk: str, candidate_keywords: set[str]) -> bool:
+    if qk in _TAM_ESLESME_GEREKEN_KELIMELER:
+        return qk in candidate_keywords
     prefix_len = min(len(qk), _PREFIX_MATCH_LEN)
     qk_prefix = qk[:prefix_len]
     return any(len(ck) >= prefix_len and ck[:prefix_len] == qk_prefix for ck in candidate_keywords)

@@ -764,3 +764,75 @@ def test_muafiyet_alakasiz_sorguyu_kapidan_gecirmez():
     )
 
     assert Retriever(store=store).retrieve("Bitcoin fiyati ne kadar") == []
+
+
+# ---------------------------------------------------------------------------
+# "Kaynaklar" listesine alakasiz dokuman sizmasi — analist canli test turu
+# (2026-08-26): "bilgi yok" cevabinin altina bile alakasiz sirket
+# dokumanlari "Kaynaklar" olarak yaziliyordu.
+# ---------------------------------------------------------------------------
+
+
+def test_altin_sorgusu_alti_ayli_kelimesiyle_yanlislikla_eslesmez():
+    """ "altin" (gold) ile "alti" (six, "alti aylik"/"ilk alti ay" hemen her
+    bilancoda geciyor) 4 harflik onekte cakisiyordu (olculdu): "Altin
+    piyasasinda ne oluyor" sorgusu RAG'da altin fiyatina dair hic icerik
+    olmamasina ragmen TOASO gibi tamamen alakasiz sirketleri "bulundu"
+    saydirip "Kaynaklar" listesine sokuyordu."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Tofas 2026 ikinci ceyrekte, ilk alti aylik donemde net kar acikladi.",
+                sirket="TOASO",
+                baslik="Tofas 2026 2. Ceyrek",
+                tur="bilanco",
+                distance=0.594,
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("Altin piyasasinda ne oluyor") == []
+
+
+def test_altin_sorgusu_altinda_kelimesiyle_de_yanlislikla_eslesmez():
+    """ "altinda" (below/under, "beklentilerin altinda" gibi ifadeler) da
+    ayni 4 harflik onekte ("alti") cakisiyor — "alti" (six) ile ayni aile,
+    tek tek istisna yerine "altin" icin tam eslesme zorunlu kilindi."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Net kar, piyasa beklentisinin altinda gerceklesti.",
+                sirket="SISE",
+                baslik="Sisecam 2026 2. Ceyrek",
+                tur="bilanco",
+                distance=0.607,
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("Altin piyasasinda ne oluyor") == []
+
+
+def test_kap_ve_gelisme_kelimeleri_jenerik_sayilir():
+    """ "KAP" (Kamuyu Aydinlatma Platformu) hemen her dokumanin kaynaginda
+    geciyor, "gelisme" de genel bir haber/olay kelimesi. Olculdu: "KAP'a
+    gore deniz bank hakkinda guncel bir gelisme var mi?" sorgusu —
+    DenizBank RAG'da hic yok — "kap"+"gelisme" uzerinden Is Bankasi gibi
+    tamamen alakasiz bankalari "bulundu" saydirip "Kaynaklar" listesine
+    sokuyordu."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Is Bankasi KAP'a yeni bir gelisme bildirdi, ikinci ceyrek net kar acikladi.",
+                sirket="ISCTR",
+                baslik="Is Bankasi 2026 2. Ceyrek",
+                tur="bilanco",
+                distance=0.553,
+            )
+        ]
+    )
+
+    assert (
+        Retriever(store=store).retrieve("KAP'a gore deniz bank hakkinda guncel bir gelisme var mi")
+        == []
+    )
