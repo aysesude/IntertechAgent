@@ -454,6 +454,7 @@ kök neden teşhisi (`causes`) da gelir.
   "is_within_profile": false,
   "risk_profile": "conservative",
   "risk_profile_source": "user",
+  "risk_survey_score": 2,
   "metrics": {
     "annualized_volatility_percent": 24.31,
     "value_at_risk_try": 6968.0, "value_at_risk_percent": 0.44,
@@ -470,6 +471,11 @@ kök neden teşhisi (`causes`) da gelir.
 - **0-100 kompozit skor YOK.** Risk v2 onu bilerek kaldırdı; seviye yalnızca
   volatiliteden gelir, yoğunlaşma/çeşitlendirme skora karışmaz (onlar teşhiste
   kullanılır). Arayüz skor uydurmamalı.
+- `risk_survey_score` kullanıcının anket puanıdır (1-7) ve `risk_profile`
+  ondan türer; arayüzün "Risk Profili" kartı bunu gösteriyor, bu yüzden ayrı
+  bir uç çağırmasın diye burada taşınıyor. **`null` olabilir:** anket
+  doldurulmamıştır ya da sonuç `profile_override` ile hesaplanmıştır — o
+  senaryoda profil kullanıcının beyanı olmadığı için puan bilerek düşürülür.
 - **Yeterli fiyat geçmişi yoksa `risk_level` ve metrikler `null` döner**,
   tahmini bir değerle doldurulmaz (AK 2.7 / 5.5). Sebep `warnings`'te yazar.
   Arayüz bu durumda "hesaplanamadı" göstermeli — `0` göstermek "riskiniz yok"

@@ -1027,6 +1027,7 @@ def _empty_assessment(
     source: RiskProfileSource,
     risk_free_rate: float,
     rf_is_live: bool,
+    survey_score: int | None = None,
 ) -> RiskAssessment:
     """Boş portföy: çökmek veya sıfır risk iddia etmek yerine nötr bir sonuç
     ve açık bir uyarı döner (CLAUDE.md §4)."""
@@ -1035,6 +1036,7 @@ def _empty_assessment(
         as_of=date.today(),
         risk_profile=profile,
         risk_profile_source=source,
+        risk_survey_score=survey_score,
         total_value=_ZERO,
         risk_level=None,
         is_within_profile=None,
@@ -1092,6 +1094,11 @@ def get_risk_assessment(
 
     profile = profile_override or user.risk_profile
     source = RiskProfileSource.OVERRIDE if profile_override is not None else RiskProfileSource.USER
+    # Anket puanı yalnızca profil KULLANICININ kendi beyanıysa taşınır.
+    # `profile_override` ("ya agresif olsaydım?") senaryosunda profil beyanla
+    # ilgisizdir; puanı yanına koymak, kullanıcının o puanı verdiğini
+    # söylemek olurdu.
+    survey_score = user.risk_survey_score if profile_override is None else None
 
     portfolio = db.execute(
         select(Portfolio).where(Portfolio.user_id == user_id)
@@ -1112,7 +1119,7 @@ def get_risk_assessment(
     risk_free_rate, rf_is_live = _resolve_risk_free_rate()
 
     if not holdings:
-        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live)
+        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live, survey_score)
 
     asset_ids = [h.asset_id for h in holdings]
     currency_by_asset = {h.asset_id: h.asset.currency for h in holdings}
@@ -1189,7 +1196,7 @@ def get_risk_assessment(
         class_values[AssetClass.CASH] = class_values.get(AssetClass.CASH, _ZERO) + cash_balance
 
     if total_value <= 0:
-        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live)
+        return _empty_assessment(user_id, profile, source, risk_free_rate, rf_is_live, survey_score)
 
     # v2: ağırlıklar TOPLAM portföy üzerinden (nakit dahil) — nakit de bir
     # kategoridir (RISK_MAX_CATEGORY_WEIGHT[CASH], RISK_DEFENSE_FLOOR), v1'in
@@ -1372,6 +1379,7 @@ def get_risk_assessment(
         as_of=max(as_of_dates) if as_of_dates else date.today(),
         risk_profile=profile,
         risk_profile_source=source,
+        risk_survey_score=survey_score,
         total_value=_round2(total_value),
         risk_level=risk_level,
         is_within_profile=is_within_profile,

@@ -233,3 +233,56 @@ class TestVeritabaniKisiti:
 
         assert kisit.name in migration
         assert ifade in migration, f"model ifadesi migration'da yok: {ifade}"
+
+
+class TestRiskDegerlendirmesindeTasinmasi:
+    """Anket puanı risk değerlendirmesiyle birlikte dönüyor.
+
+    Arayüzdeki "Risk Profili" kartı puanı gösteriyor. Ayrı bir uç çağırmak
+    zorunda kalmasın diye `/api/risk/{user_id}` yanıtında `risk_profile`'ın
+    yanında taşınıyor — ikisi aynı şeyin iki gösterimi, puan yetkili.
+    """
+
+    def test_puan_degerlendirmeyle_birlikte_donuyor(self, db_session):
+        from app.models import Portfolio
+        from app.services.risk_service import get_risk_assessment
+
+        user = _kullanici(db_session, email="risk-puan@test.local")
+        db_session.add(Portfolio(user_id=user.id))
+        db_session.commit()
+        set_user_risk_survey(db_session, user.id, 5)
+
+        sonuc = get_risk_assessment(db_session, user.id)
+
+        assert sonuc.risk_survey_score == 5
+        assert sonuc.risk_profile is RiskProfile.GROWTH
+
+    def test_profil_override_edilince_puan_DUSER(self, db_session):
+        """`profile_override` "ya agresif olsaydım?" senaryosudur; o sonuçta
+        profil kullanıcının beyanı DEĞİLDİR.
+
+        Puanı yanında taşımak, kullanıcının o puanı verdiğini söylemek
+        olurdu — arayüz de onu profil rozetinin altına basardı.
+        """
+        from app.models import Portfolio
+        from app.services.risk_service import get_risk_assessment
+
+        user = _kullanici(db_session, email="risk-override@test.local")
+        db_session.add(Portfolio(user_id=user.id))
+        db_session.commit()
+        set_user_risk_survey(db_session, user.id, 2)
+
+        sonuc = get_risk_assessment(db_session, user.id, profile_override=RiskProfile.AGGRESSIVE)
+
+        assert sonuc.risk_profile is RiskProfile.AGGRESSIVE
+        assert sonuc.risk_survey_score is None
+
+    def test_anket_doldurulmamissa_none(self, db_session):
+        from app.models import Portfolio
+        from app.services.risk_service import get_risk_assessment
+
+        user = _kullanici(db_session, email="risk-anketsiz@test.local")
+        db_session.add(Portfolio(user_id=user.id))
+        db_session.commit()
+
+        assert get_risk_assessment(db_session, user.id).risk_survey_score is None
