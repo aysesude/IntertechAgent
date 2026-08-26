@@ -260,6 +260,20 @@ const RISK_LEVEL_LABELS: Record<ApiRiskLevel, string> = {
   very_high: "Çok Yüksek",
 };
 
+/**
+ * Kademenin SIRA numarası (1-7). `RISK_LEVEL_LABELS` ile aynı sırayı izler;
+ * ikisi ayrıştığında gösterge yanlış rengi verir, bu yüzden yan yana duruyorlar.
+ */
+const RISK_LEVEL_ORDINALS: Record<ApiRiskLevel, number> = {
+  very_low: 1,
+  low: 2,
+  low_medium: 3,
+  medium: 4,
+  medium_high: 5,
+  high: 6,
+  very_high: 7,
+};
+
 const RISK_PROFILE_LABELS: Record<ApiRiskAssessment["risk_profile"], string> = {
   conservative: "Korumacı",
   balanced: "Dengeli",
@@ -270,6 +284,7 @@ const RISK_PROFILE_LABELS: Record<ApiRiskAssessment["risk_profile"], string> = {
 export function toRiskSummary(risk: ApiRiskAssessment): RiskSummary {
   return {
     levelLabel: risk.risk_level ? RISK_LEVEL_LABELS[risk.risk_level] : null,
+    level: risk.risk_level ? RISK_LEVEL_ORDINALS[risk.risk_level] : null,
     annualizedVolatilityPct: risk.metrics.annualized_volatility_percent,
     withinProfile: risk.is_within_profile,
     profileLabel: RISK_PROFILE_LABELS[risk.risk_profile],

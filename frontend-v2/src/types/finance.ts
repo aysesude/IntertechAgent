@@ -67,6 +67,14 @@ export interface AssetPerformer {
 export interface RiskSummary {
   /** Türkçe etiket: "Çok Düşük" … "Çok Yüksek". */
   levelLabel: string | null;
+  /**
+   * Aynı kademenin SAYISAL karşılığı (1-7), renkli gösterge için.
+   *
+   * Etiketten ayrı tutuluyor: gösterge sıra bilgisine ihtiyaç duyuyor,
+   * metni yeniden ayrıştırmak (etiket → sayı) çeviri değişince sessizce
+   * kırılırdı.
+   */
+  level: number | null;
   annualizedVolatilityPct: number | null;
   /** Volatilite, kullanıcının profil bandının içinde mi? */
   withinProfile: boolean | null;

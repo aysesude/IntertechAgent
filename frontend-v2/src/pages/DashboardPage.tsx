@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { dashboardStaggerItem } from "@/components/PageTransition";
 import { PageHeading } from "@/components/common/PageHeading";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RiskLevelBar } from "@/components/dashboard/RiskLevelBar";
 import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
 import { AssetAllocationDonut } from "@/components/dashboard/AssetAllocationDonut";
 import { PerformerHighlights } from "@/components/dashboard/PerformerHighlights";
@@ -161,13 +162,19 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
               volatiliteden türeyen 7 kademeli etiket geldi. Skoru geri
               getirmek, kaldırılma gerekçesini görmezden gelmek olurdu.
 
+              Gösterilen kademe portföyün ÖLÇÜLEN oynaklığından gelir; anket
+              puanı (`risk_survey_score`) ya da dört kademeli `risk_profile`
+              alanı değildir. Üçü de benzer ölçeklerde yaşıyor, karıştırmayın
+              — bkz. docs/notes/analiste-kapsam-sapmalari.md §7.
+
               Dönem getirisi buradan çıkarıldı çünkü grafiğin altındaki
               kutuda zaten var — aynı rakamı iki yerde göstermek kartı
               harcıyordu. */}
           <StaggerItem active={stagger}>
             <StatCard
-              label="Risk Seviyesi"
+              label="Risk Profili"
               value={data.risk?.levelLabel ?? "—"}
+              indicator={<RiskLevelBar level={data.risk?.level ?? null} />}
               footer={
                 data.risk?.annualizedVolatilityPct == null ? (
                   // Yeterli fiyat geçmişi yoksa risk UYDURULMAZ (AK 2.7).
