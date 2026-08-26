@@ -5,10 +5,8 @@ import { BRAND, DANGER, INK_FAINT, LINE2, FIXED_DARK_CHIP } from "@/utils/colors
 /**
  * VİRA — Varlıklar Arası Karşılaştırmalı Getiri grafiği.
  *
- * "Hedef vs Gerçekleşen" grafiği PORTFÖY AĞIRLIĞINI gösteriyor (bkz.
- * TargetVsActualChart.tsx); bu component ise tamamen farklı bir soruyu
- * cevaplıyor: "Seçili dönemde altın mı, dolar mı, euro mu daha çok
- * kazandırdı?"
+ * "Seçili dönemde altın mı, dolar mı, euro mu daha çok kazandırdı?"
+ * sorusunu cevaplıyor.
  *
  * Yöntem: zaman serisi/endeksleme YOK — her varlık için dönem başı ile bugün
  * arasındaki TOPLAM % getiri tek bir çubukla gösteriliyor (bkz. referans:

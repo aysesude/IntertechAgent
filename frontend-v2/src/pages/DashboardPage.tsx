@@ -36,7 +36,7 @@ function ilkAd(tamAd: string): string {
 
 export function DashboardPage({ introSequence = false }: DashboardPageProps) {
   const [range, setRange] = useState<RangeKey>("1Y");
-  const { data, loading, rangeLoading, error, isDemoData, freshnessWarning, chartRange, refetch } =
+  const { data, loading, rangeLoading, error, isDemoData, chartRange, refetch } =
     useDashboardData(range);
   const { user } = useAuth();
   const shouldReduceMotion = useReducedMotion();
@@ -68,15 +68,6 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             gönderdiği metin zaten Türkçe ve bu ayrımı taşıyor, olduğu gibi
             gösteriliyor. */}
         {error && <ErrorBanner message={error} onDismiss={refetch} />}
-
-        {/* Özet her varlığı KENDİ son fiyatıyla değerliyor; tek bir tarih tüm
-            portföyü tarif etmiyor. Bir kısmı eskiyse söylenmesi zorunlu,
-            yoksa özet olduğundan taze görünür. */}
-        {freshnessWarning && (
-          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
-            {freshnessWarning}
-          </div>
-        )}
 
         {/* Gösterilen veri sunucudan gelmediyse bunu SÖYLEMEK zorundayız;
             uydurma rakamı gerçek sanmak bir finans ürününde en kötü hata

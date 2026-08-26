@@ -199,14 +199,6 @@ export interface RiskSummaryRow {
   trendColor: string;
 }
 
-export interface TargetVsActualRow {
-  id: string;
-  label: string;
-  targetPct: number;
-  actualPct: number;
-  diff: number;
-}
-
 export interface MarketIndicator {
   id: string;
   label: string;
@@ -320,7 +312,6 @@ export interface PortfolioPageData {
   assetClasses: AssetClassSummary[];
   holdings: Holding[];
   riskSummary: RiskSummaryRow[];
-  targetVsActual: TargetVsActualRow[];
   instrumentCount: number;
   assetClassCount: number;
 }
