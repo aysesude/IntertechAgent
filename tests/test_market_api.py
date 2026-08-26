@@ -114,13 +114,18 @@ def test_degisim_onceki_ISLEM_gununden_hesaplanir(db_session, client_for):
 
     Takvim günü ("dün") aransaydı pazartesi günü değişim hep `null` çıkardı;
     borsa cumartesi-pazar kapalı.
+
+    TARİHLER SABİT, `date.today()` DEĞİL. Göreli gün kullanan ilk sürüm
+    testin koştuğu güne bağımlıydı: `price_service` seriden hafta sonlarını
+    düşürüyor (`d.weekday() < 5`), dolayısıyla salı günü koşulduğunda
+    "bugün − 3" cumartesiye denk gelip seride tek nokta kalıyor ve değişim
+    `None` çıkıyordu. Yerelde pazartesi geçti, CI'da salı düştü. Pencere
+    `as_of`'a (verideki en son fiyat günü) göre hesaplandığı için sabit
+    geçmiş tarihler kullanmak güvenli.
     """
-    bugun = date.today()
-    asset = _fiyatli_varlik(
-        db_session,
-        "HFT",
-        [(bugun - timedelta(days=3), 100), (bugun, 110)],
-    )
+    cuma = date(2026, 8, 7)
+    pazartesi = date(2026, 8, 10)
+    asset = _fiyatli_varlik(db_session, "HFT", [(cuma, 100), (pazartesi, 110)])
     user = _portfoy_kur(db_session, "piyasa-hafta@example.com", asset)
 
     body = client_for(user).get(f"/api/market/influence/{user.id}").json()
