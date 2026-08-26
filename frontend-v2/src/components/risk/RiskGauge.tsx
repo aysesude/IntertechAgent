@@ -163,7 +163,7 @@ export function RiskGauge({ score, label, description }: RiskGaugeProps) {
       </div>
 
       <div className="-mt-1.5 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-brand-border bg-brand-tint px-4 py-2 text-[13px] font-semibold text-brand">
+        <div className="inline-flex items-center gap-2 rounded-full border border-brand-border bg-brand-tint px-4 py-2 text-[13px] font-semibold text-brand dark:border-transparent">
           {label}
         </div>
         <p className="m-0 mt-3.5 text-[13px] leading-[1.6] text-ink-muted">{description}</p>

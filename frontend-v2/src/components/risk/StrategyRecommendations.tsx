@@ -25,7 +25,7 @@ export function StrategyRecommendations({ recommendations }: StrategyRecommendat
         {recommendations.map((rec) => (
           <div
             key={rec.id}
-            className="rounded-[10px] border border-line p-5 transition-shadow hover:border-brand hover:shadow-card"
+            className="rounded-[10px] border border-line p-5 transition-shadow hover:border-brand hover:shadow-card dark:border-transparent dark:bg-white/5"
           >
             <div className={`mb-3 inline-block rounded-md px-[9px] py-[5px] text-[11px] font-bold uppercase tracking-[.6px] ${PRIORITY_STYLES[rec.priority]}`}>
               {rec.priority}

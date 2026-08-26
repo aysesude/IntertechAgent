@@ -73,7 +73,7 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             uydurma rakamı gerçek sanmak bir finans ürününde en kötü hata
             modu (CLAUDE.md §4). */}
         {isDemoData && !loading && !error && (
-          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
+          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted dark:border-transparent">
             Bu ekranda <strong className="font-semibold">tasarım verisi</strong> gösteriliyor —
             sunucuya bağlanılamadı.
           </div>

@@ -31,8 +31,8 @@ export function MarketPage() {
                       ? // Şeffaf zemin, sayfanın üst bandındaki tabloya karşı
                         // koyu temada neredeyse görünmüyordu — ChatPage'deki
                         // önerilen-soru pilleriyle aynı opak zemin çözümü.
-                        "border-[1.5px] border-brand-border bg-white text-brand dark:bg-surface-elevated"
-                      : "border border-line bg-white text-ink-muted dark:bg-surface-elevated")
+                        "border-[1.5px] border-brand-border bg-white text-brand dark:border-transparent dark:bg-surface-elevated"
+                      : "border border-line bg-white text-ink-muted dark:border-transparent dark:bg-surface-elevated")
                 }
               >
                 {f}

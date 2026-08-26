@@ -198,7 +198,7 @@ export function AssetComparisonChart({
   const data = useMemo(() => generateReturns(period, assets), [period, assets]);
 
   return (
-    <div className={variant === "nested" ? "mt-5 border-t border-line pt-5" : ""}>
+    <div className={variant === "nested" ? "mt-5 border-t border-line pt-5 dark:border-transparent" : ""}>
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display m-0 text-[15px] font-semibold">Varlıklar Arası Karşılaştırmalı Getiri</h3>
         <div className="flex flex-wrap gap-1">
@@ -208,7 +208,7 @@ export function AssetComparisonChart({
               onClick={() => setPeriod(p)}
               className={
                 "rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors " +
-                (p === period ? "bg-brand text-white" : "border border-line text-ink-muted")
+                (p === period ? "bg-brand text-white" : "border border-line text-ink-muted dark:border-transparent dark:bg-white/5")
               }
             >
               {PERIOD_CONFIG[p].label}

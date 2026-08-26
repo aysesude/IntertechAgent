@@ -67,7 +67,7 @@ export function ChatWidget() {
                       key={prompt}
                       onClick={() => handleSend(prompt)}
                       disabled={sending}
-                      className="min-h-10 rounded-full border-[1.5px] border-brand-border px-[13px] py-2 text-xs font-semibold text-brand hover:bg-brand-tint"
+                      className="min-h-10 rounded-full border-[1.5px] border-brand-border px-[13px] py-2 text-xs font-semibold text-brand hover:bg-brand-tint dark:border-transparent dark:bg-white/5"
                     >
                       {prompt}
                     </button>
@@ -92,14 +92,14 @@ export function ChatWidget() {
             )}
           </div>
 
-          <div className="flex shrink-0 gap-[9px] border-t border-line2 px-[18px] pb-[18px] pt-3">
+          <div className="flex shrink-0 gap-[9px] border-t border-line2 px-[18px] pb-[18px] pt-3 dark:border-transparent">
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               disabled={sending}
               placeholder="Mesaj yaz…"
-              className="h-11 flex-1 rounded-[10px] border border-line px-3.5 text-[13.5px] outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,87,232,.1)] dark:border-white/[0.12] dark:bg-white/[0.06] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#C4485A] dark:focus:shadow-[0_0_0_3px_rgba(196,72,90,.2)]"
+              className="h-11 flex-1 rounded-[10px] border border-line px-3.5 text-[13.5px] outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,87,232,.1)] dark:border-transparent dark:bg-white/[0.06] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#C4485A] dark:focus:shadow-[0_0_0_3px_rgba(196,72,90,.2)]"
             />
             <button
               onClick={() => handleSend()}
@@ -129,7 +129,7 @@ export function ChatWidget() {
           // Sayfanın camsı kart yüzeyiyle (bkz. Card.tsx CARD_SURFACE_CLASS)
           // aynı şeffaflık/blur/gölge seviyesi — marka rengi zeminde
           // gradyan/parlama yerine ince bir ton olarak kalıyor.
-          className="grid h-16 w-16 place-items-center rounded-full border border-[rgba(15,23,42,0.08)] shadow-[0_10px_30px_-20px_rgba(15,23,42,0.12)] backdrop-blur-[16px] transition-transform hover:scale-[1.04] dark:border-white/[0.08] dark:shadow-[0_10px_30px_-18px_rgba(0,0,0,0.55)]"
+          className="grid h-16 w-16 place-items-center rounded-full border border-[rgba(15,23,42,0.08)] shadow-[0_10px_30px_-20px_rgba(15,23,42,0.12)] backdrop-blur-[16px] transition-transform hover:scale-[1.04] dark:border-transparent dark:shadow-[0_10px_30px_-18px_rgba(0,0,0,0.55)]"
           style={{ backgroundColor: isDark ? "rgba(196,72,90,0.82)" : "rgba(37,87,232,0.68)" }}
           aria-label="Sohbeti aç/kapat"
         >

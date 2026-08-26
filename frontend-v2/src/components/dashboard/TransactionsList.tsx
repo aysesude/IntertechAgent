@@ -23,7 +23,7 @@ export function TransactionsList({ transactions }: TransactionsListProps) {
           return (
             <div
               key={tx.id}
-              className={`flex items-center gap-3.5 py-3.5 ${i < transactions.length - 1 ? "border-b border-line2" : ""}`}
+              className={`flex items-center gap-3.5 py-3.5 ${i < transactions.length - 1 ? "border-b border-line2 dark:border-transparent" : ""}`}
             >
               <span className={`grid h-9 w-9 place-items-center rounded-[9px] ${style.bg} ${style.fg}`}>
                 <Icon size={16} />

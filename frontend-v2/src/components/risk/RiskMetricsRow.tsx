@@ -13,7 +13,7 @@ export function RiskMetricsRow({ valueAtRisk, sharpeRatio, limitedHistoryWarning
   return (
     <div className="mb-4">
       {limitedHistoryWarning && (
-        <div className="mb-3 flex items-start gap-2.5 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+        <div className="mb-3 flex items-start gap-2.5 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800 dark:border-transparent dark:bg-amber-900/20 dark:text-amber-200">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold">{limitedHistoryWarning.message}</div>
