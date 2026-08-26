@@ -30,15 +30,23 @@ Savunma Sanayi sektöründe sınıflandırılmaktadır.
 
 Şirketin ana ortağı Türk Silahlı Kuvvetlerini Güçlendirme Vakfı'dır
 (TSKGV). Hisseleri Borsa İstanbul'da "ASELS" koduyla işlem gören halka
-açık bir anonim şirkettir.
+açık bir anonim şirkettir. Yönetim kurulu başkanı Prof. Dr. İbrahim
+Özkol'dur.
 
 ## İştirakler
 
 ASELSAN'ın çok sayıda bağlı ortaklığı ve iştiraki bulunmaktadır. Öne
 çıkan bir örnek: Aselsan Bakü, 11 Şubat 1998 tarihinde Azerbaycan'da
 kurulmuş olup halen bu ülkede sivil ve askeri el telsizleri
-üretmektedir. Yönetim kurulu başkanı Prof. Dr. İbrahim Özkol'dur. 2026
-yılında hisse başına brüt 0,4276315 TL, net 0,3634867 TL nakit temettü
-dağıtılmasına karar verildi; ödeme tarihi 26 Kasım 2026'dır. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+üretmektedir. 2026 yılında hisse başına brüt 0,4276315 TL, net
+0,3634867 TL nakit temettü dağıtılmasına karar verildi; ödeme tarihi 26
+Kasım 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+ASELSAN hisseleri 1990 yılında Borsa İstanbul'da halka arz edilmiştir
+(tam tarih kaynaklarda çelişkili olduğu için yalnızca yıl
+belirtilmiştir). Ağustos 2023'te yüzde 100 oranında bedelsiz sermaye
+artırımıyla sermaye 2,28 milyar TL'den 4,56 milyar TL'ye çıkarılmıştır.
+Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

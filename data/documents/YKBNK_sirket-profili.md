@@ -36,6 +36,13 @@ aracılığıyla kontrol ettiği bir bankadır. Yönetim kurulu başkanı Ali
 Koç'tur. Bankanın en son doğrulanabilen temettü ödemesi 2024 yılına
 aittir (hisse başına net 1,21 TL, temettü verimi yaklaşık yüzde 4,2);
 2026 yılına ait kesin temettü tutarı güvenilir kaynaklarda
-netleştirilememiştir. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü
-dokümanlarda yer alır.
+netleştirilememiştir.
+
+## Kurumsal olaylar tarihçesi
+
+Yapı Kredi hisseleri 28 Mayıs 1987'de Borsa İstanbul'da halka arz
+edilmiştir. Mart 2006'da, Koçbank ile birleşmenin bir parçası olarak
+sermaye yaklaşık 2,5 kat (yüzde 65,7) artırılarak 1,897 milyar YTL'den
+3,143 milyar YTL'ye çıkarılmıştır. Bu doküman şirketin kimlik ve
+yapısal bilgilerini özetler; dönemsel finansal sonuçlar ayrı
+`bilanco` türü dokümanlarda yer alır.

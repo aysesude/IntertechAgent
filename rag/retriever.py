@@ -79,6 +79,10 @@ _STOPWORDS = {
     # soru-kalıbı stopword'leriyle aynı sınıf.
     "durumda",
     "uygulanir",
+    # "zaman" ("ne zaman" -> "when") aynı gerekçeyle: kurumsal olaylar
+    # tarihçesi turu sonrası ölçümle doğrulandı, "ne" zaten stopword ama
+    # "zaman" değildi.
+    "zaman",
 }
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -291,10 +295,73 @@ _GENERIC_FINANCE_TERMS = {
     "ticaret",
     "yatirim",
     "gayrimenkul",
+    # Kurumsal olaylar tarihçesi turu (2026-08-24) sonrası ölçümle
+    # doğrulandı: "halka arz edildi" ifadesi 15'ten fazla profile halka
+    # arz tarihi olarak eklenince "halka"/"arz"/"edildi" aynı sınıfta
+    # jenerikleşti — "Sahte Sanayi ne zaman halka arz edildi" sorgusu bu
+    # üç kelime üzerinden SISE/GARAN/DOAS/KCHOL gibi tamamen alakasız
+    # şirketleri "bulundu" saydırdı (uydurma kısım hiç eşleşmemesine
+    # rağmen oran 4/6 > 0.5'i geçti). Ayrıca "HALKB" tickerının "halka"
+    # ile 4 harflik önek çakışması ayrı bir güvenlik açığıydı — bkz.
+    # _SIRKET_ONEK_ISTISNALARI.
+    "halka",
+    "arz",
+    "edildi",
+    # Aynı turda "sermaye artırımı" ifadesi 10'dan fazla profile eklendi —
+    # ölçümle doğrulandı: "ABC Holding'in sermaye artırımı ne zaman oldu"
+    # sorgusu "sermaye"/"artırımı" üzerinden AKBNK/ULKER/TUPRS/ASELS gibi
+    # tamamen alakasız şirketleri "bulundu" saydırdı. "bedelsiz"/"birleşme"/
+    # "devralma" da aynı turda birden fazla profile eklenen, tek başına
+    # ayırt edici olmayan kurumsal-olay klişeleri.
+    "sermaye",
+    "artirimi",
+    "bedelsiz",
+    "birlesme",
+    "devralma",
+    # "satın al-" (M&A anlatımının standart fiili) ve "geçmişi" ("... tarihçesi/
+    # geçmişi" başlık kalıbı) aynı turda kanıtlandı: "[Uydurma Şirket] hangi
+    # şirketi satın aldı" sorgusu neredeyse HER şirketin M&A cümlesindeki
+    # "satın al-" fiili üzerinden rastgele bir gerçek şirketi "bulundu"
+    # saydırdı.
+    "satin",
+    "aldi",
+    "gecmisi",
+    # "oldu" ("... ne zaman oldu") — jenerik geçmiş zaman soru-kalıbı, "sermaye
+    # artırımı ne zaman oldu" gibi sorgularda sermaye/artırımı jenerikleştikten
+    # SONRA tek kalan ayırt edici kelime oluyordu.
+    "oldu",
+    # "KAP" (Kamuyu Aydınlatma Platformu) hemen her dokümanın kaynak alanında
+    # veya metninde geçiyor — 31 profilin/bilançonun neredeyse tamamı KAP'a
+    # atıf yapıyor. "gelişme" de aynı sınıfta genel bir haber/olay kelimesi.
+    # Ölçümle doğrulandı (2026-08-26, analist canlı test turu): "KAP'a göre
+    # deniz bank hakkında güncel bir gelişme var mı?" sorgusu — DenizBank
+    # RAG'da hiç yok — "kap"+"gelişme" üzerinden İş Bankası/Halkbank/Garanti
+    # BBVA gibi tamamen alakasız bankaları "bulundu" saydırıp "Kaynaklar"
+    # listesine soktu (asıl soru "bilgi yok" dese bile).
+    "kap",
+    "gelisme",
 }
 
 
+# "altın" (gold, "altin") 4 harflik önekte ("alti") "alt" kökünün HEMEN
+# TÜM çekimli hâlleriyle çakışıyor — "altı" (six, "altı aylık"/"ilk altı
+# ay" hemen her bilanço dokümanında geçiyor) VE "altında"/"altına"/
+# "altından" (below/under — "beklentilerin altında" gibi ifadeler de aynı
+# derecede yaygın). Bunlar ayrı ayrı istisna olarak elenemeyecek kadar
+# çok ve üretken bir aile (vurgu/hâl ekleriyle çoğalıyor); tek tek
+# istisna eklemek yerine "altin" için önek yerine TAM eşleşme zorunlu
+# kılındı. Ölçümle doğrulandı (2026-08-26, analist canlı test turu):
+# "Altın piyasasında ne oluyor" sorgusu, RAG'da altın fiyatına dair hiç
+# içerik olmamasına rağmen ("alti"-önekli çakışma yüzünden) TOASO/SISE
+# gibi tamamen alakasız şirketleri "bulundu" saydırıp "Kaynaklar"
+# listesine sokuyordu. Şirket adı/ticker çakışmalarıyla aynı sınıf (bkz.
+# _SIRKET_ONEK_ISTISNALARI) ama genel kelime düzeyinde.
+_TAM_ESLESME_GEREKEN_KELIMELER = {"altin"}
+
+
 def _query_keyword_matches(qk: str, candidate_keywords: set[str]) -> bool:
+    if qk in _TAM_ESLESME_GEREKEN_KELIMELER:
+        return qk in candidate_keywords
     prefix_len = min(len(qk), _PREFIX_MATCH_LEN)
     qk_prefix = qk[:prefix_len]
     return any(len(ck) >= prefix_len and ck[:prefix_len] == qk_prefix for ck in candidate_keywords)
@@ -406,6 +473,22 @@ _SIRKET_ALIAS_PHRASES: dict[str, list[set[str]]] = {
 }
 
 
+# Bazı tickerlar, kendileriyle anlamsal hiçbir ilgisi olmayan çok yaygın bir
+# Türkçe kelimeyle salt 4 harflik önek çakışması yaşıyor. "HALKB" (Halkbank)
+# "halka" (kamuya — "halka arz"/"halka açık" ifadelerinde) ile "halk" önekini
+# paylaşıyor — ölçümle doğrulandı (2026-08-24, kurumsal olaylar tarihçesi
+# turu): "Sahte Sanayi ne zaman halka arz edildi" ve "Ülker ne zaman halka
+# arz edildi" gibi sorgular, sorguda Halkbank'a dair hiçbir gerçek referans
+# yokken salt bu çakışma yüzünden HALKB'yi "adıyla anıldı" sayıp güvenlik
+# ağını (aşağıdaki fonksiyon) yanlışlıkla tetikledi ve tamamen alakasız
+# sonuçları öne çıkardı. Bu, "Aselsan"->"ASELS" gibi ANLAMLI önek
+# örtüşmelerinden farklı — "halka" hiçbir bağlamda Halkbank'a işaret etmez,
+# bu yüzden yalnızca bu ticker için açıkça hariç tutulur.
+_SIRKET_ONEK_ISTISNALARI: dict[str, set[str]] = {
+    "HALKB": {"halka"},
+}
+
+
 def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
     """İki farklı şirketin bilançosu neredeyse aynı jenerik kalıpla
     yazıldığında ("ikinci çeyrek net kâr açıklandı") ikisi de aynı kelime-
@@ -434,7 +517,11 @@ def _sirket_matches_query(result: dict, query_keywords: set[str]) -> bool:
         return False
     ticker = str(sirket).upper()
     sirket_keywords = _keywords(str(sirket))
-    if any(_query_keyword_matches(qk, sirket_keywords) for qk in query_keywords):
+    onek_istisnalari = _SIRKET_ONEK_ISTISNALARI.get(ticker) or set()
+    if any(
+        qk not in onek_istisnalari and _query_keyword_matches(qk, sirket_keywords)
+        for qk in query_keywords
+    ):
         return True
     aliases = _SIRKET_ALIASES.get(ticker)
     if aliases and query_keywords & aliases:

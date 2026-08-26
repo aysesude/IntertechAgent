@@ -253,7 +253,10 @@ def test_dummy_anket_puani_profile_gore_esleniyor():
     """Gerçek anket gelene kadarki GEÇİCİ eşleme (bkz. modül docstring'i).
 
     Puanlar bilinçli olarak advice_eligibility.ASSET_CLASS_ADVICE_RISK_LEVEL
-    kırılım noktalarına (1/3/4/6) denk düşecek şekilde seçildi.
+    kırılım noktalarına denk düşecek şekilde seçildi; tablo 26 Ağustos
+    2026'da yeniden kalibre edilince eşlemenin kendisi değişmedi ama artık
+    dört profil dört FARKLI izin kümesi üretiyor (önce BALANCED ve GROWTH
+    aynı sonucu veriyordu).
     """
     assert _dummy_survey_score(RiskProfile.CONSERVATIVE) == 2
     assert _dummy_survey_score(RiskProfile.BALANCED) == 4
@@ -363,8 +366,11 @@ def test_sinyal_baglami_dummy_puan_uyarisiyla_ve_izinli_siniflarla_gelir():
 
     assert context["survey_puani_dummy"] == 2
     assert "GERÇEK bir anket sonucu değildir" in context["survey_puani_dummy_uyarisi"]
-    # Korumacı dummy puanı (2), yalnızca nakit sınıfını (kırılım noktası 1) geçer.
-    assert context["bu_puanla_izinli_siniflar"] == ["cash"]
+    # Korumacı dummy puanı (2): nakit (1) ve tahvil (2) sınıflarını geçer.
+    # Eski tabloda tahvil 3'tü ve bu puan YALNIZCA nakit açıyordu — yani
+    # muhafazakâr kullanıcıya önerilebilecek tek şey, satın alınamayan
+    # serbest bakiyeydi. Yeniden kalibrasyon bunu da düzeltti.
+    assert context["bu_puanla_izinli_siniflar"] == ["bond", "cash"]
 
 
 def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():

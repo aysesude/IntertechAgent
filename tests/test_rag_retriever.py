@@ -96,8 +96,16 @@ def test_retrieve_son_filtre_yanlis_sirketi_eler():
 def test_retrieve_donem_listesi_ile_son_ceyrekler_filtrelenir():
     store = _FakeVectorStore(
         [
-            _doc("ASELS 2026 Ç2 bilançosu net kâr açıklandı", sirket="ASELS", donem="2026-Q2"),
-            _doc("ASELS 2025 Ç1 bilançosu net kâr açıklandı", sirket="ASELS", donem="2025-Q1"),
+            _doc(
+                "ASELS 2026 Ç2 bilançosu net kâr açıklandı",
+                sirket="ASELS",
+                donem="2026-Q2",
+            ),
+            _doc(
+                "ASELS 2025 Ç1 bilançosu net kâr açıklandı",
+                sirket="ASELS",
+                donem="2025-Q1",
+            ),
         ]
     )
     retriever = Retriever(store=store)
@@ -181,7 +189,11 @@ def test_retrieve_buyuk_i_harfi_kelimeyi_parcalamaz():
     doğrular."""
     store = _FakeVectorStore(
         [
-            _doc("BİM Birleşik Mağazalar hedef fiyat açıklandı", sirket="BIMAS", distance=0.3),
+            _doc(
+                "BİM Birleşik Mağazalar hedef fiyat açıklandı",
+                sirket="BIMAS",
+                distance=0.3,
+            ),
             _doc(
                 "THYAO için bilanço sonrası hedef fiyat açıklandı",
                 sirket="THYAO",
@@ -586,6 +598,70 @@ def test_retrieve_uydurma_sirket_sektor_tarih_yil_kelimeleriyle_bulunmus_sayilma
     assert retriever.retrieve("Vizyon Sanayi 2026 yılında temettü dağıttı mı") == []
 
 
+def test_retrieve_uydurma_sirket_kurumsal_olay_kelimeleriyle_bulunmus_sayilmaz():
+    """Kurumsal olaylar tarihçesi turunda (2026-08-24) 26 profile eklenen
+    "halka arz edildi" / "sermaye artırımı" / "satın aldı" kalıp ifadeleri de
+    aynı sınıfta jenerikleşti — ölçümle doğrulandı: 32 uydurma-şirket
+    sorgusundan oluşan bir tarama 20 sızıntı gösterdi. "Ne zaman"/"hangi"
+    soru kalıpları ("zaman", "oldu", "edildi") ile "halka"/"arz"/"sermaye"/
+    "artırımı"/"satın"/"aldı"/"geçmişi" kalıp kelimeleri jenerikleştirilerek
+    kapatıldı."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Petkim hisseleri 9 Temmuz 1990'da Borsa İstanbul'da halka arz "
+                "edilmiştir. Şirket STAR Rafineri hissesini satın almıştır, "
+                "sermaye artırımı geçmişi bulunmamaktadır.",
+                baslik="Petkim Şirket Profili",
+                sirket="PETKM",
+                distance=0.3,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    assert retriever.retrieve("Sahte Sanayi ne zaman halka arz edildi") == []
+    assert retriever.retrieve("ABC Holding'in sermaye artırımı ne zaman oldu") == []
+    assert retriever.retrieve("Falanca Enerji hangi şirketi satın aldı") == []
+
+
+def test_halkb_ticker_onegi_halka_kelimesiyle_yanlislikla_eslesmez():
+    """ "HALKB" (Halkbank) tickerının foldlanmış hali ("halkb") ile "halka"
+    (kamuya — "halka arz"/"halka açık") kelimesi 4 harflik önekte ("halk")
+    çakışıyor. Bu, "Aselsan"->"ASELS" gibi ANLAMLI önek örtüşmelerinden
+    farklı: "halka" hiçbir bağlamda Halkbank'a işaret etmiyor. Ölçümle
+    doğrulandı (2026-08-24): "Sahte Sanayi ne zaman halka arz edildi" ve
+    "Ülker ne zaman halka arz edildi" sorguları, sorguda Halkbank'a dair
+    hiçbir referans yokken salt bu çakışma yüzünden HALKB'yi "adıyla
+    anıldı" sayıp güvenlik ağını (bkz. _sirket_matches_query) yanlışlıkla
+    tetikledi ve tamamen alakasız içeriği öne çıkardı."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Halkbank hisseleri Borsa İstanbul'da halka arz edilmiştir",
+                baslik="Halkbank Şirket Profili",
+                sirket="HALKB",
+                distance=0.3,
+            ),
+            _doc(
+                "Ülker hisseleri 24 Şubat 2004'te Borsa İstanbul'da halka " "arz edilmiştir",
+                baslik="Ülker Bisküvi Şirket Profili",
+                sirket="ULKER",
+                distance=0.35,
+            ),
+        ]
+    )
+    retriever = Retriever(store=store)
+
+    sonuc = retriever.retrieve("Sahte Sanayi ne zaman halka arz edildi")
+    assert all(r["metadata"]["sirket"] != "HALKB" for r in sonuc)
+
+    sonuc = retriever.retrieve("Ülker ne zaman halka arz edildi")
+    sirketler = {r["metadata"]["sirket"] for r in sonuc}
+    assert "HALKB" not in sirketler
+    assert "ULKER" in sirketler
+
+
 # ---------------------------------------------------------------------------
 # Sirket adiyla anilan sorgu, kelime-ortusme oranindan muaf
 # ---------------------------------------------------------------------------
@@ -688,3 +764,75 @@ def test_muafiyet_alakasiz_sorguyu_kapidan_gecirmez():
     )
 
     assert Retriever(store=store).retrieve("Bitcoin fiyati ne kadar") == []
+
+
+# ---------------------------------------------------------------------------
+# "Kaynaklar" listesine alakasiz dokuman sizmasi — analist canli test turu
+# (2026-08-26): "bilgi yok" cevabinin altina bile alakasiz sirket
+# dokumanlari "Kaynaklar" olarak yaziliyordu.
+# ---------------------------------------------------------------------------
+
+
+def test_altin_sorgusu_alti_ayli_kelimesiyle_yanlislikla_eslesmez():
+    """ "altin" (gold) ile "alti" (six, "alti aylik"/"ilk alti ay" hemen her
+    bilancoda geciyor) 4 harflik onekte cakisiyordu (olculdu): "Altin
+    piyasasinda ne oluyor" sorgusu RAG'da altin fiyatina dair hic icerik
+    olmamasina ragmen TOASO gibi tamamen alakasiz sirketleri "bulundu"
+    saydirip "Kaynaklar" listesine sokuyordu."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Tofas 2026 ikinci ceyrekte, ilk alti aylik donemde net kar acikladi.",
+                sirket="TOASO",
+                baslik="Tofas 2026 2. Ceyrek",
+                tur="bilanco",
+                distance=0.594,
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("Altin piyasasinda ne oluyor") == []
+
+
+def test_altin_sorgusu_altinda_kelimesiyle_de_yanlislikla_eslesmez():
+    """ "altinda" (below/under, "beklentilerin altinda" gibi ifadeler) da
+    ayni 4 harflik onekte ("alti") cakisiyor — "alti" (six) ile ayni aile,
+    tek tek istisna yerine "altin" icin tam eslesme zorunlu kilindi."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Net kar, piyasa beklentisinin altinda gerceklesti.",
+                sirket="SISE",
+                baslik="Sisecam 2026 2. Ceyrek",
+                tur="bilanco",
+                distance=0.607,
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("Altin piyasasinda ne oluyor") == []
+
+
+def test_kap_ve_gelisme_kelimeleri_jenerik_sayilir():
+    """ "KAP" (Kamuyu Aydinlatma Platformu) hemen her dokumanin kaynaginda
+    geciyor, "gelisme" de genel bir haber/olay kelimesi. Olculdu: "KAP'a
+    gore deniz bank hakkinda guncel bir gelisme var mi?" sorgusu —
+    DenizBank RAG'da hic yok — "kap"+"gelisme" uzerinden Is Bankasi gibi
+    tamamen alakasiz bankalari "bulundu" saydirip "Kaynaklar" listesine
+    sokuyordu."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "Is Bankasi KAP'a yeni bir gelisme bildirdi, ikinci ceyrek net kar acikladi.",
+                sirket="ISCTR",
+                baslik="Is Bankasi 2026 2. Ceyrek",
+                tur="bilanco",
+                distance=0.553,
+            )
+        ]
+    )
+
+    assert (
+        Retriever(store=store).retrieve("KAP'a gore deniz bank hakkinda guncel bir gelisme var mi")
+        == []
+    )

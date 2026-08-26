@@ -33,6 +33,16 @@ Hayat Emeklilik yer almaktadır. Yönetim kurulu başkanı, Adnan Bali'nin
 ardından bu göreve getirilen ve önceden Türkiye İş Bankası genel müdürü
 olan Hakan Aran'dır. 2026 yılında hisse başına brüt 0,58762 TL, net
 0,49948 TL nakit temettü dağıtılmasına karar verildi; ödeme tarihi 3
-Haziran 2026'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini
+Haziran 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+Şişecam hisseleri 13 Ocak 1986'da Borsa İstanbul'da halka arz
+edilmiştir. Ekim 2020'de, Anadolu Cam, Denizli Cam, Soda Sanayii,
+Trakya Cam ve Paşabahçe Cam şirketleri Şişecam çatısı altında
+birleştirilmiştir — Türkiye sermaye piyasaları tarihinin en büyük
+birleşme işlemlerinden biri olarak nitelendirilmiştir; birleşmeyle
+bağlantılı olarak yüzde 36,14 oranında bedelli sermaye artırımı
+yapılmıştır. Bu doküman şirketin kimlik ve yapısal bilgilerini
 özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
 yer alır.

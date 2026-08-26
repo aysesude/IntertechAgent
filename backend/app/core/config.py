@@ -148,20 +148,177 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
 # oynaklığından çıkar. Aynı ölçekte oldukları için değil, tesadüfen ikisi de
 # 1-7 olduğu için benzer görünürler.
 #
-# Sayılar şartnameden birebir alınmıştır, türetilmemiştir. Kıymetli maden
-# ("ALTIN") ve döviz ("DOVIZ") aynı seviyededir (4).
+# --- Tablo 26 Ağustos 2026'da yeniden kalibre edildi ---
+#
+# Önceki hâli şartnameden birebir alınmıştı (CASH 1, BOND 3, CURRENCY 4,
+# PRECIOUS_METAL 4, STOCK 6). ÖLÇÜLDÜ: yedi puan yalnızca DÖRT farklı sonuç
+# üretiyordu — 2, 5 ve 7 puanları bir öncekine hiçbir şey eklemiyordu:
+#
+#     1 -> nakit          2 -> nakit           (aynı)
+#     3 -> +tahvil        4 -> +döviz, maden
+#     5 -> (aynı)         6 -> +hisse          7 -> (aynı)
+#
+# Yani anket 1-7 arası puan verirken sistemin ayırt edebildiği yalnızca dört
+# kademe vardı; aradaki puanları kazanmak ya da kaybetmek kullanıcı için
+# hiçbir şeyi değiştirmiyordu. Yeni tablo her kademeyi bir kategoriye
+# karşılık getiriyor (7 hariç, bilerek boş — aşağıya bakın).
+#
+# BU ÖLÇEK SRRI DEĞİLDİR. İkisi de 1-7 olduğu için benzer görünür ama SRRI
+# volatilite bandından hesaplanır; bu tablo UYGUNLUK (suitability) sıralaması,
+# yani "hangi ürün hangi yatırımcıya sunulabilir" sorusunun cevabı. Volatilite
+# sıralamayı doğrularken kullanıldı, sıralamayı BELİRLEMEDİ — ölçümle
+# ayrıştığı iki yer aşağıda açıkça yazılı.
+#
+#   1  Serbest nakit, para piyasası fonu     (ölçülen: %0 / IOO %1,42)
+#   2  TL borçlanma araçları fonu            (AYR %1,5 · APT %7,1 · AK2 %10,0)
+#   3  Döviz, eurobond fonu                  (USDTRY ~%1 · AKE %4,6)
+#   4  Kıymetli maden, altın fonu            (gram altın %24 · GTA %25,6)
+#   5  Yerli hisse, yerli hisse fonu         (BIST ort. %38,6)
+#   6  Yabancı hisse, yabancı hisse fonu     (ABD ort. %28,8)
+#   7  Serbest fon (SPK III-52.1)            (BHE %22,8)
+#
+# ÖLÇÜMLE AYRIŞAN İKİ YER, ikisi de bilinçli:
+#
+# (a) Döviz (3) TL tahvil fonundan (2) YÜKSEK, oysa ölçülen volatilitesi çok
+#     daha düşük (~%1'e karşı %10'a kadar). Dövizin TL cinsinden düşük
+#     oynaklığı düşük risk değil, TL'nin düzenli değer kaybının yan ürünüdür:
+#     seri neredeyse tek yönlü tırmandığı için standart sapma küçük çıkar.
+#     Döviz TL'li yatırımcı için yönlü bir kur bahsidir. `gerek.md` de dövizi
+#     tahvilin üstünde ("Orta-Yüksek") sıralıyor.
+#
+# (b) Yabancı hisse (6) yerli hisseden (5) YÜKSEK, oysa ABD ortalaması
+#     BIST'in ALTINDA (%28,8'e karşı %38,6). Gerekçe volatilite değil ERİŞİM
+#     ve KARMAŞIKLIK: kur maruziyeti, sınır ötesi saklama, yerel yatırımcı
+#     korumasının bulunmaması, farklı vergi rejimi. Bunu "daha oynak" diye
+#     yazmak rakamlara bakan ilk kişi tarafından yakalanırdı.
+#
+# ŞARTNAMEDEN SAPMA — analist onayına sunulacak:
+#   - BOND 3 -> 2, CURRENCY 4 -> 3, STOCK 6 -> 5 (kademelerin yayılması).
+#   - Kıymetli maden 4'te KALDI; şartnamede döviz ile aynı seviyedeydi, artık
+#     dövizin bir üstünde. `gerek.md` §2 ise tersini söylüyor (maden "Orta",
+#     döviz "Orta-Yüksek") — ölçüm bizim sıralamamızı destekliyor
+#     (altın %24 > döviz ~%1), bu çelişki analiste bildirildi.
+#
+# SEVİYE 7 — SERBEST FON. Ölçüt yine yapı, volatilite değil. Serbest fonlar
+# yalnızca NİTELİKLİ YATIRIMCIYA satılır, diğer fon türlerine uygulanan
+# portföy sınırlamalarının çoğundan MUAFTIR ve izahnameleri kaldıraç, açığa
+# satış ve türev kullanımına izin verir. Sıradan bir fonun tabi olduğu
+# sınırlar olmadığı için yönetici stratejiyi serbestçe değiştirebilir —
+# uygunluk sorusunun ("bu ürün acemi yatırımcıya sunulabilir mi") cevabı
+# fonun BUGÜNKÜ içeriğinden bağımsız olarak hayırdır.
+#
+# Kural buradan çıkıyor: serbest fon = 7, ne tutuyor olursa olsun. Para
+# piyasası serbest fonu da 7'dir; muafiyet ortak, içerik değişkendir.
+#
+# 700 TEFAS fonu tarandı (26 Ağustos 2026): kaldıraçlı, ters (inverse) ve
+# girişim sermayesi fonu SIFIR. Yani 7'nin ilk tanımı ("türev/kaldıraçlı
+# ürün") TEFAS'ta karşılığı olmayan bir tanımdı; serbest fon bu boşluğu
+# doldurabilen tek gerçek araç ve `scope.yaml` onu kapsam içi sayıyor.
+#
+# Eleme kayıtları: GMI (Ak Portföy Gümüş Serbest) %61,4 ile en oynak adaydı
+# ama kaldıraçlı DEĞİL — spot gümüşün kendisi %63,1 (ölçüldü), yani rakam
+# emtiadan geliyor, yapıdan değil. THV %137 ölçtü ama üst üste +%67 ve +%90
+# sıçraması var, veri kusuru. On istatistiksel arbitraj fonu %2,1-4,7
+# aralığında: yapıca en karmaşık ürünler ama piyasa nötr oldukları için
+# ölçekte tepeye konurlarsa "risk 7 ama hiç oynamıyor" görüntüsü doğardı.
+#
+# Bu tablo TİPİK varlık içindir ve varlık düzeyinde ezilebilir: bkz.
+# `providers/universe.AssetSpec.risk_level` ve
+# `services/advice_eligibility.asset_risk_level`. Bir varlık sınıfının
+# altında da (IOO para piyasası fonu: sınıfı BOND=2, kendisi 1) üstünde de
+# (AAPL: sınıfı STOCK=5, kendisi 6) olabilir.
 ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
     AssetClass.CASH: 1,
-    AssetClass.BOND: 3,
-    AssetClass.CURRENCY: 4,
+    AssetClass.BOND: 2,
+    AssetClass.CURRENCY: 3,
     AssetClass.PRECIOUS_METAL: 4,
-    AssetClass.STOCK: 6,
+    AssetClass.STOCK: 5,
 }
 
 # Anket puanının alabileceği aralık (dahil). Tabloyla karşılaştırma bu
 # aralıkta anlamlıdır; dışında bir değer gelirse çağıran taraf hata verir.
 RISK_SURVEY_SCORE_MIN = 1
 RISK_SURVEY_SCORE_MAX = 7
+
+# --- Anket puanı (1-7) <-> risk profili (4 kademe) ---
+#
+# İki ölçek YAN YANA yaşıyor ve bu bilinçli. Anket puanı ŞARTNAMENİN ölçeğidir
+# ve uygunluk kontrolünün girdisidir (`advice_eligibility`). `RiskProfile` ise
+# risk motorunun (`risk_service`) hedef dağılım, volatilite bandı ve
+# yeniden dengeleme tablolarının anahtarıdır — dördü de profil bazlı. Puanı
+# yetkili alan yapıp profili ondan TÜRETMEK, risk motoruna hiç dokunmadan
+# şartnamenin ölçeğine geçmeyi sağlıyor.
+#
+# Bantlar varlık merdiveniyle (ASSET_CLASS_ADVICE_RISK_LEVEL) hizalı seçildi;
+# her profil, kendi bandının açtığı varlık kümesiyle anlamlı şekilde örtüşür:
+#
+#   1-2  Muhafazakâr  nakit/para piyasası + TL borçlanma fonları
+#   3-4  Dengeli      + döviz, kıymetli maden
+#   5    Büyüme       + yerli hisse
+#   6-7  Agresif      + yabancı hisse, serbest fon
+#
+# BÜYÜME tek puanlıktır. Yapay değil: yerli hisseye erişim tek bir kademede
+# açılıyor ve o kademe iki profil arasındaki gerçek eşiği işaretliyor. Bandı
+# genişletmek için 5 ile 6 arasına bir varlık kategorisi girmesi gerekir.
+RISK_SURVEY_SCORE_TO_PROFILE: dict[int, RiskProfile] = {
+    1: RiskProfile.CONSERVATIVE,
+    2: RiskProfile.CONSERVATIVE,
+    3: RiskProfile.BALANCED,
+    4: RiskProfile.BALANCED,
+    5: RiskProfile.GROWTH,
+    6: RiskProfile.AGGRESSIVE,
+    7: RiskProfile.AGGRESSIVE,
+}
+
+_eksik_puanlar = set(range(RISK_SURVEY_SCORE_MIN, RISK_SURVEY_SCORE_MAX + 1)) - set(
+    RISK_SURVEY_SCORE_TO_PROFILE
+)
+if _eksik_puanlar:
+    # Eşlenmemiş bir puan, anketin o cevabı için profil üretememesi demek
+    # olurdu — kullanıcı anketi doldurur ama sistem sonucu kaydedemez.
+    raise ValueError(f"RISK_SURVEY_SCORE_TO_PROFILE eksik puan iceriyor: {_eksik_puanlar}")
+
+if set(RISK_SURVEY_SCORE_TO_PROFILE.values()) != set(RiskProfile):
+    # Kullanılmayan bir profil, risk motorunun o profil için taşıdığı tüm
+    # tabloların (hedef dağılım, volatilite bandı, savunma tabanı) ölü koda
+    # dönmesi demek olurdu.
+    raise ValueError(
+        "RISK_SURVEY_SCORE_TO_PROFILE her profili en az bir puana eslemeli: "
+        f"eksik={set(RiskProfile) - set(RISK_SURVEY_SCORE_TO_PROFILE.values())}"
+    )
+
+_PROFIL_SIRASI = [
+    RiskProfile.CONSERVATIVE,
+    RiskProfile.BALANCED,
+    RiskProfile.GROWTH,
+    RiskProfile.AGGRESSIVE,
+]
+_gorulen_sira = []
+for _puan in sorted(RISK_SURVEY_SCORE_TO_PROFILE):
+    _profil = RISK_SURVEY_SCORE_TO_PROFILE[_puan]
+    if not _gorulen_sira or _gorulen_sira[-1] is not _profil:
+        _gorulen_sira.append(_profil)
+if _gorulen_sira != _PROFIL_SIRASI:
+    # Puan arttıkça profil de artan risk sırasında ilerlemeli ve bir profile
+    # iki ayrı yerde dönülmemeli; aksi hâlde "puanım arttı ama profilim
+    # muhafazakâra düştü" gibi bir sonuç mümkün olurdu.
+    raise ValueError(f"RISK_SURVEY_SCORE_TO_PROFILE sirasi bozuk: {_gorulen_sira}")
+
+
+def risk_profile_for_survey_score(survey_score: int) -> RiskProfile:
+    """Anket puanından risk profili. Aralık dışı puan `KeyError` verir —
+    doğrulama çağıranın işi (`advice_eligibility.validate_survey_score`)."""
+    return RISK_SURVEY_SCORE_TO_PROFILE[survey_score]
+
+
+def survey_score_band(profile: RiskProfile) -> tuple[int, int]:
+    """Profilin karşılık geldiği puan aralığı (dahil).
+
+    Ters yön tek bir sayı vermez — Muhafazakâr hem 1 hem 2'dir. Bandın
+    kendisini döndürmek, keyfi bir temsilci puan seçmekten dürüst."""
+    puanlar = [p for p, pr in RISK_SURVEY_SCORE_TO_PROFILE.items() if pr is profile]
+    return min(puanlar), max(puanlar)
+
 
 if set(ASSET_CLASS_ADVICE_RISK_LEVEL) != set(AssetClass):
     # Yeni bir varlık sınıfı eklenip bu tabloya yazılmazsa, uygunluk kontrolü
@@ -360,6 +517,7 @@ class AssetSubType(str, Enum):
     TIME_DEPOSIT = "time_deposit"
     DEMAND_DEPOSIT = "demand_deposit"
     GOLD_COIN = "gold_coin"
+    HEDGE_FUND = "hedge_fund"  # SPK "serbest fon" — bkz. universe._FUND_ASSET_CLASS
 
 
 class IngestStatus(str, Enum):

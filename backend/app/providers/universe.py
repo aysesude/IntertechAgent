@@ -70,6 +70,23 @@ class AssetSpec:
     # ama satın alınamazlar. Bayrak olmasaydı seed, endeksi sıradan bir hisse
     # gibi kullanıcılara dağıtırdı.
     tradable: bool = True
+    # Uygunluk risk seviyesi (1-7), SINIF VARSAYILANINI EZER.
+    #
+    # `None` ise `ASSET_CLASS_ADVICE_RISK_LEVEL[asset_class]` geçerlidir; o
+    # tablo TİPİK varlığı tarif eder. Bu alan yalnızca varlık sınıfından
+    # ayrıldığında doldurulur ve iki yöne de gidebilir:
+    #
+    #   IOO  para piyasası fonu   sınıfı BOND=2, kendisi 1  (aşağı)
+    #   AKE  eurobond fonu        sınıfı BOND=2, kendisi 3  (yukarı)
+    #   AAPL ABD hissesi          sınıfı STOCK=5, kendisi 6 (yukarı)
+    #
+    # Neden hesaplanmıyor da elle yazılıyor: hesaplansaydı fiyat geçmişine
+    # bağımlı olurdu — geçmişi henüz olmayan yeni varlıkta seviye üretilemez
+    # ve tablo risk motorunun volatilite borusuna kenetlenirdi. Uygunluk
+    # sıralaması ürün kategorisine bakar, o kategori de zaten burada tanımlı.
+    #
+    # Okunacak yer: `services/advice_eligibility.asset_risk_level`.
+    risk_level: int | None = None
 
 
 def _stock(symbol: str, name: str, base_price: str) -> AssetSpec:
@@ -92,6 +109,11 @@ def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
     TRY'ye çevrilir (AK 5.7). Bu yol daha önce yalnızca `AKE` (eurobond fonu)
     tarafından kullanılıyordu — `docs/DATA.md` onu "evrendeki tek TRY dışı
     varlık" diye anıyordu; artık yirmi iki varlık bu yoldan geçiyor.
+
+    Uygunluk seviyesi 6, yani yerli hissenin (STOCK=5) bir üstü. Gerekçe
+    volatilite DEĞİL — ölçüm tersini söylüyor, ABD ortalaması %28,8'e karşı
+    BIST %38,6 — sınır ötesi erişimin kendisi: kur maruziyeti, saklama,
+    yerel yatırımcı korumasının bulunmaması, farklı vergi rejimi.
     """
     return AssetSpec(
         symbol=symbol,
@@ -101,6 +123,7 @@ def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
         currency="USD",
         data_source=PriceSource.YFINANCE,
         provider_symbol=symbol,
+        risk_level=6,
     )
 
 
@@ -117,7 +140,22 @@ def _fx(symbol: str, name: str, tcmb_code: str, base_price: str) -> AssetSpec:
     )
 
 
-def _gram_metal(symbol: str, name: str, yf_future: str, base_price: str) -> AssetSpec:
+def _gram_metal(
+    symbol: str,
+    name: str,
+    yf_future: str,
+    base_price: str,
+    risk_level: int | None = None,
+) -> AssetSpec:
+    """Ons vadeli fiyattan türetilen gram metal.
+
+    `risk_level`: kıymetli maden sınıfı uygunlukta 4'tür ama sınıf içi
+    dağılım geniş — ölçüldü (365 gün, 26 Ağustos 2026): gram altın %28,6,
+    gümüş %65,9, platin %55,3. Gümüş ve platin YERLİ HİSSENİN (%38,6,
+    seviye 5) üstünde oynuyor, dolayısıyla ondan düşük bir kademede
+    duramazlar. Bu ikisi sanayi/spekülatif metal; perakende yatırımcının
+    "altın alıyorum" refleksiyle aynı yere konmaları yanlış olurdu.
+    """
     return AssetSpec(
         symbol=symbol,
         name=name,
@@ -126,6 +164,7 @@ def _gram_metal(symbol: str, name: str, yf_future: str, base_price: str) -> Asse
         data_source=PriceSource.YFINANCE,
         provider_symbol=yf_future,
         ons_to_gram=True,
+        risk_level=risk_level,
     )
 
 
@@ -156,6 +195,12 @@ def _gold_coin(symbol: str, name: str, factor: str, base_price: str) -> AssetSpe
 # enstrümandır, risk motorunda savunma tarafında (BOND+CASH) sayılmalıdır.
 _FUND_ASSET_CLASS: dict[AssetSubType, AssetClass] = {
     AssetSubType.EQUITY_FUND: AssetClass.STOCK,
+    # Serbest fon sınıfı da İÇERİĞİNDEN çıkar, kabuğundan değil: evrendeki
+    # tek serbest fon (BHE) hisse senedi yoğun olduğu için STOCK. Bir gün
+    # para piyasası serbest fonu eklenirse alt türü MONEY_MARKET_FUND
+    # olur ve `risk_level=7` ile işaretlenir — yani 7'yi veren yapı,
+    # sınıfı veren içeriktir; ikisi ayrı alanlarda durur.
+    AssetSubType.HEDGE_FUND: AssetClass.STOCK,
     # Para piyasası fonu artık CASH DEĞİL, BOND.
     #
     # `AssetClass.CASH` yalnızca SERBEST NAKDİ (defterdeki bakiye, harcanabilir
@@ -183,12 +228,19 @@ def _fund(
     currency: str = "TRY",
     synthetic_daily_drift: float | None = None,
     synthetic_daily_volatility: float | None = None,
+    risk_level: int | None = None,
 ) -> AssetSpec:
     """TEFAS fonu. Sembol = fon kodu = sağlayıcı sembolü.
 
     `currency`: TEFAS fiyatları kural olarak TL'dir; döviz cinsi fonlarda
     (ör. AKE eurobond fonu) birim fiyat kendi para biriminde yayımlanır ve
     değerleme o günün kuruyla TRY'ye çevrilir (AK 5.7).
+
+    `risk_level`: fon, sınıfının tipik seviyesinden ayrılıyorsa verilir.
+    Kullanıcının kararı: "fonlar kendi risklerini taşısın" — bir fonun
+    uygunluk seviyesi kabuğundan (BOND/STOCK) değil, İÇERİĞİNDEN çıkar.
+    Para piyasası fonu da eurobond fonu da BOND sınıfındadır ama biri
+    seviye 1, diğeri 3'tür.
     """
     return AssetSpec(
         symbol=symbol,
@@ -197,6 +249,7 @@ def _fund(
         base_price=Decimal(base_price),
         currency=currency,
         sub_type=sub_type,
+        risk_level=risk_level,
         data_source=PriceSource.TEFAS,
         provider_symbol=symbol,
         synthetic_daily_drift=synthetic_daily_drift,
@@ -387,9 +440,12 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     # sanma riski) kazandırdığından fazlasını götürürdü. 98 hisse yeterli;
     # bilerek bozuk veri dağıtmaktansa dışarıda bırakmak doğru.
     # --- Kıymetli maden: gram fiyatlar (ons vadeli × USDTRY) ---
+    # Gram altın sınıf varsayılanında (4) kalır: ölçülen %28,6, gram altından
+    # türetilen sikkelerle ve altın fonuyla (%25,6) aynı mertebede.
     _gram_metal("XAUTRY", "Gram Altın", "GC=F", "2450.00"),
-    _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00"),
-    _gram_metal("XPTTRY", "Gram Platin", "PL=F", "1550.00"),
+    # Gümüş ve platin 5'e çekildi — gerekçe `_gram_metal` docstring'inde.
+    _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00", risk_level=5),
+    _gram_metal("XPTTRY", "Gram Platin", "PL=F", "1550.00", risk_level=5),
     # --- Kıymetli maden: sikke (gram altından türetilir) ---
     _gold_coin("CEYREK", "Çeyrek Altın", "1.6030", "4020.00"),
     _gold_coin("YARIM", "Yarım Altın", "3.2060", "8040.00"),
@@ -427,6 +483,10 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         AssetSubType.EUROBOND_FUND,
         "0.430407",
         currency="USD",
+        # Sınıfı BOND (=2) ama uygunluk açısından DÖVİZ ürünüdür: TL'li
+        # yatırımcı için getirisinin büyük kısmı kurdan gelir. Bu yüzden
+        # döviz kademesinde (3), TL borçlanma fonlarının bir üstünde.
+        risk_level=3,
     ),
     _fund(
         "AYR",
@@ -445,6 +505,11 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         "Ak Portföy Yeni Teknolojiler Yabancı Hisse Senedi Fonu",
         AssetSubType.EQUITY_FUND,
         "0.669568",
+        # YABANCI hisse fonu: içeriği yurt dışı hisse, dolayısıyla yabancı
+        # hisse kademesinde (6). TI2 ve TCD yerli olduğu için 5'te (sınıf
+        # varsayılanı) kalır. Fonun kabuğu ikisinde de aynı — ayrımı yapan
+        # içeriktir.
+        risk_level=6,
     ),
     # PPF KALDIRILDI, yerine IOO geldi.
     #
@@ -472,8 +537,34 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         "3.154068",
         synthetic_daily_drift=0.00152,
         synthetic_daily_volatility=0.0009,
+        # Sınıfı BOND (=2) ama uygunluk açısından NAKİT eşdeğeri: kısa vadeli
+        # borçlanma aracı ve repo tutar, ölçülen volatilitesi %1,42. En düşük
+        # anket puanına sahip kullanıcının alabileceği tek yatırım aracı
+        # olması bilinçli — aksi hâlde 1 puanlık kullanıcıya önerilebilecek
+        # HİÇBİR varlık kalmıyordu (CASH sınıfında varlık yok).
+        risk_level=1,
     ),
     _fund("GTA", "Garanti Portföy Altın Fonu", AssetSubType.GOLD_FUND, "1.078670"),
+    # Ölçeğin tepesi: evrendeki TEK serbest fon.
+    #
+    # Ölçüldü (26 Ağustos 2026): 256 gün kesintisiz veri, açıklanmayan
+    # sıçrama YOK, %22,8 yıllık volatilite. base_price serinin ilk gerçek
+    # günü (20.08.2025) kapanışı.
+    #
+    # Seviyesi 7 çünkü SERBEST fondur (nitelikli yatırımcı, portföy
+    # sınırlamalarından muafiyet, kaldıraç/açığa satış izni) — içeriği
+    # hisse olduğu için değil. Gerekçenin tamamı config.py'de.
+    #
+    # Rakamı da aynı yöne bakıyor (%22,8, ABD hisseleriyle aynı bantta),
+    # yani ölçeğin tepesinde ters bir görüntü oluşmuyor. Aday havuzundaki
+    # arbitraj fonları (%2,1-4,7) bu yüzden seçilmedi.
+    _fund(
+        "BHE",
+        "Ak Portföy Birinci Hisse Senedi Serbest Fon",
+        AssetSubType.HEDGE_FUND,
+        "1.451871",
+        risk_level=7,
+    ),
     # --- Nakit ---
     #
     # `AssetClass.CASH` altında VARLIK YOK, bilerek. Nakit artık yalnızca

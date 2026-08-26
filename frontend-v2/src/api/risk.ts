@@ -40,6 +40,13 @@ export interface ApiRiskAssessment {
   as_of: string;
   risk_profile: "conservative" | "balanced" | "growth" | "aggressive";
   risk_profile_source: "user" | "override";
+  /**
+   * Kullanıcının anket puanı (1-7) — profilin türediği YETKİLİ alan.
+   *
+   * `null` olabilir: anket doldurulmamıştır ya da sonuç `profile_override`
+   * ile hesaplanmıştır (o senaryoda profil kullanıcının beyanı değildir).
+   */
+  risk_survey_score: number | null;
   risk_level: ApiRiskLevel | null;
   /** Volatilite, profilin beklenen bandının içinde mi? Hesaplanamıyorsa null. */
   is_within_profile: boolean | null;

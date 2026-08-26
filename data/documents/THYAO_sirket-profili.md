@@ -42,5 +42,11 @@ göstermektedir. Yönetim kurulu başkanı, 9 Nisan 2026 itibarıyla Prof.
 Dr. Murat Şeker'dir. Şirket, Orta Doğu'daki jeopolitik belirsizlik
 nedeniyle nakit pozisyonunu korumak amacıyla 2025 yılı kârı için
 temettü dağıtmama, kârı geçmiş yıllar kârlarına aktarma kararı almıştır.
+
+## Kurumsal olaylar tarihçesi
+
+THY hisseleri 20 Aralık 1990'da Borsa İstanbul'da halka arz
+edilmiştir. Düşük maliyetli marka AJet, 7 Ağustos 2023'te THY
+sermayesiyle ayrı bir tüzel kişilik olarak yeniden yapılandırılmıştır.
 Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
 finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

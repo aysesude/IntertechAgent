@@ -35,6 +35,13 @@ varlik_siniflari:
       etiketler: [altın, altin, gram altın, ons altın, çeyrek altın, yarım altın,
                   tam altın, cumhuriyet altını, has altın, ziynet, XAU]
 
+    # Karar K-1 (gümüşün v1'de kapsam dışı bırakılması) 2026-08-26'da geri
+    # alındı: price_query.py gümüş/platini XAGTRY/XPTTRY ile zaten tam
+    # destekliyordu, scope_checker'ın kapsam dışı sayması bir tutarsızlıktı
+    # (ölçümle doğrulandı, analist canlı test turu).
+    - id: kiymetli_maden_diger
+      etiketler: [gümüş, gumus, gram gümüş, XAG, platin, gram platin, XPT]
+
     - id: doviz
       etiketler: [dolar, usd, "$", euro, eur, "€", kur, döviz, parite,
                   sterlin, gbp, yen, jpy]
@@ -68,8 +75,7 @@ varlik_siniflari:
       etiketler: [ev, konut, arsa, gayrimenkul, kira getirisi, ipotek]
 
     - id: emtia_diger
-      etiketler: [petrol, brent, bakır, buğday, doğalgaz, gümüş]
-      # gümüş: karar K-1 — v1'de kapsam dışı
+      etiketler: [petrol, brent, bakır, buğday, doğalgaz]
 
     - id: bankacilik_urunleri          # karar K-15 — v2'de yeniden değerlendirilecek
       etiketler: [kredi, kredi kartı, ihtiyaç kredisi, konut kredisi, taşıt kredisi,
@@ -97,7 +103,15 @@ islem_talebi:
   # kontrolünü kapatıyor, yani "bana yatırım yap" gibi gerçek bir emir de
   # kapıdan geçerdi. Doğrusu fiili kendi biçimiyle sınırlamak — "yatır" zaten
   # emir kipinin tam hâli, ekli biçimlerine ihtiyaç yok.
-  tam_eslesme_fiiller: [yatır]
+  #
+  # "satın al" da aynı sınıf: 8 harf olduğu için (boşluk dahil) sonek
+  # toleransı alıyor ve "satın aldı" (gecmis zaman, ucuncu sahis — "Petkim
+  # hangi şirketi satın aldı?" gibi kurumsal-olay sorularinda) "satın al" +
+  # "dı" ekiyle eşleşip UNAUTHORIZED_ACTION donduruyordu (olculdu,
+  # 2026-08-26: kurumsal olaylar tarihcesi turunde M&A sorulari
+  # reddediliyordu). "satın al" da emir kipinin tam hali, ekli
+  # ("aldı"/"alıyor"/"alacak") bicimlere ihtiyaç yok.
+  tam_eslesme_fiiller: [yatır, "satın al"]
   # Not: "alayım mı" / "satayım mı" BURAYA GİRMEZ — onlar tavsiye bayrağıdır,
   # işlem talebi değildir. Ayrım kritik: soru soran kullanıcı reddedilmemeli.
   istisna_kaliplari: ["alayım mı", "satayım mı", "alsam mı", "satsam mı",

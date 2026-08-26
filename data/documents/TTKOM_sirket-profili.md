@@ -36,6 +36,14 @@ Bakanlığı ve halka açık hisseler yer almaktadır. Yönetim kurulu
 başkanı İsmail İlhan Hatipoğlu'dur. Şirket, 13 Mart 2026'da KAP'a
 yaptığı bildirimde; 5G lisans ödemeleri, borç geri ödeme planı ve
 yatırım önceliği gerekçesiyle 2025 yılı kârı için temettü dağıtmama
-kararı aldığını duyurmuştur. Bu doküman şirketin kimlik ve yapısal
-bilgilerini özetler; dönemsel finansal sonuçlar ayrı `bilanco`
-türü dokümanlarda yer alır.
+kararı aldığını duyurmuştur.
+
+## Kurumsal olaylar tarihçesi
+
+Türk Telekom hisseleri 9 Mayıs 2008'de, hisse başına 4,60 TL fiyatla
+Borsa İstanbul'da halka arz edilmiştir (2008'in dünya genelinde 7.
+büyük halka arzı). 26 Ocak 2016'da Avea ve TTNET markaları tüzel
+kişilikleri feshedilerek tek "Türk Telekom" çatısı altında
+birleştirilmiştir. Bu doküman şirketin kimlik ve yapısal bilgilerini
+özetler; dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda
+yer alır.

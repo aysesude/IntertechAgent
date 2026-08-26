@@ -109,11 +109,11 @@ değişikliği geçmedi ve seed eski ankrajla koştu.
 çekilen değil. Geçmişi zaten tam olan bir sembol `0` yazar ve bu doğrudur;
 işarete bakın: `+` başarılı, `-` atlandı, `!` başarısız, `~` kısmi.
 
-### Varlık evreni (140 varlık)
+### Varlık evreni (141 varlık)
 
 | Sınıf | Adet | Kaynak |
 |---|---|---|
-| Hisse | 123 | yfinance (BIST 100'den 98 hisse + endeks + **21 ABD hissesi**) + TEFAS (3 hisse fonu) |
+| Hisse | 124 | yfinance (BIST 100'den 98 hisse + endeks + **21 ABD hissesi**) + TEFAS (3 hisse fonu + 1 serbest fon) |
 | Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
 | Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
 | Borçlanma Araçları | 5 | TEFAS (4 borçlanma fonu + 1 para piyasası fonu) |
@@ -162,6 +162,153 @@ alıyordu. Buna rağmen risk sıralamasında yabancı hisse yerlinin **bir kadem
 üstünde** olacak; gerekçe volatilite değil erişim ve karmaşıklıktır (kur
 maruziyeti, sınır ötesi saklama, yerel yatırımcı korumasının bulunmaması,
 vergi). Bkz. `providers/universe._foreign_stock`.
+
+### Uygunluk risk seviyesi (1-7)
+
+Anket puanı 1-7; **seviyesi puandan büyük olan varlık** için kullanıcı ne
+tavsiye alır ne de portföyünde bulunması uyumlu sayılır
+(`services/advice_eligibility.py`).
+
+| Seviye | Ne | Ölçülen volatilite |
+|---|---|---|
+| 1 | Serbest nakit, para piyasası fonu | %0 · IOO %1,42 |
+| 2 | TL borçlanma araçları fonu | AYR %1,5 · APT %7,1 · AK2 %10,0 |
+| 3 | Döviz, eurobond fonu | USDTRY ~%1 · AKE %4,6 |
+| 4 | Kıymetli maden, altın fonu | gram altın %24 · GTA %25,6 |
+| 5 | Yerli hisse, yerli hisse fonu | BIST ort. %38,6 |
+| 6 | Yabancı hisse, yabancı hisse fonu | ABD ort. %28,8 |
+| 7 | **Serbest fon** (SPK III-52.1) | BHE %22,8 |
+
+**Bu ölçek SRRI değildir.** İkisi de 1-7 olduğu için karıştırılmaya müsait
+ama SRRI volatilite bandından hesaplanır; bu tablo *uygunluk* sıralamasıdır
+("hangi ürün hangi yatırımcıya sunulabilir"). Volatilite sıralamayı
+doğrularken kullanıldı, belirlemedi — **ölçümle bilerek ayrışan iki yer** var
+ve ikisi de kodda gerekçesiyle yazılı: döviz TL tahvil fonunun üstünde
+(düşük oynaklığı TL'nin düzenli değer kaybının yan ürünü), yabancı hisse
+yerlinin üstünde (gerekçe volatilite değil erişim/karmaşıklık).
+
+#### Seviye 7 neden serbest fon
+Serbest fonlar yalnızca **nitelikli yatırımcıya** satılır, diğer fon
+türlerine uygulanan portföy sınırlamalarının çoğundan **muaftır** ve
+izahnameleri **kaldıraç, açığa satış ve türev** kullanımına izin verir.
+Yönetici sıradan bir fonun sınırları olmadan strateji değiştirebildiği için,
+uygunluk sorusunun cevabı fonun bugünkü içeriğinden bağımsız olarak hayırdır.
+Kural: **serbest fon = 7**, ne tutuyor olursa olsun.
+
+700 TEFAS fonu tarandı (26 Ağustos 2026): **kaldıraçlı, ters (inverse) ve
+girişim sermayesi fonu sıfır**. 7'nin ilk tanımının ("türev/kaldıraçlı ürün")
+TEFAS'ta karşılığı yoktu; serbest fon bu boşluğu doldurabilen tek araç ve
+`scope.yaml` onu kapsam içi sayıyor.
+
+Elenen adaylar: `GMI` (Gümüş Serbest) %61,4 ile en oynak adaydı ama
+kaldıraçlı değil — **spot gümüşün kendisi %63,1**, rakam emtiadan geliyor.
+`THV` %137 ölçtü ama üst üste +%67/+%90 sıçraması var (veri kusuru). On
+istatistiksel arbitraj fonu %2,1-4,7: yapıca en karmaşık ürünler ama piyasa
+nötr, tepeye konsalar "risk 7 ama hiç oynamıyor" görüntüsü doğardı.
+
+Tablo **26 Ağustos 2026'da yeniden kalibre edildi**. Eski hâli (şartnameden
+birebir: NAKIT 1, TAHVIL 3, DOVIZ 4, MADEN 4, HISSE 6) yedi puandan yalnızca
+**dört farklı sonuç** üretiyordu — 2, 5 ve 7 puanları bir öncekine hiçbir şey
+eklemiyordu. Yeni tabloda **yedi puanın yedisi de** farklı bir varlık kümesi
+açıyor.
+
+#### Varlık düzeyi istisnası
+Seviye normalde `ASSET_CLASS_ADVICE_RISK_LEVEL[sınıf]`'tan gelir, ama
+`AssetSpec.risk_level` doluysa **o kazanır** — iki yöne de:
+
+| Varlık | Sınıfı | Seviyesi | Neden |
+|---|---|---|---|
+| `IOO` | BOND (2) | **1** | Para piyasası fonu, nakit eşdeğeri |
+| `AKE` | BOND (2) | **3** | Eurobond — getirisi ağırlıklı olarak kurdan |
+| `AFT` | STOCK (5) | **6** | Yurt dışı hisse fonu |
+| 21 ABD hissesi | STOCK (5) | **6** | Sınır ötesi erişim |
+| `XAGTRY` `XPTTRY` | PRECIOUS_METAL (4) | **5** | Ölçülen %65,9 / %55,3 — yerli hissenin üstünde |
+| `BHE` | STOCK (5) | **7** | Serbest fon — nitelikli yatırımcı, kaldıraç izni |
+
+#### Seed portföyleri puana UYAR
+`data/seed_ledger._uygun_arketip` arketipin varlıklarını kullanıcının anket
+puanına göre süzer ve kalan ağırlıkları orantılı yeniden dağıtır (nakit
+dahil, ki `cash_heavy` nakit ağırlıklı kalsın).
+
+Süzgeç olmadan Ürün Sahibi ilkesi ("profil önce belirlenir, portföy ona göre
+kurulur") dummy veride ihlal ediliyordu ve bu **yapısaldı**: dört arketipin
+dördünde de hisse, kıymetli maden ve döviz vardı, oysa muhafazakâr bandın
+(1-2) izin verdiği tek sınıf tahvil, dengeli bandın (3-4) izin vermediği tek
+sınıf hisse. Ölçülen: **31/50 kullanıcı** puanının üstünde varlık tutuyordu,
+şimdi **0/50**.
+
+Süzme **varlık** düzeyinde yapılır, sınıf düzeyinde değil: büyüme bandı (5)
+hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
+
+Merdiven demo verisinde görünür hâlde:
+
+| puan | örnek portföy |
+|---|---|
+| 1 | `IOO` + %66 nakit |
+| 2 | `AK2, APT` |
+| 3 | `AKE, APT, CHFTRY, GBPTRY, IOO, USDTRY` |
+| 4 | `AK2, APT, CEYREK, CHFTRY, CUMHUR, EURTRY, GBPTRY, IOO` |
+| 5 | `APT, CEYREK, EREGL, EURTRY, FROTO, GBPTRY, IOO, TURSG, XAGTRY` |
+| 6 | `ANSGR, EURTRY, GRTHO, META, TAMALTIN, WMT` |
+| 7 | `BHE, EUREN, EURTRY, KO, NVDA, YARIM` |
+
+#### Tepe kademe garantisi
+Uyumluluk yetmiyor: üst kademenin gerçekten TUTULUYOR olması da gerekiyor.
+Süzgeç doğru çalışırken bile seçim aday havuzunda düzgün dağılımlıydı ve üst
+kademeler havuzda azınlıkta — hisse sınıfında **101 yerliye karşı 21 ABD
+hissesi ve tek bir serbest fon**. Ölçülen: 6-7 puanlı 13 kullanıcının yalnızca
+5'i yabancı varlık tutuyordu, `BHE`'yi **hiç kimse** tutmuyordu. 5, 6 ve 7
+puanlı portföyler ekranda ayırt edilemiyordu.
+
+`_tepe_temsil_edilsin` kullanıcının erişebildiği en üst kademeden en az bir
+varlık seçilmesini garantiliyor. Aşağı kademelerde neredeyse işlemsiz (4
+puanlının tepesi kıymetli madendir ve o sınıfta zaten her varlık o
+kademededir); ısırdığı yer yalnızca 6 ve 7. Sonuç: **7/7** altı puanlı yabancı
+varlık, **6/6** yedi puanlı `BHE` tutuyor.
+
+`MIN_HOLDINGS_PER_USER` bu yüzden 5'ten **1'e** indi: 1 puanlık kullanıcının
+alabileceği tek varlık `IOO`. Eksiklik değil, kuralın kendisi.
+
+#### Anket puanı nerede duruyor
+`users.risk_survey_score` (1-7, nullable, CHECK'li). **Puan yetkili alan,
+`users.risk_profile` ondan türer** (`config.risk_profile_for_survey_score`):
+1-2 Muhafazakâr · 3-4 Dengeli · 5 Büyüme · 6-7 Agresif. Bantlar bu merdivenle
+hizalı seçildi, her profil kendi bandının açtığı varlık kümesiyle örtüşüyor.
+
+`NULL` anlamlıdır: "kayıtlı anket sonucu yok". `make seed` 50 demo
+kullanıcısının hepsini dolduruyor ve **yedi puanın yedisini de** temsil
+ediyor. Yazma yolu `services/user_service.set_user_risk_survey`; uçlar
+`docs/API.md` → "Kullanıcı risk profili ve anket puanı".
+
+#### Seviye DB'de de var: `assets.risk_level`
+Sütun 1-7 tutar, CHECK'li, `seed_assets` her koşuda **koddan yeniden yazar**.
+Böylece seviye SQL'den sorgulanabiliyor ve JOIN'e girebiliyor:
+
+```sql
+-- puanı 3 olan kullanıcıya yasak varlıklar
+SELECT symbol, risk_level FROM assets WHERE is_active AND risk_level > 3;
+```
+
+**TÜREV KOPYADIR, ikinci bir gerçek değil.** Tanım noktası hâlâ
+`universe.py` + `config.py`; sütuna elle yazılan değeri bir sonraki
+seed/backfill üzerine yazar. Ayrışma olursa `scripts/data_doctor` §7
+bildirir ("risk seviyesi DB ile kod arasinda ayrismis").
+
+Neden kopya tutuluyor: alım/satım engeli ve risk ajanı bu bilgiye **DB
+üzerinden** bakacak. Yalnızca kodda kaldığı sürece `assets` tablosuna bakan
+biri alanın var olduğunu bile göremiyordu.
+
+`NULL` yalnızca **pasif** (evrenden çıkarılmış) varlıklarda olabilir; aktif
+varlıkta NULL bir kusurdur ve testle korunur.
+
+Okuma noktası (kod tarafı) `advice_eligibility.asset_risk_level(symbol, asset_class)`;
+sınıf sürümü (`is_advice_allowed`) kaba görünüm içindir ve şartname metnine
+bire bir karşılık geldiği için korunuyor. Bir varlığa karar verirken
+**varlık sürümü** kullanılmalı.
+
+`IOO`'nun 1'e çekilmesi zorunluydu: nakit sınıfında varlık yok, dolayısıyla
+o istisna olmadan 1 puanlık kullanıcıya önerilebilecek hiçbir varlık
+kalmıyordu.
 
 ### Yeni varlık eklemek
 `backend/app/providers/universe.py` → `ASSET_UNIVERSE`'e bir `AssetSpec`
@@ -283,7 +430,8 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 
 ## 7. Şema özeti (migration zinciri)
 
-`60bf3d7b4c54 → abe38b185ff1 → 9c31e7a0d2b4 → 4e8b2f6c1a53 → d17f3b9e5c28 → 6a92d4c8e0f1`
+`60bf3d7b4c54 → abe38b185ff1 → 9c31e7a0d2b4 → 4e8b2f6c1a53 → d17f3b9e5c28 →
+6a92d4c8e0f1 → b26e8dab6ef9 → c5d81a3f7b60 → f18c4a2e7b90 → a3d75e1c9f04`
 
 - `users` +risk_profile · `assets` +sub_type/is_active/data_source/
   provider_symbol/derived_from/derived_factor
@@ -291,6 +439,10 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
 - `transactions` 7 tip + nakit ayağı + kur + CHECK'ler + indeksler
 - `holdings` +realized_pnl_try/last_rebuilt_at (qty=0 satır silinmez)
 - `data_ingest_log` (yeni): çekim işlerinin iş-düzeyi kaydı
+- `risk_profile` enum'una `growth` (`b26e8dab6ef9`)
+- `users` +national_id/password_hash/last_login_at (`c5d81a3f7b60`)
+- `users` +risk_survey_score, 1-7 CHECK'li, nullable (`f18c4a2e7b90`)
+- `assets` +risk_level, 1-7 CHECK'li; migration mevcut satırları da doldurur (`a3d75e1c9f04`)
 
 ## 8. Sık düşülen tuzaklar
 
