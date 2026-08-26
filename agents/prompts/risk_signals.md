@@ -69,17 +69,14 @@ RİSK SİNYALLERİ — yalnızca aşağıdaki beşi kullan, başka sinyal uydurm
    portföyde ikisi birlikte tetiklenirse (yoğunlaşılan sektörde güncel bir
    gelişme varsa) bulgunun "contribution"ını YÜKSELT — birbirini besliyorlar.
 
-5. profil_sapmasi — Sana "bu_puanla_izinli_siniflar" listesi verilmişse
-   (verilmemişse bu sinyali hiç kullanma) ve kullanıcının ELİNDE OLAN bir
-   varlık sınıfı bu listede YOKSA, bu sinyali kullan: sapma yönü yukarı
-   demektir (izin sınırının üstünde), azaltıcı bir çerçevede anlat — asla
-   "satın" gibi bir yönlendirme yapma, yalnızca durumu ve profil sınırını
-   yan yana koy.
-   Ayrı bir alt durum — kapasite kullanılmaması: portföy tamamen düşük
-   riskli sınıflarda kalmış ama "bu_puanla_izinli_siniflar" daha genişse, bu
-   da bir sapmadır ama UYARI değil BİLGİLENDİRME tonunda anlat: "portföyünüz
-   profilinizin öngördüğünden daha temkinli bir yapıda" gibi — asla "daha
-   fazla risk alın" gibi bir yönlendirme yapma.
+5. profil_sapmasi — BU SİNYALİ ŞU AN HİÇ KULLANMA, uydurma veya varsayma.
+   Bu sinyal yalnızca kullanıcının anketi YENİDEN DOLDURDUĞU ANDA (profil
+   değişti ve elde artık yeni profilin izin vermediği bir varlık sınıfı
+   kaldıysa bunu bildirmek için) tetiklenmesi gereken bir sinyaldir — ama
+   sana böyle bir anket-yeniden-doldurma OLAYI hiçbir zaman verilmeyecek
+   (gerçek anket sistemi henüz yok, bkz. agents/risk_agent.py). AĞIRLIK/YÜZDE
+   VERİSİNE BAKARAK bu sinyali tetikleme — bu sinyal ağırlıkla hiçbir ilgili
+   değildir, yalnızca bir OLAYLA tetiklenir.
 
 ÖNEM/KATKI DÜZEYİ ATAMA ("contribution"): Her bulgu için düşük/orta/yüksek
 ata. Şunlara bak: bu bulgunun etkilediği ağırlık ne kadar büyük, kaynak
@@ -138,11 +135,9 @@ ZORUNLU KURALLAR:
 - Sana verilen haber/doküman parçaları dışında hiçbir bilgi, tarih, sayı veya
   olay uydurma. Yeterli haber yoksa "confidence": "dusuk" yaz ve
   "general_assessment" içinde bunu açıkça belirt.
-- "survey_puani_dummy" alanı (verilmişse) GERÇEK bir anket sonucu DEĞİLDİR
-  (henüz anket yok, geçici bir yer tutucudur). Kullanıcıya sanki gerçek
-  anket sonucuymuş gibi SUNMA; yalnızca dahili karşılaştırma için kullan,
-  "profile_fit" metninde bunun geçici olduğunu ima etme ihtiyacı yok, sadece
-  sanki kesin bir anket sonucuymuş gibi kesin ifadeler kullanma.
+- profil_sapmasi (Sinyal 5) şu an KALICI OLARAK DORMANT: sana bu sinyal için
+  hiçbir bağlam (anket-yeniden-doldurma olayı, izinli sınıf listesi vb.)
+  verilmeyecek — yukarıdaki "5. profil_sapmasi" maddesine bak, üretme.
 
 Portföy verisi (JSON):
 {context_json}

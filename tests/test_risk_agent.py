@@ -3,18 +3,27 @@ ve değerlendirmenin küçültülmesi.
 
 2026-08-22 eki: sinyal tabanlı risk değerlendirmesinin (bkz. modül
 docstring'i, agents/prompts/risk_signals.md) LLM'e GİTMEYEN yardımcıları —
-dummy anket puanı eşlemesi, LLM çıktısının JSON'a ayrıştırılması, ham tool
-verisinin LLM bağlamına dönüştürülmesi. `_assess_signals`'ın kendisi gerçek
-bir LLM çağrısı yaptığı için burada test edilmiyor; ajanın diğer LLM'li
-kısımlarında olduğu gibi (`_summarize`) bu proje deterministik pytest yerine
-manuel/entegrasyon doğrulaması kullanıyor.
+LLM çıktısının JSON'a ayrıştırılması, ham tool verisinin LLM bağlamına
+dönüştürülmesi. `_assess_signals`'ın kendisi gerçek bir LLM çağrısı yaptığı
+için burada test edilmiyor; ajanın diğer LLM'li kısımlarında olduğu gibi
+(`_summarize`) bu proje deterministik pytest yerine manuel/entegrasyon
+doğrulaması kullanıyor.
 
 2026-08-25 eki: aynı ilkeyle `_fetch_macro_context`/`_fetch_live_macro_news`
 de burada test edilmiyor (MCP tool çağrısı yapıyorlar) — yalnızca onların
 girdisini hazırlayan saf fonksiyon `_live_macro_symbols_for_holdings` test
 edilir (bkz. app/providers/universe.py:macro_news_key, MCP tool testi için
 tests/test_mcp_market_tool.py, ingest/servis testleri için
-tests/test_macro_news_ingest.py)."""
+tests/test_macro_news_ingest.py).
+
+2026-08-26 eki: dummy anket puanı eşlemesi (`_dummy_survey_score`,
+`_DUMMY_SURVEY_SCORE_BY_PROFILE`) ve `_build_signal_context`'in ürettiği
+"survey_puani_dummy"/"bu_puanla_izinli_siniflar" alanları KALDIRILDI —
+Sinyal 5 artık profil/ağırlık tabanlı değil, yalnızca anket-yeniden-doldurma
+OLAYIYLA tetiklenmeli (bkz. agents/risk_agent.py modül docstring'i "2026-08-26
+eki"); böyle bir olay mekanizması henüz yok, sinyal kalıcı dormant. Bu
+dosyadaki ilgili testler kaldırıldı; `_build_signal_context` artık yalnızca
+holdings/haber/makro verisini birleştirdiğini doğrulayan testler kaldı."""
 
 import json
 
@@ -24,14 +33,12 @@ from agents.risk_agent import (
     _SIGNAL_PROMPT_TEMPLATE,
     _build_signal_context,
     _compact,
-    _dummy_survey_score,
     _extract_json_object,
     _live_macro_symbols_for_holdings,
     _macro_queries_for_holdings,
     _render_signal_prompt,
     _wants_scenarios,
 )
-from app.core.config import RiskProfile
 
 
 def test_senaryo_yalnizca_aksiyon_sorularinda_istenir():
@@ -258,23 +265,6 @@ def test_prompt_alan_adi_yazmayi_yasakliyor():
     assert "JSON ALAN ADLARINI ASLA YAZMA" in _PROMPT_TEMPLATE
 
 
-def test_dummy_anket_puani_profile_gore_esleniyor():
-    """Gerçek anket gelene kadarki GEÇİCİ eşleme (bkz. modül docstring'i).
-
-    Puanlar bilinçli olarak advice_eligibility.ASSET_CLASS_ADVICE_RISK_LEVEL
-    kırılım noktalarına (1/3/4/6) denk düşecek şekilde seçildi.
-    """
-    assert _dummy_survey_score(RiskProfile.CONSERVATIVE) == 2
-    assert _dummy_survey_score(RiskProfile.BALANCED) == 4
-    assert _dummy_survey_score(RiskProfile.GROWTH) == 5
-    assert _dummy_survey_score(RiskProfile.AGGRESSIVE) == 7
-
-
-def test_dummy_anket_puani_profil_yoksa_none():
-    """Profil tanınmıyorsa ya da hiç yoksa puan uydurulmaz."""
-    assert _dummy_survey_score(None) is None
-
-
 def test_json_ciktisi_kod_bloguyla_gelirse_ayiklanir():
     """Prompt "yalnızca JSON" istiyor ama modeller sık sık ``` bloğuna sarar
     (bkz. _extract_json_object docstring'i); bu tolere edilmeli."""
@@ -309,7 +299,7 @@ def test_sinyal_baglami_fiyati_eksik_varligi_disliyor():
     }
     news_data = {"assets": [], "assets_without_documents": ["TST"], "confidence": "low"}
 
-    context = _build_signal_context(holdings_data, news_data, None, None)
+    context = _build_signal_context(holdings_data, news_data)
 
     assert context["varliklar"] == [{"sembol": "TST", "sinif": "stock", "agirlik_yuzde": 60.0}]
     assert context["haber_kapsami_olmayan_varliklar"] == ["TST"]
@@ -341,7 +331,7 @@ def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
         "confidence": "normal",
     }
 
-    context = _build_signal_context(holdings_data, news_data, None, None)
+    context = _build_signal_context(holdings_data, news_data)
 
     assert context["haberler"]["TST"] == [
         {
@@ -354,26 +344,17 @@ def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
     ]
 
 
-def test_sinyal_baglami_dummy_puan_yoksa_alanlar_eklenmez():
-    """Profil tanınmıyorsa (dummy puan üretilemiyorsa) anket/izin alanları
-    bağlama hiç eklenmemeli — uydurulmuş bir puan görünmemeli."""
-    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None)
+def test_sinyal_baglami_anket_alanlari_hicbir_zaman_eklenmez():
+    """2026-08-26 eki: Sinyal 5 artık profil/dummy puana bakmıyor (bkz.
+    agents/risk_agent.py modül docstring'i) — `_build_signal_context`
+    "survey_puani_dummy"/"survey_puani_dummy_uyarisi"/
+    "bu_puanla_izinli_siniflar" alanlarını ARTIK HİÇ üretmemeli; bu, önceki
+    "dummy puan varsa/yoksa" ayrımının yerini alan tek testtir."""
+    context = _build_signal_context({"holdings": []}, {"assets": []})
 
     assert "survey_puani_dummy" not in context
     assert "survey_puani_dummy_uyarisi" not in context
     assert "bu_puanla_izinli_siniflar" not in context
-
-
-def test_sinyal_baglami_dummy_puan_uyarisiyla_ve_izinli_siniflarla_gelir():
-    """Dummy puan varsa hem açık bir uyarı hem de o puanla izinli varlık
-    sınıfları bağlama eklenmeli (LLM'in "profil_sapmasi" sinyalini
-    değerlendirebilmesi için)."""
-    context = _build_signal_context({"holdings": []}, {"assets": []}, RiskProfile.CONSERVATIVE, 2)
-
-    assert context["survey_puani_dummy"] == 2
-    assert "GERÇEK bir anket sonucu değildir" in context["survey_puani_dummy_uyarisi"]
-    # Korumacı dummy puanı (2), yalnızca nakit sınıfını (kırılım noktası 1) geçer.
-    assert context["bu_puanla_izinli_siniflar"] == ["cash"]
 
 
 def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():
@@ -546,7 +527,7 @@ def test_sinyal_baglami_makro_gelismeler_varsayilan_bos_liste():
     olmalı (boş liste olarak) — alan hiç eksik olmamalı, CLAUDE.md §4'teki
     "alan silinmesin" ilkesiyle tutarlı (LLM eksik alanı uydurmaya kalkışmaz,
     var olan boş alanı görür)."""
-    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None)
+    context = _build_signal_context({"holdings": []}, {"assets": []})
 
     assert context["makro_gelismeler"] == []
 
@@ -557,6 +538,6 @@ def test_sinyal_baglami_makro_gelismeler_tasinir():
     bitmiş oluyor."""
     macro = [{"tur": "haber", "baslik": "Faiz kararı", "tarih": "2026-08-20", "icerik": "..."}]
 
-    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None, macro)
+    context = _build_signal_context({"holdings": []}, {"assets": []}, macro)
 
     assert context["makro_gelismeler"] == macro
