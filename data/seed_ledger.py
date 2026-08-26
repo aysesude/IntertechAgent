@@ -5,6 +5,8 @@ Eski üreticiden temel farklar:
   Defter her an dengelidir (nakit = SUM(cash_amount_try) >= 0).
 - İşlem tarihleri fiyatın gerçekten VAR OLDUĞU günlere hizalanır (işlem
   günleri); hafta sonuna denk alım artık mümkün değildir.
+- NAKİT satın alınmaz: bütçenin nakit payı harcanmadan defterde serbest
+  bakiye olarak kalır (bkz. providers/universe.py — CASH altında varlık yok).
 - Fiyatlar price_history'den OKUNUR (kaynağı ne olursa olsun); maliyet
   bugünkü fiyattan geriye türetilmez — zarardaki portföyler de doğal olarak
   oluşur.
@@ -24,22 +26,29 @@ from faker import Faker
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import AssetClass, RiskProfile, settings
+from app.core.config import AssetClass, RiskProfile, settings, survey_score_band
 from app.core.security import hash_password
 from app.models import Asset, PriceHistory, Transaction, TransactionType
 from app.providers.universe import SPEC_BY_SYMBOL
+from app.services.advice_eligibility import asset_risk_level, is_asset_advice_allowed
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
+from data.anchor import resolve_anchor_date
 
 SEED = 42
 NUM_USERS = 50
 # Test/mutabakat sözleşmesi: kullanıcı başına işlem GÖRMÜŞ varlık sayısı aralığı.
-MIN_HOLDINGS_PER_USER = 5
+#
+# ALT SINIR 5'TEN 1'E INDI. Portföyler artık anket puanının izin verdiği
+# varlıklardan kuruluyor (bkz. `_uygun_arketip`) ve en düşük puan (1)
+# yalnızca TEK varlığı açıyor: para piyasası fonu IOO. Bu bir eksiklik
+# değil, kuralın kendisi — 1 puanlık kullanıcının alabileceği başka bir şey
+# yok. Alt sınırı 5'te tutmak, seed'i kendi uygunluk kuralını ihlal etmeye
+# zorlardı.
+MIN_HOLDINGS_PER_USER = 1
 MAX_HOLDINGS_PER_USER = 15
 
 # Hisse alım/satım komisyonu (brüt tutarın oranı); diğer sınıflarda 0.
 STOCK_FEE_RATE = Decimal("0.0015")
-# Vadeli mevduat aylık faizi (INTEREST kaydı olarak deftere işlenir).
-TIME_DEPOSIT_MONTHLY_RATE = Decimal("0.03")
 
 # Alım/satımda adet yuvarlaması. Hisse ve döviz tam sayı (lot/birim), diğerleri
 # küsuratlı. BOND tam sayıydı — doğrudan tahvil adet bazlı alınır — ama sınıfın
@@ -129,6 +138,122 @@ def _build_archetype_risk_profiles() -> dict[str, RiskProfile]:
 
 
 ARCHETYPE_RISK_PROFILE: dict[str, RiskProfile] = _build_archetype_risk_profiles()
+
+
+def _uygun_arketip(
+    archetype: dict[AssetClass, tuple[float, int]],
+    assets_by_class: dict[AssetClass, list[Asset]],
+    survey_score: int,
+) -> dict[AssetClass, tuple[float, int, list[Asset]]]:
+    """Arketipi kullanıcının ANKET PUANINA göre süzer ve ağırlıkları yeniden
+    normalleştirir.
+
+    Ürün Sahibi'nin ilkesi (Not 3/4): "profil önce belirlenir, portföy ona
+    göre kurulur, tersine sistem izin vermez." Süzgeç olmadan bu ilke dummy
+    veride ihlal ediliyordu: HER arketipte hisse, kıymetli maden ve döviz
+    vardı, oysa muhafazakâr bandın (1-2) izin verdiği tek sınıf tahvil,
+    dengeli bandın (3-4) izin vermediği tek sınıf ise hisse. Ölçüldü:
+    50 kullanıcının 31'i puanının izin vermediği bir varlık tutuyordu.
+
+    Süzme VARLIK düzeyinde yapılır, sınıf düzeyinde değil: Büyüme bandı (5)
+    hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
+    Sınıf düzeyinde süzülseydi büyüme profilli kullanıcı AAPL tutabilirdi.
+
+    Kalan ağırlıklar ORANTILI dağıtılır (nakit dahil): elenen sınıfın payını
+    tamamen nakde yığmak arketipin karakterini bozardı — `cash_heavy`
+    zaten nakit ağırlıklı, `diversified` ise çeşitlendirilmiş kalmalı.
+    Orantılı dağıtım hayatta kalan sınıfların BİRBİRİNE göre oranını
+    koruyor.
+
+    Dönen üçlü: `(ağırlık, seçilecek adet, uygun adaylar)`. Nakit sınıfı
+    listesi boş gelir — nakit satın alınmaz, harcanmayan bakiyedir.
+    """
+    kalan: dict[AssetClass, tuple[float, int, list[Asset]]] = {}
+    for asset_class, (weight, pick_count) in archetype.items():
+        if asset_class is AssetClass.CASH:
+            kalan[asset_class] = (weight, 0, [])
+            continue
+        adaylar = [
+            a
+            for a in assets_by_class.get(asset_class, [])
+            if is_asset_advice_allowed(a.symbol, a.asset_class, survey_score)
+        ]
+        if adaylar:
+            kalan[asset_class] = (weight, pick_count, adaylar)
+
+    toplam = sum(w for w, _, _ in kalan.values())
+    if toplam <= 0:  # pragma: no cover - her bantta en az bir sınıf kalıyor
+        return kalan
+    return {ac: (w / toplam, n, lst) for ac, (w, n, lst) in kalan.items()}
+
+
+def _tepe_kademe(
+    uygun_archetype: dict[AssetClass, tuple[float, int, list["Asset"]]],
+) -> int:
+    """Kullanıcının erişebildiği EN ÜST uygunluk kademesi.
+
+    Puanın kendisi değil, o puanla gerçekten alınabilen varlıkların en üst
+    seviyesi. İkisi 7 puanda ayrışabilir: puan 7'dir ama arketipte serbest
+    fonun bulunduğu sınıf yoksa tepe 6'da kalır.
+    """
+    seviyeler = [
+        asset_risk_level(a.symbol, a.asset_class)
+        for _, _, adaylar in uygun_archetype.values()
+        for a in adaylar
+    ]
+    return max(seviyeler, default=1)
+
+
+def _tepe_temsil_edilsin(
+    picked: list["Asset"],
+    candidates: list["Asset"],
+    tepe: int,
+    rng: random.Random,
+) -> list["Asset"]:
+    """Sınıfta kullanıcının tepe kademesinden varlık varsa, en az biri seçilsin.
+
+    NEDEN GEREKLİ. Süzgeç doğru çalışıyordu ama seçim aday havuzunda düzgün
+    dağılımlıydı ve üst kademeler havuzda çok azınlıkta: hisse sınıfında 101
+    yerli varlığa karşı 21 ABD hissesi ve TEK bir serbest fon var. Konsantre
+    arketip 4 hisse seçiyor, dolayısıyla üst kademeler istatistiksel olarak
+    kayboluyordu. Ölçüldü: 6-7 puanlı 13 kullanıcının yalnızca 5'i herhangi
+    bir yabancı varlık tutuyordu ve `BHE`'yi (seviye 7, evrendeki tek serbest
+    fon) **hiç kimse** tutmuyordu.
+
+    Sonuç: 5, 6 ve 7 puanlı portföyler ekranda ayırt edilemiyordu — yani
+    uygunluk merdiveninin tepesi demoda hiç görünmüyordu.
+
+    Aşağı kademelerde bu neredeyse işlemsizdir: 4 puanlı kullanıcının tepesi
+    kıymetli madendir ve o sınıfta zaten hemen her varlık o kademededir.
+    Isırdığı yer yalnızca 6 ve 7.
+
+    Değiştirme SON sırayı hedefler (`picked[-1]`), böylece `rng.sample`'ın
+    ürettiği sıranın başı korunur ve determinizm bozulmaz.
+    """
+    tepedekiler = [a for a in candidates if asset_risk_level(a.symbol, a.asset_class) == tepe]
+    if not tepedekiler or any(a in tepedekiler for a in picked):
+        return picked
+    yeni = rng.choice(tepedekiler)
+    if yeni in picked:  # pragma: no cover - üstteki `any` bunu zaten eler
+        return picked
+    return picked[:-1] + [yeni]
+
+
+def _survey_score(user_index: int, profile: RiskProfile) -> int:
+    """Kullanıcının anket puanı: profilin bandı içinde deterministik dağılım.
+
+    Profil arketipten geliyor, arketip de `user_index % 4` ile seçiliyor —
+    yani aynı profildeki kullanıcıların indeksleri 4'ün katları kadar
+    aralıklı. Doğrudan `user_index % bant` alınsaydı hepsi bandın AYNI
+    ucuna düşerdi (0, 4, 8 ... hepsi %2 = 0) ve 1, 3, 6 puanları seed'de
+    hiç görünmezdi. Önce tur sayısına bölmek bandı gerçekten tarıyor.
+
+    Böylece yedi puanın yedisi de demo verisinde temsil ediliyor ve uygunluk
+    merdiveninin her kademesi elle puan değiştirmeden görülebiliyor.
+    """
+    alt, ust = survey_score_band(profile)
+    return alt + (user_index // len(PORTFOLIO_ARCHETYPE_CYCLE)) % (ust - alt + 1)
+
 
 # Kullanıcı kimliklerinin tohuma bağlı olması için sabit ad alanı. Değeri
 # keyfi ama DEĞİŞMEMELİ: değişirse tüm kullanıcı UUID'leri değişir.
@@ -290,17 +415,27 @@ def seed_ledger(session: Session) -> int:
     for asset_list in assets_by_class.values():
         asset_list.sort(key=lambda a: a.symbol)  # determinizm sözlük sırasına bağlı kalmasın
 
-    anchor = settings.anchor_date
+    anchor = resolve_anchor_date(session)
     tx_count = 0
 
     for user_index in range(NUM_USERS):
         archetype_name = PORTFOLIO_ARCHETYPE_CYCLE[user_index % len(PORTFOLIO_ARCHETYPE_CYCLE)]
         archetype = PORTFOLIO_ARCHETYPES[archetype_name]
+        # TEK kaynak: hem User kaydına yazılan puan hem portföyü süzen puan
+        # buradan geliyor. İki ayrı çağrı olsaydı biri değiştiğinde diğeri
+        # sessizce geride kalır ve seed kendi kuralını ihlal ederdi.
+        survey_score = _survey_score(user_index, ARCHETYPE_RISK_PROFILE[archetype_name])
         user = User(
             id=_user_id(user_index),
             email=fake.unique.email(),
             full_name=fake.name(),
             risk_profile=ARCHETYPE_RISK_PROFILE[archetype_name],
+            # Anket puanı YETKİLİ alan, profil ondan türer. Seed'de sıra
+            # tersine işliyor (arketip -> profil -> bant içinde puan) çünkü
+            # portföyün yapısı arketiple belirleniyor; sonuçta ikisi yine
+            # tutarlı: `risk_profile_for_survey_score(puan)` aynı profili
+            # verir (tests/test_seed_ledger_determinism.py bunu kilitliyor).
+            risk_survey_score=survey_score,
             # Faker'ın tr_TR sağlayıcısı SAĞLAMASI GEÇERLİ bir T.C. kimlik
             # numarası üretir (doğrulandı), dolayısıyla giriş ekranındaki
             # 11 hane + sağlama kontrolü anlamlı bir kapı olur. Faker.seed
@@ -335,14 +470,31 @@ def seed_ledger(session: Session) -> int:
         )
         tx_count += 1
 
-        time_deposit_events: list[tuple] = []  # (alım günü, yatırılan tutar)
+        # Portföy, kullanıcının anket puanının izin verdiği varlıklardan
+        # kurulur (bkz. `_uygun_arketip`). Puan burada zaten hesaplanmış
+        # durumda; User kaydına yazılan değerle AYNI olmalı, yoksa portföy
+        # kullanıcının beyanına uymayan bir puana göre kurulur.
+        uygun_archetype = _uygun_arketip(archetype, assets_by_class, survey_score)
+        tepe = _tepe_kademe(uygun_archetype)
 
-        for asset_class, (weight, pick_count) in archetype.items():
-            candidates = assets_by_class.get(asset_class, [])
-            if not candidates:
+        for asset_class, (weight, pick_count, candidates) in uygun_archetype.items():
+            # NAKİT SATIN ALINMAZ — harcanmayan bakiyedir.
+            #
+            # `AssetClass.CASH` altında artık varlık yok (bkz. universe.py):
+            # bütçenin nakit payı hiç harcanmaz ve defterdeki serbest bakiye
+            # olarak kalır. Portföy özeti onu `cash_balance_as_of` ile okuyup
+            # nakit dilimine ekliyor, yani temsil için bir varlığa gerek yok.
+            if asset_class is AssetClass.CASH:
                 continue
             picked = rng.sample(candidates, min(pick_count, len(candidates)))
-            class_budget = budget * Decimal(str(weight)) * Decimal("0.9")  # %10 pay: komisyon+nakit
+            picked = _tepe_temsil_edilsin(picked, candidates, tepe, rng)
+            # Ağırlığın TAMAMI harcanır. Eskiden 0.9 ile çarpılıyordu ("%10 pay:
+            # komisyon+nakit") çünkü nakit de bir varlık gibi satın alınıyordu
+            # ve ayrıca pay ayırmak gerekiyordu. Artık nakit payı arketipte
+            # açıkça yazılı, dolayısıyla ikinci bir kesintiye gerek yok —
+            # ağırlıklar toplamı 1.0 ve ekrandaki dağılım arketiple birebir
+            # örtüşüyor. Komisyonlar nakit bakiyesinden karşılanır.
+            class_budget = budget * Decimal(str(weight))
             per_asset = class_budget / len(picked)
 
             for asset in picked:
@@ -384,32 +536,6 @@ def seed_ledger(session: Session) -> int:
                         fee_try=fee,
                     )
                     tx_count += 1
-                    if asset.symbol == "MEVDUAT-V":
-                        time_deposit_events.append((buy_day, quantity * price))
-
-        # Vadeli mevduat: aylık faiz, INTEREST kaydı olarak (varlığa bağlı değil).
-        for start_day, principal in time_deposit_events:
-            payment_days = [
-                d for d in window if d > start_day and d.day <= 7 and d.month != start_day.month
-            ]
-            seen_months: set[tuple[int, int]] = set()
-            for pay_day in payment_days:
-                key = (pay_day.year, pay_day.month)
-                if key in seen_months:
-                    continue
-                seen_months.add(key)
-                interest = (principal * TIME_DEPOSIT_MONTHLY_RATE).quantize(
-                    _TRY_QUANT, rounding=ROUND_HALF_UP
-                )
-                record_transaction(
-                    session,
-                    portfolio.id,
-                    TransactionType.INTEREST,
-                    transaction_date=_tx_datetime(pay_day),
-                    cash_amount_try=interest,
-                    note="Vadeli mevduat faizi",
-                )
-                tx_count += 1
 
         # --- Kısmi satışlar: pencerenin TAMAMINA yayılır -------------------
         #
@@ -422,11 +548,7 @@ def seed_ledger(session: Session) -> int:
                 kac = rng.randint(1, MAX_SELLS_PER_USER)
                 for sell_day in sorted(rng.sample(aday_gunler, min(kac, len(aday_gunler)))):
                     quantities = position_as_of(session, portfolio.id, sell_day)
-                    sellable = [
-                        (asset_id, qty)
-                        for asset_id, qty in quantities.items()
-                        if qty > 0 and asset_id != assets["MEVDUAT-V"].id
-                    ]
+                    sellable = [(asset_id, qty) for asset_id, qty in quantities.items() if qty > 0]
                     if not sellable:
                         continue
                     asset_id, quantity = sellable[rng.randrange(len(sellable))]

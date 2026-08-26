@@ -147,3 +147,124 @@ def test_filtre_cikar_yalnizca_dolu_alanlari_dondurur():
     assert filtre_cikar("ASELSAN 2026 2. ceyrek") == {"sirket": "ASELS", "donem": "2026-Q2"}
     assert filtre_cikar("ASELSAN nasil gidiyor") == {"sirket": "ASELS"}
     assert filtre_cikar("enflasyon ne oldu") == {}
+
+
+# ---------------------------------------------------------------------------
+# Gundelik kelimeyle cakisan borsa kodlari
+# ---------------------------------------------------------------------------
+
+
+class TestBelirsizTickerlar:
+    """BIST 100 eklenince bazi kodlar gundelik Turkce kelimelerle cakisti.
+
+    MAVI (renk), ESEN, EFOR, BERA... Hepsi kucultulup eslestirildiginde
+    "grafikteki mavi cizgi" sorgusu Mavi Giyim'e gidiyordu. Ayrica "girisim"
+    ve "destek" gibi FINANS KAVRAMLARI da sirket adiyla cakisiyordu —
+    "girisim sermayesi nedir" sorusu Girisim Elektrik'e gidiyordu.
+
+    Cozum iki parcali: cakisan tek kelimelik varyantlar eslemeden cikarildi,
+    ve borsa kodlari BUYUK HARF DUYARLI taraniyor (kodlar teamulen buyuk
+    yazilir).
+    """
+
+    def test_kucuk_harf_gundelik_kelime_sirket_sayilmaz(self):
+        from agents.market_query import sirket_tespit_et
+
+        for cumle in [
+            "Grafikteki mavi çizgi ne anlama geliyor",
+            "Esen bir piyasa mı",
+            "Bu ay efor sarf ettim",
+            "Girişim sermayesi nedir",
+            "Destek almak istiyorum",
+            "Pasifik okyanusu",
+        ]:
+            assert sirket_tespit_et(cumle) is None, f"yanlış pozitif: {cumle}"
+
+    def test_BUYUK_harf_ticker_sirkettir(self):
+        """Kullanıcı kodu büyük yazdıysa niyeti açıktır."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("MAVI hakkında ne biliyorsun") == "MAVI"
+        assert sirket_tespit_et("ESEN son çeyrek") == "ESEN"
+
+    def test_tam_ad_her_zaman_calisir(self):
+        """Çıkarılan varyantlar tek kelimelikti; tam ad etkilenmedi."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("Mavi Giyim son çeyrek") == "MAVI"
+        assert sirket_tespit_et("Girişim Elektrik bilançosu") == "GESAN"
+        assert sirket_tespit_et("Destek Faktoring") == "DSTKF"
+
+    def test_bist100_sirketleri_taniniyor(self):
+        """Eşleme 53 tickerdan 126'ya çıktı; yeni şirketler bulunabilmeli."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("Migros bilançosu") == "MGROS"
+        assert sirket_tespit_et("Otokar hakkında bilgi") == "OTKAR"
+        assert sirket_tespit_et("Kardemir ortaklık yapısı") == "KRDMD"
+
+
+# ---------------------------------------------------------------------------
+# Sorguda birden fazla farkli sirket gecince filtre KONULMAMALI
+# ---------------------------------------------------------------------------
+
+
+class TestBirdenFazlaSirket:
+    """M&A/ortaklık sorularında iki şirket adı aynı anda geçebilir: "Tüpraş'ın
+    tam sahipliği ne zaman Koç Holding'e geçti" gibi. Eskiden en uzun eşleşen
+    ad ("Koç Holding") kazanıp filtreyi TEK şirkete (KCHOL) daraltıyordu;
+    soru asıl Tüpraş hakkında olsa bile arama KCHOL dokümanlarıyla sınırlanıp
+    doğru cevap (TUPRS profilindeki "Kurumsal olaylar tarihçesi" bölümü) aday
+    havuzuna hiç girmiyordu — canlı testte ölçüldü (2026-08-26). Modülün
+    kendi tasarım kuralı zaten bunu söylüyor: belirsizlikte filtre koymamak
+    yanlış filtre koymaktan iyidir."""
+
+    def test_iki_sirket_gecen_sorguda_filtre_konulmaz(self):
+        from agents.market_query import filtre_cikar, sirket_tespit_et
+
+        query = "Tüpraş'ın tam sahipliği ne zaman Koç Holding'e geçti"
+        assert sirket_tespit_et(query) is None
+        assert filtre_cikar(query) == {}
+
+    def test_ayni_sirketin_farkli_yazimlari_tek_sirket_sayilir(self):
+        """ "Türk Hava Yolları" ve "THY" aynı şirkete (THYAO) çıkıyor; bu
+        birden fazla farklı şirket sayılmamalı, filtre yine konulmalı."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("Türk Hava Yolları (THY) bilançosu") == "THYAO"
+
+    def test_petkim_falanca_satin_alma_sorusu_petkime_daralir(self):
+        """ "Falanca Enerji" eşleme dosyasında yok (uydurma şirket), yalnızca
+        Petkim gerçek bir eşleşme — tek gerçek eşleşme olduğu için filtre
+        yine konulmalı."""
+        from agents.market_query import sirket_tespit_et
+
+        assert sirket_tespit_et("Petkim hangi şirketi satın aldı?") == "PETKM"
+
+    def test_sirket_gecer_mi_coklu_sirkette_de_true_doner(self):
+        """`sirket_tespit_et`'ten farkı: birden fazla şirket geçse bile
+        (tek bir filtre üretilemese bile) en az biri geçtiği için True
+        döner — scope_checker'ın kapsam-dışı-etiket istisnası bunu
+        kullanır (ölçümle doğrulandı, 2026-08-26)."""
+        from agents.market_query import sirket_gecer_mi, sirket_tespit_et
+
+        query = "Akbank, İş Bankası ve Yapı Kredi'nin son çeyrek net kârlarını karşılaştır"
+        assert sirket_tespit_et(query) is None
+        assert sirket_gecer_mi(query) is True
+        assert sirket_gecer_mi("konut kredisi ne kadar") is False
+
+    def test_sirket_sayisi_coklu_sirketli_sorguda_dogru_sayar(self):
+        """market_agent bu sayıyı top_k'yı genişletmek için kullanır —
+        korpus büyüdükçe sabit top_k=5, 3 şirketli bir karşılaştırmada
+        şirketlerden birini (ör. Yapı Kredi) üst-5'in dışına düşürüyordu
+        (ölçümle doğrulandı, 2026-08-26)."""
+        from agents.market_query import sirket_sayisi
+
+        assert (
+            sirket_sayisi(
+                "Akbank, İş Bankası ve Yapı Kredi'nin son çeyrek net kârlarını karşılaştır"
+            )
+            == 3
+        )
+        assert sirket_sayisi("ASELSAN son çeyrek raporu") == 1
+        assert sirket_sayisi("bugün piyasada ne oldu") == 0

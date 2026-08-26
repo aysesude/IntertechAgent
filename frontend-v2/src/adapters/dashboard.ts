@@ -1,6 +1,5 @@
-import type { ApiRiskAssessment, ApiRiskLevel } from "@/api/risk";
+import type { ApiRiskAssessment } from "@/api/risk";
 import type {
-  ApiAssetClass,
   ApiHoldingsValuation,
   ApiPerformanceResult,
   ApiPortfolioSummary,
@@ -10,9 +9,16 @@ import type {
 } from "@/api/portfolio";
 import { DARK_ASSET_CLASS_COLORS } from "@/data/assetColors";
 import { formatDateDMY, formatSignedTRY, formatTRY } from "@/utils/format";
+import {
+  ASSET_CLASS_IDS,
+  ASSET_CLASS_LABELS,
+  LIGHT_ASSET_CLASS_COLORS,
+  RISK_LEVEL_LABELS,
+  RISK_LEVEL_ORDINALS,
+  RISK_PROFILE_LABELS,
+} from "@/adapters/shared";
 import type {
   AssetAllocationSlice,
-  AssetClassId,
   DashboardData,
   PerformanceRange,
   PortfolioSummary,
@@ -35,41 +41,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Varlık sınıfı eşlemesi
 // ---------------------------------------------------------------------------
-
-/**
- * Backend'in 5 varlık sınıfı ↔ arayüz paletindeki kimlikler.
- *
- * Arayüz paletinde ayrıca `crypto` var; backend'de karşılığı YOK ve adapter
- * bunu asla üretmez. Palet dosyasında durması zararsız (ileride sınıf
- * eklenirse rengi hazır), ama buradan çıkmadığı sürece ekranda görünmez.
- */
-const ASSET_CLASS_IDS: Record<ApiAssetClass, AssetClassId> = {
-  stock: "stocks",
-  precious_metal: "precious",
-  currency: "fx",
-  bond: "bond",
-  cash: "cash",
-};
-
-const ASSET_CLASS_LABELS: Record<ApiAssetClass, string> = {
-  stock: "Hisse Senedi",
-  precious_metal: "Kıymetli Madenler",
-  currency: "Döviz",
-  bond: "Tahvil",
-  cash: "Nakit",
-};
-
-// Donut'un açık tema renkleri. Koyu tema paleti tek kaynaktan
-// (`DARK_ASSET_CLASS_COLORS`) okunuyor; ikisi ayrı çünkü koyu temada
-// kontrast için farklı bir ölçek kullanılıyor.
-const LIGHT_ASSET_CLASS_COLORS: Record<AssetClassId, { color: string; highlight: string }> = {
-  stocks: { color: "#1E3A8A", highlight: "#3B82F6" },
-  precious: { color: "#B45309", highlight: "#F59E0B" },
-  fx: { color: "#047857", highlight: "#10B981" },
-  bond: { color: "#5B21B6", highlight: "#8B5CF6" },
-  cash: { color: "#475569", highlight: "#94A3B8" },
-  crypto: { color: "#334155", highlight: "#64748B" },
-};
 
 /** Grafik dönemi ↔ backend penceresi. */
 export const WINDOW_BY_RANGE: Record<RangeKey, ApiWindow> = {
@@ -247,27 +218,11 @@ export function toTransactions(liste: ApiTransactionList, limit = 6): Transactio
 // Risk
 // ---------------------------------------------------------------------------
 
-/** 7 kademeli etiketin Türkçe karşılığı. Tek kaynak burası. */
-const RISK_LEVEL_LABELS: Record<ApiRiskLevel, string> = {
-  very_low: "Çok Düşük",
-  low: "Düşük",
-  low_medium: "Düşük-Orta",
-  medium: "Orta",
-  medium_high: "Orta-Yüksek",
-  high: "Yüksek",
-  very_high: "Çok Yüksek",
-};
-
-const RISK_PROFILE_LABELS: Record<ApiRiskAssessment["risk_profile"], string> = {
-  conservative: "Korumacı",
-  balanced: "Dengeli",
-  growth: "Büyüme",
-  aggressive: "Agresif",
-};
-
 export function toRiskSummary(risk: ApiRiskAssessment): RiskSummary {
   return {
     levelLabel: risk.risk_level ? RISK_LEVEL_LABELS[risk.risk_level] : null,
+    level: risk.risk_level ? RISK_LEVEL_ORDINALS[risk.risk_level] : null,
+    surveyScore: risk.risk_survey_score,
     annualizedVolatilityPct: risk.metrics.annualized_volatility_percent,
     withinProfile: risk.is_within_profile,
     profileLabel: RISK_PROFILE_LABELS[risk.risk_profile],

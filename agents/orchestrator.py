@@ -63,10 +63,6 @@ AGENT_NODES = {
     "web_research": "web_research_agent",
 }
 
-# Merge prompt'u bu metni istiyor; LLM düşerse kod tarafından garanti edilir
-# (CLAUDE.md §4). Kısa biçim, prompt'takiyle birebir aynı.
-_DISCLAIMER = "Bu bir yatırım tavsiyesi değildir."
-
 
 def _mesaj(anahtar: str, varsayilan: str) -> str:
     """Kullanıcıya gösterilen metni scope.yaml'dan okur.
@@ -118,11 +114,16 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "PORTFOLIO — kullanıcının kendi varlıkları: değeri, dağılımı, getirisi, "
         "işlem geçmişi, tek tek pozisyonları.\n"
         "  Örnek: 'portföyüm ne durumda', 'geçen ay ne aldım', 'varlıklarımı listele'\n"
-        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz; "
-        "ayrıca ARŞİVDE BELGESİ OLAN teknik konular: muhasebe standartları ve "
-        "finansal tablo terimleri.\n"
+        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz "
+        "(döviz, altın, gümüş, platin dahil kıymetli madenler); ayrıca ARŞİVDE "
+        "BELGESİ OLAN teknik konular: muhasebe standartları, finansal oran "
+        "tanımları, kurumsal olay terimleri ve düzenleyici çerçeve.\n"
         "  Örnek: 'Aselsan haberleri', 'dolar kuru ne durumda', 'BIST bugün nasıl', "
-        "'TFRS 16 nedir', 'konsolide finansal tablo ne demek'\n"
+        "'gram altın kaç TL', 'gümüş fiyatı nedir', 'platin ne kadar', "
+        "'TFRS 16 nedir', 'F/K oranı nasıl hesaplanır', 'temettü nedir', "
+        "'halka arz nasıl olur', 'konsolide finansal tablo ne demek', "
+        "'2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam soruluyor, "
+        "TAHMIN değil)\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -134,11 +135,17 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "WEB_RESEARCH — genel finans kavramlarının ne anlama geldiği, nasıl "
         "işlediği, nasıl hesaplandığı; yaygın uygulamalar ve süreçler. "
         "Kullanıcının kendi verisiyle ya da güncel bir piyasa değeriyle ilgisi "
-        "yoktur, arşivde de belgesi yoktur.\n"
-        "  Örnek: 'lot ne demek', 'temettü nedir', 'halka arz nasıl olur', "
-        "'borsa saat kaçta kapanır', 'şirketler ne sıklıkla temettü verir', "
-        "'portföy kârı nasıl hesaplanır', 'hisse ile fon arasındaki fark ne'\n\n"
-        "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı.\n"
+        "yoktur ve ARŞİVDE BELGESİ DE YOKTUR (arşivde varsa MARKET).\n"
+        "  Örnek: 'lot ne demek', 'borsa saat kaçta kapanır', "
+        "'şirketler ne sıklıkla temettü verir', 'portföy kârı nasıl hesaplanır', "
+        "'hisse ile fon arasındaki fark ne'\n\n"
+        "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı;\n"
+        "AÇIKÇA gelecek zaman/gelecek yıl belirten bir ifade GEREKİR "
+        "('olur', 'olacak', 'yükselecek mi', 'gelecek yıl'). Bir yıl "
+        "GEÇMESE veya belirtilse bile ('2026 temettüsü ne kadar' gibi) "
+        "soru zaten AÇIKLANMIŞ/RAPORLANMIŞ bir rakamı soruyorsa (gelecek "
+        "zaman eki YOK) bu TAHMIN DEĞİL, MARKET'tir — yıl geçmesi tek "
+        "başına tahmin sayılmaz.\n"
         "  Örnek: '2027de dolar kaç TL olur', 'altın yükselecek mi', "
         "'bu hisse gelecek yıl ne kadar olur'\n"
         "KAPSAM_DISI — finansla ya da kullanıcının portföyüyle ilgisi olmayan "
@@ -150,9 +157,11 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
         "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
         "'riskim nedir' → sadece RISK.\n"
-        "TANIM mı DEĞER mi: bir kavramın ne olduğu soruluyorsa WEB_RESEARCH, "
-        "aynı kavramın kullanıcıdaki değeri soruluyorsa ilgili ajan. "
-        "'temettü nedir' → WEB_RESEARCH, 'ne kadar temettü aldım' → PORTFOLIO. "
+        "TANIM mı DEĞER mi: bir kavramın ne olduğu soruluyorsa MARKET ya da "
+        "WEB_RESEARCH (arşivde belgesi varsa MARKET, yoksa WEB_RESEARCH); "
+        "aynı kavramın kullanıcıdaki DEĞERİ soruluyorsa ilgili ajan. "
+        "'temettü nedir' → MARKET, 'lot ne demek' → WEB_RESEARCH, "
+        "'ne kadar temettü aldım' → PORTFOLIO. "
         "'kâr nasıl hesaplanır' → WEB_RESEARCH, 'ne kadar kâr ettim' → PORTFOLIO.\n"
         "TAHMIN ve KAPSAM_DISI TEK BAŞINA yazılır, başka etiketle birlikte değil.\n"
         "TAKİP SORUSU: Soru kendi başına anlaşılmıyorsa ('bunu açıkla', 'peki "
@@ -360,6 +369,13 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "belirt. Yakın duran başka bir veriyi cevap yerine koyma ve "
         "verilerden çıkmayan hiçbir sayı, oran veya isim üretme.\n"
         "\n"
+        "HESAPLAMA YAPMA: Verilerde iki sayı (ör. başlangıç ve bitiş fiyatı) "
+        "olsa bile aralarındaki FARKI, TOPLAMI ya da başka bir türetilmiş "
+        "değeri KENDİN hesaplama — yalnızca verilerde YAZILI OLAN sayıyı "
+        "aktar. Veride zaten hesaplanmış bir yüzde değişim varsa onu "
+        "kullan; yoksa değişim miktarından hiç bahsetme, iki sayıyı olduğu "
+        "gibi ver.\n"
+        "\n"
         "UYARILARI KORU: 'ALINAMAYAN BİLGİLER' bölümü, hesaplanamayan "
         "metrikler ve veri eksikliği notları ELENEMEZ; doğal bir dille "
         "aktarılır ('Şu an piyasa verilerine ulaşamıyorum ancak "
@@ -388,8 +404,6 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Para ve oranlarda Türkçe biçim kullan: 1.234,56 TL ve +%8,41 "
         "(yüzde işareti sayıdan ÖNCE, artı/eksi en başta).\n"
         "\n"
-        "ÖNEMLİ: Her yanıtının en sonuna mutlaka 'Bu bir yatırım tavsiyesi "
-        "değildir.' uyarısını ekle.\n"
         "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme "
         "senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', "
         "'Riskinizi azaltın' gibi eylem önerilerinde bulunma. Yalnızca "
@@ -416,8 +430,6 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
     # boş çıktıyı değil — iki durumu da aynı düşüş kapatıyor.
     if not final_answer.strip():
         final_answer = "\n\n".join(successful)
-        if _DISCLAIMER not in final_answer:
-            final_answer += f"\n\n{_DISCLAIMER}"
         writer({"delta": final_answer})
 
     return {"final_answer": final_answer}

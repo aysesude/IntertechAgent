@@ -68,20 +68,95 @@ def _sirket_eslemesi() -> dict[str, str]:
     return {_normalize(ad): kayit["ticker"] for ad, kayit in ham.items() if kayit.get("ticker")}
 
 
-def sirket_tespit_et(query: str) -> str | None:
-    """Sorguda geçen ilk şirketin borsa kodunu döndürür ("ASELS"), yoksa None.
+def _tum_sirketleri_tespit_et(query: str) -> set[str]:
+    """Sorguda geçen TÜM farklı şirketlerin borsa kodlarını döndürür.
 
-    Uzun adlar önce denenir: "garanti bankası" ile "garan" aynı sorguda
-    eşleşebilir, uzun olan daha spesifik olduğu için öncelikli. Kelime sınırı
-    (`\\b`) aranır — aksi hâlde "thy" gibi kısa kodlar başka kelimelerin
-    içinde sahte eşleşme üretir.
+    Kelime sınırı (`\\b`) aranır — aksi hâlde "thy" gibi kısa kodlar başka
+    kelimelerin içinde sahte eşleşme üretir.
     """
-    normalized = _normalize(query)
     eslemeler = _sirket_eslemesi()
-    for ad in sorted(eslemeler, key=len, reverse=True):
+    bulunanlar: set[str] = set()
+
+    # 1) BÜYÜK HARF ticker taraması — küçültmeden ÖNCE.
+    #
+    # Bazı borsa kodları gündelik Türkçe kelimelerle çakışıyor: MAVI (renk),
+    # ESEN, EFOR, BERA. Hepsi küçültülüp eşleştirildiğinde "grafikteki mavi
+    # çizgi" sorgusu Mavi Giyim'e gidiyordu (ölçüldü). Kodlar teamülen BÜYÜK
+    # yazıldığı için büyük harf duyarlı bir tarama ikisini ayırıyor: "MAVI"
+    # şirkettir, "mavi" renktir.
+    #
+    # Yalnızca tickerın kendisi aranır, ad varyantları değil — "Mavi Giyim"
+    # zaten aşağıdaki normal taramada bulunuyor.
+    for ticker in set(eslemeler.values()):
+        if re.search(rf"\b{re.escape(ticker)}\b", query):
+            bulunanlar.add(ticker)
+
+    # 2) Normal tarama: küçültülmüş ve aksansız.
+    normalized = _normalize(query)
+    for ad, ticker in eslemeler.items():
         if re.search(rf"\b{re.escape(ad)}\b", normalized):
-            return eslemeler[ad]
+            bulunanlar.add(ticker)
+
+    return bulunanlar
+
+
+def sirket_tespit_et(query: str) -> str | None:
+    """Sorguda geçen TEK şirketin borsa kodunu döndürür ("ASELS"); sorguda
+    hiç şirket geçmiyorsa veya BİRDEN FAZLA FARKLI şirket geçiyorsa None
+    döner.
+
+    İki-şirketli sorgularda filtre KONULMAMALI: "Tüpraş'ın tam sahipliği ne
+    zaman Koç Holding'e geçti" gibi bir M&A/ortaklık sorusu hem TUPRS hem
+    KCHOL'ü doğal olarak barındırır. Eskiden en uzun eşleşen ad (burada
+    "Koç Holding") kazanıp filtreyi TEK şirkete daraltıyordu — soru asıl
+    Tüpraş hakkında olsa bile arama KCHOL dokümanlarıyla sınırlanıp doğru
+    cevap (TUPRS profilindeki "Kurumsal olaylar tarihçesi" bölümü) aday
+    havuzuna hiç girmiyordu (ölçüldü, 2026-08-26). Modülün kendi tasarım
+    kuralı zaten bunu söylüyor: belirsizlikte filtre koymamak yanlış filtre
+    koymaktan iyidir — serbest metin araması iki şirketi de bulur (bkz.
+    modül başlığı).
+
+    NOT: bu fonksiyon "arama filtresi" ihtiyacı için TEK/None döner. "Sorguda
+    HERHANGİ bir şirket geçiyor mu?" sorusu için (ör. scope_checker'ın
+    kapsam-dışı-etiket istisnası) `sirket_gecer_mi()` kullanılmalı — o,
+    birden fazla şirket geçse bile True döner (bkz. o fonksiyonun docstring'i).
+    """
+    bulunanlar = _tum_sirketleri_tespit_et(query)
+    if len(bulunanlar) == 1:
+        return next(iter(bulunanlar))
     return None
+
+
+def sirket_sayisi(query: str) -> int:
+    """Sorguda geçen FARKLI şirket sayısını döndürür.
+
+    Çoklu şirket karşılaştırma sorgularında ("Akbank, İş Bankası ve Yapı
+    Kredi'nin ... karşılaştır") sabit `top_k=5` yetersiz kalıyordu: korpus
+    büyüdükçe (kurumsal olaylar/nakit akış içeriği eklendikçe) her şirketin
+    kendi ilgili chunk'ı için rekabet arttı, 3 şirketten biri (ör. Yapı
+    Kredi) üst-5'in dışına düşüp sorgunun cevabından tamamen kayboluyordu
+    (ölçümle doğrulandı, 2026-08-26). market_agent bu sayıyı kullanarak
+    top_k'yı şirket sayısına göre genişletir.
+    """
+    return len(_tum_sirketleri_tespit_et(query))
+
+
+def sirket_gecer_mi(query: str) -> bool:
+    """Sorguda bilinen bir BIST şirketi (adıyla ya da koduyla) geçiyor mu?
+
+    `sirket_tespit_et`'ten farkı: o, TEK bir filtre üretebilmek için birden
+    fazla şirket geçtiğinde None döner (bkz. docstring'i). Ama scope_checker
+    gibi "en az bir şirket adı geçiyorsa kapsam-dışı-etiket istisnası
+    uygulanır" mantığı için bu ayrım YANLIŞ: "Akbank, İş Bankası ve Yapı
+    Kredi'nin ... karşılaştır" gibi 3 şirketli bir sorguda "Yapı Kredi"
+    bankacılık-ürünleri sınıfındaki "kredi" etiketiyle çakışıp sorguyu
+    OUT_OF_SCOPE'a düşürüyordu — `sirket_tespit_et` üç şirket birden
+    geçtiği için None dönüyor, istisna hiç tetiklenmiyordu (ölçüldü,
+    2026-08-26, analist canlı test turu; bu, çoklu-şirket None davranışının
+    scope_checker'a sızan bir yan etkisiydi). Bu fonksiyon şirket SAYISINA
+    bakmaz, yalnızca en az bir tane geçip geçmediğine bakar.
+    """
+    return bool(_tum_sirketleri_tespit_et(query))
 
 
 def donem_tespit_et(query: str) -> str | None:

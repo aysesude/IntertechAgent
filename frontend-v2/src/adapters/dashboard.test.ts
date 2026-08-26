@@ -350,11 +350,15 @@ function risk(ustuneYaz: Partial<ApiRiskAssessment> = {}): ApiRiskAssessment {
     as_of: "2026-08-20",
     risk_profile: "conservative",
     risk_profile_source: "user",
+    risk_survey_score: 2,
+    total_value: 1_569_468.64,
     risk_level: "medium_high",
     is_within_profile: false,
     metrics: {
       annualized_volatility_percent: 24.31,
       max_drawdown_percent: 8.4,
+      category_metrics: [],
+      asset_metrics: [],
       diversification_ratio: 1.36,
       value_at_risk_try: 6968,
       value_at_risk_percent: 0.44,
@@ -362,8 +366,12 @@ function risk(ustuneYaz: Partial<ApiRiskAssessment> = {}): ApiRiskAssessment {
       value_at_risk_horizon_days: 1,
       sharpe_ratio: -6.74,
       risk_free_rate_percent: 37,
+      risk_free_rate_is_live: false,
       max_asset_weight_percent: 24.17,
       max_asset_symbol: "PPF",
+      max_class_weight_percent: 54.77,
+      max_class: "cash",
+      herfindahl_index: 0.1646,
       holdings_count: 8,
       asset_class_count: 5,
       price_points_used: 260,
@@ -380,6 +388,35 @@ describe("toRiskSummary", () => {
     expect(toRiskSummary(risk()).levelLabel).toBe("Orta-Yüksek");
     expect(toRiskSummary(risk({ risk_level: "very_low" })).levelLabel).toBe("Çok Düşük");
     expect(toRiskSummary(risk({ risk_level: "very_high" })).levelLabel).toBe("Çok Yüksek");
+  });
+
+  it("etiketin SAYISAL karşılığını da taşır", () => {
+    // Gösterge (RiskLevelBar) sıra bilgisine ihtiyaç duyuyor. Etiketten
+    // yeniden çıkarmak, çeviri değişince sessizce kırılırdı.
+    expect(toRiskSummary(risk({ risk_level: "very_low" })).level).toBe(1);
+    expect(toRiskSummary(risk({ risk_level: "medium_high" })).level).toBe(5);
+    expect(toRiskSummary(risk({ risk_level: "very_high" })).level).toBe(7);
+    expect(toRiskSummary(risk({ risk_level: null })).level).toBeNull();
+  });
+
+  it("etiket ile sıra AYNI kademeyi gösterir", () => {
+    // İki tablo yan yana elle tutuluyor; ayrıştıklarında gösterge doğru
+    // metnin yanına yanlış rengi koyar ve bunu kimse fark etmez.
+    const seviyeler = [
+      ["very_low", 1, "Çok Düşük"],
+      ["low", 2, "Düşük"],
+      ["low_medium", 3, "Düşük-Orta"],
+      ["medium", 4, "Orta"],
+      ["medium_high", 5, "Orta-Yüksek"],
+      ["high", 6, "Yüksek"],
+      ["very_high", 7, "Çok Yüksek"],
+    ] as const;
+
+    for (const [apiDeger, sira, etiket] of seviyeler) {
+      const ozet = toRiskSummary(risk({ risk_level: apiDeger }));
+      expect(ozet.level).toBe(sira);
+      expect(ozet.levelLabel).toBe(etiket);
+    }
   });
 
   it("profil bandının dışında olmayı taşır", () => {
@@ -401,6 +438,17 @@ describe("toRiskSummary", () => {
     expect(yetersiz.levelLabel).toBeNull();
     expect(yetersiz.annualizedVolatilityPct).toBeNull();
     expect(yetersiz.warning).toBe("Yeterli fiyat geçmişi yok.");
+  });
+
+  it("anket puanını taşır", () => {
+    // Kart bunu gösteriyor: KULLANICININ beyanı, portföyün ölçümü değil.
+    expect(toRiskSummary(risk()).surveyScore).toBe(2);
+  });
+
+  it("anket doldurulmamışsa puan UYDURULMAZ", () => {
+    // Profilden geriye puan üretmek (Korumacı -> 1 veya 2?) verilmemiş bir
+    // cevabı verilmiş göstermek olurdu (AK 5.5). Kartta gösterge çizilmez.
+    expect(toRiskSummary(risk({ risk_survey_score: null })).surveyScore).toBeNull();
   });
 
   it("profil adını Türkçeleştirir", () => {

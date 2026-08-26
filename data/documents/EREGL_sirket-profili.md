@@ -32,5 +32,13 @@ diğer ortaklar ve şirketin kendi hisse geri alımları arasındadır.
 Yönetim kurulu başkanı, OYTAŞ İç ve Dış Ticaret A.Ş.'yi temsilen Murat
 Yalçıntaş'tır. 2026 yılında hisse başına brüt 0,55 TL, net 0,4675 TL
 nakit temettü dağıtılmasına karar verildi; ödeme tarihi 3 Haziran
-2026'dır. Bu doküman şirketin kimlik ve yapısal bilgilerini özetler;
-dönemsel finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+Erdemir hisseleri 13 Ocak 1986'da Borsa İstanbul'da halka arz
+edilmiştir. 2002 yılında İskenderun Demir Çelik (İsdemir) satın
+alınmıştır. Kasım 2024'te yüzde 100 oranında bedelsiz sermaye
+artırımıyla sermaye 3,5 milyar TL'den 7 milyar TL'ye çıkarılmıştır. Bu
+doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

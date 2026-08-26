@@ -21,7 +21,10 @@ finansal sonuçlarını Kamuyu Aydınlatma Platformu'na (KAP) bildirdi.
 TL'lik piyasa beklentisini yüzde 41 aştı ve yıllık bazda yüzde 28 arttı.
 Çeyrek geliri 48,9 milyar TL olarak gerçekleşti; 43,8 milyar TL'lik
 analist beklentisini yüzde 11 aştı, gelir yıllık bazda yüzde 42,
-çeyreklik bazda ise yüzde 37 arttı.
+çeyreklik bazda ise yüzde 37 arttı. İlk yarıda (Ocak-Haziran 2026) esas
+faaliyet kârı, 2025 ilk yarısındaki 13,390 milyar TL'den yüzde 9
+azalışla 12,216 milyar TL'ye geriledi; aynı dönemde FAVÖK de 15,580
+milyar TL'den 15,262 milyar TL'ye hafif geriledi.
 
 ## Segment performansı
 

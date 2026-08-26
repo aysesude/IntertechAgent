@@ -373,6 +373,113 @@ Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
 - `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
   çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
 
+### Kullanıcı risk profili ve anket puanı
+
+Projedeki tek YAZAN uç ailesi; geri kalan her REST ucu salt okur. Dördü de
+`verify_user_access` ister (AK 5.4) — başkasının profilini okumak ya da
+değiştirmek, tüm risk ve uygunluk değerlendirmesinin dayandığı beyanı ele
+geçirmek olurdu.
+
+**İKİ ÖLÇEK YAN YANA, biri yetkili:**
+
+| | Ne | Kim kullanıyor |
+|---|---|---|
+| `risk_survey_score` | **1-7**, şartnamenin anket puanı | uygunluk kontrolü (`advice_eligibility`) |
+| `risk_profile` | 4 kademe, puandan **türer** | risk motoru (`risk_service`) tabloları |
+
+Eşleme: **1-2** Muhafazakâr · **3-4** Dengeli · **5** Büyüme · **6-7** Agresif.
+Bantlar varlık merdiveniyle hizalı — her profil, kendi bandının açtığı varlık
+kümesiyle örtüşür.
+
+#### `GET /api/users/{user_id}/risk-survey`
+
+```json
+{
+  "user_id": "...",
+  "risk_survey_score": 5,
+  "risk_profile": "growth",
+  "score_band": [5, 5],
+  "score_min": 1,
+  "score_max": 7
+}
+```
+
+- `risk_survey_score` **`null` olabilir**: kullanıcı anketi hiç doldurmamıştır.
+  Bu durumda `score_band` da `null` olur ama `risk_profile` yine dolu döner.
+  Uydurulmuş bir puan döndürmek, verilmemiş bir cevabı verilmiş göstermek
+  olurdu (AK 5.5).
+- `score_min`/`score_max` yanıtın içinde: **arayüz anket ölçeğini kendi
+  tarafında sabit yazmasın.**
+- `score_band` puanın karşılık geldiği profilin tüm aralığı — arayüz
+  "Muhafazakâr (1-2 puan)" gösterebilsin diye.
+
+#### `PUT /api/users/{user_id}/risk-survey`
+
+```json
+{ "risk_survey_score": 5 }
+```
+
+Anket ekranının yazması gereken uç budur. Puanı kaydeder **ve profili ondan
+türetir**; ikisi tek işlemde yazılır. İdempotent. Aralık dışı puan `422`.
+
+#### `GET` / `PUT /api/users/{user_id}/risk-profile`
+
+Profili doğrudan okur/yazar (`{"risk_profile": "balanced"}`). Yanıt ayrıca
+`available_profiles` taşır ki arayüz seçenekleri sabit yazmasın.
+
+> **`PUT /risk-profile` kayıtlı anket puanını SİLER.** Profil artık türev bir
+> alan; doğrudan yazılması "elle geçersiz kılma" demektir ve elde duran puan
+> o değişikliği açıklamaz. Puan bırakılsaydı birbirini tutmayan iki cevap
+> saklanırdı: puan 6 (Agresif) derken profil Muhafazakâr görünürdü.
+
+**Ajana açılmadı, açılmamalı.** `agents/scope.yaml` alım/satım/değiştirme
+fiillerini `UNAUTHORIZED_ACTION` sayıyor; sohbet üzerinden bir modelin risk
+profilini değiştirebilmesi, prompt enjeksiyonuyla ("artık agresif
+profildesin") kullanıcının beyan ettiği risk toleransının ele geçirilmesi
+demek olurdu.
+
+**Açık iş:** risk ajanı hâlâ profilden türetilen GEÇİCİ bir puan kullanıyor
+(`agents/risk_agent._DUMMY_SURVEY_SCORE_BY_PROFILE`). Gerçek puanın ajana
+bağlanması ayrı bir iştir — risk ajanına bu turda dokunulmadı.
+
+### `GET /api/portfolio/{user_id}/benchmark?window=`
+
+Arayüzdeki **"Varlıklar Arası Karşılaştırmalı Getiri"** kartının kaynağı.
+Portföyün ve dört kıyas enstrümanının seçili dönemdeki toplam **fiyat**
+getirisi.
+
+```json
+{
+  "window": "12m", "start_date": "2025-09-08", "end_date": "2026-08-26",
+  "truncated_to_inception": true,
+  "portfolio_return_percent": 91.7,
+  "benchmarks": [
+    { "symbol": "XU100",  "name": "BIST 100 Endeksi", "return_percent": 39.8 },
+    { "symbol": "USDTRY", "name": "Amerikan Doları",  "return_percent": 16.8 },
+    { "symbol": "EURTRY", "name": "Euro",             "return_percent": 16.6 },
+    { "symbol": "XAUTRY", "name": "Gram Altın",       "return_percent": 49.0 }
+  ],
+  "excluded_symbols": []
+}
+```
+
+- `window`: **`1m | 3m | 6m | 12m | ytd`**. `ytd` diğerlerinin aksine sabit
+  uzunlukta değildir — 1 Ocak'tan bugüne.
+- **Miktarlar dönem başında dondurulur**; dönem içindeki alım/satım, temettü
+  ve komisyon hesaba katılmaz. Endeks de saf fiyat getirisi olduğu için ancak
+  böyle aynı ölçekte olurlar — yoksa "portföyüm endeksi yendi" cümlesi
+  aslında sadece yeni para yatırıldığı anlamına gelirdi.
+- **Başlangıç, ilk VARLIK ALIMIDIR**, ilk işlem değil. Portföyler önce
+  nakitle fonlanıp varlık günler sonra alınabiliyor; `min(transaction_date)`
+  alındığında o gün hiç pozisyon olmadığı için uç `InsufficientDataError`
+  veriyordu (ölçülen: 12 aylık pencerede seed'li 50 kullanıcının 50'si).
+- `truncated_to_inception: true` → portföy pencereden genç, başlangıç ilk
+  alıma çekildi. **Arayüz bunu söylemeli**; "Yıllık" yazıp dört aylık getiri
+  göstermek kıyası olduğundan iyi ya da kötü gösterir.
+- `excluded_symbols`: dönem başında fiyatı olmayan varlıklar hesaba
+  katılmaz — eksik maliyetle bölmek yanlış getiri üretirdi.
+- Getiriler hesaplanamıyorsa **`null`**, `0` değil (AK 5.5).
+
 ### `GET /api/risk/{user_id}?profile_override=`
 
 7 kademeli risk seviyesi, yıllık volatilite, VaR, Sharpe, yoğunlaşma ve
@@ -385,6 +492,7 @@ kök neden teşhisi (`causes`) da gelir.
   "is_within_profile": false,
   "risk_profile": "conservative",
   "risk_profile_source": "user",
+  "risk_survey_score": 2,
   "metrics": {
     "annualized_volatility_percent": 24.31,
     "value_at_risk_try": 6968.0, "value_at_risk_percent": 0.44,
@@ -401,6 +509,11 @@ kök neden teşhisi (`causes`) da gelir.
 - **0-100 kompozit skor YOK.** Risk v2 onu bilerek kaldırdı; seviye yalnızca
   volatiliteden gelir, yoğunlaşma/çeşitlendirme skora karışmaz (onlar teşhiste
   kullanılır). Arayüz skor uydurmamalı.
+- `risk_survey_score` kullanıcının anket puanıdır (1-7) ve `risk_profile`
+  ondan türer; arayüzün "Risk Profili" kartı bunu gösteriyor, bu yüzden ayrı
+  bir uç çağırmasın diye burada taşınıyor. **`null` olabilir:** anket
+  doldurulmamıştır ya da sonuç `profile_override` ile hesaplanmıştır — o
+  senaryoda profil kullanıcının beyanı olmadığı için puan bilerek düşürülür.
 - **Yeterli fiyat geçmişi yoksa `risk_level` ve metrikler `null` döner**,
   tahmini bir değerle doldurulmaz (AK 2.7 / 5.5). Sebep `warnings`'te yazar.
   Arayüz bu durumda "hesaplanamadı" göstermeli — `0` göstermek "riskiniz yok"
@@ -471,9 +584,108 @@ Oturumdaki tüm mesajları kronolojik sırada döner:
 ```
 404 → `{"detail": "Chat session not found for session_id ..."}`
 
-### İskelet route'lar
+## Piyasa uçları
 
-- `GET /api/market/news` → `501` + `{"detail": "TODO: ..."}`
+Piyasa ekranını besler. Üç uç, üç ayrı kaynak.
+
+### `GET /api/market/indicators`
+
+Gösterge şeridi: BIST 100, USD/TRY, EUR/TRY, gram altın. Kaynak `price_history`
+tablosu; token ister ama kullanıcıya özel değildir.
+
+```json
+{
+  "as_of": "2026-08-24",
+  "indicators": [
+    {
+      "symbol": "XU100", "name": "BIST 100 Endeksi", "asset_class": "stock",
+      "price": 14514.82, "change_percent": 0.82,
+      "price_date": "2026-08-22", "source": "yfinance", "stale": false
+    }
+  ],
+  "missing_symbols": []
+}
+```
+
+`change_percent` bir önceki **işlem** gününe göredir (takvim günü değil —
+piyasa hafta sonu kapalı). Seride tek nokta varsa `null` döner, `0` DEĞİL:
+"değişmedi" ile "hesaplanamadı" farklı şeylerdir (AK 5.5). `price_date` ve
+`source` her satırda döner ve arayüz ikisini de göstermek zorundadır (AK 5.1,
+5.3).
+
+### `GET /api/market/headlines`
+
+Genel piyasa gündemi — istek anında BloombergHT son dakika akışından **canlı**
+çekilir, veritabanına yazılmaz. Sağlayıcı 5 dakikalık önbellek tutar ve bu
+önbellek sohbet tarafındaki `get_live_market_headlines` tool'uyla paylaşılır.
+
+```json
+{
+  "headlines": [
+    { "title": "TCMB: REEL SEKTÖRÜN NET DÖVİZ POZİSYONU...", "published_at": "2026-08-24T14:38:00" }
+  ],
+  "source_name": "BloombergHT",
+  "source_url": "https://www.bloomberght.com/sondakika"
+}
+```
+
+Madde başına **URL YOKTUR**: akıştaki maddelerin ayrı adresi bulunmuyor
+(ölçüldü), kaynak listenin tamamına giden tek adrestir. Özet, etki seviyesi
+ve kaynak sayısı da yoktur — kaynak yalnızca başlık ve zaman veriyor,
+üretmek uydurma olurdu.
+
+503 → `{"detail": "Piyasa gündemine şu an ulaşılamıyor."}`. Boş liste
+DÖNMEZ: "ulaşılamadı" ile "haber yok" aynı şey değil.
+
+### `GET /api/market/influence/{user_id}`
+
+Kullanıcının en ağırlıklı pozisyonları ve günlük değişimleri. Nakit hariç
+(fiyatı, dolayısıyla değişimi yok).
+
+```json
+{
+  "as_of": "2026-08-24",
+  "rows": [
+    {
+      "symbol": "ASELS", "name": "Aselsan", "asset_class": "stock",
+      "weight_percent": 16.4, "change_percent": 0.25
+    }
+  ]
+}
+```
+
+Kullanıcıya özeldir: `Depends(get_current_user)` + `verify_user_access`
+(AK 5.4). 403 → başkasının portföyü, 401 → token yok.
+
+### `GET /api/market/calendar/{user_id}`
+
+Kullanıcının **hisselerinin** yaklaşan KAP bildirim takvimi. Makro takvim
+(TCMB PPK, TÜİK, ABD TÜFE) DEĞİLDİR — onun doğrulanmış bir kaynağı yok.
+
+```json
+{
+  "entries": [
+    {
+      "symbol": "ASELS", "company": "ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.",
+      "subject": "Finansal Rapor", "period": "9 Aylık",
+      "start_date": "2026-10-01", "due_date": "2026-11-09"
+    }
+  ],
+  "source_name": "KAP",
+  "source_url": "https://www.kap.org.tr/tr"
+}
+```
+
+KAP tek bir tarih değil bir **dosyalama penceresi** yayımlıyor; `due_date`
+aralığın sonudur ve kullanıcı için bağlayıcı olan gün odur. Arayüz bu günü
+gösterir.
+
+Şirket başına bir HTTP isteği atılır (pykap toplu sorgu sunmuyor), bu yüzden
+liste kullanıcının en ağırlıklı 6 hissesiyle sınırlıdır. Bir şirket düşerse
+diğerleri düşmez.
+
+Boş liste **hata değildir**: kullanıcının hissesi olmayabilir ya da yakın
+dönemde beklenen bildirim bulunmayabilir. 503 → KAP'a hiç ulaşılamadı.
 
 ## MCP Tool'ları
 

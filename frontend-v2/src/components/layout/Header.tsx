@@ -49,7 +49,7 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
       initial={shouldReduceMotion ? false : { opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
-      className="sticky top-0 z-[100] border-b border-line bg-white/92 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#0D0A0C]/50 dark:backdrop-blur-xl"
+      className="sticky top-0 z-[100] border-b border-line bg-white/92 backdrop-blur-md dark:border-transparent dark:bg-[#0D0A0C]/50 dark:backdrop-blur-xl"
     >
       <div className="relative mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:h-[68px] sm:px-6 md:px-10 lg:gap-11">
         <button
@@ -75,7 +75,7 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
             tam yatay merkezine sabitlendi, sol/sağ blokların genişliğinden
             bağımsız. */}
         <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:block">
-          <div className="flex items-center gap-1 rounded-full bg-line2 p-1 dark:border dark:border-white/[0.06] dark:bg-transparent">
+          <div className="flex items-center gap-1 rounded-full bg-line2 p-1 dark:bg-white/5">
             {NAV_ITEMS.map((item) => {
               const active = item.id === activeScreen;
               return (
@@ -120,13 +120,13 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
             onClick={() => setMobileNavOpen((v) => !v)}
             aria-label={mobileNavOpen ? "Menüyü kapat" : "Menüyü aç"}
             aria-expanded={mobileNavOpen}
-            className="grid h-11 w-11 place-items-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-brand hover:bg-brand-tint dark:bg-surface-elevated"
+            className="grid h-11 w-11 place-items-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-brand hover:bg-brand-tint dark:border-transparent dark:bg-surface-elevated"
           >
             {mobileNavOpen ? <XIcon size={20} /> : <MenuIcon size={20} />}
           </button>
 
           {mobileNavOpen && (
-            <div className="animate-tipIn absolute right-0 top-[calc(100%+10px)] w-[230px] overflow-hidden rounded-xl border border-line bg-white p-1.5 shadow-pop dark:bg-surface-elevated">
+            <div className="animate-tipIn absolute right-0 top-[calc(100%+10px)] w-[230px] overflow-hidden rounded-xl border border-line bg-white p-1.5 shadow-pop dark:border-transparent dark:bg-surface-elevated">
               {NAV_ITEMS.map((item) => (
                 <button
                   key={item.id}
@@ -155,7 +155,7 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
           <button
             onClick={() => setTheme(isDark ? "light" : "dark")}
             aria-label={isDark ? "Açık temaya geç" : "Koyu temaya geç"}
-            className="grid h-11 w-11 place-items-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-brand hover:bg-brand-tint dark:bg-surface-elevated"
+            className="grid h-11 w-11 place-items-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-brand hover:bg-brand-tint dark:border-transparent dark:bg-surface-elevated"
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -175,8 +175,8 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-[calc(100%+10px)] w-[230px] animate-tipIn overflow-hidden rounded-xl border border-line bg-white shadow-pop dark:bg-surface-elevated">
-                <div className="border-b border-line2 px-4 py-3.5">
+              <div className="absolute right-0 top-[calc(100%+10px)] w-[230px] animate-tipIn overflow-hidden rounded-xl border border-line bg-white shadow-pop dark:border-transparent dark:bg-surface-elevated">
+                <div className="border-b border-line2 px-4 py-3.5 dark:border-transparent">
                   <div className="text-[13.5px] font-semibold">{user.name}</div>
                   <div className="mt-0.5 text-[11.5px] text-ink-soft dark:text-ink-faint">{user.role}</div>
                 </div>

@@ -13,8 +13,9 @@ Temizlik kapsamı:
 - --wipe-all: her şey (fiyat geçmişi, varlıklar, ingest logu dahil) silinir.
   Yalnızca bozuk bir DB'yi sıfırlamak için.
 
-Tarihler settings.anchor_date'e sabitlenir (date.today() değil): her seed
-geçmişi kaydırsaydı "o tarihten bugüne" hiçbir karşılaştırma yapılamazdı.
+Tarihler ANKRAJ gününe göre kurulur; ankraj varsayılan olarak gerçek fiyat
+verisinin bittiği gündür (bkz. data/anchor.py). `ANCHOR_DATE` ortam değişkeni
+verilirse o kullanılır.
 
 Kullanım:
     python -m data.generate_dummy [--wipe-all]
@@ -39,6 +40,7 @@ from app.models import (
     Transaction,
     User,
 )
+from data.anchor import resolve_anchor_date
 from data.seed_assets import seed_assets
 from data.seed_ledger import (
     MAX_HOLDINGS_PER_USER,
@@ -100,7 +102,9 @@ def main(wipe_all: bool = False) -> None:
             f"{NUM_USERS} kullanıcı, {len(assets_by_symbol)} varlık, "
             f"{price_rows} sentetik fiyat satırı, {tx_count} işlem üretildi."
         )
-        print(f"Ankraj: {settings.anchor_date} (geçmiş {HISTORY_DAYS} gün, işlem günleri)")
+        ankraj = resolve_anchor_date(session)
+        kaynak = "ANCHOR_DATE" if settings.anchor_date is not None else "gerçek fiyat verisi"
+        print(f"Ankraj: {ankraj} ({kaynak}; geçmiş {HISTORY_DAYS} gün, işlem günleri)")
 
 
 if __name__ == "__main__":

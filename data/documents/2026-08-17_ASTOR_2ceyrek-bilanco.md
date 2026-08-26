@@ -35,6 +35,17 @@ yüzde 88 artışla 4,646 milyar TL'ye ulaştı. Aynı dönemde satış gelirler
 TL iken yüzde 1,8 artışla 9,28 milyar TL'ye yükseldi. FAVÖK, 5,823
 milyar TL'den 6,751 milyar TL'ye çıkarak yaklaşık yüzde 16 büyüdü.
 
+## Nakit akış tablosu
+
+İkinci çeyrekte işletme faaliyetlerinden elde edilen nakit akışı,
+işletme sermayesindeki olumlu etkiyle yaklaşık 4,3 milyar TL düzeyinde
+gerçekleşti; bu tutar, ilk çeyrekteki 1.343 milyon TL'lik net nakit
+girişine kıyasla belirgin bir artışa işaret etti. Buna karşılık,
+finansal yatırımlar ve yeni fabrika yatırımına yönelik harcamalar
+nedeniyle serbest nakit akışı hafif negatif seyretti. Şirketin net
+nakit pozisyonu, ilk çeyrekle paralel şekilde yaklaşık 203 milyon USD
+düzeyinde gerçekleşti.
+
 ## Değerlendirme
 
 Net kârın beklentileri belirgin şekilde aşması ve güçlü FAVÖK büyümesi,

@@ -14,7 +14,7 @@ export function AIRecommendationsList({ recommendations }: AIRecommendationsList
           <SparkleIcon size={18} />
         </span>
         <h2 className="font-display m-0 text-[17px] font-semibold">AI Önerileri</h2>
-        <span className="ml-auto rounded-md border border-brand-border px-2 py-1 text-[11px] font-semibold text-brand">
+        <span className="ml-auto rounded-md border border-brand-border px-2 py-1 text-[11px] font-semibold text-brand dark:border-transparent dark:bg-brand-tint">
           {recommendations.length} yeni
         </span>
       </div>
@@ -22,7 +22,7 @@ export function AIRecommendationsList({ recommendations }: AIRecommendationsList
         {recommendations.map((rec) => (
           <div
             key={rec.id}
-            className="rounded-[10px] border border-line p-[15px] transition-colors hover:border-brand hover:bg-[#FCFDFF] dark:hover:bg-white/5"
+            className="rounded-[10px] border border-line p-[15px] transition-colors hover:border-brand hover:bg-[#FCFDFF] dark:border-transparent dark:hover:bg-white/5"
           >
             <div className="mb-1.5 text-sm font-semibold">{rec.title}</div>
             <p className="m-0 text-[13px] leading-[1.55] text-ink-muted">{rec.description}</p>

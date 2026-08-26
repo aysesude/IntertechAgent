@@ -247,6 +247,19 @@ class RiskAssessment(BaseModel):
     as_of: date
     risk_profile: RiskProfile
     risk_profile_source: RiskProfileSource
+    # Kullanıcının ANKET PUANI (1-7) — profilin türediği yetkili alan.
+    #
+    # `risk_profile` ile birlikte dönüyor çünkü ikisi aynı şeyin iki
+    # gösterimi: puan yetkili, profil ondan türer
+    # (`config.risk_profile_for_survey_score`). Arayüzün "Risk Profili"
+    # kartı puanı gösteriyor; ayrı bir uç çağırmak zorunda kalmasın diye
+    # burada, `risk_profile`'ın yanında.
+    #
+    # `None` olabilir: kullanıcı anketi hiç doldurmamıştır. Uydurulmaz —
+    # profilden geriye puan üretmek, verilmemiş bir cevabı verilmiş
+    # göstermek olurdu (AK 5.5). `profile_override` ile hesaplandığında da
+    # `None` döner: o senaryoda profil kullanıcının beyanı değildir.
+    risk_survey_score: int | None
     total_value: Money
 
     # Volatilite hesaplanamıyorsa (AK 2.7, boş portföy vb.) `null` döner:

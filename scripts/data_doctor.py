@@ -258,9 +258,59 @@ def main() -> int:
                     )
         if asiri:
             print(f"  toplam: {asiri} pozisyon")
-            bulgular.append(f"{asiri} pozisyonda |K/Z| > %{ASIRI_KZ_ESIGI}")
-            sira_hatasi = True
+            # Aşırı K/Z tek başına SIRA HATASI DEĞİLDİR.
+            #
+            # Bu kontrol, maliyetin bir evrenden değerlemenin başka evrenden
+            # geldiği durumu yakalamak için eklendi. Ama aynı belirti gerçek
+            # bir piyasa hareketinden de doğabilir: TL'de bir yılda üçe
+            # katlanan hisse olağandışı değil, ayrıca sermaye artırımı
+            # (bölünme) ham fiyat serisinde kopukluk bırakıyor.
+            #
+            # Ayırt edici olan 3. KONTROL: işlem fiyatları o günün
+            # `price_history` kaydıyla uyuşuyorsa maliyet ve değerleme aynı
+            # evrendendir ve yeniden seed hiçbir şeyi değiştirmez. Yalnızca
+            # ikisi BİRLİKTE görüldüğünde sıra hatasından söz edilebilir.
+            if sapmalar:
+                bulgular.append(
+                    f"{asiri} pozisyonda |K/Z| > %{ASIRI_KZ_ESIGI} "
+                    "(islem fiyatlari da uyumsuz - sira hatasi)"
+                )
+                sira_hatasi = True
+            else:
+                bulgular.append(
+                    f"{asiri} pozisyonda |K/Z| > %{ASIRI_KZ_ESIGI} "
+                    "(islem fiyatlari UYUMLU - piyasa hareketi ya da bolunme)"
+                )
         else:
+            print("  temiz")
+
+        # --- 7. risk_level: DB ile kod ayrismis mi ---------------------------
+        # `assets.risk_level` TUREV bir kopyadir; tanimi providers/universe.py
+        # icinde durur ve seed_assets her kosuda yeniden yazar. Ayrisma
+        # yalnizca iki yolla olur: kod degisti ama seed/backfill kosmadi, ya
+        # da sutuna elle yazildi. Ikisi de sessiz; sorgular eski seviyeye
+        # gore filtreler ve kimse fark etmez.
+        _baslik("7. Varlik risk seviyesi (DB <-> kod)")
+        from app.services.advice_eligibility import asset_risk_level
+
+        ayrisan: list[str] = []
+        bos: list[str] = []
+        for asset in db.execute(select(Asset).where(Asset.is_active)).scalars():
+            beklenen = asset_risk_level(asset.symbol, asset.asset_class)
+            if asset.risk_level is None:
+                bos.append(asset.symbol)
+            elif asset.risk_level != beklenen:
+                ayrisan.append(f"{asset.symbol}: DB {asset.risk_level} != kod {beklenen}")
+        if bos:
+            print(f"  seviyesi BOS aktif varlik: {len(bos)} -> {', '.join(sorted(bos)[:8])}")
+            bulgular.append(f"{len(bos)} aktif varligin risk seviyesi bos (seed kosmamis)")
+            sira_hatasi = True
+        for satir in ayrisan[:8]:
+            print(f"  {satir}")
+        if ayrisan:
+            bulgular.append(f"{len(ayrisan)} varligin risk seviyesi DB ile kod arasinda ayrismis")
+            sira_hatasi = True
+        if not bos and not ayrisan:
             print("  temiz")
 
         # --- Karar -------------------------------------------------------------

@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { dashboardStaggerItem } from "@/components/PageTransition";
 import { PageHeading } from "@/components/common/PageHeading";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RiskLevelBar } from "@/components/dashboard/RiskLevelBar";
 import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
 import { AssetAllocationDonut } from "@/components/dashboard/AssetAllocationDonut";
 import { PerformerHighlights } from "@/components/dashboard/PerformerHighlights";
@@ -36,7 +37,7 @@ function ilkAd(tamAd: string): string {
 
 export function DashboardPage({ introSequence = false }: DashboardPageProps) {
   const [range, setRange] = useState<RangeKey>("1Y");
-  const { data, loading, rangeLoading, error, isDemoData, freshnessWarning, chartRange, refetch } =
+  const { data, loading, rangeLoading, error, isDemoData, chartRange, refetch } =
     useDashboardData(range);
   const { user } = useAuth();
   const shouldReduceMotion = useReducedMotion();
@@ -69,20 +70,11 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
             gösteriliyor. */}
         {error && <ErrorBanner message={error} onDismiss={refetch} />}
 
-        {/* Özet her varlığı KENDİ son fiyatıyla değerliyor; tek bir tarih tüm
-            portföyü tarif etmiyor. Bir kısmı eskiyse söylenmesi zorunlu,
-            yoksa özet olduğundan taze görünür. */}
-        {freshnessWarning && (
-          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
-            {freshnessWarning}
-          </div>
-        )}
-
         {/* Gösterilen veri sunucudan gelmediyse bunu SÖYLEMEK zorundayız;
             uydurma rakamı gerçek sanmak bir finans ürününde en kötü hata
             modu (CLAUDE.md §4). */}
         {isDemoData && !loading && !error && (
-          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted">
+          <div className="mb-6 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[13px] text-ink-muted dark:border-transparent">
             Bu ekranda <strong className="font-semibold">tasarım verisi</strong> gösteriliyor —
             sunucuya bağlanılamadı.
           </div>
@@ -161,13 +153,21 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
               volatiliteden türeyen 7 kademeli etiket geldi. Skoru geri
               getirmek, kaldırılma gerekçesini görmezden gelmek olurdu.
 
+              Kart KULLANICIYI anlatır, portföyü değil: değer ve gösterge
+              anket puanından (`risk_survey_score`, 1-7) gelir — kullanıcının
+              beyan ettiği risk toleransı. Portföyün ÖLÇÜLEN kademesi
+              (`risk_level`) alt satırda, çünkü ikisinin ayrışması asıl
+              bilgidir: "profiliniz Dengeli ama portföyünüz Orta-Yüksek
+              oynuyor". Aynı yere ikisini birden koymak bu farkı gizlerdi.
+
               Dönem getirisi buradan çıkarıldı çünkü grafiğin altındaki
               kutuda zaten var — aynı rakamı iki yerde göstermek kartı
               harcıyordu. */}
           <StaggerItem active={stagger}>
             <StatCard
-              label="Risk Seviyesi"
-              value={data.risk?.levelLabel ?? "—"}
+              label="Risk Profili"
+              value={data.risk?.profileLabel ?? "—"}
+              indicator={<RiskLevelBar level={data.risk?.surveyScore ?? null} />}
               footer={
                 data.risk?.annualizedVolatilityPct == null ? (
                   // Yeterli fiyat geçmişi yoksa risk UYDURULMAZ (AK 2.7).
@@ -177,13 +177,14 @@ export function DashboardPage({ introSequence = false }: DashboardPageProps) {
                 ) : (
                   <>
                     <span className="font-medium text-ink-faint">
-                      yıllık %{formatNumberTR(data.risk.annualizedVolatilityPct, 1)} oynaklık
+                      Portföy: {data.risk.levelLabel ?? "—"} · %
+                      {formatNumberTR(data.risk.annualizedVolatilityPct, 1)} oynaklık
                     </span>
                     {data.risk.withinProfile === false && (
                       <span className="font-semibold text-negative">· profil üstü</span>
                     )}
                     <InfoTooltip
-                      text={`Seviye, portföyün yıllık oynaklığından hesaplanır. ${data.risk.profileLabel} profilinin beklenen bandına göre değerlendirilir.`}
+                      text={`Profiliniz doldurduğunuz anketin sonucudur (1-7). Alt satırdaki kademe ise portföyünüzün ÖLÇÜLEN yıllık oynaklığından hesaplanır; ikisi ayrışabilir ve "profil üstü" tam olarak bunu söyler.`}
                     />
                   </>
                 )

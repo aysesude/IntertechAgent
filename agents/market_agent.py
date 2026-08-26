@@ -22,10 +22,14 @@ içindir, güncel bildirim listesi ayrı ve etiketli kalır"). KAP'a
 ulaşılamazsa bu blok sessizce atlanır — RAG özeti kendi başına geçerli bir
 cevaptır, canlı ek bir "varsa iyi" katmandır.
 
-Sorgu bir şirkete işaret ETMİYOR ama genel gündem istiyorsa (bkz.
-`market_query.genel_gundem_istegi_var_mi`), aynı desenle
-`get_live_market_headlines` çağrılıp BloombergHT son dakika başlıkları
-eklenir. İkisi birbirini dışlar: şirket sorulduğunda genel gündem alakasız
+Sorgu bir şirkete işaret ETMİYOR ama hem gündem hem güncellik istiyorsa
+("son piyasa haberleri neler"), soru RAG'e HİÇ gitmez: yanıt yalnızca
+`get_live_market_headlines`'tan gelen BloombergHT başlıklarıdır. Arşivde
+haber yok; yine de aramaya gidildiğinde en yakın belge dönüp kaynak
+listesine yazılıyor, cevapta hiç geçmeyen bir doküman sanki cevabı
+destekliyormuş gibi görünüyordu (ölçüldü, 24 Ağustos).
+
+İki canlı yol birbirini dışlar: şirket sorulduğunda genel gündem alakasız
 gürültüdür, şirket sorulmadığında KAP'a hangi şirketi soracağımız belirsizdir.
 """
 
@@ -40,6 +44,7 @@ from agents.market_query import (
     filtre_cikar,
     genel_gundem_istegi_var_mi,
     guncellik_istegi_var_mi,
+    sirket_sayisi,
 )
 from agents.price_query import fiyat_niyeti
 from app.core.llm_client import get_llm_client
@@ -130,7 +135,10 @@ def _gundem_blogu(headlines: list[dict[str, Any]], kaynak_url: str | None) -> st
         satirlar.append(satir)
     blok = _GUNDEM_BASLIGI + "\n".join(satirlar)
     if kaynak_url:
-        blok += f"\nKaynak: BloombergHT ({kaynak_url})"
+        # BOŞ SATIR ŞART: tek satır sonu markdown'da listeyi bitirmiyor,
+        # kaynak satırı son maddenin devamı gibi render ediliyordu (ölçüldü,
+        # 24 Ağustos). Boş satır listeyi kapatıp ayrı bir paragraf açar.
+        blok += f"\n\nKaynak: BloombergHT ({kaynak_url})"
     return blok
 
 
@@ -216,8 +224,43 @@ class MarketAgent(BaseAgent):
             return await self._fiyat_yaniti(fiyat)
 
         filtreler = filtre_cikar(request.query)
+
+        # SAF GÜNDEM SORUSU RAG'E GİTMEZ.
+        #
+        # "Son piyasa haberleri neler" sorusunun arşivde karşılığı YOK —
+        # RAG haber tutmuyor. Yine de aramaya gidildiğinde en yakın belge
+        # dönüyor ve kaynak listesine yazılıyordu: cevapta hiç geçmeyen
+        # "Doğuş Otomotiv 2. Çeyrek Sonuçları" sanki cevabı destekleyen bir
+        # kaynakmış gibi görünüyordu (ölçüldü, 24 Ağustos). Kullanılmayan
+        # bir kaynağı listelemek, kaynak göstermenin amacını tersine çevirir.
+        #
+        # Koşul İKİ kelimeyi birden arar: gündem kelimesi TEK BAŞINA yetmez,
+        # yoksa "piyasa değeri ne demek" gibi bir kavram sorusu da bu dala
+        # düşüp arşive hiç bakmazdı. Güncellik şartı ikisini ayırıyor.
+        if (
+            not filtreler.get("sirket")
+            and genel_gundem_istegi_var_mi(request.query)
+            and guncellik_istegi_var_mi(request.query)
+        ):
+            gundem_yaniti = await self._gundem_yaniti(on_token=on_token)
+            if gundem_yaniti is not None:
+                return gundem_yaniti
+            # Canlı kaynağa ulaşılamadı: aşağıdaki RAG yoluna düşülür. Boş
+            # cevap vermektense arşivde ne varsa onu göstermek daha iyi.
+
+        # Çoklu şirketli sorgularda (karşılaştırma vb.) sabit top_k=5
+        # yetersiz kalıyordu: korpus büyüdükçe her şirketin kendi ilgili
+        # chunk'ı için rekabet arttı, 3 şirketten biri üst-5'in dışına
+        # düşüp cevaptan tamamen kayboluyordu (ölçüldü, 2026-08-26 — "Akbank,
+        # İş Bankası ve Yapı Kredi'nin ... karşılaştır" sorgusunda Yapı
+        # Kredi'nin net kâr chunk'ı düşmüştü). Tek şirketli/şirketsiz
+        # sorgularda davranış DEĞİŞMİYOR (top_k=5 kalıyor).
+        ek_args: dict[str, Any] = {}
+        if (n := sirket_sayisi(request.query)) > 1:
+            ek_args["top_k"] = min(5 * n, 20)
+
         tool_result = await self.call_mcp_tool(
-            "search_market_news", {"query": request.query, **filtreler}
+            "search_market_news", {"query": request.query, **filtreler, **ek_args}
         )
 
         # Yedek deneme: filtre tespiti yanılmış olabilir (ör. sorguda geçen
@@ -225,7 +268,9 @@ class MarketAgent(BaseAgent):
         # boş dönerse bir kez de filtresiz denenir — filtre bir hızlandırma ve
         # doğruluk aracıdır, cevabı büsbütün engellememeli.
         if not tool_result.get("success") and filtreler:
-            tool_result = await self.call_mcp_tool("search_market_news", {"query": request.query})
+            tool_result = await self.call_mcp_tool(
+                "search_market_news", {"query": request.query, **ek_args}
+            )
 
         if not tool_result.get("success"):
             error = tool_result.get("error", {})
@@ -240,24 +285,12 @@ class MarketAgent(BaseAgent):
         # ("piyasa nasıl gidiyor" gibi genel bir soru) hangi şirketin
         # bildirimi isteneceği belirsiz, bu adım tamamen atlanır.
         canli_bildirimler: list[dict[str, Any]] = []
-        canli_gundem: dict[str, Any] = {}
-        sirket = filtreler.get("sirket")
-        if sirket and guncellik_istegi_var_mi(request.query):
+        if (sirket := filtreler.get("sirket")) and guncellik_istegi_var_mi(request.query):
             canli_bildirimler = await self._canli_kap_bildirimleri(sirket, on_token=on_token)
             summary_text += _kap_blogu(canli_bildirimler)
-        elif not sirket and genel_gundem_istegi_var_mi(request.query):
-            # `elif`: şirket sorulduğunda genel gündem eklenmez. "ASELSAN
-            # haberleri" sorusuna piyasanın günlük gündemini iliştirmek,
-            # sorulmayan bilgiyle cevabı seyreltmek olurdu.
-            canli_gundem = await self._canli_piyasa_gundemi(on_token=on_token)
-            summary_text += _gundem_blogu(
-                canli_gundem.get("headlines") or [], canli_gundem.get("kaynak_url")
-            )
 
         if canli_bildirimler:
             data = {**data, "canli_kap_bildirimleri": canli_bildirimler}
-        if canli_gundem.get("headlines"):
-            data = {**data, "canli_piyasa_gundemi": canli_gundem["headlines"]}
 
         return AgentResponse(
             agent_name=self.agent_name,
@@ -310,6 +343,29 @@ class MarketAgent(BaseAgent):
         if disclosures and on_token is not None:
             on_token(_kap_blogu(disclosures))
         return disclosures
+
+    async def _gundem_yaniti(
+        self, *, on_token: Callable[[str], None] | None = None
+    ) -> AgentResponse | None:
+        """Yalnızca canlı gündem bloğundan oluşan yanıt — LLM DEVREDE DEĞİL.
+
+        Başlıklar sitenin kendi ifadeleriyle geçer; özetleyecek bir arşiv
+        metni yok, cümleyi orchestrator'ın merge adımı kuruyor.
+
+        Canlı kaynağa ulaşılamazsa `None` döner ve çağıran taraf RAG yoluna
+        düşer — bu dal bir kestirme, çıkmaz sokak değil.
+        """
+        gundem = await self._canli_piyasa_gundemi(on_token=on_token)
+        headlines = gundem.get("headlines") or []
+        if not headlines:
+            return None
+
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=_gundem_blogu(headlines, gundem.get("kaynak_url")),
+            data={"canli_piyasa_gundemi": headlines},
+        )
 
     async def _canli_piyasa_gundemi(
         self, *, on_token: Callable[[str], None] | None = None

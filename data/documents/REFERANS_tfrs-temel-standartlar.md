@@ -72,12 +72,8 @@ ayırt eder — ikisi aynı çeyrek için farklı rakamlar üretebilir.
 Finansal tabloların (bilanço, gelir tablosu, nakit akış tablosu,
 özkaynak değişim tablosu ve dipnotlar) genel sunuluş ilkelerini,
 asgari içerik gereksinimlerini ve karşılaştırmalı dönem sunma
-zorunluluğunu belirler.
-
-## Not
-
-Bu doküman standartların genel amacını özetler, tam metin ve teknik
-uygulama detayları için KGK'nın yayımladığı resmi TMS/TFRS setlerine
-başvurulmalıdır. Standart numaraları ve isimleri değişmez; yalnızca
-KGK tarafından yayımlanan güncellemeler/tebliğler zaman içinde
-uygulama detaylarını değiştirebilir.
+zorunluluğunu belirler. Bu doküman standartların genel amacını özetler,
+tam metin ve teknik uygulama detayları için KGK'nın yayımladığı resmi
+TMS/TFRS setlerine başvurulmalıdır; standart numaraları ve isimleri
+değişmez, yalnızca KGK tarafından yayımlanan güncellemeler/tebliğler
+zaman içinde uygulama detaylarını değiştirebilir.

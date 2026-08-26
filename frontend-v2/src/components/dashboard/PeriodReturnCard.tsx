@@ -26,7 +26,7 @@ export function PeriodReturnCard({ periodReturns, active, onChange }: PeriodRetu
     <Card className="p-[22px]">
       <div className="mb-3.5 flex min-h-[28px] items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-[.4px] text-ink-faint">Getiri</span>
-        <div className="flex gap-1 rounded-[8px] border border-line p-[2px]">
+        <div className="flex gap-1 rounded-[8px] border border-line p-[2px] dark:border-transparent dark:bg-white/5">
           {PERIOD_ORDER.map((key) => (
             <button
               key={key}

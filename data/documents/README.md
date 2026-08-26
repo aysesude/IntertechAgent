@@ -100,11 +100,15 @@ sırası:
   bulunmuyor, henüz sistematik olarak hedeflenmiyor.
 - **`sirket_profili`** — şirketin kimlik/yapısal bilgisi: faaliyet alanı,
   sektör, kuruluş tarihi, ortaklık yapısı, ana iştirakler, yönetim
-  kurulu/üst yönetim, halka açıklık oranı, temettü (kurumsal olay)
-  geçmişi. Yılda birkaç kez değişse de "statik" sayılır, periyodik
-  olarak yeniden ingest edilebilir. **Her şirket için hedef: 1
-  doküman.** Denetim raporları ve dipnotlar bilinçli olarak hedeflenmiyor
-  (düşük bilgi değeri/yüksek araştırma maliyeti oranı).
+  kurulu/üst yönetim, halka açıklık oranı, kurumsal olaylar tarihçesi
+  (temettü geçmişi, halka arz tarihi, önemli birleşme/devralma ve
+  sermaye artırımı olayları — 2026-08-24'te 26/31 profile eklendi;
+  5'i, ASTOR/DOAS/EKGYO/ENKAI/MGROS, zaten yeterli kapsamdaydı). Yılda
+  birkaç kez değişse de "statik" sayılır, periyodik olarak yeniden
+  ingest edilebilir. **Her şirket için hedef: 1 doküman.** Denetim
+  raporları, dipnotlar ve kurumsal yönetim uyum raporları bilinçli
+  olarak hedeflenmiyor (düşük bilgi değeri/yüksek araştırma maliyeti
+  oranı).
 - **`referans`** — şirketten bağımsız, ansiklopedik/düzenleyici bilgi:
   finansal oran tanımları (F/K, ROE, cari oran vb.), SPK/BDDK temel
   çerçevesi, TFRS temel kavramları. Neredeyse hiç değişmez.

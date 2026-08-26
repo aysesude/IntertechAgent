@@ -42,8 +42,8 @@
   /* Sayfa zemini ve kart zemini birbirine çok yakın (LoginScreen'deki
      #0A0F16/#121822 ayrımıyla aynı mantık) — kartlar artık kenarlıkla değil,
      shadow ile zeminden ayrışıyor (bkz. Card.tsx). */
-  --color-surface: #0A131D;
-  --color-surface-elevated: #0B151E;
+  --color-surface: #050A10;
+  --color-surface-elevated: #070C13;
   --color-ink: #EDF1F7;
   --color-ink-soft: #C7CEDB;
   /* ink-muted: kart zemini üstünde ~5.9:1 — AA (4.5:1) geçiyor, değiştirilmedi. */

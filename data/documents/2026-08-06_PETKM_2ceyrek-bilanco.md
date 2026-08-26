@@ -29,7 +29,16 @@ yüzde 26, yıllık bazda ise yüzde 38 arttı.
 Çeyrek geliri 36,4 milyar TL olarak gerçekleşti ve 36,8 milyar TL'lik
 piyasa konsensüsüyle uyumlu kaldı. FAVÖK 3,377 milyar TL oldu. Brüt
 kâr marjı, bir önceki çeyrekteki eksi yüzde 2,2 seviyesinden yüzde 8,6'ya
-yükseldi.
+yükseldi. İlk yarı itibarıyla şirket, 2025 yılının aynı döneminde
+kaydedilen 1,969 milyar TL'lik brüt zarardan 3,127 milyar TL'lik brüt
+kâra geçti.
+
+## Nakit akış tablosu
+
+İşletme faaliyetlerinden net nakit akışı ikinci çeyrekte 33 milyon
+dolar oldu; 2025 yılının aynı çeyreğinde 10 milyon dolar nakit çıkışı
+yaşanmıştı. Serbest nakit akışı ikinci çeyrekte yaklaşık 23 milyon
+dolar olarak gerçekleşti.
 
 ## Değerlendirme
 

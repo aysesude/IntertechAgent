@@ -121,7 +121,7 @@ export function AssetAllocationDonut({ slices, instrumentCount, assetClassCount 
               )}
 
               {isSelected && expandable && (
-                <div className="animate-fadeUp ml-[19px] mt-1 flex flex-col gap-1.5 border-l-2 border-line2 py-1 pl-3">
+                <div className="animate-fadeUp ml-[19px] mt-1 flex flex-col gap-1.5 border-l-2 border-line2 py-1 pl-3 dark:border-transparent">
                   {slice.subcategories.map((sub) => (
                     <div key={sub.name} className="flex items-center gap-2.5 text-[12.5px]">
                       <span className="flex-1 text-ink-muted">{sub.name}</span>

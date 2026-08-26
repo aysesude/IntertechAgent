@@ -31,6 +31,13 @@ TVF, imtiyazlı hisseleri sayesinde 9 kişilik yönetim kurulunun 5
 üyesini belirleyebilme hakkına sahip olup şirketin yönetim kontrolünü
 elinde bulundurmaktadır. Yönetim kurulu başkanı Şenol Kazancı'dır. 2026
 yılında hisse başına brüt 4,00 TL, net 3,40 TL nakit temettü
-dağıtılmasına karar verildi; ödeme tarihi 9 Aralık 2026'dır. Bu doküman
-şirketin kimlik ve yapısal bilgilerini özetler; dönemsel finansal
-sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.
+dağıtılmasına karar verildi; ödeme tarihi 9 Aralık 2026'dır.
+
+## Kurumsal olaylar tarihçesi
+
+Turkcell hisseleri 11 Temmuz 2000'de eşzamanlı olarak hem Borsa
+İstanbul'da (TCELL) hem New York Borsası'nda (TKC) işlem görmeye
+başlamıştır. 2009-2012 döneminde Superonline'ın tam hissedarı
+olunmuş ve iştirak Turkcell Grubu bünyesinde konsolide edilmiştir.
+Bu doküman şirketin kimlik ve yapısal bilgilerini özetler; dönemsel
+finansal sonuçlar ayrı `bilanco` türü dokümanlarda yer alır.

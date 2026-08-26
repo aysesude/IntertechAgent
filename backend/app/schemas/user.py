@@ -18,7 +18,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.config import RiskProfile
+from app.core.config import (
+    RISK_SURVEY_SCORE_MAX,
+    RISK_SURVEY_SCORE_MIN,
+    RiskProfile,
+)
 
 
 class RiskProfileUpdate(BaseModel):
@@ -46,3 +50,45 @@ class UserRiskProfile(BaseModel):
     user_id: UUID
     risk_profile: RiskProfile
     available_profiles: list[RiskProfile]
+
+
+class RiskSurveyUpdate(BaseModel):
+    """Anket PUANININ sisteme bildirilmesi (istek gövdesi).
+
+    `RiskProfileUpdate`'ten farkı ölçek: bu, şartnamenin 1-7'lik anket
+    puanıdır ve YETKİLİ alandır — profil ondan türetilir. Aralık `Field`
+    üzerinde kilitli, dolayısıyla aralık dışı bir değer servise hiç ulaşmaz
+    ve 422 döner."""
+
+    model_config = ConfigDict(frozen=True)
+
+    risk_survey_score: int = Field(
+        ge=RISK_SURVEY_SCORE_MIN,
+        le=RISK_SURVEY_SCORE_MAX,
+        description="Anket sonucunda çıkan risk puanı (1-7)",
+    )
+
+
+class UserRiskSurvey(BaseModel):
+    """Kullanıcının anket puanı ve ondan türeyen profil (yanıt gövdesi).
+
+    `risk_survey_score` `None` olabilir: kullanıcı anketi hiç doldurmamıştır.
+    Bu durumda `risk_profile` yine dolu döner — kayıtlı profil ne ise odur —
+    ve `score_band` `None` olur. Uydurulmuş bir puan döndürmek, kullanıcının
+    beyan etmediği bir cevabı beyan etmiş göstermek olurdu (AK 5.5).
+
+    `score_min`/`score_max` arayüzün anket ölçeğini kendi tarafında sabit
+    yazmaması içindir; `available_profiles` ile aynı gerekçe.
+
+    `score_band` puanın karşılık geldiği profilin TÜM aralığıdır (ör. 1-2).
+    Arayüz "Muhafazakâr (1-2 puan)" gibi bir şey gösterebilsin diye var.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: UUID
+    risk_survey_score: int | None
+    risk_profile: RiskProfile
+    score_band: tuple[int, int] | None
+    score_min: int = RISK_SURVEY_SCORE_MIN
+    score_max: int = RISK_SURVEY_SCORE_MAX

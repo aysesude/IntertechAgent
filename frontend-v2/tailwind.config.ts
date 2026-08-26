@@ -66,11 +66,6 @@ export default {
           "0%": { transform: "translateY(16px)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
-        sonarPing: {
-          "0%": { transform: "scale(1)", opacity: ".9" },
-          "16%": { transform: "scale(1.4)", opacity: "0" },
-          "100%": { transform: "scale(1.4)", opacity: "0" },
-        },
         tipIn: {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
@@ -80,7 +75,6 @@ export default {
         fadeUp: "fadeUp .3s ease-out both",
         pulseDot: "pulseDot 2s infinite",
         slideUpPanel: "slideUpPanel .2s cubic-bezier(0.4,0,0.2,1)",
-        sonarPing: "sonarPing 4.6s ease-out infinite",
         tipIn: "tipIn .15s ease-out both",
       },
     },
