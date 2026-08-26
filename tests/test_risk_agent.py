@@ -3,11 +3,27 @@ ve değerlendirmenin küçültülmesi.
 
 2026-08-22 eki: sinyal tabanlı risk değerlendirmesinin (bkz. modül
 docstring'i, agents/prompts/risk_signals.md) LLM'e GİTMEYEN yardımcıları —
-dummy anket puanı eşlemesi, LLM çıktısının JSON'a ayrıştırılması, ham tool
-verisinin LLM bağlamına dönüştürülmesi. `_assess_signals`'ın kendisi gerçek
-bir LLM çağrısı yaptığı için burada test edilmiyor; ajanın diğer LLM'li
-kısımlarında olduğu gibi (`_summarize`) bu proje deterministik pytest yerine
-manuel/entegrasyon doğrulaması kullanıyor."""
+LLM çıktısının JSON'a ayrıştırılması, ham tool verisinin LLM bağlamına
+dönüştürülmesi. `_assess_signals`'ın kendisi gerçek bir LLM çağrısı yaptığı
+için burada test edilmiyor; ajanın diğer LLM'li kısımlarında olduğu gibi
+(`_summarize`) bu proje deterministik pytest yerine manuel/entegrasyon
+doğrulaması kullanıyor.
+
+2026-08-25 eki: aynı ilkeyle `_fetch_macro_context`/`_fetch_live_macro_news`
+de burada test edilmiyor (MCP tool çağrısı yapıyorlar) — yalnızca onların
+girdisini hazırlayan saf fonksiyon `_live_macro_symbols_for_holdings` test
+edilir (bkz. app/providers/universe.py:macro_news_key, MCP tool testi için
+tests/test_mcp_market_tool.py, ingest/servis testleri için
+tests/test_macro_news_ingest.py).
+
+2026-08-26 eki: dummy anket puanı eşlemesi (`_dummy_survey_score`,
+`_DUMMY_SURVEY_SCORE_BY_PROFILE`) ve `_build_signal_context`'in ürettiği
+"survey_puani_dummy"/"bu_puanla_izinli_siniflar" alanları KALDIRILDI —
+Sinyal 5 artık profil/ağırlık tabanlı değil, yalnızca anket-yeniden-doldurma
+OLAYIYLA tetiklenmeli (bkz. agents/risk_agent.py modül docstring'i "2026-08-26
+eki"); böyle bir olay mekanizması henüz yok, sinyal kalıcı dormant. Bu
+dosyadaki ilgili testler kaldırıldı; `_build_signal_context` artık yalnızca
+holdings/haber/makro verisini birleştirdiğini doğrulayan testler kaldı."""
 
 import json
 
@@ -17,12 +33,12 @@ from agents.risk_agent import (
     _SIGNAL_PROMPT_TEMPLATE,
     _build_signal_context,
     _compact,
-    _dummy_survey_score,
     _extract_json_object,
+    _live_macro_symbols_for_holdings,
+    _macro_queries_for_holdings,
     _render_signal_prompt,
     _wants_scenarios,
 )
-from app.core.config import RiskProfile
 
 
 def test_senaryo_yalnizca_aksiyon_sorularinda_istenir():
@@ -249,26 +265,6 @@ def test_prompt_alan_adi_yazmayi_yasakliyor():
     assert "JSON ALAN ADLARINI ASLA YAZMA" in _PROMPT_TEMPLATE
 
 
-def test_dummy_anket_puani_profile_gore_esleniyor():
-    """Gerçek anket gelene kadarki GEÇİCİ eşleme (bkz. modül docstring'i).
-
-    Puanlar bilinçli olarak advice_eligibility.ASSET_CLASS_ADVICE_RISK_LEVEL
-    kırılım noktalarına denk düşecek şekilde seçildi; tablo 26 Ağustos
-    2026'da yeniden kalibre edilince eşlemenin kendisi değişmedi ama artık
-    dört profil dört FARKLI izin kümesi üretiyor (önce BALANCED ve GROWTH
-    aynı sonucu veriyordu).
-    """
-    assert _dummy_survey_score(RiskProfile.CONSERVATIVE) == 2
-    assert _dummy_survey_score(RiskProfile.BALANCED) == 4
-    assert _dummy_survey_score(RiskProfile.GROWTH) == 5
-    assert _dummy_survey_score(RiskProfile.AGGRESSIVE) == 7
-
-
-def test_dummy_anket_puani_profil_yoksa_none():
-    """Profil tanınmıyorsa ya da hiç yoksa puan uydurulmaz."""
-    assert _dummy_survey_score(None) is None
-
-
 def test_json_ciktisi_kod_bloguyla_gelirse_ayiklanir():
     """Prompt "yalnızca JSON" istiyor ama modeller sık sık ``` bloğuna sarar
     (bkz. _extract_json_object docstring'i); bu tolere edilmeli."""
@@ -303,7 +299,7 @@ def test_sinyal_baglami_fiyati_eksik_varligi_disliyor():
     }
     news_data = {"assets": [], "assets_without_documents": ["TST"], "confidence": "low"}
 
-    context = _build_signal_context(holdings_data, news_data, None, None)
+    context = _build_signal_context(holdings_data, news_data)
 
     assert context["varliklar"] == [{"sembol": "TST", "sinif": "stock", "agirlik_yuzde": 60.0}]
     assert context["haber_kapsami_olmayan_varliklar"] == ["TST"]
@@ -335,7 +331,7 @@ def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
         "confidence": "normal",
     }
 
-    context = _build_signal_context(holdings_data, news_data, None, None)
+    context = _build_signal_context(holdings_data, news_data)
 
     assert context["haberler"]["TST"] == [
         {
@@ -348,29 +344,17 @@ def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
     ]
 
 
-def test_sinyal_baglami_dummy_puan_yoksa_alanlar_eklenmez():
-    """Profil tanınmıyorsa (dummy puan üretilemiyorsa) anket/izin alanları
-    bağlama hiç eklenmemeli — uydurulmuş bir puan görünmemeli."""
-    context = _build_signal_context({"holdings": []}, {"assets": []}, None, None)
+def test_sinyal_baglami_anket_alanlari_hicbir_zaman_eklenmez():
+    """2026-08-26 eki: Sinyal 5 artık profil/dummy puana bakmıyor (bkz.
+    agents/risk_agent.py modül docstring'i) — `_build_signal_context`
+    "survey_puani_dummy"/"survey_puani_dummy_uyarisi"/
+    "bu_puanla_izinli_siniflar" alanlarını ARTIK HİÇ üretmemeli; bu, önceki
+    "dummy puan varsa/yoksa" ayrımının yerini alan tek testtir."""
+    context = _build_signal_context({"holdings": []}, {"assets": []})
 
     assert "survey_puani_dummy" not in context
     assert "survey_puani_dummy_uyarisi" not in context
     assert "bu_puanla_izinli_siniflar" not in context
-
-
-def test_sinyal_baglami_dummy_puan_uyarisiyla_ve_izinli_siniflarla_gelir():
-    """Dummy puan varsa hem açık bir uyarı hem de o puanla izinli varlık
-    sınıfları bağlama eklenmeli (LLM'in "profil_sapmasi" sinyalini
-    değerlendirebilmesi için)."""
-    context = _build_signal_context({"holdings": []}, {"assets": []}, RiskProfile.CONSERVATIVE, 2)
-
-    assert context["survey_puani_dummy"] == 2
-    assert "GERÇEK bir anket sonucu değildir" in context["survey_puani_dummy_uyarisi"]
-    # Korumacı dummy puanı (2): nakit (1) ve tahvil (2) sınıflarını geçer.
-    # Eski tabloda tahvil 3'tü ve bu puan YALNIZCA nakit açıyordu — yani
-    # muhafazakâr kullanıcıya önerilebilecek tek şey, satın alınamayan
-    # serbest bakiyeydi. Yeniden kalibrasyon bunu da düzeltti.
-    assert context["bu_puanla_izinli_siniflar"] == ["bond", "cash"]
 
 
 def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():
@@ -392,3 +376,168 @@ def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():
     assert '"sembol": "TST"' in rendered
     # Şemadaki literal parantezler dokunulmadan kalmalı (kaçırılmamalı/silinmemeli).
     assert '"risk_level": "az_riskli"' in rendered
+
+
+def test_makro_sorgular_yalnizca_tutulan_siniflar_icin_uretilir():
+    """2026-08-24 eki: Tahvil/Döviz/Altın/Nakit'in şirket bilançosu yoktur,
+    haber kaynağı makro piyasa haberleridir (bkz. modül docstring'i). Ama
+    yalnızca PORTFÖYDE FİİLEN TUTULAN sınıflar sorgulanmalı — tutulmayan bir
+    sınıf için RAG çağrısı yapmak gereksiz gecikme + alakasız gürültüdür."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "stock", "weight_percent": 50.0},
+            {"symbol": "APT", "asset_class": "bond", "weight_percent": 50.0},
+        ]
+    }
+
+    sorgular = _macro_queries_for_holdings(holdings_data)
+
+    assert sorgular == ["faiz kararı tahvil piyasası getiri görünümü"]
+
+
+def test_makro_sorgular_hisseyi_atlar():
+    """STOCK için makro sorgu üretilmez — sembol bazlı get_portfolio_news
+    zaten hisseleri kapsıyor, ayrı bir makro sorgu gereksiz gürültü olurdu."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "stock", "weight_percent": 100.0}]
+    }
+
+    assert _macro_queries_for_holdings(holdings_data) == []
+
+
+def test_makro_sorgular_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan bir varlığın sınıfı için makro sorgu üretilmemeli —
+    tutuluyor gibi görünse de ağırlık hesabına hiç girmiyor."""
+    holdings_data = {
+        "holdings": [
+            {
+                "symbol": "XAU",
+                "asset_class": "precious_metal",
+                "weight_percent": None,
+                "price_missing": True,
+            }
+        ]
+    }
+
+    assert _macro_queries_for_holdings(holdings_data) == []
+
+
+def test_makro_sorgular_birden_fazla_sinif_icin_sirali_uretilir():
+    """Birden fazla RAG-kaynaklı sınıf (Tahvil/Nakit) tutuluyorsa hepsi için
+    sorgu üretilmeli, sıra `_MACRO_QUERY_BY_ASSET_CLASS` tanım sırasını
+    izlemeli (deterministik — testte kırılgan küme sıralamasına bağlı
+    kalınmasın).
+
+    2026-08-25 eki: Döviz/Kıymetli Maden burada YOK — onlar artık RAG'a değil
+    `_live_macro_symbols_for_holdings` üzerinden `get_macro_news`e (canlı)
+    gidiyor, bkz. aşağıdaki testler."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "XAU", "asset_class": "precious_metal", "weight_percent": 30.0},
+            {"symbol": "APT", "asset_class": "bond", "weight_percent": 30.0},
+            {"symbol": "USDTRY", "asset_class": "currency", "weight_percent": 20.0},
+            {"symbol": "MEVDUAT", "asset_class": "cash", "weight_percent": 20.0},
+        ]
+    }
+
+    sorgular = _macro_queries_for_holdings(holdings_data)
+
+    assert sorgular == [
+        "faiz kararı tahvil piyasası getiri görünümü",
+        "enflasyon faiz oranı mevduat piyasası görünümü",
+    ]
+
+
+def test_canli_makro_semboller_doviz_ve_kiymetli_madeni_kapsar():
+    """2026-08-25 eki: Döviz/Kıymetli Maden RAG'dan değil `get_macro_news`den
+    (canlı) besleniyor. `_live_macro_symbols_for_holdings` portföyde FİİLEN
+    tutulan bu sınıfların "haber anahtarı"nı (bkz.
+    app/providers/universe.py:macro_news_key) döner."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "USDTRY", "asset_class": "currency", "weight_percent": 20.0},
+            {"symbol": "XAUTRY", "asset_class": "precious_metal", "weight_percent": 30.0},
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == ["USDTRY", "XAUTRY"]
+
+
+def test_canli_makro_semboller_turetilmis_varliklari_tabanina_esler_ve_tekillestirir():
+    """CEYREK ve YARIM (ikisi de altın sikkesi, XAUTRY'den türetilmiş) aynı
+    haber anahtarına düşer — aynı haberin iki kez çekilmesini engellemek için
+    tekilleştirilmeli, XAUTRY yalnızca BİR kez görünmeli."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "CEYREK", "asset_class": "precious_metal", "weight_percent": 10.0},
+            {"symbol": "YARIM", "asset_class": "precious_metal", "weight_percent": 10.0},
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == ["XAUTRY"]
+
+
+def test_canli_makro_semboller_bond_cash_stock_disi_atlar():
+    """Tahvil/Nakit/Hisse `_live_macro_symbols_for_holdings` kapsamında
+    değil — onlar RAG'a (bond/cash) ya da get_portfolio_news'e (stock)
+    gider, burada tekrar sorgulanmamalı."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "stock", "weight_percent": 40.0},
+            {"symbol": "APT", "asset_class": "bond", "weight_percent": 30.0},
+            {"symbol": "MEVDUAT-V", "asset_class": "cash", "weight_percent": 30.0},
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == []
+
+
+def test_canli_makro_semboller_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan varlık ağırlık hesabına girmediği gibi canlı haber
+    sorgusuna da girmemeli (bkz. aynı ilkenin `_macro_queries_for_holdings`
+    testi)."""
+    holdings_data = {
+        "holdings": [
+            {
+                "symbol": "XAUTRY",
+                "asset_class": "precious_metal",
+                "weight_percent": None,
+                "price_missing": True,
+            }
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == []
+
+
+def test_canli_makro_semboller_taninmayan_sembolu_sessizce_atlar():
+    """Evrende (SPEC_BY_SYMBOL) olmayan bir sembol (ör. test verisi) çökmeye
+    değil, sessiz atlanmaya yol açmalı — uydurma yok."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "BOYLE-BIR-SEY-YOK", "asset_class": "currency", "weight_percent": 100.0}
+        ]
+    }
+
+    assert _live_macro_symbols_for_holdings(holdings_data) == []
+
+
+def test_sinyal_baglami_makro_gelismeler_varsayilan_bos_liste():
+    """`macro_context` verilmezse "makro_gelismeler" anahtarı yine de var
+    olmalı (boş liste olarak) — alan hiç eksik olmamalı, CLAUDE.md §4'teki
+    "alan silinmesin" ilkesiyle tutarlı (LLM eksik alanı uydurmaya kalkışmaz,
+    var olan boş alanı görür)."""
+    context = _build_signal_context({"holdings": []}, {"assets": []})
+
+    assert context["makro_gelismeler"] == []
+
+
+def test_sinyal_baglami_makro_gelismeler_tasinir():
+    """Çekilen makro haberler context'e olduğu gibi taşınmalı — burada
+    hiçbir dönüşüm/süzme yapılmıyor, bu iş zaten `_fetch_macro_context`'te
+    bitmiş oluyor."""
+    macro = [{"tur": "haber", "baslik": "Faiz kararı", "tarih": "2026-08-20", "icerik": "..."}]
+
+    context = _build_signal_context({"holdings": []}, {"assets": []}, macro)
+
+    assert context["makro_gelismeler"] == macro

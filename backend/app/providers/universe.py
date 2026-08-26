@@ -592,3 +592,64 @@ ASSET_UNIVERSE: list[AssetSpec] = [
 SPEC_BY_SYMBOL: dict[str, AssetSpec] = {spec.symbol: spec for spec in ASSET_UNIVERSE}
 
 assert len(SPEC_BY_SYMBOL) == len(ASSET_UNIVERSE), "Varlık evreninde tekrar eden sembol var"
+
+
+# --- Canlı makro haber eşlemesi (2026-08-25 eki, bkz. app/services/ ---
+# macro_news_ingest.py) --------------------------------------------------
+#
+# yfinance'in ücretsiz `.news` özelliği yalnızca GERÇEK bir Yahoo ticker'ı
+# olan sembollerde çalışır. Bu iki fonksiyon "hangi ticker'a haber isteği
+# atılır" (yfinance_news_ticker) ile "sonuç hangi iç sembol altında
+# saklanır/sorgulanır" (macro_news_key) sorularını AYRI tutar, çünkü
+# türetilmiş varlıkların (çeyrek altın vb.) kendi ticker'ı yok — kaynağının
+# (gram altın) haberini PAYLAŞIR. İkisi de aynı eşlemeyi kullanmalı: biri
+# yazarken (macro_news_ingest), diğeri okurken (risk_agent) — aksi hâlde
+# yazılan anahtar hiçbir zaman okunmaz.
+
+
+def yfinance_news_ticker(spec: AssetSpec) -> str | None:
+    """Bu varlık için haber isteği atılacak GERÇEK Yahoo ticker'ı, yoksa
+    `None` (ör. Hisse — zaten `get_portfolio_news` ile sembol bazlı
+    kapsanıyor; Tahvil/Nakit — TEFAS fonlarının/mevduatın Yahoo'da karşılığı
+    yok).
+
+    Döviz için `provider_symbol` DEĞİL `yf_symbol` kullanılır: `provider_symbol`
+    EVDS seri kodudur (ör. 'TP.DK.USD.S.YTL'), Yahoo ticker'ı değil.
+
+    İki ayrı "kendi ticker'ı yok, bir TABANIN haberini paylaşır" durumu var:
+    türetilmiş sikkeler (`derived_from`, ör. CEYREK -> XAUTRY) VE TEFAS
+    üzerinden fiyatlanan altın fonu (GTA, `sub_type=GOLD_FUND`) — ikisi de
+    ekonomik riski gram altınla birebir aynı olduğu için XAUTRY'nin
+    ticker'ını (GC=F) paylaşır."""
+    if spec.asset_class == AssetClass.CURRENCY:
+        return spec.yf_symbol
+    if spec.asset_class == AssetClass.PRECIOUS_METAL:
+        if spec.data_source == PriceSource.YFINANCE and spec.provider_symbol:
+            return spec.provider_symbol
+        base_symbol = None
+        if spec.data_source == PriceSource.DERIVED and spec.derived_from:
+            base_symbol = spec.derived_from
+        elif spec.sub_type == AssetSubType.GOLD_FUND:
+            base_symbol = "XAUTRY"
+        if base_symbol:
+            base = SPEC_BY_SYMBOL.get(base_symbol)
+            return yfinance_news_ticker(base) if base else None
+    return None
+
+
+def macro_news_key(spec: AssetSpec) -> str | None:
+    """Bu varlığın canlı haberinin `macro_news_snapshot`ta hangi iç sembol
+    altında durduğu/aranacağı. `yfinance_news_ticker(spec)` `None` dönüyorsa
+    bu da `None` döner — anlamsız bir anahtar üretilmez.
+
+    Kendi ticker'ı olmayıp bir tabanın haberini paylaşan varlıklar (türetilmiş
+    sikkeler VE GTA altın fonu — bkz. `yfinance_news_ticker`) kendi sembolleri
+    DEĞİL, o tabanın sembolü altında saklanır — aynı haberin birden fazla
+    kopyası çekilmesin diye."""
+    if yfinance_news_ticker(spec) is None:
+        return None
+    if spec.data_source == PriceSource.DERIVED and spec.derived_from:
+        return spec.derived_from
+    if spec.asset_class == AssetClass.PRECIOUS_METAL and spec.sub_type == AssetSubType.GOLD_FUND:
+        return "XAUTRY"
+    return spec.symbol
