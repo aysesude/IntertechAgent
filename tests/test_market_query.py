@@ -240,3 +240,15 @@ class TestBirdenFazlaSirket:
         from agents.market_query import sirket_tespit_et
 
         assert sirket_tespit_et("Petkim hangi şirketi satın aldı?") == "PETKM"
+
+    def test_sirket_gecer_mi_coklu_sirkette_de_true_doner(self):
+        """`sirket_tespit_et`'ten farkı: birden fazla şirket geçse bile
+        (tek bir filtre üretilemese bile) en az biri geçtiği için True
+        döner — scope_checker'ın kapsam-dışı-etiket istisnası bunu
+        kullanır (ölçümle doğrulandı, 2026-08-26)."""
+        from agents.market_query import sirket_gecer_mi, sirket_tespit_et
+
+        query = "Akbank, İş Bankası ve Yapı Kredi'nin son çeyrek net kârlarını karşılaştır"
+        assert sirket_tespit_et(query) is None
+        assert sirket_gecer_mi(query) is True
+        assert sirket_gecer_mi("konut kredisi ne kadar") is False

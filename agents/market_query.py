@@ -68,24 +68,11 @@ def _sirket_eslemesi() -> dict[str, str]:
     return {_normalize(ad): kayit["ticker"] for ad, kayit in ham.items() if kayit.get("ticker")}
 
 
-def sirket_tespit_et(query: str) -> str | None:
-    """Sorguda geçen TEK şirketin borsa kodunu döndürür ("ASELS"); sorguda
-    hiç şirket geçmiyorsa veya BİRDEN FAZLA FARKLI şirket geçiyorsa None
-    döner.
+def _tum_sirketleri_tespit_et(query: str) -> set[str]:
+    """Sorguda geçen TÜM farklı şirketlerin borsa kodlarını döndürür.
 
     Kelime sınırı (`\\b`) aranır — aksi hâlde "thy" gibi kısa kodlar başka
     kelimelerin içinde sahte eşleşme üretir.
-
-    İki-şirketli sorgularda filtre KONULMAMALI: "Tüpraş'ın tam sahipliği ne
-    zaman Koç Holding'e geçti" gibi bir M&A/ortaklık sorusu hem TUPRS hem
-    KCHOL'ü doğal olarak barındırır. Eskiden en uzun eşleşen ad (burada
-    "Koç Holding") kazanıp filtreyi TEK şirkete daraltıyordu — soru asıl
-    Tüpraş hakkında olsa bile arama KCHOL dokümanlarıyla sınırlanıp doğru
-    cevap (TUPRS profilindeki "Kurumsal olaylar tarihçesi" bölümü) aday
-    havuzuna hiç girmiyordu (ölçüldü, 2026-08-26). Modülün kendi tasarım
-    kuralı zaten bunu söylüyor: belirsizlikte filtre koymamak yanlış filtre
-    koymaktan iyidir — serbest metin araması iki şirketi de bulur (bkz.
-    modül başlığı).
     """
     eslemeler = _sirket_eslemesi()
     bulunanlar: set[str] = set()
@@ -110,9 +97,52 @@ def sirket_tespit_et(query: str) -> str | None:
         if re.search(rf"\b{re.escape(ad)}\b", normalized):
             bulunanlar.add(ticker)
 
+    return bulunanlar
+
+
+def sirket_tespit_et(query: str) -> str | None:
+    """Sorguda geçen TEK şirketin borsa kodunu döndürür ("ASELS"); sorguda
+    hiç şirket geçmiyorsa veya BİRDEN FAZLA FARKLI şirket geçiyorsa None
+    döner.
+
+    İki-şirketli sorgularda filtre KONULMAMALI: "Tüpraş'ın tam sahipliği ne
+    zaman Koç Holding'e geçti" gibi bir M&A/ortaklık sorusu hem TUPRS hem
+    KCHOL'ü doğal olarak barındırır. Eskiden en uzun eşleşen ad (burada
+    "Koç Holding") kazanıp filtreyi TEK şirkete daraltıyordu — soru asıl
+    Tüpraş hakkında olsa bile arama KCHOL dokümanlarıyla sınırlanıp doğru
+    cevap (TUPRS profilindeki "Kurumsal olaylar tarihçesi" bölümü) aday
+    havuzuna hiç girmiyordu (ölçüldü, 2026-08-26). Modülün kendi tasarım
+    kuralı zaten bunu söylüyor: belirsizlikte filtre koymamak yanlış filtre
+    koymaktan iyidir — serbest metin araması iki şirketi de bulur (bkz.
+    modül başlığı).
+
+    NOT: bu fonksiyon "arama filtresi" ihtiyacı için TEK/None döner. "Sorguda
+    HERHANGİ bir şirket geçiyor mu?" sorusu için (ör. scope_checker'ın
+    kapsam-dışı-etiket istisnası) `sirket_gecer_mi()` kullanılmalı — o,
+    birden fazla şirket geçse bile True döner (bkz. o fonksiyonun docstring'i).
+    """
+    bulunanlar = _tum_sirketleri_tespit_et(query)
     if len(bulunanlar) == 1:
         return next(iter(bulunanlar))
     return None
+
+
+def sirket_gecer_mi(query: str) -> bool:
+    """Sorguda bilinen bir BIST şirketi (adıyla ya da koduyla) geçiyor mu?
+
+    `sirket_tespit_et`'ten farkı: o, TEK bir filtre üretebilmek için birden
+    fazla şirket geçtiğinde None döner (bkz. docstring'i). Ama scope_checker
+    gibi "en az bir şirket adı geçiyorsa kapsam-dışı-etiket istisnası
+    uygulanır" mantığı için bu ayrım YANLIŞ: "Akbank, İş Bankası ve Yapı
+    Kredi'nin ... karşılaştır" gibi 3 şirketli bir sorguda "Yapı Kredi"
+    bankacılık-ürünleri sınıfındaki "kredi" etiketiyle çakışıp sorguyu
+    OUT_OF_SCOPE'a düşürüyordu — `sirket_tespit_et` üç şirket birden
+    geçtiği için None dönüyor, istisna hiç tetiklenmiyordu (ölçüldü,
+    2026-08-26, analist canlı test turu; bu, çoklu-şirket None davranışının
+    scope_checker'a sızan bir yan etkisiydi). Bu fonksiyon şirket SAYISINA
+    bakmaz, yalnızca en az bir tane geçip geçmediğine bakar.
+    """
+    return bool(_tum_sirketleri_tespit_et(query))
 
 
 def donem_tespit_et(query: str) -> str | None:

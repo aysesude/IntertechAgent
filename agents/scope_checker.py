@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from agents.market_query import sirket_tespit_et
+from agents.market_query import sirket_gecer_mi
 
 # Config yolunu dinamik al
 CONFIG_PATH = Path(__file__).parent / "scope.yaml"
@@ -180,14 +180,22 @@ def check_scope(query: str) -> dict:
     # Kredi'nin 2026 temettüsü ne kadar?" ikisi de OUT_OF_SCOPE dönüyordu,
     # oysa RAG'de bu şirketlerin verisi doğru ve eksiksiz duruyor.
     #
-    # `market_query.sirket_tespit_et` zaten test edilmiş, deterministik bir
-    # fonksiyon (RAG'in kendi filtre çıkarımı da bunu kullanıyor) — burada
-    # yeni bir eşleme listesi yazmak yerine o kullanılır. Sorguda bilinen bir
-    # BIST şirketi tespit edilirse, sanki `bist_hisse` etiketi eşleşmiş gibi
-    # kapsam içi sayılır. "konut kredisi ne kadar" gibi GERÇEK kapsam-dışı
-    # sorular etkilenmez: bunlarda hiçbir şirket adı geçmiyor.
+    # `market_query.sirket_gecer_mi` zaten test edilmiş, deterministik bir
+    # fonksiyon (RAG'in kendi filtre çıkarımı da aynı modülü kullanıyor) —
+    # burada yeni bir eşleme listesi yazmak yerine o kullanılır. Sorguda
+    # bilinen bir BIST şirketi tespit edilirse, sanki `bist_hisse` etiketi
+    # eşleşmiş gibi kapsam içi sayılır. "konut kredisi ne kadar" gibi GERÇEK
+    # kapsam-dışı sorular etkilenmez: bunlarda hiçbir şirket adı geçmiyor.
+    #
+    # BİLEREK `sirket_tespit_et` (tek/None) DEĞİL `sirket_gecer_mi`
+    # (en az bir tane mi) kullanılıyor: "Akbank, İş Bankası ve Yapı Kredi'nin
+    # ... karşılaştır" gibi 3 şirketli bir sorguda `sirket_tespit_et`
+    # belirsizlik yüzünden None dönüyor (bkz. o fonksiyonun docstring'i) ve
+    # "Yapı Kredi" bankacılık-ürünleri sınıfındaki "kredi" etiketiyle
+    # çakışıp sorguyu yanlışlıkla OUT_OF_SCOPE'a düşürüyordu (ölçüldü,
+    # 2026-08-26, analist canlı test turu).
     if not kapsam_ici_bulundu:
-        kapsam_ici_bulundu = sirket_tespit_et(query) is not None
+        kapsam_ici_bulundu = sirket_gecer_mi(query)
 
     if kapsam_disi_bulundu and not kapsam_ici_bulundu:
         return {
