@@ -350,6 +350,14 @@ _GENERIC_FINANCE_TERMS = {
     # listesine soktu (asıl soru "bilgi yok" dese bile).
     "kap",
     "gelisme",
+    # DENENDİ, GERİ ALINDI (2026-08-26): "konsolide"/"finansal" da
+    # "Konsolide finansal tablo ne demek?" sorgusunda GARAN/ASELS/BIMAS gibi
+    # alakasız şirketleri "bulundu" saydırıp gereksiz kaynak ekliyordu — ama
+    # ikisini birden jenerikleştirmek, sorunun asıl doğru cevabını veren
+    # TFRS referans dokümanının TEK ayırt edici kelimesini de silip sorguyu
+    # tamamen BOŞ sonuca düşürdü (ölçümle doğrulandı). Birkaç fazladan
+    # kaynak göstermek, doğru cevabı hiç vermemekten iyidir — bu ikisi
+    # BİLEREK jenerik listede DEĞİL.
 }
 
 
@@ -664,6 +672,17 @@ class Retriever:
         # Muafiyet DAR: yalnızca kendi `sirket` alanı sorguyla eşleşen sonucu
         # kapsıyor. Başka şirketin dokümanı, alakasız sorgu ve mesafe eşiği
         # aynen eskisi gibi eleniyor.
+        # `tur: referans` dokümanları (TFRS/finansal oran/SPK-BDDK/kurumsal
+        # olay terimleri sözlüğü — küçük, 4 dokümanlık, şirketten bağımsız
+        # bir küme) kelime-örtüşme kapısından MUAF: bir kavramı TANIMLAYAN
+        # doküman, tanımladığı kelimeleri (ör. "konsolide", "finansal",
+        # "tablo") sıkça kullanır — ama bu kelimeler bilanço dokümanlarının
+        # boilerplate açılış cümlesinde de geçtiği için jenerik sayılmak
+        # zorunda kalıyor (bkz. _GENERIC_FINANCE_TERMS). İkisi çakışınca
+        # kavramı tanımlayan TEK doğru kaynak da elenip sorgu tamamen boş
+        # dönüyordu (ölçümle doğrulandı, 2026-08-26: "Konsolide finansal
+        # tablo ne demek?" sorgusu). Şirket dokümanlarının aksine burada
+        # "yanlış şirket" riski yok — muafiyet güvenli.
         filtered = [
             r
             for r in results
@@ -671,6 +690,7 @@ class Retriever:
             and (
                 _shares_a_keyword(query_keywords, _result_keywords(r))
                 or _sirket_matches_query(r, query_keywords)
+                or (r.get("metadata") or {}).get("tur") == "referans"
             )
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]
