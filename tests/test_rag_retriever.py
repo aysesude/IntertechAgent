@@ -45,9 +45,7 @@ class _TopKAwareFakeVectorStore(VectorStore):
 
 
 def test_retrieve_sirket_filtresi_where_olarak_gecirilir():
-    store = _FakeVectorStore(
-        [_doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS")]
-    )
+    store = _FakeVectorStore([_doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS")])
     retriever = Retriever(store=store)
 
     retriever.retrieve("ASELS bilanço", sirket="ASELS")
@@ -59,9 +57,7 @@ def test_retrieve_coklu_filtre_and_ile_birlestirilir():
     store = _FakeVectorStore([])
     retriever = Retriever(store=store)
 
-    retriever.retrieve(
-        "bilanço sorgusu", sirket="ASELS", donem="2026-Q2", tur="bilanco"
-    )
+    retriever.retrieve("bilanço sorgusu", sirket="ASELS", donem="2026-Q2", tur="bilanco")
 
     assert store.son_where == {
         "$and": [{"sirket": "ASELS"}, {"donem": "2026-Q2"}, {"tur": "bilanco"}]
@@ -127,9 +123,7 @@ def test_retrieve_donem_ve_donem_listesi_birlikte_verilemez():
     retriever = Retriever(store=store)
 
     with pytest.raises(ValueError):
-        retriever.retrieve(
-            "soru", donem="2026-Q2", donem_listesi=["2026-Q1", "2026-Q2"]
-        )
+        retriever.retrieve("soru", donem="2026-Q2", donem_listesi=["2026-Q1", "2026-Q2"])
 
 
 def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
@@ -141,9 +135,7 @@ def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
     etiketli sonuçlar sıralamada geriye atılmakla kalmaz, tamamen elenir."""
     store = _FakeVectorStore(
         [
-            _doc(
-                "ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3
-            ),
+            _doc("ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3),
             _doc("THYAO ikinci çeyrek net kâr açıkladı", sirket="THYAO", distance=0.2),
             _doc(
                 "Piyasada ASELSAN dahil savunma sanayi şirketlerinin ikinci çeyrek "
@@ -183,9 +175,7 @@ def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
     )
     retriever = Retriever(store=store)
 
-    results = retriever.retrieve(
-        "BIST 100 endeksindeki şirketlerin net kâr açıklamaları"
-    )
+    results = retriever.retrieve("BIST 100 endeksindeki şirketlerin net kâr açıklamaları")
 
     assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}
 
@@ -654,8 +644,7 @@ def test_halkb_ticker_onegi_halka_kelimesiyle_yanlislikla_eslesmez():
                 distance=0.3,
             ),
             _doc(
-                "Ülker hisseleri 24 Şubat 2004'te Borsa İstanbul'da halka "
-                "arz edilmiştir",
+                "Ülker hisseleri 24 Şubat 2004'te Borsa İstanbul'da halka " "arz edilmiştir",
                 baslik="Ülker Bisküvi Şirket Profili",
                 sirket="ULKER",
                 distance=0.35,
@@ -722,9 +711,7 @@ def test_korpus_farkli_kelime_kullansa_da_sirket_eslesmesi_yeterli():
         ]
     )
 
-    sonuclar = Retriever(store=store).retrieve(
-        "TUPRS'un bilancosunda one cikan ne var?"
-    )
+    sonuclar = Retriever(store=store).retrieve("TUPRS'un bilancosunda one cikan ne var?")
 
     assert len(sonuclar) == 1
 
