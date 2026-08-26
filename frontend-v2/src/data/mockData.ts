@@ -603,7 +603,11 @@ export const mockChatMessages: ChatMessage[] = [
 export const mockChatPage: ChatPageData = {
   threads: mockChatThreads,
   messages: mockChatMessages,
-  suggestedPrompts: ["Portföyümü nasıl dengelerim?", "Bu ay en riskli varlığım hangisi?", "Altın almalı mıyım?"],
+  suggestedPrompts: [
+    "Portföyümün dağılımı nasıl?",
+    "Portföyüm ne kadar riskli?",
+    "Enflasyon haberi portföyümü nasıl etkiler?",
+  ],
 };
 
 export const INVESTMENT_DISCLAIMER = "Yatırım tavsiyesi değildir.";
