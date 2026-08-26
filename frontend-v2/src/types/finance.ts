@@ -79,6 +79,14 @@ export interface RiskSummary {
   /** Volatilite, kullanıcının profil bandının içinde mi? */
   withinProfile: boolean | null;
   profileLabel: string;
+  /**
+   * Kullanıcının anket puanı (1-7). `profileLabel` bundan türer.
+   *
+   * `level` ile KARIŞTIRMAYIN: bu kullanıcının beyan ettiği risk toleransı,
+   * `level` ise portföyün ölçülen oynaklığı. İkisinin ayrışması anlamlı bir
+   * bilgidir ("profil üstü").
+   */
+  surveyScore: number | null;
   /** Hesaplanamadıysa sebebi. */
   warning: string | null;
 }

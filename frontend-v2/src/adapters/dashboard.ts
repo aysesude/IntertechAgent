@@ -285,6 +285,7 @@ export function toRiskSummary(risk: ApiRiskAssessment): RiskSummary {
   return {
     levelLabel: risk.risk_level ? RISK_LEVEL_LABELS[risk.risk_level] : null,
     level: risk.risk_level ? RISK_LEVEL_ORDINALS[risk.risk_level] : null,
+    surveyScore: risk.risk_survey_score,
     annualizedVolatilityPct: risk.metrics.annualized_volatility_percent,
     withinProfile: risk.is_within_profile,
     profileLabel: RISK_PROFILE_LABELS[risk.risk_profile],

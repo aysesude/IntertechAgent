@@ -350,6 +350,7 @@ function risk(ustuneYaz: Partial<ApiRiskAssessment> = {}): ApiRiskAssessment {
     as_of: "2026-08-20",
     risk_profile: "conservative",
     risk_profile_source: "user",
+    risk_survey_score: 2,
     risk_level: "medium_high",
     is_within_profile: false,
     metrics: {
@@ -430,6 +431,17 @@ describe("toRiskSummary", () => {
     expect(yetersiz.levelLabel).toBeNull();
     expect(yetersiz.annualizedVolatilityPct).toBeNull();
     expect(yetersiz.warning).toBe("Yeterli fiyat geçmişi yok.");
+  });
+
+  it("anket puanını taşır", () => {
+    // Kart bunu gösteriyor: KULLANICININ beyanı, portföyün ölçümü değil.
+    expect(toRiskSummary(risk()).surveyScore).toBe(2);
+  });
+
+  it("anket doldurulmamışsa puan UYDURULMAZ", () => {
+    // Profilden geriye puan üretmek (Korumacı -> 1 veya 2?) verilmemiş bir
+    // cevabı verilmiş göstermek olurdu (AK 5.5). Kartta gösterge çizilmez.
+    expect(toRiskSummary(risk({ risk_survey_score: null })).surveyScore).toBeNull();
   });
 
   it("profil adını Türkçeleştirir", () => {
