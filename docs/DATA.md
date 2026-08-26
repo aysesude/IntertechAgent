@@ -242,13 +242,29 @@ hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
 
 Merdiven demo verisinde görünür hâlde:
 
-| puan | portföy |
+| puan | örnek portföy |
 |---|---|
 | 1 | `IOO` + %66 nakit |
-| 2 | `AYR, IOO` |
-| 3 | `AKE, AYR, CHFTRY, EURTRY, GBPTRY, IOO` |
-| 5 | `AKE, AYR, CEYREK, CHFTRY, EREGL, FROTO, GBPTRY, TURSG, YARIM` |
-| 7 | `AFT, CUMHUR, EUREN, KO, NVDA, USDTRY` |
+| 2 | `AK2, APT` |
+| 3 | `AKE, APT, CHFTRY, GBPTRY, IOO, USDTRY` |
+| 4 | `AK2, APT, CEYREK, CHFTRY, CUMHUR, EURTRY, GBPTRY, IOO` |
+| 5 | `APT, CEYREK, EREGL, EURTRY, FROTO, GBPTRY, IOO, TURSG, XAGTRY` |
+| 6 | `ANSGR, EURTRY, GRTHO, META, TAMALTIN, WMT` |
+| 7 | `BHE, EUREN, EURTRY, KO, NVDA, YARIM` |
+
+#### Tepe kademe garantisi
+Uyumluluk yetmiyor: üst kademenin gerçekten TUTULUYOR olması da gerekiyor.
+Süzgeç doğru çalışırken bile seçim aday havuzunda düzgün dağılımlıydı ve üst
+kademeler havuzda azınlıkta — hisse sınıfında **101 yerliye karşı 21 ABD
+hissesi ve tek bir serbest fon**. Ölçülen: 6-7 puanlı 13 kullanıcının yalnızca
+5'i yabancı varlık tutuyordu, `BHE`'yi **hiç kimse** tutmuyordu. 5, 6 ve 7
+puanlı portföyler ekranda ayırt edilemiyordu.
+
+`_tepe_temsil_edilsin` kullanıcının erişebildiği en üst kademeden en az bir
+varlık seçilmesini garantiliyor. Aşağı kademelerde neredeyse işlemsiz (4
+puanlının tepesi kıymetli madendir ve o sınıfta zaten her varlık o
+kademededir); ısırdığı yer yalnızca 6 ve 7. Sonuç: **7/7** altı puanlı yabancı
+varlık, **6/6** yedi puanlı `BHE` tutuyor.
 
 `MIN_HOLDINGS_PER_USER` bu yüzden 5'ten **1'e** indi: 1 puanlık kullanıcının
 alabileceği tek varlık `IOO`. Eksiklik değil, kuralın kendisi.

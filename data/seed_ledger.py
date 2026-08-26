@@ -30,7 +30,7 @@ from app.core.config import AssetClass, RiskProfile, settings, survey_score_band
 from app.core.security import hash_password
 from app.models import Asset, PriceHistory, Transaction, TransactionType
 from app.providers.universe import SPEC_BY_SYMBOL
-from app.services.advice_eligibility import is_asset_advice_allowed
+from app.services.advice_eligibility import asset_risk_level, is_asset_advice_allowed
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
 from data.anchor import resolve_anchor_date
 
@@ -185,6 +185,58 @@ def _uygun_arketip(
     if toplam <= 0:  # pragma: no cover - her bantta en az bir sınıf kalıyor
         return kalan
     return {ac: (w / toplam, n, lst) for ac, (w, n, lst) in kalan.items()}
+
+
+def _tepe_kademe(
+    uygun_archetype: dict[AssetClass, tuple[float, int, list["Asset"]]],
+) -> int:
+    """Kullanıcının erişebildiği EN ÜST uygunluk kademesi.
+
+    Puanın kendisi değil, o puanla gerçekten alınabilen varlıkların en üst
+    seviyesi. İkisi 7 puanda ayrışabilir: puan 7'dir ama arketipte serbest
+    fonun bulunduğu sınıf yoksa tepe 6'da kalır.
+    """
+    seviyeler = [
+        asset_risk_level(a.symbol, a.asset_class)
+        for _, _, adaylar in uygun_archetype.values()
+        for a in adaylar
+    ]
+    return max(seviyeler, default=1)
+
+
+def _tepe_temsil_edilsin(
+    picked: list["Asset"],
+    candidates: list["Asset"],
+    tepe: int,
+    rng: random.Random,
+) -> list["Asset"]:
+    """Sınıfta kullanıcının tepe kademesinden varlık varsa, en az biri seçilsin.
+
+    NEDEN GEREKLİ. Süzgeç doğru çalışıyordu ama seçim aday havuzunda düzgün
+    dağılımlıydı ve üst kademeler havuzda çok azınlıkta: hisse sınıfında 101
+    yerli varlığa karşı 21 ABD hissesi ve TEK bir serbest fon var. Konsantre
+    arketip 4 hisse seçiyor, dolayısıyla üst kademeler istatistiksel olarak
+    kayboluyordu. Ölçüldü: 6-7 puanlı 13 kullanıcının yalnızca 5'i herhangi
+    bir yabancı varlık tutuyordu ve `BHE`'yi (seviye 7, evrendeki tek serbest
+    fon) **hiç kimse** tutmuyordu.
+
+    Sonuç: 5, 6 ve 7 puanlı portföyler ekranda ayırt edilemiyordu — yani
+    uygunluk merdiveninin tepesi demoda hiç görünmüyordu.
+
+    Aşağı kademelerde bu neredeyse işlemsizdir: 4 puanlı kullanıcının tepesi
+    kıymetli madendir ve o sınıfta zaten hemen her varlık o kademededir.
+    Isırdığı yer yalnızca 6 ve 7.
+
+    Değiştirme SON sırayı hedefler (`picked[-1]`), böylece `rng.sample`'ın
+    ürettiği sıranın başı korunur ve determinizm bozulmaz.
+    """
+    tepedekiler = [a for a in candidates if asset_risk_level(a.symbol, a.asset_class) == tepe]
+    if not tepedekiler or any(a in tepedekiler for a in picked):
+        return picked
+    yeni = rng.choice(tepedekiler)
+    if yeni in picked:  # pragma: no cover - üstteki `any` bunu zaten eler
+        return picked
+    return picked[:-1] + [yeni]
 
 
 def _survey_score(user_index: int, profile: RiskProfile) -> int:
@@ -423,6 +475,7 @@ def seed_ledger(session: Session) -> int:
         # durumda; User kaydına yazılan değerle AYNI olmalı, yoksa portföy
         # kullanıcının beyanına uymayan bir puana göre kurulur.
         uygun_archetype = _uygun_arketip(archetype, assets_by_class, survey_score)
+        tepe = _tepe_kademe(uygun_archetype)
 
         for asset_class, (weight, pick_count, candidates) in uygun_archetype.items():
             # NAKİT SATIN ALINMAZ — harcanmayan bakiyedir.
@@ -434,6 +487,7 @@ def seed_ledger(session: Session) -> int:
             if asset_class is AssetClass.CASH:
                 continue
             picked = rng.sample(candidates, min(pick_count, len(candidates)))
+            picked = _tepe_temsil_edilsin(picked, candidates, tepe, rng)
             # Ağırlığın TAMAMI harcanır. Eskiden 0.9 ile çarpılıyordu ("%10 pay:
             # komisyon+nakit") çünkü nakit de bir varlık gibi satın alınıyordu
             # ve ayrıca pay ayırmak gerekiyordu. Artık nakit payı arketipte

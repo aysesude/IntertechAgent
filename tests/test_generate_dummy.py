@@ -231,3 +231,59 @@ def test_dusuk_puanli_kullanicinin_portfoyu_daralir(engine):
 
         assert sinif_sayisi(1) == 1, "1 puanlı kullanıcı yalnızca tahvil sınıfı tutabilmeli"
         assert sinif_sayisi(1) < sinif_sayisi(5), "merdiven portföy çeşitliliğine yansımıyor"
+
+
+def test_kullanicinin_tepe_kademesi_portfoyunde_gorunur(engine):
+    """Uyumluluk YETMEZ: üst kademe gerçekten TUTULUYOR olmalı.
+
+    Bir önceki test "hiçbir kullanıcı puanının üstünde varlık tutmuyor" der
+    ve süzgeç kaldırılsa bile bir üst kademe hiç seçilmediğinde YİNE GEÇER.
+    Nitekim öyle oldu: süzgeç doğru çalışıyordu ama seçim aday havuzunda
+    düzgün dağılımlıydı ve üst kademeler havuzda azınlıkta (hisse sınıfında
+    101 yerliye karşı 21 ABD hissesi ve TEK serbest fon). Ölçülen: 6-7 puanlı
+    13 kullanıcının yalnızca 5'i yabancı varlık tutuyordu, `BHE`'yi ise
+    HİÇ KİMSE tutmuyordu.
+
+    Sonucu demoda 5, 6 ve 7 puanlı portföylerin ayırt edilememesiydi — yani
+    merdivenin tepesi görünmüyordu. Bu test o durumu kilitliyor.
+    """
+    from app.services.advice_eligibility import asset_risk_level
+
+    generate_dummy_main()
+
+    with Session(engine) as session:
+        users = session.execute(select(User)).scalars().all()
+
+        def tepe_seviye(user) -> int:
+            return max(
+                (
+                    asset_risk_level(h.asset.symbol, h.asset.asset_class)
+                    for h in user.portfolio.holdings
+                    if h.quantity > 0
+                ),
+                default=0,
+            )
+
+        for beklenen_tepe in (6, 7):
+            eslesen = [u for u in users if u.risk_survey_score == beklenen_tepe]
+            assert eslesen, f"seed'de {beklenen_tepe} puanlı kullanıcı yok"
+            eksik = [u.email for u in eslesen if tepe_seviye(u) < beklenen_tepe]
+            assert not eksik, (
+                f"{beklenen_tepe} puanlı olup {beklenen_tepe}. kademeden hiç varlık "
+                f"tutmayan kullanıcılar: {eksik}"
+            )
+
+
+def test_serbest_fon_demoda_en_az_bir_portfoyde(engine):
+    """`BHE` evrendeki tek seviye-7 varlık; hiç tutulmazsa 7. kademeyi
+    doldurmak için yapılan işin demoda karşılığı olmaz."""
+    generate_dummy_main()
+
+    with Session(engine) as session:
+        users = session.execute(select(User)).scalars().all()
+        tutan = [
+            u.email
+            for u in users
+            if any(h.asset.symbol == "BHE" and h.quantity > 0 for h in u.portfolio.holdings)
+        ]
+        assert tutan, "hiçbir demo kullanıcısı serbest fon (BHE) tutmuyor"
