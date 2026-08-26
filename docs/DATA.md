@@ -109,11 +109,11 @@ değişikliği geçmedi ve seed eski ankrajla koştu.
 çekilen değil. Geçmişi zaten tam olan bir sembol `0` yazar ve bu doğrudur;
 işarete bakın: `+` başarılı, `-` atlandı, `!` başarısız, `~` kısmi.
 
-### Varlık evreni (119 varlık)
+### Varlık evreni (140 varlık)
 
 | Sınıf | Adet | Kaynak |
 |---|---|---|
-| Hisse | 102 | yfinance (BIST 100'den 98 hisse + endeks) + TEFAS (3 hisse fonu) |
+| Hisse | 123 | yfinance (BIST 100'den 98 hisse + endeks + **21 ABD hissesi**) + TEFAS (3 hisse fonu) |
 | Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
 | Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
 | Borçlanma Araçları | 5 | TEFAS (4 borçlanma fonu + 1 para piyasası fonu) |
@@ -145,9 +145,23 @@ bir fiyat kaynağı yok, uydurma ISIN'ler ise hiçbir sağlayıcıdan çekilemed
 için sonsuza kadar bayat kalıyordu. Fon tahvil değildir (vade/kupon yok) ama
 tahvil riski taşır ve gerçek fiyatlanır.
 
-`AKE` evrendeki **tek TRY dışı varlıktır** (USD); AK 5.7 kur dönüşümünü
-egzersiz eden tek enstrüman odur (`test_ak_5_7_fx_conversion`). Kaldırılırsa
-o kod yolu seed'li evrende test edilmez hale gelir.
+### ABD hisseleri ve kur dönüşümü
+Evrende 21 ABD hissesi var (AAPL, MSFT, NVDA, … CAT), `currency="USD"`.
+Sembole `.IS` eklenmez; yfinance'ta sade koduyla geçerler.
+
+USD varlıkların değeri `valuation_service` içinde **o günün kuruyla** TRY'ye
+çevrilir (AK 5.7). Bu yol uzun süre yalnızca `AKE` (eurobond fonu) tarafından
+kullanıldı; `test_ak_5_7_fx_conversion` hâlâ onun üzerinden koşuyor, çünkü
+tek varlıklı portföyde dönüşümü izole eden en sade örnek odur — ama artık
+o kod yolunu 22 varlık paylaşıyor, yani AKE kaldırılsa bile yol ölmez.
+
+**Ölçülen volatiliteler yerli hissenin altında** (ABD ortalaması %28,8'e
+karşı BIST %38,6) ve ABD tarafında SRRI gerçekten ayrışıyor: BRK-B %14,7 (5),
+KO/PG/MCD ~%19 (6), AMD %72,1 (7). Yerli hissede on beşin on beşi de 7
+alıyordu. Buna rağmen risk sıralamasında yabancı hisse yerlinin **bir kademe
+üstünde** olacak; gerekçe volatilite değil erişim ve karmaşıklıktır (kur
+maruziyeti, sınır ötesi saklama, yerel yatırımcı korumasının bulunmaması,
+vergi). Bkz. `providers/universe._foreign_stock`.
 
 ### Yeni varlık eklemek
 `backend/app/providers/universe.py` → `ASSET_UNIVERSE`'e bir `AssetSpec`

@@ -83,6 +83,27 @@ def _stock(symbol: str, name: str, base_price: str) -> AssetSpec:
     )
 
 
+def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
+    """ABD hissesi. `_stock`'tan iki farkı var ve ikisi de önemli.
+
+    Sembole `.IS` EKLENMEZ: yfinance'ta ABD hisseleri sade koduyla geçer.
+
+    Para birimi USD: değerleme `valuation_service` içinde O GÜNÜN kuruyla
+    TRY'ye çevrilir (AK 5.7). Bu yol daha önce yalnızca `AKE` (eurobond fonu)
+    tarafından kullanılıyordu — `docs/DATA.md` onu "evrendeki tek TRY dışı
+    varlık" diye anıyordu; artık yirmi iki varlık bu yoldan geçiyor.
+    """
+    return AssetSpec(
+        symbol=symbol,
+        name=name,
+        asset_class=AssetClass.STOCK,
+        base_price=Decimal(base_price),
+        currency="USD",
+        data_source=PriceSource.YFINANCE,
+        provider_symbol=symbol,
+    )
+
+
 def _fx(symbol: str, name: str, tcmb_code: str, base_price: str) -> AssetSpec:
     return AssetSpec(
         symbol=symbol,
@@ -310,6 +331,39 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     _stock("VESTL", "Vestel", "40.680000"),
     _stock("YKBNK", "Yapı Kredi Bankası", "34.080002"),
     _stock("ZOREN", "Zorlu Enerji", "4.100000"),
+    # --- Hisse: ABD (yfinance, USD) ---
+    #
+    # Kapsam dosyası (`agents/scope.yaml`) NASDAQ / S&P 500 / Dow Jones'u
+    # kapsam içi sayıyor ama evrende bir tane bile yoktu.
+    #
+    # base_price hepsi ÖLÇÜLDÜ (26 Ağustos 2026, serinin ilk gerçek günü) ve
+    # 21 sembolün tamamı açıklanmayan kopukluk için tarandı — hiç çıkmadı.
+    # ABD tarafında kurumsal olay verisi eksiksiz; BIST'te FENER/CVKMD'yi
+    # dışarıda bırakmak zorunda kaldığımız durumun karşılığı burada çıkmadı.
+    #
+    # Ölçek burada GERÇEKTEN ayrışıyor: BRK-B %14,7 (SRRI 5), KO/PG/MCD ~%19
+    # (6), AMD %72,1 (7). Yerli hissede on beşinin on beşi de 7 alıyordu.
+    _foreign_stock("AAPL", "Apple", "230.490005"),  # vol %25,1, SRRI 7
+    _foreign_stock("MSFT", "Microsoft", "506.739990"),  # vol %32,4, SRRI 7
+    _foreign_stock("NVDA", "NVIDIA", "181.600006"),  # vol %37,0, SRRI 7
+    _foreign_stock("GOOGL", "Alphabet", "207.479996"),  # vol %32,7, SRRI 7
+    _foreign_stock("AMZN", "Amazon", "229.119995"),  # vol %34,5, SRRI 7
+    _foreign_stock("META", "Meta Platforms", "747.380005"),  # vol %38,9, SRRI 7
+    _foreign_stock("TSLA", "Tesla", "349.600006"),  # vol %46,7, SRRI 7
+    _foreign_stock("AMD", "AMD", "167.130005"),  # vol %72,1, SRRI 7
+    _foreign_stock("JPM", "JPMorgan Chase", "299.279999"),  # vol %22,4, SRRI 6
+    _foreign_stock("V", "Visa", "350.350006"),  # vol %22,2, SRRI 6
+    _foreign_stock("MA", "Mastercard", "590.659973"),  # vol %22,6, SRRI 6
+    _foreign_stock("BRK-B", "Berkshire Hathaway", "495.720001"),  # vol %14,7, SRRI 5
+    _foreign_stock("JNJ", "Johnson & Johnson", "176.789993"),  # vol %18,8, SRRI 6
+    _foreign_stock("LLY", "Eli Lilly", "734.169983"),  # vol %35,8, SRRI 7
+    _foreign_stock("UNH", "UnitedHealth", "303.880005"),  # vol %35,7, SRRI 7
+    _foreign_stock("KO", "Coca-Cola", "68.830002"),  # vol %18,8, SRRI 6
+    _foreign_stock("PG", "Procter & Gamble", "156.960007"),  # vol %19,6, SRRI 6
+    _foreign_stock("WMT", "Walmart", "96.080002"),  # vol %26,0, SRRI 7
+    _foreign_stock("MCD", "McDonald's", "311.429993"),  # vol %18,4, SRRI 6
+    _foreign_stock("XOM", "Exxon Mobil", "112.750000"),  # vol %25,6, SRRI 7
+    _foreign_stock("CAT", "Caterpillar", "432.670013"),  # vol %39,9, SRRI 7
     # FENER ve CVKMD BİLEREK DIŞARIDA.
     #
     # İkisinin de fiyat serisinde GERÇEK OLMAYAN bir çöküş var:

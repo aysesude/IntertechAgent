@@ -74,3 +74,67 @@ class TestFiyatNiyeti:
     def test_risk_ve_portfoy_sorulari_etkilenmez(self):
         assert fiyat_niyeti("Riskim nedir?") is None
         assert fiyat_niyeti("Hangi varlıklara sahibim?") is None
+
+
+class TestYabanciHisseler:
+    """ABD hisseleri evrene girdi (21 sembol, USD).
+
+    Türk kullanıcı bunları koduyla değil ADIYLA yazıyor ("apple hissesi ne
+    kadar"), oysa `company_mappings.json` yalnızca yerli şirketleri tanıyor
+    ve zaten RAG filtresi içindir. Bu yüzden yabancı şirket adları
+    `_TAKMA_ADLAR`'a eklendi.
+    """
+
+    def test_sirket_adiyla_bulunur(self):
+        assert fiyat_niyeti("Apple hissesi ne kadar?") == {
+            "symbols": ["AAPL"],
+            "history": False,
+        }
+        assert fiyat_niyeti("Coca cola hisse fiyatı nedir?") == {
+            "symbols": ["KO"],
+            "history": False,
+        }
+
+    def test_sembolun_kendisiyle_de_bulunur(self):
+        assert fiyat_niyeti("TSLA fiyatı nedir?") == {"symbols": ["TSLA"], "history": False}
+        # Tire içeren tek sembol; kelime sınırı regex'i onu bölmemeli.
+        assert fiyat_niyeti("BRK-B ne kadar?") == {"symbols": ["BRK-B"], "history": False}
+
+    def test_gecmis_yolu_yabancida_da_calisir(self):
+        assert fiyat_niyeti("NVDA son 3 ayda ne yaptı?")["history"] is True
+
+
+class TestBuyukHarfDuyarliSemboller:
+    """`V` ve `META` yalnızca BÜYÜK harfle çıplak eşleşir.
+
+    İkisi de küçültülünce gündelik Türkçeyle çakışıyor: `V` tek harf,
+    `meta` ise finans Türkçesinde "emtia" demek. Küçük harfli tarama
+    bırakılsaydı "meta fiyatları arttı mı" sorusu Meta Platforms fiyat
+    sorgusuna dönerdi.
+    """
+
+    def test_kucuk_harfli_gundelik_kullanim_tetiklemez(self):
+        assert fiyat_niyeti("Meta fiyatları bu ay arttı mı?") is None
+
+    def test_buyuk_harfli_sembol_calisir(self):
+        assert fiyat_niyeti("META hissesi ne kadar?") == {"symbols": ["META"], "history": False}
+        assert fiyat_niyeti("V hissesi ne kadar?") == {"symbols": ["V"], "history": False}
+
+    def test_takma_ad_her_yazimda_erisim_birakir(self):
+        """Kısıtlama erişimi KAPATMAMALI: şirket adı hâlâ her yazımda bulur."""
+        assert fiyat_niyeti("visa ne kadar?") == {"symbols": ["V"], "history": False}
+        assert fiyat_niyeti("facebook hissesi kaç dolar?") == {
+            "symbols": ["META"],
+            "history": False,
+        }
+
+
+def test_kac_dolar_kaliba_dahil_ama_kur_sorgusu_uretmez():
+    """ "X kaç dolar?" — ABD hisseleriyle birlikte doğal hâle gelen kalıp.
+
+    Tuzak: kalıbın içindeki "dolar" USDTRY takma adıdır. Silinmeseydi
+    kullanıcı hisse sorarken cevaba kur da eklenirdi.
+    """
+    assert fiyat_niyeti("AAPL kaç dolar?") == {"symbols": ["AAPL"], "history": False}
+    # Gerçek kur sorusu bozulmamalı.
+    assert fiyat_niyeti("Dolar kaç TL?") == {"symbols": ["USDTRY"], "history": False}
