@@ -836,3 +836,25 @@ def test_kap_ve_gelisme_kelimeleri_jenerik_sayilir():
         Retriever(store=store).retrieve("KAP'a gore deniz bank hakkinda guncel bir gelisme var mi")
         == []
     )
+
+
+def test_nakit_akis_tablosu_kelimeleri_jenerik_sayilir():
+    """ "Nakit akış tablosu" başlığı 2026-08-26'da 23 bilanço dokümanına
+    eklendi — "temettü"/"halka arz" ile aynı sınıfta jenerikleşti. Ölçümle
+    doğrulandı: "BİM'in nakit akış tablosu nasıl?" (BIMAS için bu içerik
+    hiç eklenmedi) sorgusu "nakit"/"akış"/"tablosu" üzerinden tamamen
+    alakasız şirketleri "bulundu" saydırıp "Kaynaklar" listesine sokuyordu."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "## Nakit akış tablosu\n\nVakıfBank'ın işletme faaliyetlerinden "
+                "nakit akışı negatif gerçekleşti.",
+                sirket="VAKBN",
+                baslik="VakıfBank 2026 2. Çeyrek",
+                tur="bilanco",
+                distance=0.397,
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("BİM'in nakit akış tablosu nasıl?") == []
