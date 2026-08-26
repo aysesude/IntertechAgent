@@ -60,9 +60,12 @@ def test_tahvil_fonu_icin_haber_anahtari_uretilmez():
     assert yfinance_news_ticker(spec) is None
 
 
-def test_nakit_icin_haber_anahtari_uretilmez():
-    spec = SPEC_BY_SYMBOL["MEVDUAT-V"]
-    assert yfinance_news_ticker(spec) is None
+# 2026-08-26: "nakit icin haber anahtari uretilmez" testi buradan
+# KALDIRILDI — MEVDUAT-V/MEVDUAT-VS universe.py'den tamamen kaldırıldı (bkz.
+# o dosyadaki "Nakit" bolumu notu, AK 5.1): AssetClass.CASH artik evrende
+# hicbir sentetik varlik tasimiyor, nakit yalnizca defterdeki serbest bakiye
+# olarak temsil ediliyor. Test edilecek bir SPEC_BY_SYMBOL girdisi kalmadigi
+# icin senaryonun kendisi anlamsizlasti.
 
 
 # --- providers/yfinance_p.py: haber ayrıştırma -------------------------------
