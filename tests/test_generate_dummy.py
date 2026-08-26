@@ -162,3 +162,72 @@ def _gecerli_tckn(numara: str) -> bool:
     onuncu = ((sum(hane[0:9:2]) * 7) - sum(hane[1:8:2])) % 10
     onbirinci = sum(hane[:10]) % 10
     return hane[9] == onuncu and hane[10] == onbirinci
+
+
+def test_hicbir_kullanici_anket_puaninin_ustunde_varlik_tutmuyor(engine):
+    """Ürün Sahibi ilkesi (Not 3/4): "profil önce belirlenir, portföy ona göre
+    kurulur, tersine sistem izin vermez."
+
+    Süzgeç eklenmeden önce ölçülen: 50 kullanıcının **31'i** puanının izin
+    vermediği bir varlık tutuyordu. Sebebi yapısaldı, rastlantı değil — DÖRT
+    arketipin dördünde de hisse, kıymetli maden ve döviz vardı, oysa
+    muhafazakâr bandın (1-2) izin verdiği tek sınıf tahvil, dengeli bandın
+    (3-4) izin vermediği tek sınıf hisse. Yani muhafazakâr ve dengeli
+    kullanıcıların HİÇBİRİ uyumlu olamıyordu.
+
+    Süzme VARLIK düzeyinde olmalı, sınıf düzeyinde değil: büyüme bandı (5)
+    hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
+    Sınıf düzeyinde süzülseydi bu test yine geçerdi ama büyüme profilli
+    kullanıcı AAPL tutuyor olurdu.
+    """
+    from app.services.advice_eligibility import is_asset_advice_allowed
+
+    generate_dummy_main()
+
+    with Session(engine) as session:
+        users = session.execute(select(User)).scalars().all()
+        assert users
+
+        ihlaller: list[str] = []
+        for user in users:
+            assert user.risk_survey_score is not None, f"{user.email}: anket puanı yok"
+            for holding in user.portfolio.holdings:
+                if holding.quantity <= 0:
+                    continue
+                asset = holding.asset
+                if not is_asset_advice_allowed(
+                    asset.symbol, asset.asset_class, user.risk_survey_score
+                ):
+                    ihlaller.append(f"puan {user.risk_survey_score} -> {asset.symbol}")
+
+        assert not ihlaller, f"puanının üstünde varlık tutan kullanıcılar: {ihlaller[:10]}"
+
+
+def test_dusuk_puanli_kullanicinin_portfoyu_daralir(engine):
+    """Merdivenin demo verisinde GÖRÜNÜR olduğunu kilitler.
+
+    Uygunluk kuralının işe yaradığının kanıtı, düşük puanlı kullanıcının
+    portföyünün gerçekten dar olmasıdır. Bu test olmasaydı süzgeç sessizce
+    devre dışı kalabilir ve bir önceki test yine geçerdi (hiç ihlal yok
+    demek, hiç kısıt yok demek değildir — ama kısıt hiç ısırmıyorsa süzgeç
+    ölü koddur).
+
+    En düşük puan (1) yalnızca para piyasası fonunu açıyor; en yüksek puan
+    (7) evrenin tamamını. Aradaki farkın portföy çeşitliliğine yansıması
+    gerekir.
+    """
+    generate_dummy_main()
+
+    with Session(engine) as session:
+        users = session.execute(select(User)).scalars().all()
+
+        def sinif_sayisi(puan: int) -> int:
+            eslesen = [u for u in users if u.risk_survey_score == puan]
+            assert eslesen, f"seed'de {puan} puanlı kullanıcı yok"
+            return max(
+                len({h.asset.asset_class for h in u.portfolio.holdings if h.quantity > 0})
+                for u in eslesen
+            )
+
+        assert sinif_sayisi(1) == 1, "1 puanlı kullanıcı yalnızca tahvil sınıfı tutabilmeli"
+        assert sinif_sayisi(1) < sinif_sayisi(5), "merdiven portföy çeşitliliğine yansımıyor"
