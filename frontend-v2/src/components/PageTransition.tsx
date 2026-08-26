@@ -82,16 +82,6 @@ export const DASHBOARD_ENTER_DURATION_MS = Math.round(
   (DASHBOARD_REVEAL_DELAY_S + (DASHBOARD_ITEM_COUNT - 1) * DASHBOARD_STAGGER_GAP_S + DASHBOARD_ITEM_DURATION_S) * 1000
 );
 
-/**
- * İçeriğin GÖRÜNÜR olmaya başladığı an (ms).
- *
- * Mount anında bir şey animasyonlanacaksa (ör. RiskGauge'un sayaç
- * animasyonu) bu değer kadar beklemesi gerekir, yoksa kullanıcı henüz
- * görmeden oynayıp biter. Dalga kaldığı sürece bu ~605 ms'ydi; artık
- * içerik hemen belirmeye başlıyor.
- */
-export const CONTENT_REVEAL_DELAY_MS = 80;
-
 interface PageTransitionProps {
   children: React.ReactNode;
   /** Sadece LoginScreen'den gelen ilk Dashboard mount'unda true — Faz 5. */

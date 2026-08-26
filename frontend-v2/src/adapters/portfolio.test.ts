@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiHoldingRow, ApiHoldingsValuation, ApiPortfolioSummary } from "@/api/portfolio";
+import type { ApiAssetRiskMetrics, ApiRiskAssessment } from "@/api/risk";
 import { toAssetClassSummaries, toHoldings, toPortfolioPageData } from "./portfolio";
 
 /**
@@ -45,6 +46,54 @@ function holdingRow(ustuneYaz: Partial<ApiHoldingRow> = {}): ApiHoldingRow {
     realized_pnl_try: 0,
     price_missing: false,
     ...ustuneYaz,
+  };
+}
+
+function assetRiskMetrics(ustuneYaz: Partial<ApiAssetRiskMetrics> = {}): ApiAssetRiskMetrics {
+  return {
+    asset_symbol: "TUPRS",
+    asset_class: "stock",
+    weight_percent: 33.84,
+    annualized_volatility_percent: 32.46,
+    risk_level: "high",
+    ...ustuneYaz,
+  };
+}
+
+function riskAssessment(assetMetrics: ApiAssetRiskMetrics[]): ApiRiskAssessment {
+  return {
+    user_id: "u1",
+    as_of: "2026-08-20",
+    risk_profile: "balanced",
+    risk_profile_source: "user",
+    risk_survey_score: 4,
+    total_value: 2_681_069.66,
+    risk_level: "medium",
+    is_within_profile: true,
+    metrics: {
+      annualized_volatility_percent: 20,
+      max_drawdown_percent: 10,
+      category_metrics: [],
+      asset_metrics: assetMetrics,
+      diversification_ratio: 1.2,
+      value_at_risk_try: 10_000,
+      value_at_risk_percent: 1,
+      value_at_risk_confidence: 95,
+      value_at_risk_horizon_days: 1,
+      sharpe_ratio: 0.5,
+      risk_free_rate_percent: 37,
+      risk_free_rate_is_live: false,
+      max_asset_weight_percent: 33.84,
+      max_asset_symbol: "TUPRS",
+      max_class_weight_percent: 44.56,
+      max_class: "stock",
+      herfindahl_index: 0.2,
+      holdings_count: assetMetrics.length,
+      asset_class_count: 3,
+      price_points_used: 260,
+    },
+    warnings: [],
+    disclaimer: "Bu bir yatırım tavsiyesi değildir.",
   };
 }
 
@@ -139,10 +188,10 @@ describe("toAssetClassSummaries", () => {
 
 describe("toHoldings", () => {
   it("holdings === null iken boş dizi döner", () => {
-    expect(toHoldings(null)).toEqual([]);
+    expect(toHoldings(null, null)).toEqual([]);
   });
 
-  it("normal satırı Holding'e çevirir — risk ve lots kaynağı olmadığı için null/boş", () => {
+  it("normal satırı Holding'e çevirir — risk kaynağı (risk===null) verilmediyse null/boş", () => {
     const holdings: ApiHoldingsValuation = {
       user_id: "u1",
       as_of: "2026-08-20",
@@ -151,11 +200,12 @@ describe("toHoldings", () => {
       worst_performer: null,
       excluded_symbols: [],
     };
-    const [h] = toHoldings(holdings);
+    const [h] = toHoldings(holdings, null);
     expect(h.id).toBe("TUPRS");
     expect(h.assetClassId).toBe("stocks");
     expect(h.returnPct).toBe(126.91);
     expect(h.risk).toBeNull();
+    expect(h.riskOrdinal).toBeNull();
     expect(h.lots).toEqual([]);
   });
 
@@ -176,7 +226,7 @@ describe("toHoldings", () => {
       worst_performer: null,
       excluded_symbols: ["XYZ"],
     };
-    const [h] = toHoldings(holdings);
+    const [h] = toHoldings(holdings, null);
     expect(h.formattedValue).toBe("—");
     expect(h.returnPct).toBeNull();
     expect(h.value).toBe(0);
@@ -194,17 +244,98 @@ describe("toHoldings", () => {
       worst_performer: null,
       excluded_symbols: [],
     };
-    const [altin, dolar] = toHoldings(holdings);
+    const [altin, dolar] = toHoldings(holdings, null);
     expect(altin.unitLabel).toBe("gr");
     expect(dolar.unitLabel).toBe("$");
+  });
+
+  // --- Risk sütunu: /holdings'te YOK, /api/risk'teki asset_metrics[]'ten
+  // sembole göre eşleniyor (bkz. adapters/portfolio.ts:toHolding). ---
+
+  it("asset_metrics'te sembole göre eşleşme varsa risk/riskOrdinal'ı doldurur", () => {
+    const holdings: ApiHoldingsValuation = {
+      user_id: "u1",
+      as_of: "2026-08-20",
+      holdings: [holdingRow({ symbol: "TUPRS" })],
+      best_performer: null,
+      worst_performer: null,
+      excluded_symbols: [],
+    };
+    const risk = riskAssessment([assetRiskMetrics({ asset_symbol: "TUPRS", risk_level: "high" })]);
+    const [h] = toHoldings(holdings, risk);
+    expect(h.risk).toBe("Yüksek");
+    expect(h.riskOrdinal).toBe(6);
+  });
+
+  it("eşleşme bulunamayan satırda (ör. nakit kalemi asset_metrics'te yok) risk null kalır", () => {
+    const holdings: ApiHoldingsValuation = {
+      user_id: "u1",
+      as_of: "2026-08-20",
+      holdings: [holdingRow({ symbol: "USD-MEVDUAT", asset_class: "cash" })],
+      best_performer: null,
+      worst_performer: null,
+      excluded_symbols: [],
+    };
+    // asset_metrics'te BAŞKA bir sembol var, USD-MEVDUAT yok.
+    const risk = riskAssessment([assetRiskMetrics({ asset_symbol: "TUPRS" })]);
+    const [h] = toHoldings(holdings, risk);
+    expect(h.risk).toBeNull();
+    expect(h.riskOrdinal).toBeNull();
+  });
+
+  it("eşleşen kaydın kendi risk_level'ı null ise (yetersiz fiyat geçmişi) yine null kalır, uydurmaz", () => {
+    const holdings: ApiHoldingsValuation = {
+      user_id: "u1",
+      as_of: "2026-08-20",
+      holdings: [holdingRow({ symbol: "YENI" })],
+      best_performer: null,
+      worst_performer: null,
+      excluded_symbols: [],
+    };
+    const risk = riskAssessment([
+      assetRiskMetrics({ asset_symbol: "YENI", annualized_volatility_percent: null, risk_level: null }),
+    ]);
+    const [h] = toHoldings(holdings, risk);
+    expect(h.risk).toBeNull();
+    expect(h.riskOrdinal).toBeNull();
+  });
+
+  it("risk isteği düşmüşse (risk===null) TÜM satırlarda risk null kalır, geri kalan alanlar etkilenmez", () => {
+    const holdings: ApiHoldingsValuation = {
+      user_id: "u1",
+      as_of: "2026-08-20",
+      holdings: [holdingRow({ symbol: "TUPRS" })],
+      best_performer: null,
+      worst_performer: null,
+      excluded_symbols: [],
+    };
+    const [h] = toHoldings(holdings, null);
+    expect(h.risk).toBeNull();
+    expect(h.riskOrdinal).toBeNull();
+    expect(h.value).toBe(559_419.0);
+    expect(h.returnPct).toBe(126.91);
   });
 });
 
 describe("toPortfolioPageData", () => {
   it("instrumentCount/assetClassCount özetten gelir, riskSummary kaynağı olmadığı için boş", () => {
-    const data = toPortfolioPageData({ summary: OZET, holdings: null });
+    const data = toPortfolioPageData({ summary: OZET, holdings: null, risk: null });
     expect(data.instrumentCount).toBe(3);
     expect(data.assetClassCount).toBe(3);
     expect(data.riskSummary).toEqual([]);
+  });
+
+  it("risk sağlandığında holdings'teki ilgili sembole risk sütununu taşır", () => {
+    const holdings: ApiHoldingsValuation = {
+      user_id: "u1",
+      as_of: "2026-08-20",
+      holdings: [holdingRow({ symbol: "TUPRS" })],
+      best_performer: null,
+      worst_performer: null,
+      excluded_symbols: [],
+    };
+    const risk = riskAssessment([assetRiskMetrics({ asset_symbol: "TUPRS", risk_level: "low_medium" })]);
+    const data = toPortfolioPageData({ summary: OZET, holdings, risk });
+    expect(data.holdings[0].risk).toBe("Düşük-Orta");
   });
 });

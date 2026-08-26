@@ -1,5 +1,6 @@
 import type { ApiAssetClass, ApiHoldingRow, ApiHoldingsValuation, ApiPortfolioSummary } from "@/api/portfolio";
-import { ASSET_CLASS_IDS, ASSET_CLASS_LABELS } from "@/adapters/shared";
+import type { ApiAssetRiskMetrics, ApiRiskAssessment } from "@/api/risk";
+import { ASSET_CLASS_IDS, ASSET_CLASS_LABELS, RISK_LEVEL_LABELS, RISK_LEVEL_ORDINALS } from "@/adapters/shared";
 import { formatQuantityByUnit, formatTRY } from "@/utils/format";
 import type { AssetClassSummary, Holding, PortfolioPageData } from "@/types/finance";
 
@@ -92,8 +93,29 @@ export function toAssetClassSummaries(
 // Pozisyonlar
 // ---------------------------------------------------------------------------
 
-function toHolding(h: ApiHoldingRow): Holding {
+/**
+ * `asset_metrics[]`i sembole indeksler — `toHolding` sembol bazında O(1)
+ * arasın diye. `risk === null` (istek düştü) ya da hiç varlığı yoksa boş
+ * `Map` döner, çağıran taraf ekstra dallanmaya gerek duymaz.
+ */
+function riskMetricsBySymbol(risk: ApiRiskAssessment | null): Map<string, ApiAssetRiskMetrics> {
+  const harita = new Map<string, ApiAssetRiskMetrics>();
+  if (risk === null) return harita;
+  for (const varlik of risk.metrics.asset_metrics) harita.set(varlik.asset_symbol, varlik);
+  return harita;
+}
+
+function toHolding(h: ApiHoldingRow, riskBySymbol: Map<string, ApiAssetRiskMetrics>): Holding {
   const unitLabel = unitLabelFor(h.asset_class, h.currency);
+  // Risk seviyesi `/holdings`TEN DEĞİL: bu uçta `risk_level` alanı hiç yok.
+  // Kaynağı `/api/risk/{user_id}` — `metrics.asset_metrics[]`, sembole göre
+  // burada eşleniyor. Eşleşme yoksa (nakit kalemi, risk isteği düştü, ya da
+  // o varlığın kendi geçmişi yetersiz — asset_metrics'te satırı olsa bile
+  // risk_level'ı null olabilir) `null` kalır, HoldingsTable "—" gösterir.
+  const riskVarlik = riskBySymbol.get(h.symbol);
+  const risk = riskVarlik?.risk_level ? RISK_LEVEL_LABELS[riskVarlik.risk_level] : null;
+  const riskOrdinal = riskVarlik?.risk_level ? RISK_LEVEL_ORDINALS[riskVarlik.risk_level] : null;
+
   return {
     id: h.symbol,
     name: h.name,
@@ -103,10 +125,8 @@ function toHolding(h: ApiHoldingRow): Holding {
     value: h.market_value_try ?? 0,
     formattedValue: h.price_missing ? "—" : formatTRY(h.market_value_try ?? 0),
     returnPct: h.price_missing ? null : h.unrealized_pnl_percent,
-    // Backend `/holdings` henüz enstrüman bazlı risk seviyesi döndürmüyor
-    // (`assets.risk_level` DB'de var ama şemaya eklenmedi — bkz. PR planı).
-    // Alan gelene kadar `null`; HoldingsTable "—" gösterir.
-    risk: null,
+    risk,
+    riskOrdinal,
     currentUnitPrice: h.current_price_try ?? 0,
     unitLabel,
     // Parti/lot kırılımı için backend ucu yok (bkz. HoldingReturnDetail'deki
@@ -115,9 +135,10 @@ function toHolding(h: ApiHoldingRow): Holding {
   };
 }
 
-export function toHoldings(holdings: ApiHoldingsValuation | null): Holding[] {
+export function toHoldings(holdings: ApiHoldingsValuation | null, risk: ApiRiskAssessment | null): Holding[] {
   if (holdings === null) return [];
-  return holdings.holdings.map(toHolding);
+  const riskBySymbol = riskMetricsBySymbol(risk);
+  return holdings.holdings.map((h) => toHolding(h, riskBySymbol));
 }
 
 // ---------------------------------------------------------------------------
@@ -127,12 +148,14 @@ export function toHoldings(holdings: ApiHoldingsValuation | null): Holding[] {
 export interface PortfolioPageSources {
   summary: ApiPortfolioSummary;
   holdings: ApiHoldingsValuation | null;
+  /** Yalnızca Pozisyonlar tablosundaki risk sütunu için (bkz. toHolding). Düşerse `null` — tablo diğer her şeyle birlikte çizilir, sadece risk "—" kalır. */
+  risk: ApiRiskAssessment | null;
 }
 
 export function toPortfolioPageData(kaynak: PortfolioPageSources): PortfolioPageData {
   return {
     assetClasses: toAssetClassSummaries(kaynak.summary, kaynak.holdings),
-    holdings: toHoldings(kaynak.holdings),
+    holdings: toHoldings(kaynak.holdings, kaynak.risk),
     // Kaynağı yok (bkz. PR planı) — PortfolioPage zaten bunu render etmiyor
     // (RiskSummaryCard bağlı değil), boş dizi uydurmadan daha doğru.
     riskSummary: [],
