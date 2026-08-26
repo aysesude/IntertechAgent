@@ -70,6 +70,23 @@ class AssetSpec:
     # ama satın alınamazlar. Bayrak olmasaydı seed, endeksi sıradan bir hisse
     # gibi kullanıcılara dağıtırdı.
     tradable: bool = True
+    # Uygunluk risk seviyesi (1-7), SINIF VARSAYILANINI EZER.
+    #
+    # `None` ise `ASSET_CLASS_ADVICE_RISK_LEVEL[asset_class]` geçerlidir; o
+    # tablo TİPİK varlığı tarif eder. Bu alan yalnızca varlık sınıfından
+    # ayrıldığında doldurulur ve iki yöne de gidebilir:
+    #
+    #   IOO  para piyasası fonu   sınıfı BOND=2, kendisi 1  (aşağı)
+    #   AKE  eurobond fonu        sınıfı BOND=2, kendisi 3  (yukarı)
+    #   AAPL ABD hissesi          sınıfı STOCK=5, kendisi 6 (yukarı)
+    #
+    # Neden hesaplanmıyor da elle yazılıyor: hesaplansaydı fiyat geçmişine
+    # bağımlı olurdu — geçmişi henüz olmayan yeni varlıkta seviye üretilemez
+    # ve tablo risk motorunun volatilite borusuna kenetlenirdi. Uygunluk
+    # sıralaması ürün kategorisine bakar, o kategori de zaten burada tanımlı.
+    #
+    # Okunacak yer: `services/advice_eligibility.asset_risk_level`.
+    risk_level: int | None = None
 
 
 def _stock(symbol: str, name: str, base_price: str) -> AssetSpec:
@@ -92,6 +109,11 @@ def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
     TRY'ye çevrilir (AK 5.7). Bu yol daha önce yalnızca `AKE` (eurobond fonu)
     tarafından kullanılıyordu — `docs/DATA.md` onu "evrendeki tek TRY dışı
     varlık" diye anıyordu; artık yirmi iki varlık bu yoldan geçiyor.
+
+    Uygunluk seviyesi 6, yani yerli hissenin (STOCK=5) bir üstü. Gerekçe
+    volatilite DEĞİL — ölçüm tersini söylüyor, ABD ortalaması %28,8'e karşı
+    BIST %38,6 — sınır ötesi erişimin kendisi: kur maruziyeti, saklama,
+    yerel yatırımcı korumasının bulunmaması, farklı vergi rejimi.
     """
     return AssetSpec(
         symbol=symbol,
@@ -101,6 +123,7 @@ def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
         currency="USD",
         data_source=PriceSource.YFINANCE,
         provider_symbol=symbol,
+        risk_level=6,
     )
 
 
@@ -183,12 +206,19 @@ def _fund(
     currency: str = "TRY",
     synthetic_daily_drift: float | None = None,
     synthetic_daily_volatility: float | None = None,
+    risk_level: int | None = None,
 ) -> AssetSpec:
     """TEFAS fonu. Sembol = fon kodu = sağlayıcı sembolü.
 
     `currency`: TEFAS fiyatları kural olarak TL'dir; döviz cinsi fonlarda
     (ör. AKE eurobond fonu) birim fiyat kendi para biriminde yayımlanır ve
     değerleme o günün kuruyla TRY'ye çevrilir (AK 5.7).
+
+    `risk_level`: fon, sınıfının tipik seviyesinden ayrılıyorsa verilir.
+    Kullanıcının kararı: "fonlar kendi risklerini taşısın" — bir fonun
+    uygunluk seviyesi kabuğundan (BOND/STOCK) değil, İÇERİĞİNDEN çıkar.
+    Para piyasası fonu da eurobond fonu da BOND sınıfındadır ama biri
+    seviye 1, diğeri 3'tür.
     """
     return AssetSpec(
         symbol=symbol,
@@ -197,6 +227,7 @@ def _fund(
         base_price=Decimal(base_price),
         currency=currency,
         sub_type=sub_type,
+        risk_level=risk_level,
         data_source=PriceSource.TEFAS,
         provider_symbol=symbol,
         synthetic_daily_drift=synthetic_daily_drift,
@@ -427,6 +458,10 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         AssetSubType.EUROBOND_FUND,
         "0.430407",
         currency="USD",
+        # Sınıfı BOND (=2) ama uygunluk açısından DÖVİZ ürünüdür: TL'li
+        # yatırımcı için getirisinin büyük kısmı kurdan gelir. Bu yüzden
+        # döviz kademesinde (3), TL borçlanma fonlarının bir üstünde.
+        risk_level=3,
     ),
     _fund(
         "AYR",
@@ -445,6 +480,11 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         "Ak Portföy Yeni Teknolojiler Yabancı Hisse Senedi Fonu",
         AssetSubType.EQUITY_FUND,
         "0.669568",
+        # YABANCI hisse fonu: içeriği yurt dışı hisse, dolayısıyla yabancı
+        # hisse kademesinde (6). TI2 ve TCD yerli olduğu için 5'te (sınıf
+        # varsayılanı) kalır. Fonun kabuğu ikisinde de aynı — ayrımı yapan
+        # içeriktir.
+        risk_level=6,
     ),
     # PPF KALDIRILDI, yerine IOO geldi.
     #
@@ -472,6 +512,12 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         "3.154068",
         synthetic_daily_drift=0.00152,
         synthetic_daily_volatility=0.0009,
+        # Sınıfı BOND (=2) ama uygunluk açısından NAKİT eşdeğeri: kısa vadeli
+        # borçlanma aracı ve repo tutar, ölçülen volatilitesi %1,42. En düşük
+        # anket puanına sahip kullanıcının alabileceği tek yatırım aracı
+        # olması bilinçli — aksi hâlde 1 puanlık kullanıcıya önerilebilecek
+        # HİÇBİR varlık kalmıyordu (CASH sınıfında varlık yok).
+        risk_level=1,
     ),
     _fund("GTA", "Garanti Portföy Altın Fonu", AssetSubType.GOLD_FUND, "1.078670"),
     # --- Nakit ---

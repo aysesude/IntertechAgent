@@ -50,10 +50,20 @@ _SIGNAL_PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "risk_signals.md"
     encoding="utf-8"
 )
 
-# GEÇİCİ eşleme — bkz. modül docstring'i. Puanlar bilinçli olarak
-# advice_eligibility.ASSET_CLASS_ADVICE_RISK_LEVEL'daki kırılım noktalarına
-# (1/3/4/6) denk düşecek şekilde seçildi ki dummy veriyle test ederken tüm
-# varlık sınıfı izinleri anlamlı şekilde temsil edilsin.
+# GEÇİCİ eşleme — bkz. modül docstring'i. Puanlar, uygunluk tablosunun
+# kırılım noktalarına denk düşecek şekilde seçildi ki dummy veriyle test
+# ederken tüm varlık sınıfı izinleri anlamlı şekilde temsil edilsin.
+#
+# Tablo 26 Ağustos 2026'da yeniden kalibre edildi (kırılımlar 1/3/4/6 iken
+# 1/2/3/4/5 oldu; ayrıca yabancı hisse varlık düzeyinde 6). EŞLEME
+# DEĞİŞMEDİ, çünkü yeni tabloda dört profil zaten dört FARKLI sonuç
+# üretiyor — eski tabloda BALANCED (4) ve GROWTH (5) birebir aynı izin
+# kümesini veriyordu, yani iki profil ayırt edilemiyordu:
+#
+#   CONSERVATIVE 2 -> nakit, tahvil
+#   BALANCED     4 -> + döviz, kıymetli maden
+#   GROWTH       5 -> + yerli hisse
+#   AGGRESSIVE   7 -> + yabancı hisse
 _DUMMY_SURVEY_SCORE_BY_PROFILE: dict[RiskProfile, int] = {
     RiskProfile.CONSERVATIVE: 2,
     RiskProfile.BALANCED: 4,

@@ -163,6 +163,56 @@ alıyordu. Buna rağmen risk sıralamasında yabancı hisse yerlinin **bir kadem
 maruziyeti, sınır ötesi saklama, yerel yatırımcı korumasının bulunmaması,
 vergi). Bkz. `providers/universe._foreign_stock`.
 
+### Uygunluk risk seviyesi (1-7)
+
+Anket puanı 1-7; **seviyesi puandan büyük olan varlık** için kullanıcı ne
+tavsiye alır ne de portföyünde bulunması uyumlu sayılır
+(`services/advice_eligibility.py`).
+
+| Seviye | Ne | Ölçülen volatilite |
+|---|---|---|
+| 1 | Serbest nakit, para piyasası fonu | %0 · IOO %1,42 |
+| 2 | TL borçlanma araçları fonu | AYR %1,5 · APT %7,1 · AK2 %10,0 |
+| 3 | Döviz, eurobond fonu | USDTRY ~%1 · AKE %4,6 |
+| 4 | Kıymetli maden, altın fonu | gram altın %24 · GTA %25,6 |
+| 5 | Yerli hisse, yerli hisse fonu | BIST ort. %38,6 |
+| 6 | Yabancı hisse, yabancı hisse fonu | ABD ort. %28,8 |
+| 7 | *(boş — türev/kaldıraç için ayrıldı)* | — |
+
+**Bu ölçek SRRI değildir.** İkisi de 1-7 olduğu için karıştırılmaya müsait
+ama SRRI volatilite bandından hesaplanır; bu tablo *uygunluk* sıralamasıdır
+("hangi ürün hangi yatırımcıya sunulabilir"). Volatilite sıralamayı
+doğrularken kullanıldı, belirlemedi — **ölçümle bilerek ayrışan iki yer** var
+ve ikisi de kodda gerekçesiyle yazılı: döviz TL tahvil fonunun üstünde
+(düşük oynaklığı TL'nin düzenli değer kaybının yan ürünü), yabancı hisse
+yerlinin üstünde (gerekçe volatilite değil erişim/karmaşıklık).
+
+Tablo **26 Ağustos 2026'da yeniden kalibre edildi**. Eski hâli (şartnameden
+birebir: NAKIT 1, TAHVIL 3, DOVIZ 4, MADEN 4, HISSE 6) yedi puandan yalnızca
+**dört farklı sonuç** üretiyordu — 2, 5 ve 7 puanları bir öncekine hiçbir şey
+eklemiyordu. Yeni tabloda 1-6 arasında her puan farklı bir varlık kümesi
+açıyor (**6 farklı sonuç**); 7 bilerek boş.
+
+#### Varlık düzeyi istisnası
+Seviye normalde `ASSET_CLASS_ADVICE_RISK_LEVEL[sınıf]`'tan gelir, ama
+`AssetSpec.risk_level` doluysa **o kazanır** — iki yöne de:
+
+| Varlık | Sınıfı | Seviyesi | Neden |
+|---|---|---|---|
+| `IOO` | BOND (2) | **1** | Para piyasası fonu, nakit eşdeğeri |
+| `AKE` | BOND (2) | **3** | Eurobond — getirisi ağırlıklı olarak kurdan |
+| `AFT` | STOCK (5) | **6** | Yurt dışı hisse fonu |
+| 21 ABD hissesi | STOCK (5) | **6** | Sınır ötesi erişim |
+
+Okuma noktası `advice_eligibility.asset_risk_level(symbol, asset_class)`;
+sınıf sürümü (`is_advice_allowed`) kaba görünüm içindir ve şartname metnine
+bire bir karşılık geldiği için korunuyor. Bir varlığa karar verirken
+**varlık sürümü** kullanılmalı.
+
+`IOO`'nun 1'e çekilmesi zorunluydu: nakit sınıfında varlık yok, dolayısıyla
+o istisna olmadan 1 puanlık kullanıcıya önerilebilecek hiçbir varlık
+kalmıyordu.
+
 ### Yeni varlık eklemek
 `backend/app/providers/universe.py` → `ASSET_UNIVERSE`'e bir `AssetSpec`
 satırı ekleyin, `make seed` çalıştırın. **Başka hiçbir kod değişmez.**

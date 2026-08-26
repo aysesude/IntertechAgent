@@ -148,14 +148,68 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
 # oynaklığından çıkar. Aynı ölçekte oldukları için değil, tesadüfen ikisi de
 # 1-7 olduğu için benzer görünürler.
 #
-# Sayılar şartnameden birebir alınmıştır, türetilmemiştir. Kıymetli maden
-# ("ALTIN") ve döviz ("DOVIZ") aynı seviyededir (4).
+# --- Tablo 26 Ağustos 2026'da yeniden kalibre edildi ---
+#
+# Önceki hâli şartnameden birebir alınmıştı (CASH 1, BOND 3, CURRENCY 4,
+# PRECIOUS_METAL 4, STOCK 6). ÖLÇÜLDÜ: yedi puan yalnızca DÖRT farklı sonuç
+# üretiyordu — 2, 5 ve 7 puanları bir öncekine hiçbir şey eklemiyordu:
+#
+#     1 -> nakit          2 -> nakit           (aynı)
+#     3 -> +tahvil        4 -> +döviz, maden
+#     5 -> (aynı)         6 -> +hisse          7 -> (aynı)
+#
+# Yani anket 1-7 arası puan verirken sistemin ayırt edebildiği yalnızca dört
+# kademe vardı; aradaki puanları kazanmak ya da kaybetmek kullanıcı için
+# hiçbir şeyi değiştirmiyordu. Yeni tablo her kademeyi bir kategoriye
+# karşılık getiriyor (7 hariç, bilerek boş — aşağıya bakın).
+#
+# BU ÖLÇEK SRRI DEĞİLDİR. İkisi de 1-7 olduğu için benzer görünür ama SRRI
+# volatilite bandından hesaplanır; bu tablo UYGUNLUK (suitability) sıralaması,
+# yani "hangi ürün hangi yatırımcıya sunulabilir" sorusunun cevabı. Volatilite
+# sıralamayı doğrularken kullanıldı, sıralamayı BELİRLEMEDİ — ölçümle
+# ayrıştığı iki yer aşağıda açıkça yazılı.
+#
+#   1  Serbest nakit, para piyasası fonu     (ölçülen: %0 / IOO %1,42)
+#   2  TL borçlanma araçları fonu            (AYR %1,5 · APT %7,1 · AK2 %10,0)
+#   3  Döviz, eurobond fonu                  (USDTRY ~%1 · AKE %4,6)
+#   4  Kıymetli maden, altın fonu            (gram altın %24 · GTA %25,6)
+#   5  Yerli hisse, yerli hisse fonu         (BIST ort. %38,6)
+#   6  Yabancı hisse, yabancı hisse fonu     (ABD ort. %28,8)
+#   7  (boş — türev/kaldıraçlı ürünler için ayrıldı)
+#
+# ÖLÇÜMLE AYRIŞAN İKİ YER, ikisi de bilinçli:
+#
+# (a) Döviz (3) TL tahvil fonundan (2) YÜKSEK, oysa ölçülen volatilitesi çok
+#     daha düşük (~%1'e karşı %10'a kadar). Dövizin TL cinsinden düşük
+#     oynaklığı düşük risk değil, TL'nin düzenli değer kaybının yan ürünüdür:
+#     seri neredeyse tek yönlü tırmandığı için standart sapma küçük çıkar.
+#     Döviz TL'li yatırımcı için yönlü bir kur bahsidir. `gerek.md` de dövizi
+#     tahvilin üstünde ("Orta-Yüksek") sıralıyor.
+#
+# (b) Yabancı hisse (6) yerli hisseden (5) YÜKSEK, oysa ABD ortalaması
+#     BIST'in ALTINDA (%28,8'e karşı %38,6). Gerekçe volatilite değil ERİŞİM
+#     ve KARMAŞIKLIK: kur maruziyeti, sınır ötesi saklama, yerel yatırımcı
+#     korumasının bulunmaması, farklı vergi rejimi. Bunu "daha oynak" diye
+#     yazmak rakamlara bakan ilk kişi tarafından yakalanırdı.
+#
+# ŞARTNAMEDEN SAPMA — analist onayına sunulacak:
+#   - BOND 3 -> 2, CURRENCY 4 -> 3, STOCK 6 -> 5 (kademelerin yayılması).
+#   - Kıymetli maden 4'te KALDI; şartnamede döviz ile aynı seviyedeydi, artık
+#     dövizin bir üstünde. `gerek.md` §2 ise tersini söylüyor (maden "Orta",
+#     döviz "Orta-Yüksek") — ölçüm bizim sıralamamızı destekliyor
+#     (altın %24 > döviz ~%1), bu çelişki analiste bildirildi.
+#
+# Bu tablo TİPİK varlık içindir ve varlık düzeyinde ezilebilir: bkz.
+# `providers/universe.AssetSpec.risk_level` ve
+# `services/advice_eligibility.asset_risk_level`. Bir varlık sınıfının
+# altında da (IOO para piyasası fonu: sınıfı BOND=2, kendisi 1) üstünde de
+# (AAPL: sınıfı STOCK=5, kendisi 6) olabilir.
 ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
     AssetClass.CASH: 1,
-    AssetClass.BOND: 3,
-    AssetClass.CURRENCY: 4,
+    AssetClass.BOND: 2,
+    AssetClass.CURRENCY: 3,
     AssetClass.PRECIOUS_METAL: 4,
-    AssetClass.STOCK: 6,
+    AssetClass.STOCK: 5,
 }
 
 # Anket puanının alabileceği aralık (dahil). Tabloyla karşılaştırma bu
