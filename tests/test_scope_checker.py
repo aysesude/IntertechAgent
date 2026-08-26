@@ -162,5 +162,40 @@ def test_gercek_kapsam_disi_konut_kredi_sorulari_hala_reddedilir():
     """Yukarıdaki düzeltme kapıyı açmamalı: sorguda bilinen bir BIST şirket
     adı GEÇMEYEN gerçek "konut"/"kredi" soruları hâlâ kapsam dışı sayılmalı."""
     assert _intent("konut kredisi ne kadar") == "OUT_OF_SCOPE"
+
+
+# ---------------------------------------------------------------------------
+# "satin al" gecmis zaman ("aldi") kurumsal-olay sorusuyla cakisiyor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Petkim hangi şirketi satın aldı?",
+        "Falanca Enerji hangi şirketi satın aldı?",
+        "Koç Holding Tüpraş'ı ne zaman satın aldı?",
+    ],
+)
+def test_satin_aldi_gecmis_zaman_kurumsal_olay_sorusu_reddedilmez(query):
+    """Ölçümle doğrulandı (2026-08-26, canlı test turu): "satın al" 8 harf
+    olduğu için (boşluk dahil) sonek toleransı alıyor, "satın aldı" (geçmiş
+    zaman, üçüncü şahıs) bu toleransla eşleşip kurumsal olaylar tarihçesi
+    türündeki M&A sorularını UNAUTHORIZED_ACTION ile reddediyordu — oysa
+    kullanıcı işlem istemiyor, geçmişteki bir şirket olayını soruyor."""
+    assert _intent(query) == "pass_to_llm"
+
+
+def test_gercek_satin_alma_emri_hala_reddedilir():
+    """Düzeltme kapıyı açmamalı: emir kipi "satın al" hâlâ işlem talebidir."""
+    assert _intent("THYAO hissesi satın al") == "UNAUTHORIZED_ACTION"
+    assert _intent("10 lot AKBNK satın al") == "UNAUTHORIZED_ACTION"
+
+
+def test_satin_alma_tavsiye_sorusu_hala_gecer():
+    """ "alayım mı" istisna kalıbı bu fiil için de korunuyor olmalı."""
+    result = check_scope("Bu hisseyi satın alayım mı?")
+    assert result["intent"] == "pass_to_llm"
+    assert "advice_seeking" in result["flags"]
     assert _intent("ev almak için ne kadar kredi çekebilirim") == "OUT_OF_SCOPE"
     assert _intent("kredi kartı limitim ne kadar") == "OUT_OF_SCOPE"
