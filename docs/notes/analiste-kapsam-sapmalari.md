@@ -5,7 +5,7 @@
 
 # Kapsam sapmaları — analist onayı bekliyor
 
-Beş madde var. Üçü veri/kapsam kararı, ikisi bir **çelişki bildirimi**.
+Altı madde var. Dördü veri/kapsam kararı, ikisi **çelişki bildirimi**.
 
 ---
 
@@ -63,10 +63,24 @@ Ayrıca eski tabloda muhafazakâr kullanıcıya (puan 2) önerilebilecek **tek �
 nakitti** — nakit sınıfında satın alınabilir varlık olmadığı için pratikte
 hiçbir şey.
 
-**Yeni tabloda** 1-6 arası her puan farklı bir varlık kümesi açıyor
-(**6 farklı sonuç**), dört profil dört farklı sonuç veriyor. **7 bilerek boş
-bırakıldı**, türev/kaldıraçlı ürünler için ayrıldı — tepede yer kalsın ki yeni
-bir ürün geldiğinde tüm tabloyu kaydırmak gerekmesin.
+**Yeni tabloda yedi puanın yedisi de** farklı bir varlık kümesi açıyor, dört
+profil dört farklı sonuç veriyor.
+
+**7. seviye serbest fonla dolduruldu.** İlk tasarımda boş bırakılmıştı
+("türev/kaldıraçlı ürün için ayrıldı") ama 700 TEFAS fonu tarandığında
+kaldıraçlı, ters (inverse) ve girişim sermayesi fonu **sıfır** çıktı — yani o
+tanımın TEFAS'ta karşılığı yok. Serbest fon (SPK III-52.1) boşluğu
+dolduruyor: yalnızca **nitelikli yatırımcıya** satılır, portföy
+sınırlamalarının çoğundan **muaftır**, izahnamesi **kaldıraç ve açığa satışa**
+izin verir. `scope.yaml` "serbest fon"u zaten kapsam içi sayıyor.
+
+Eklenen: **`BHE`** (Ak Portföy Birinci Hisse Senedi Serbest Fon), 256 gün
+kesintisiz veri, %22,8 volatilite.
+
+Elenen adaylar kayıt için: `GMI` (Gümüş Serbest) %61,4 ile en oynaktı ama
+kaldıraçlı değil — **spot gümüş zaten %63,1**; `THV` %137 ölçtü ama üst üste
++%67/+%90 sıçraması var (veri kusuru); on istatistiksel arbitraj fonu
+%2,1-4,7 — yapıca en karmaşık ürünler ama piyasa nötr.
 
 **Karar gerekiyor:** kademelerin yayılması onaylanıyor mu?
 
@@ -90,7 +104,7 @@ Yani **döviz madenin üstünde** olmalı.
 |---|---|
 | USDTRY | ~%1 |
 | EURTRY / GBPTRY / CHFTRY | %0,9 – %7,1 |
-| Gram altın | **%24** |
+| Gram altın | **%28,6** |
 | Altın fonu (GTA) | **%25,6** |
 
 TL'li yatırımcı için altın, dövizden **kat kat** oynak.
@@ -103,6 +117,23 @@ dövizi en alta koymadık; TL tahvil fonlarının **üstünde** (3), madenin
 korunuyor, yalnızca madenle olan sırası ters.
 
 **Karar gerekiyor:** hangisi geçerli — `gerek.md` mi, ölçüm mü?
+
+### 3b. Gümüş ve platin madenden ayrıldı (4 → 5)
+
+Sınıf içi dağılım ölçüldüğünde kıymetli madenin tek kademeye sığmadığı
+görüldü (365 gün, TL cinsinden):
+
+| | ölçülen |
+|---|---|
+| Gram altın · sikkeler · altın fonu | %25,6 – %28,6 |
+| **Gram platin** | **%55,3** |
+| **Gram gümüş** | **%65,9** |
+
+Gümüş ve platin, **yerli hissenin (%38,6, seviye 5) üstünde** oynuyor;
+ondan düşük bir kademede duramazlar. İkisi varlık düzeyinde **5**'e çekildi,
+gram altın ve sikkeler 4'te kaldı.
+
+**Karar gerekiyor:** kategori bütünlüğü mü (hepsi 4), ölçüm mü (gümüş/platin 5)?
 
 ---
 

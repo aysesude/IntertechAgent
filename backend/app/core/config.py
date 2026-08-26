@@ -175,7 +175,7 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
 #   4  Kıymetli maden, altın fonu            (gram altın %24 · GTA %25,6)
 #   5  Yerli hisse, yerli hisse fonu         (BIST ort. %38,6)
 #   6  Yabancı hisse, yabancı hisse fonu     (ABD ort. %28,8)
-#   7  (boş — türev/kaldıraçlı ürünler için ayrıldı)
+#   7  Serbest fon (SPK III-52.1)            (BHE %22,8)
 #
 # ÖLÇÜMLE AYRIŞAN İKİ YER, ikisi de bilinçli:
 #
@@ -198,6 +198,29 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
 #     dövizin bir üstünde. `gerek.md` §2 ise tersini söylüyor (maden "Orta",
 #     döviz "Orta-Yüksek") — ölçüm bizim sıralamamızı destekliyor
 #     (altın %24 > döviz ~%1), bu çelişki analiste bildirildi.
+#
+# SEVİYE 7 — SERBEST FON. Ölçüt yine yapı, volatilite değil. Serbest fonlar
+# yalnızca NİTELİKLİ YATIRIMCIYA satılır, diğer fon türlerine uygulanan
+# portföy sınırlamalarının çoğundan MUAFTIR ve izahnameleri kaldıraç, açığa
+# satış ve türev kullanımına izin verir. Sıradan bir fonun tabi olduğu
+# sınırlar olmadığı için yönetici stratejiyi serbestçe değiştirebilir —
+# uygunluk sorusunun ("bu ürün acemi yatırımcıya sunulabilir mi") cevabı
+# fonun BUGÜNKÜ içeriğinden bağımsız olarak hayırdır.
+#
+# Kural buradan çıkıyor: serbest fon = 7, ne tutuyor olursa olsun. Para
+# piyasası serbest fonu da 7'dir; muafiyet ortak, içerik değişkendir.
+#
+# 700 TEFAS fonu tarandı (26 Ağustos 2026): kaldıraçlı, ters (inverse) ve
+# girişim sermayesi fonu SIFIR. Yani 7'nin ilk tanımı ("türev/kaldıraçlı
+# ürün") TEFAS'ta karşılığı olmayan bir tanımdı; serbest fon bu boşluğu
+# doldurabilen tek gerçek araç ve `scope.yaml` onu kapsam içi sayıyor.
+#
+# Eleme kayıtları: GMI (Ak Portföy Gümüş Serbest) %61,4 ile en oynak adaydı
+# ama kaldıraçlı DEĞİL — spot gümüşün kendisi %63,1 (ölçüldü), yani rakam
+# emtiadan geliyor, yapıdan değil. THV %137 ölçtü ama üst üste +%67 ve +%90
+# sıçraması var, veri kusuru. On istatistiksel arbitraj fonu %2,1-4,7
+# aralığında: yapıca en karmaşık ürünler ama piyasa nötr oldukları için
+# ölçekte tepeye konurlarsa "risk 7 ama hiç oynamıyor" görüntüsü doğardı.
 #
 # Bu tablo TİPİK varlık içindir ve varlık düzeyinde ezilebilir: bkz.
 # `providers/universe.AssetSpec.risk_level` ve
@@ -414,6 +437,7 @@ class AssetSubType(str, Enum):
     TIME_DEPOSIT = "time_deposit"
     DEMAND_DEPOSIT = "demand_deposit"
     GOLD_COIN = "gold_coin"
+    HEDGE_FUND = "hedge_fund"  # SPK "serbest fon" — bkz. universe._FUND_ASSET_CLASS
 
 
 class IngestStatus(str, Enum):

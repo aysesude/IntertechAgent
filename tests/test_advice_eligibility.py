@@ -157,6 +157,19 @@ class TestVarlikDuzeyi:
         assert asset_risk_level("TI2", AssetClass.STOCK) == 5
         assert asset_risk_level("TCD", AssetClass.STOCK) == 5
 
+    def test_gumus_ve_platin_altindan_bir_kademe_yukarida(self):
+        """Kıymetli maden sınıfı 4 ama sınıf içi dağılım geniş.
+
+        Ölçüldü (365 gün): gram altın %28,6, gümüş %65,9, platin %55,3.
+        İkincisi ve üçüncüsü YERLİ HİSSENİN (%38,6, seviye 5) üstünde
+        oynuyor, dolayısıyla ondan düşük bir kademede duramazlar.
+        """
+        assert asset_risk_level("XAUTRY", AssetClass.PRECIOUS_METAL) == 4
+        assert asset_risk_level("XAGTRY", AssetClass.PRECIOUS_METAL) == 5
+        assert asset_risk_level("XPTTRY", AssetClass.PRECIOUS_METAL) == 5
+        # Sikkeler gram ALTINDAN türetilir, onunla aynı kademede kalır.
+        assert asset_risk_level("CEYREK", AssetClass.PRECIOUS_METAL) == 4
+
     def test_evrende_olmayan_sembol_sinif_varsayilanina_duser(self):
         """Elle eklenmiş bir DB kaydı uygunluk kontrolünü çökertmemeli."""
         assert asset_risk_level("YOKBOYLE", AssetClass.STOCK) == 5
@@ -176,24 +189,35 @@ def _izinli_semboller(puan):
     )
 
 
-def test_yedi_puan_altidan_fazla_varlik_acmaz():
-    """7 BİLEREK boş bırakıldı: türev/kaldıraçlı ürünler için ayrıldı.
+def test_yedinci_seviye_yalnizca_serbest_fonu_acar():
+    """7'nin tek sakini serbest fondur (SPK III-52.1).
 
-    Test bunu kusur olarak değil KARAR olarak kilitliyor — 7'ye bir şey
-    eklendiğinde kırılır ve kararın gözden geçirilmesi gerekir.
+    Ölçüt yapı, volatilite değil: serbest fon nitelikli yatırımcıya satılır,
+    portföy sınırlamalarının çoğundan muaftır ve kaldıraç/açığa satış
+    kullanabilir. BHE'nin ölçülen oynaklığı (%22,8) 6'daki ABD hisseleriyle
+    aynı bantta — yani bu kademeyi kazandıran sayı değil.
+
+    700 TEFAS fonu tarandığında kaldıraçlı/ters/girişim sermayesi fonu
+    çıkmadı; 7'nin ilk tanımının ("türev ürün") karşılığı yoktu.
     """
-    assert _izinli_semboller(7) == _izinli_semboller(6)
+    from app.providers.universe import ASSET_UNIVERSE
+
+    yedide_acilan = _izinli_semboller(7) - _izinli_semboller(6)
+    assert yedide_acilan == {"BHE"}
+
+    bhe = next(a for a in ASSET_UNIVERSE if a.symbol == "BHE")
+    assert bhe.risk_level == 7
 
 
 def test_her_puan_bir_oncekinden_farkli_kume_acar():
-    """Asıl ölçüt: 1-6 arasında her puanın somut bir karşılığı olmalı.
+    """Asıl ölçüt: yedi puanın YEDİSİNİN de somut bir karşılığı olmalı.
 
     Eski tablo yedi puandan yalnızca DÖRT farklı sonuç üretiyordu (2, 5 ve 7
     bir öncekine hiçbir şey eklemiyordu), yani anketin ayırt ettiği kademe
     sayısı vaat edilenin yarısıydı. Yeniden kalibrasyonun sebebi buydu.
     """
-    kumeler = [_izinli_semboller(puan) for puan in range(1, 7)]
+    kumeler = [_izinli_semboller(puan) for puan in range(1, 8)]
 
-    assert len(set(kumeler)) == 6, "1-6 puanlari farkli varlik kumesi acmali"
+    assert len(set(kumeler)) == 7, "yedi puan yedi farkli varlik kumesi acmali"
     for onceki, sonraki in zip(kumeler, kumeler[1:]):
         assert onceki < sonraki, "puan arttikca kume GERCEKTEN buyumeli"

@@ -140,7 +140,22 @@ def _fx(symbol: str, name: str, tcmb_code: str, base_price: str) -> AssetSpec:
     )
 
 
-def _gram_metal(symbol: str, name: str, yf_future: str, base_price: str) -> AssetSpec:
+def _gram_metal(
+    symbol: str,
+    name: str,
+    yf_future: str,
+    base_price: str,
+    risk_level: int | None = None,
+) -> AssetSpec:
+    """Ons vadeli fiyattan türetilen gram metal.
+
+    `risk_level`: kıymetli maden sınıfı uygunlukta 4'tür ama sınıf içi
+    dağılım geniş — ölçüldü (365 gün, 26 Ağustos 2026): gram altın %28,6,
+    gümüş %65,9, platin %55,3. Gümüş ve platin YERLİ HİSSENİN (%38,6,
+    seviye 5) üstünde oynuyor, dolayısıyla ondan düşük bir kademede
+    duramazlar. Bu ikisi sanayi/spekülatif metal; perakende yatırımcının
+    "altın alıyorum" refleksiyle aynı yere konmaları yanlış olurdu.
+    """
     return AssetSpec(
         symbol=symbol,
         name=name,
@@ -149,6 +164,7 @@ def _gram_metal(symbol: str, name: str, yf_future: str, base_price: str) -> Asse
         data_source=PriceSource.YFINANCE,
         provider_symbol=yf_future,
         ons_to_gram=True,
+        risk_level=risk_level,
     )
 
 
@@ -179,6 +195,12 @@ def _gold_coin(symbol: str, name: str, factor: str, base_price: str) -> AssetSpe
 # enstrümandır, risk motorunda savunma tarafında (BOND+CASH) sayılmalıdır.
 _FUND_ASSET_CLASS: dict[AssetSubType, AssetClass] = {
     AssetSubType.EQUITY_FUND: AssetClass.STOCK,
+    # Serbest fon sınıfı da İÇERİĞİNDEN çıkar, kabuğundan değil: evrendeki
+    # tek serbest fon (BHE) hisse senedi yoğun olduğu için STOCK. Bir gün
+    # para piyasası serbest fonu eklenirse alt türü MONEY_MARKET_FUND
+    # olur ve `risk_level=7` ile işaretlenir — yani 7'yi veren yapı,
+    # sınıfı veren içeriktir; ikisi ayrı alanlarda durur.
+    AssetSubType.HEDGE_FUND: AssetClass.STOCK,
     # Para piyasası fonu artık CASH DEĞİL, BOND.
     #
     # `AssetClass.CASH` yalnızca SERBEST NAKDİ (defterdeki bakiye, harcanabilir
@@ -418,9 +440,12 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     # sanma riski) kazandırdığından fazlasını götürürdü. 98 hisse yeterli;
     # bilerek bozuk veri dağıtmaktansa dışarıda bırakmak doğru.
     # --- Kıymetli maden: gram fiyatlar (ons vadeli × USDTRY) ---
+    # Gram altın sınıf varsayılanında (4) kalır: ölçülen %28,6, gram altından
+    # türetilen sikkelerle ve altın fonuyla (%25,6) aynı mertebede.
     _gram_metal("XAUTRY", "Gram Altın", "GC=F", "2450.00"),
-    _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00"),
-    _gram_metal("XPTTRY", "Gram Platin", "PL=F", "1550.00"),
+    # Gümüş ve platin 5'e çekildi — gerekçe `_gram_metal` docstring'inde.
+    _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00", risk_level=5),
+    _gram_metal("XPTTRY", "Gram Platin", "PL=F", "1550.00", risk_level=5),
     # --- Kıymetli maden: sikke (gram altından türetilir) ---
     _gold_coin("CEYREK", "Çeyrek Altın", "1.6030", "4020.00"),
     _gold_coin("YARIM", "Yarım Altın", "3.2060", "8040.00"),
@@ -520,6 +545,26 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         risk_level=1,
     ),
     _fund("GTA", "Garanti Portföy Altın Fonu", AssetSubType.GOLD_FUND, "1.078670"),
+    # Ölçeğin tepesi: evrendeki TEK serbest fon.
+    #
+    # Ölçüldü (26 Ağustos 2026): 256 gün kesintisiz veri, açıklanmayan
+    # sıçrama YOK, %22,8 yıllık volatilite. base_price serinin ilk gerçek
+    # günü (20.08.2025) kapanışı.
+    #
+    # Seviyesi 7 çünkü SERBEST fondur (nitelikli yatırımcı, portföy
+    # sınırlamalarından muafiyet, kaldıraç/açığa satış izni) — içeriği
+    # hisse olduğu için değil. Gerekçenin tamamı config.py'de.
+    #
+    # Rakamı da aynı yöne bakıyor (%22,8, ABD hisseleriyle aynı bantta),
+    # yani ölçeğin tepesinde ters bir görüntü oluşmuyor. Aday havuzundaki
+    # arbitraj fonları (%2,1-4,7) bu yüzden seçilmedi.
+    _fund(
+        "BHE",
+        "Ak Portföy Birinci Hisse Senedi Serbest Fon",
+        AssetSubType.HEDGE_FUND,
+        "1.451871",
+        risk_level=7,
+    ),
     # --- Nakit ---
     #
     # `AssetClass.CASH` altında VARLIK YOK, bilerek. Nakit artık yalnızca
