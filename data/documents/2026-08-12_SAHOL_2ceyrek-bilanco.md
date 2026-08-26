@@ -40,6 +40,15 @@ trilyon TL seviyesinde gerçekleşti.
 Sabancı Holding ve iştiraklerinin 2026 yılının ilk yarısındaki toplam
 yatırım harcaması 65,8 milyar TL oldu.
 
+## Nakit akış tablosu
+
+Holdingin ilk yarı nakit akış tablosuna göre işletme faaliyetlerinden
+yaratılan nakit akışı 30,7 milyar TL oldu; bankacılık dışı operasyonel
+nakit akışı ikinci çeyrekte 20 milyar TL seviyesinde güçlü seyrini
+korudu. Solo net nakit pozisyonu, Akçansa hisse satışından elde edilen
+gelirin katkısıyla tüm zamanların en yükseği olan 35,3 milyar TL'ye
+ulaştı.
+
 ## Değerlendirme
 
 Geçen yılın aynı döneminde kaydedilen zarardan bu yıl kâra geçiş,

@@ -15,7 +15,13 @@ yedek olarak duruyor.
 import re
 from functools import lru_cache
 
-_TURKISH_FOLD_MAP = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u"})
+# "â" da dahildir ("kâr" -> "kar"): eksikliği ölçümle doğrulandı (bkz.
+# rag/retriever.py'deki aynı düzeltme) — "kârı" hiç foldlanmadığı için
+# "brüt kârı ne kadar" gibi bir içerik sorusu, _ICERIK_KELIMELERI_RE'deki
+# "brut kar" kalıbıyla eşleşemeyip yanlışlıkla fiyat sorgusu sayılıyordu.
+_TURKISH_FOLD_MAP = str.maketrans(
+    {"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a", "î": "i", "û": "u"}
+)
 
 
 def _normalize(text: str) -> str:
@@ -233,6 +239,23 @@ def _icerir(normalized: str, kaliplar: tuple[str, ...]) -> bool:
     return any(k in normalized for k in kaliplar)
 
 
+# Bir sorguda BIST ticker'ı ("ARCLK", "PGSUS", "KCHOL" gibi kodun kendisi —
+# şirket adı değil) VE "ne kadar" gibi genel bir kalıp birlikte geçtiğinde,
+# bu iki şart tek başına PİYASA FİYATI sorusu sanılıyordu (ölçümle
+# doğrulandı, 2026-08-26): "ARCLK'nin serbest nakit akışı ne kadar?" ve
+# "PGSUS'un brüt kârı ne kadar oldu?" gibi sorular — ikisi de RAG'daki
+# bilanço dokümanlarında YANITI olan içerik soruları — fiyat/tarihçe
+# tool'una yönlendirilip "kayıt bulunamadı" ya da alakasız güncel fiyat
+# döndürüyordu. Sorguda bilinen bir bilanço/finansal-tablo kalemi geçiyorsa
+# bu artık şirketin KENDİ PİYASA FİYATI değil, RAPORLANMIŞ bir rakam
+# soruluyor demektir — fiyat_niyeti devre dışı kalır, RAG yoluna düşer.
+_ICERIK_KELIMELERI_RE = re.compile(
+    r"\b(net kar|brut kar|faaliyet kari|favok|ciro|hasilat|nakit akis|"
+    r"temettu|marj|segment|ortaklik yapisi|sermaye artir|yonetim kurulu|"
+    r"kurumsal olay|bilanco|gelir tablosu)\w*"
+)
+
+
 def fiyat_niyeti(query: str) -> dict | None:
     """Fiyat sorusuysa `{"symbols": [...], "history": bool}`, değilse None.
 
@@ -242,6 +265,9 @@ def fiyat_niyeti(query: str) -> dict | None:
     ("dolar hakkında haberler"). İkisi birlikteyken niyet nettir.
     """
     normalized = _normalize(query)
+    if _ICERIK_KELIMELERI_RE.search(normalized):
+        return None
+
     semboller = varlik_tespit_et(query)
     if not semboller:
         return None

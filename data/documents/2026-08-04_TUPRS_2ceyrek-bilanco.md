@@ -31,6 +31,17 @@ değerlendirmesinden kaynaklanıyor.
 İlk yarı net kârı 49,847 milyar TL olarak açıklandı; bu, 2025 yılının
 aynı dönemindeki 11,872 milyar TL'ye göre yüzde 291 artışa denk geliyor.
 
+## Nakit akış tablosu
+
+İlk yarıda işletme faaliyetlerinden sağlanan net nakit akışı 132,4
+milyar TL olarak gerçekleşti; dönem sonu nakit ve nakit benzerleri 164,6
+milyar TL'ye ulaştı. Serbest nakit akışı ilk yarıda 120,5 milyar TL
+(yaklaşık 2,28 milyar dolar) olurken, yalnızca ikinci çeyrekte 118
+milyar TL oldu (2025 yılının aynı çeyreğinde 36,5 milyar TL idi). Şirket
+ikinci çeyrekte 246 milyon dolar yatırım harcaması yaptı. 30 Haziran
+itibarıyla net nakit pozisyonu, birinci çeyrek sonundaki 79,9 milyar
+TL'den 130,7 milyar TL'ye yükseldi.
+
 ## Not
 
 Bu belge, KAP'a yapılan bildirimin haber sitelerine yansıyan

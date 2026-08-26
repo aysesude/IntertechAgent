@@ -38,6 +38,15 @@ yüzde 12 artışla 1,431 trilyon TL'ye yükseldi. Beklenen kredi zararı
 karşılıkları bir önceki çeyreğe göre (89,607 milyar TL) artarak 105,509
 milyar TL'ye çıktı.
 
+## Nakit akış tablosu
+
+2026 2. çeyrekte işletme faaliyetlerinden net nakit akışı 168,56 milyar
+TL negatif gerçekleşti. Yatırım faaliyetlerinden 90,33 milyar TL,
+finansman faaliyetlerinden ise 291,67 milyar TL pozitif nakit akışı
+sağlandı; finansman tarafındaki artışta mevduat hesaplarındaki net
+artış belirleyici oldu. Bu kalemlerin bileşkesiyle dönem içindeki net
+nakit değişimi 211,91 milyar TL pozitif olarak gerçekleşti.
+
 ## Not
 
 Rakamlar konsolide finansal tablolara aittir. Bu belge KAP bildiriminin

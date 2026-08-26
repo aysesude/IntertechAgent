@@ -36,6 +36,14 @@ geriledi.
 Toplam varlıklar 440,012 milyar TL, finansal borçlar 95,272 milyar TL,
 özkaynaklar ise 152,835 milyar TL olarak açıklandı.
 
+## Nakit akış tablosu
+
+İlk yarı (Ocak-Haziran 2026) döneminde işletme faaliyetlerinden nakit
+akışı 13,95 milyar TL negatif olarak gerçekleşti. Buna karşılık,
+finansman faaliyetlerinden 39,55 milyar TL pozitif nakit akışı
+sağlandı. Yatırım faaliyetlerinden nakit akışına ilişkin ayrıntılı
+rakam kamuya açık kaynaklarda yer almıyor.
+
 ## Değerlendirme
 
 Net kârdaki sert yıllık gerileme ve daralan brüt marj, artan maliyet

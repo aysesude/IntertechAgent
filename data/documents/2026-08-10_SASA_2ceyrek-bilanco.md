@@ -36,6 +36,15 @@ Satış gelirleri yüzde 31, faaliyet kârı ise yüzde 522 arttı; 2025
 yılının aynı döneminde kaydedilen 11,6 milyar TL zarardan belirgin bir
 toparlanma yaşandı.
 
+## Nakit akış tablosu
+
+Şirketin ilk yarı nakit akış tablosuna göre işletme faaliyetlerinden
+nakit akışı 3.626 milyon TL negatif gerçekleşti; geçen yılın aynı
+döneminde bu kalem 18.439 milyon TL pozitifti. Ödenen faiz aynı
+dönemde 4,6 milyar TL'den 10,7 milyar TL'ye yükseldi. Buna karşın
+negatif serbest nakit akımı, güçlü operasyonel kârlılığın etkisiyle
+yarı yarıya azalarak 9,5 milyar TL'ye geriledi.
+
 ## Değerlendirme
 
 Operasyonel tarafta güçlü bir iyileşme görülse de, ikinci çeyrekte
