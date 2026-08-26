@@ -35,6 +35,14 @@ Migros Grubu CFO'su Cem Doğan, 2026 yılının tamamında 180-200 yeni
 mağaza açmayı ve yüzde 5-7 konsolide satış büyümesi elde etmeyi
 hedeflediklerini açıkladı.
 
+## Nakit akış tablosu
+
+Şirketin ilk yarı nakit akış tablosuna göre işletme faaliyetlerinden
+nakit akışı yıllık yüzde 6,5 artışla 17.837 milyon TL'ye yükseldi.
+Serbest nakit akışı 11.540 milyon TL olarak gerçekleşirken, kira
+ödemeleri sonrası serbest nakit akışı 5.766 milyon TL'ye ulaştı. Net
+Borç/FAVÖK oranı 0,21x seviyesinde gerçekleşti.
+
 ## Değerlendirme
 
 Yatırım harcamalarının önemli bir bölümü yeni mağaza açılışlarının

@@ -39,7 +39,8 @@ avroya yükseldi.
 
 TAV Havalimanları, yılın ilk yarısında 528 milyon 152 bin TL net kâr
 açıkladı. Geçen yılın aynı döneminde şirket 1 milyar 929 milyon 875 bin
-TL net zarar bildirmişti.
+TL net zarar bildirmişti. İlk yarıda esas faaliyet kârı yüzde 23
+artışla 7 milyar 964 milyon TL'ye yükseldi.
 
 ## Değerlendirme
 

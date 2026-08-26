@@ -35,6 +35,17 @@ konsolide gelirleri 142,2 milyar TL olarak gerçekleşti.
 ulaştı. Fiber ağ uzunluğu 571 bin kilometreye, fiber hane kapsaması
 ise 34,6 milyon haneye çıktı.
 
+## Nakit akış tablosu
+
+İş Yatırım'ın 2. çeyrek mali tablo analizine göre, Türk Telekom 2026
+yılının ilk yarısında (Ocak-Haziran) 47,6 milyar TL negatif serbest nakit
+akışı üretti. Bu gerileme büyük ölçüde ilk 5G lisans taksidi ve buna
+bağlı KDV ödemelerinden kaynaklandı; bu kalemler hariç tutulduğunda
+kaldıraçsız serbest nakit akışı pozitif 1,7 milyar TL olarak
+hesaplanıyor. Söz konusu ödemelerin etkisiyle şirketin nakit pozisyonu
+2025 yıl sonundaki 78,8 milyar TL'den ilk yarı sonunda 25,6 milyar TL'ye
+geriledi.
+
 ## Değerlendirme
 
 Gelir ve kârlılıktaki çift haneli büyüme, abone ve altyapı

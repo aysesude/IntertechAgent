@@ -35,6 +35,12 @@ Güçlü ikinci çeyrek sonuçlarının ardından Ülker hissesi yüzde 6,7
 değer kazandı. Çok sayıda aracı kurum, hisse için 126 TL ile 209,26 TL
 arasında değişen hedef fiyatlar belirledi.
 
+## Nakit akış tablosu
+
+İkinci çeyrekte serbest nakit akışı, esas olarak işletme sermayesi
+yönetimindeki iyileşmenin etkisiyle, geçen yılın aynı dönemindeki
+(2Ç25) 3,6 milyar TL düzeyinden 2Ç26'da 5,9 milyar TL'ye yükseldi.
+
 ## Değerlendirme
 
 İkinci çeyrekteki güçlü kâr sürprizine rağmen ilk yarı toplam net

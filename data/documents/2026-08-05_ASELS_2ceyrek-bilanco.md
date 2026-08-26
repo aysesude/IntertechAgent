@@ -35,6 +35,19 @@ yüzde 26 seviyesine ulaştı (1 puanlık iyileşme). Brüt kâr marjı ilk
 yarıda yüzde 32 ile yıllık bazda yatay seyretti. Şirketin sipariş defteri
 yılın ilk yarısı sonunda 23,2 milyar dolar seviyesine yükseldi.
 
+## Nakit akış tablosu
+
+İş Yatırım'ın 2. çeyrek kâr analizine göre, 2026 2. çeyrekte operasyonel
+nakit akışı 8,93 milyar TL olarak gerçekleşti (2025 2. çeyrek: 12,1 milyar
+TL). Şirketin 2026 2. çeyrekte yaptığı yatırım harcaması (capex) 19,0
+milyar TL'ye yükseldi (2025 2. çeyrek: 8,85 milyar TL); yüksek yatırım
+harcamaları nedeniyle serbest nakit akışı 2026 2. çeyrekte negatif 10,1
+milyar TL'ye geriledi (2025 2. çeyrek: pozitif 3,25 milyar TL). Zayıf
+serbest nakit akışı, çeyreksel mevsimsellik ile Oğulbey yatırımına yönelik
+yüksek sermaye harcamalarını yansıtıyor. Net borç pozisyonu 2026 2. çeyrek
+sonunda 33,8 milyar TL'ye yükseldi (2026 1. çeyrek sonu: 23,6 milyar TL;
+net borç/FAVÖK: 0,55x).
+
 ## Not
 
 Rakamlar konsolide finansal tablolara aittir. Bu belge KAP bildiriminin
