@@ -1,6 +1,5 @@
 import type { ApiRiskAssessment, ApiRiskLevel } from "@/api/risk";
 import type {
-  ApiAssetClass,
   ApiHoldingsValuation,
   ApiPerformanceResult,
   ApiPortfolioSummary,
@@ -10,6 +9,7 @@ import type {
 } from "@/api/portfolio";
 import { DARK_ASSET_CLASS_COLORS } from "@/data/assetColors";
 import { formatDateDMY, formatSignedTRY, formatTRY } from "@/utils/format";
+import { ASSET_CLASS_IDS, ASSET_CLASS_LABELS } from "@/adapters/shared";
 import type {
   AssetAllocationSlice,
   AssetClassId,
@@ -35,31 +35,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Varlık sınıfı eşlemesi
 // ---------------------------------------------------------------------------
-
-/**
- * Backend'in 5 varlık sınıfı ↔ arayüz paletindeki kimlikler.
- *
- * Arayüz paletinde ayrıca `crypto` var; backend'de karşılığı YOK ve adapter
- * bunu asla üretmez. Palet dosyasında durması zararsız (ileride sınıf
- * eklenirse rengi hazır), ama buradan çıkmadığı sürece ekranda görünmez.
- */
-const ASSET_CLASS_IDS: Record<ApiAssetClass, AssetClassId> = {
-  stock: "stocks",
-  precious_metal: "precious",
-  currency: "fx",
-  bond: "bond",
-  cash: "cash",
-};
-
-const ASSET_CLASS_LABELS: Record<ApiAssetClass, string> = {
-  stock: "Hisse Senedi",
-  precious_metal: "Kıymetli Madenler",
-  currency: "Döviz",
-  // "Tahvil" DEĞİL: bu sınıfta doğrudan devlet tahvili yok, hepsi TEFAS
-  // borçlanma araçları fonu (ve bir para piyasası fonu).
-  bond: "Borçlanma Araçları",
-  cash: "Nakit",
-};
 
 // Donut'un açık tema renkleri. Koyu tema paleti tek kaynaktan
 // (`DARK_ASSET_CLASS_COLORS`) okunuyor; ikisi ayrı çünkü koyu temada

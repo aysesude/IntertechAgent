@@ -57,10 +57,16 @@ export function AssetClassCards({ assetClasses }: AssetClassCardsProps) {
         // Koyu temada Dashboard'daki Varlık Dağılımı donut'uyla aynı kaynaktan
         // (bkz. src/data/assetColors.ts) — iki sayfa arasında renk sapması olmasın.
         const barColor = isDark ? DARK_ASSET_CLASS_COLORS[ac.icon].color : ASSET_BAR_COLORS[ac.icon];
-        const positive = ac.returnPct >= 0;
+        // Sınıf getirisi holdings verisinden türetiliyor (bkz.
+        // adapters/portfolio.ts); o uç düşerse `null` gelir — "hesaplanamadı"
+        // demek, 0 yazmak yanlış bir "değişmedi" iddiası olurdu (AK 5.5).
+        const returnPct = ac.returnPct;
+        const hasReturn = returnPct !== null;
+        const positive = hasReturn && returnPct >= 0;
         // Portföyde pozisyonu bulunmayan bir sınıf boş bırakılmak yerine
         // 0/"—" ile açıkça gösterilir (AK-1.2).
         const notHeld = ac.value === 0;
+        const returnText = notHeld ? "Portföyde yok" : hasReturn ? formatPct(returnPct) : "hesaplanamadı";
         return (
           <Card key={ac.id} className="p-5">
             <div className="mb-3.5 flex items-center gap-2.5">
@@ -70,8 +76,11 @@ export function AssetClassCards({ assetClasses }: AssetClassCardsProps) {
             <div className={`font-display text-[25px] font-bold tracking-[-0.6px] ${notHeld ? "text-ink-faint" : ""}`}>
               {ac.formattedValue}
             </div>
-            <div className="mt-2 text-[13px] font-semibold" style={{ color: notHeld ? INK_FAINT : positive ? POSITIVE : NEGATIVE }}>
-              {notHeld ? "Portföyde yok" : formatPct(ac.returnPct)} <span className="font-medium text-ink-faint">· {ac.weightPct}% ağırlık</span>
+            <div
+              className="mt-2 text-[13px] font-semibold"
+              style={{ color: notHeld || !hasReturn ? INK_FAINT : positive ? POSITIVE : NEGATIVE }}
+            >
+              {returnText} <span className="font-medium text-ink-faint">· {ac.weightPct}% ağırlık</span>
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line2">
               <div
