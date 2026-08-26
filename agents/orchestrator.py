@@ -61,10 +61,6 @@ AGENT_NODES = {
     "risk": "risk_agent",
 }
 
-# Merge prompt'u bu metni istiyor; LLM düşerse kod tarafından garanti edilir
-# (CLAUDE.md §4). Kısa biçim, prompt'takiyle birebir aynı.
-_DISCLAIMER = "Bu bir yatırım tavsiyesi değildir."
-
 
 def _mesaj(anahtar: str, varsayilan: str) -> str:
     """Kullanıcıya gösterilen metni scope.yaml'dan okur.
@@ -396,8 +392,6 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
     # boş çıktıyı değil — iki durumu da aynı düşüş kapatıyor.
     if not final_answer.strip():
         final_answer = "\n\n".join(successful)
-        if _DISCLAIMER not in final_answer:
-            final_answer += f"\n\n{_DISCLAIMER}"
         writer({"delta": final_answer})
 
     return {"final_answer": final_answer}
