@@ -26,9 +26,14 @@ def _normalize(text: str) -> str:
 # `varlik_tespit_et`): "çeyrek altın" ile "altın" aynı cümlede geçer ve
 # spesifik olan kazanmalıdır.
 #
-# Yalnızca kur ve kıymetli maden burada: hisse kodları zaten sembolün
-# kendisiyle yazılıyor (THYAO) ve şirket adları `market_query` tarafında
-# çözülüyor.
+# BIST hisseleri burada YOK: kodları zaten sembolün kendisiyle yazılıyor
+# (THYAO) ve şirket adları `market_query` tarafında çözülüyor — oradaki
+# `company_mappings.json` 126 yerli şirketi tanıyor.
+#
+# ABD hisseleri ise oraya girmiyor (RAG'da dokümanları yok) ve Türk kullanıcı
+# bunları koduyla değil ADIYLA yazıyor: "apple hissesi ne kadar" cümlesinde
+# `AAPL` geçmiyor. Bu yüzden yabancı şirket adları takma ad olarak buraya
+# eklendi; sembolün kendisi zaten `_sembol_kumesi` taramasında bulunuyor.
 _TAKMA_ADLAR: dict[str, str] = {
     # Döviz
     "dolar": "USDTRY",
@@ -60,6 +65,35 @@ _TAKMA_ADLAR: dict[str, str] = {
     "gumus": "XAGTRY",
     "gram platin": "XPTTRY",
     "platin": "XPTTRY",
+    # ABD hisseleri — şirket adıyla.
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "nvidia": "NVDA",
+    "google": "GOOGL",
+    "alphabet": "GOOGL",
+    "amazon": "AMZN",
+    "meta platforms": "META",
+    "facebook": "META",
+    "tesla": "TSLA",
+    "jpmorgan": "JPM",
+    "jp morgan": "JPM",
+    "visa": "V",
+    "mastercard": "MA",
+    "berkshire": "BRK-B",
+    "berkshire hathaway": "BRK-B",
+    "johnson": "JNJ",
+    "eli lilly": "LLY",
+    "lilly": "LLY",
+    "unitedhealth": "UNH",
+    "coca cola": "KO",
+    "cocacola": "KO",
+    "kola": "KO",
+    "procter": "PG",
+    "walmart": "WMT",
+    "mcdonalds": "MCD",
+    "mcdonald": "MCD",
+    "exxon": "XOM",
+    "caterpillar": "CAT",
 }
 
 # Fiyat/kur sorusunu ele veren kalıplar.
@@ -68,6 +102,11 @@ _FIYAT_KALIPLARI = (
     "kac tl",
     "kac lira",
     "kac para",
+    # ABD hisseleri evrene girince doğal soru hâline geldi ("AAPL kaç
+    # dolar?"). Kalıbın kendisi `varlik_tespit_et` içinde metinden
+    # SİLİNİYOR, aksi hâlde içindeki "dolar" USDTRY takma adına eşleşir ve
+    # kullanıcı bir hisse sorarken cevaba kur da eklenirdi.
+    "kac dolar",
     "fiyati",
     "fiyat",
     "kuru",
@@ -109,6 +148,19 @@ _GECMIS_KALIPLARI = (
 _BELIRSIZ_SEMBOLLER = {"CEYREK", "YARIM"}
 
 
+# Küçültülünce gündelik Türkçeyle çakışan semboller: çıplak taramaya ham
+# metinde BÜYÜK HARFİYLE girerler, küçük harfli hâlleriyle değil. Aynı çözüm
+# `market_query.sirket_tespit_et` içinde MAVI/ESEN/EFOR için de kullanılıyor.
+#
+# `V` (Visa) tek harf — neredeyse her cümlede sahte eşleşme üretirdi.
+# `META` finans Türkçesinde "emtia" anlamında kullanılır; "meta fiyatları
+# arttı" cümlesi Meta Platforms sorgusu değildir.
+#
+# İkisi de takma adıyla ("visa", "meta platforms", "facebook") her yazımda
+# bulunabildiği için kısıtlama erişimi kapatmıyor.
+_BUYUK_HARF_SEMBOLLER = {"V", "META"}
+
+
 @lru_cache(maxsize=1)
 def _sembol_kumesi() -> set[str]:
     """Varlık evrenindeki tüm semboller (THYAO, USDTRY, ...).
@@ -136,6 +188,13 @@ def varlik_tespit_et(query: str) -> list[str]:
     çeyrek altın soran kullanıcıya gram altın fiyatı dönerdi.
     """
     normalized = _normalize(query)
+
+    # "kaç dolar" bir FİYAT KALIBIDIR, varlık adı değil: içindeki "dolar"
+    # takma ad taramasına girmemeli (bkz. `_FIYAT_KALIPLARI`). Kalıp
+    # eşleşmesi `fiyat_niyeti` içinde ham `normalized` üzerinde yapıldığı
+    # için burada silmek o tarafı etkilemiyor.
+    normalized = normalized.replace("kac dolar", " ")
+
     bulunan: list[str] = []
 
     for ad in sorted(_TAKMA_ADLAR, key=len, reverse=True):
@@ -149,9 +208,13 @@ def varlik_tespit_et(query: str) -> list[str]:
 
     # Sembolün kendisiyle yazılmış varlıklar (THYAO, USDTRY, XAUTRY...).
     for sembol in sorted(_sembol_kumesi(), key=len, reverse=True):
-        if re.search(rf"\b{re.escape(_normalize(sembol))}\b", normalized):
-            if sembol not in bulunan:
-                bulunan.append(sembol)
+        if sembol in _BUYUK_HARF_SEMBOLLER:
+            # Ham metinde, büyük harfiyle (bkz. `_BUYUK_HARF_SEMBOLLER`).
+            eslesti = bool(re.search(rf"\b{re.escape(sembol)}\b", query))
+        else:
+            eslesti = bool(re.search(rf"\b{re.escape(_normalize(sembol))}\b", normalized))
+        if eslesti and sembol not in bulunan:
+            bulunan.append(sembol)
 
     return bulunan
 

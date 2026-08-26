@@ -364,8 +364,10 @@ def test_ak_5_7_fx_conversion(seeded):
         session.add(portfolio)
         session.flush()
 
-        # AKE = eurobond fonu; evrendeki tek TRY dışı varlık, bu yüzden AK 5.7
-        # kur dönüşümünü egzersiz eden tek enstrüman (bkz. providers/universe).
+        # AKE = eurobond fonu, USD fiyatlanır. Evrende 21 ABD hissesi
+        # eklendikten sonra tek TRY dışı varlık DEĞİL, ama dönüşümü izole
+        # eden en sade örnek: tek varlıklı bir portföyde tutulup elde edilen
+        # TRY değerinin `fiyat * kur` olduğu doğrudan doğrulanabiliyor.
         eurobond = session.execute(select(Asset).where(Asset.symbol == "AKE")).scalar_one()
         assert eurobond.currency == "USD"
 
