@@ -45,7 +45,9 @@ class _TopKAwareFakeVectorStore(VectorStore):
 
 
 def test_retrieve_sirket_filtresi_where_olarak_gecirilir():
-    store = _FakeVectorStore([_doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS")])
+    store = _FakeVectorStore(
+        [_doc("ASELS bilançosu net kâr açıklandı", sirket="ASELS")]
+    )
     retriever = Retriever(store=store)
 
     retriever.retrieve("ASELS bilanço", sirket="ASELS")
@@ -57,7 +59,9 @@ def test_retrieve_coklu_filtre_and_ile_birlestirilir():
     store = _FakeVectorStore([])
     retriever = Retriever(store=store)
 
-    retriever.retrieve("bilanço sorgusu", sirket="ASELS", donem="2026-Q2", tur="bilanco")
+    retriever.retrieve(
+        "bilanço sorgusu", sirket="ASELS", donem="2026-Q2", tur="bilanco"
+    )
 
     assert store.son_where == {
         "$and": [{"sirket": "ASELS"}, {"donem": "2026-Q2"}, {"tur": "bilanco"}]
@@ -96,8 +100,16 @@ def test_retrieve_son_filtre_yanlis_sirketi_eler():
 def test_retrieve_donem_listesi_ile_son_ceyrekler_filtrelenir():
     store = _FakeVectorStore(
         [
-            _doc("ASELS 2026 Ç2 bilançosu net kâr açıklandı", sirket="ASELS", donem="2026-Q2"),
-            _doc("ASELS 2025 Ç1 bilançosu net kâr açıklandı", sirket="ASELS", donem="2025-Q1"),
+            _doc(
+                "ASELS 2026 Ç2 bilançosu net kâr açıklandı",
+                sirket="ASELS",
+                donem="2026-Q2",
+            ),
+            _doc(
+                "ASELS 2025 Ç1 bilançosu net kâr açıklandı",
+                sirket="ASELS",
+                donem="2025-Q1",
+            ),
         ]
     )
     retriever = Retriever(store=store)
@@ -115,7 +127,9 @@ def test_retrieve_donem_ve_donem_listesi_birlikte_verilemez():
     retriever = Retriever(store=store)
 
     with pytest.raises(ValueError):
-        retriever.retrieve("soru", donem="2026-Q2", donem_listesi=["2026-Q1", "2026-Q2"])
+        retriever.retrieve(
+            "soru", donem="2026-Q2", donem_listesi=["2026-Q1", "2026-Q2"]
+        )
 
 
 def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
@@ -127,7 +141,9 @@ def test_retrieve_serbest_metinde_yanlis_sirket_tamamen_elenir():
     etiketli sonuçlar sıralamada geriye atılmakla kalmaz, tamamen elenir."""
     store = _FakeVectorStore(
         [
-            _doc("ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3),
+            _doc(
+                "ASELSAN ikinci çeyrek net kâr açıkladı", sirket="ASELS", distance=0.3
+            ),
             _doc("THYAO ikinci çeyrek net kâr açıkladı", sirket="THYAO", distance=0.2),
             _doc(
                 "Piyasada ASELSAN dahil savunma sanayi şirketlerinin ikinci çeyrek "
@@ -167,7 +183,9 @@ def test_retrieve_sirket_eslesmesi_yoksa_hicbir_sey_elenmez():
     )
     retriever = Retriever(store=store)
 
-    results = retriever.retrieve("BIST 100 endeksindeki şirketlerin net kâr açıklamaları")
+    results = retriever.retrieve(
+        "BIST 100 endeksindeki şirketlerin net kâr açıklamaları"
+    )
 
     assert {r["metadata"]["sirket"] for r in results} == {"ASELS", "THYAO"}
 
@@ -181,7 +199,11 @@ def test_retrieve_buyuk_i_harfi_kelimeyi_parcalamaz():
     doğrular."""
     store = _FakeVectorStore(
         [
-            _doc("BİM Birleşik Mağazalar hedef fiyat açıklandı", sirket="BIMAS", distance=0.3),
+            _doc(
+                "BİM Birleşik Mağazalar hedef fiyat açıklandı",
+                sirket="BIMAS",
+                distance=0.3,
+            ),
             _doc(
                 "THYAO için bilanço sonrası hedef fiyat açıklandı",
                 sirket="THYAO",
@@ -614,7 +636,7 @@ def test_retrieve_uydurma_sirket_kurumsal_olay_kelimeleriyle_bulunmus_sayilmaz()
 
 
 def test_halkb_ticker_onegi_halka_kelimesiyle_yanlislikla_eslesmez():
-    """"HALKB" (Halkbank) tickerının foldlanmış hali ("halkb") ile "halka"
+    """ "HALKB" (Halkbank) tickerının foldlanmış hali ("halkb") ile "halka"
     (kamuya — "halka arz"/"halka açık") kelimesi 4 harflik önekte ("halk")
     çakışıyor. Bu, "Aselsan"->"ASELS" gibi ANLAMLI önek örtüşmelerinden
     farklı: "halka" hiçbir bağlamda Halkbank'a işaret etmiyor. Ölçümle
@@ -700,7 +722,9 @@ def test_korpus_farkli_kelime_kullansa_da_sirket_eslesmesi_yeterli():
         ]
     )
 
-    sonuclar = Retriever(store=store).retrieve("TUPRS'un bilancosunda one cikan ne var?")
+    sonuclar = Retriever(store=store).retrieve(
+        "TUPRS'un bilancosunda one cikan ne var?"
+    )
 
     assert len(sonuclar) == 1
 
