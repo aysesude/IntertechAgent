@@ -124,25 +124,21 @@ export function ChatWidget() {
       )}
 
       <div className={`fixed bottom-6 right-4 z-[61] w-[76px] flex-col items-center gap-1.5 sm:bottom-8 sm:right-8 ${open ? "hidden sm:flex" : "flex"}`}>
-        <div className="relative h-16 w-16">
-          <span className="animate-sonarPing pointer-events-none absolute inset-0 rounded-full border-2 border-[#8FB4F2] dark:border-[#C4485A]" />
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="relative grid h-16 w-16 place-items-center overflow-hidden rounded-full border-2 border-[rgba(210,228,255,.85)] shadow-[0_10px_26px_rgba(24,72,176,.4),inset_0_2px_4px_rgba(255,255,255,.35)] transition-transform hover:scale-[1.08] dark:border-[rgba(196,72,90,.85)] dark:shadow-[0_10px_26px_rgba(122,43,57,.45),inset_0_2px_4px_rgba(255,255,255,.12)]"
-            style={{
-              background: isDark
-                ? "radial-gradient(circle at 32% 28%, #C4485A, #7A2B39 62%, #5C2129)"
-                : "radial-gradient(circle at 32% 28%, #3E7CE8, #1848B0 62%, #123C8E)",
-            }}
-            aria-label="Sohbeti aç/kapat"
-          >
-            {open ? (
-              <XIcon size={24} className="text-white" />
-            ) : (
-              <AssistantIcon size={30} strokeWidth={2} className="text-white" />
-            )}
-          </button>
-        </div>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          // Sayfanın camsı kart yüzeyiyle (bkz. Card.tsx CARD_SURFACE_CLASS)
+          // aynı şeffaflık/blur/gölge seviyesi — marka rengi zeminde
+          // gradyan/parlama yerine ince bir ton olarak kalıyor.
+          className="grid h-16 w-16 place-items-center rounded-full border border-[rgba(15,23,42,0.08)] shadow-[0_10px_30px_-20px_rgba(15,23,42,0.12)] backdrop-blur-[16px] transition-transform hover:scale-[1.04] dark:border-white/[0.08] dark:shadow-[0_10px_30px_-18px_rgba(0,0,0,0.55)]"
+          style={{ backgroundColor: isDark ? "rgba(196,72,90,0.82)" : "rgba(37,87,232,0.68)" }}
+          aria-label="Sohbeti aç/kapat"
+        >
+          {open ? (
+            <XIcon size={24} className="text-white" />
+          ) : (
+            <AssistantIcon size={30} strokeWidth={2} className="text-white" />
+          )}
+        </button>
         <span className="text-[11px] font-semibold text-white [text-shadow:0_1px_3px_rgba(15,17,21,.25)]">Asistan</span>
       </div>
     </>
