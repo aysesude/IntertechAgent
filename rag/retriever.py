@@ -330,6 +330,16 @@ _GENERIC_FINANCE_TERMS = {
     # artırımı ne zaman oldu" gibi sorgularda sermaye/artırımı jenerikleştikten
     # SONRA tek kalan ayırt edici kelime oluyordu.
     "oldu",
+    # "Nakit akış tablosu" başlığı ve boilerplate cümlesi 2026-08-26'da 23
+    # bilanço dokümanına eklendi — "temettü"/"halka arz" ile aynı sınıfta
+    # jenerikleşti. Ölçümle doğrulandı: "BİM'in nakit akış tablosu nasıl?"
+    # (BIMAS için bu içerik hiç eklenmedi) sorgusu "nakit"/"akış"/"tablosu"
+    # üzerinden YKBNK/GARAN/PGSUS/EKGYO gibi tamamen alakasız şirketleri VE
+    # TFRS referans dokümanını "bulundu" saydırıp "Kaynaklar" listesine
+    # sokuyordu — cevabın kendisi doğru şekilde "bulunamadı" dese bile.
+    "nakit",
+    "akis",
+    "tablosu",
     # "KAP" (Kamuyu Aydınlatma Platformu) hemen her dokümanın kaynak alanında
     # veya metninde geçiyor — 31 profilin/bilançonun neredeyse tamamı KAP'a
     # atıf yapıyor. "gelişme" de aynı sınıfta genel bir haber/olay kelimesi.
