@@ -5,6 +5,7 @@ import {
   type ApiHoldingsValuation,
   type ApiPortfolioSummary,
 } from "@/api/portfolio";
+import { fetchRiskAssessment, type ApiRiskAssessment } from "@/api/risk";
 import { isApiConfigured } from "@/api/client";
 import { useCurrentUserId } from "@/auth/AuthContext";
 import { toPortfolioPageData } from "@/adapters/portfolio";
@@ -25,6 +26,12 @@ interface TemelVeri {
   ozet: ApiPortfolioSummary;
   /** `/holdings` düşerse `null`; kart/tablo veri yokken de çizilir. */
   holdings: ApiHoldingsValuation | null;
+  /**
+   * Yalnızca Pozisyonlar tablosundaki risk sütunu için (bkz.
+   * adapters/portfolio.ts:toHolding). Düşerse `null` — sayfa yine çizilir,
+   * risk sütunu "—" kalır; başka hiçbir alan buna bağımlı değil.
+   */
+  risk: ApiRiskAssessment | null;
 }
 
 /**
@@ -78,10 +85,13 @@ export function usePortfolioData(): PortfolioState {
       // Opsiyonel: düşerse `null` ile devam edilir, kartlar/tablo boş
       // kırılımla çizilir (dashboard.ts'teki holdings ile aynı yaklaşım).
       fetchHoldings(kullanici).catch(() => null),
+      // Yalnızca risk sütunu için (bkz. TemelVeri.risk) — düşerse `null`,
+      // sayfanın geri kalanı bundan bağımsız çizilmeye devam eder.
+      fetchRiskAssessment(kullanici).catch(() => null),
     ])
-      .then(([ozet, holdings]) => {
+      .then(([ozet, holdings, risk]) => {
         if (nesil.current !== benimNesil) return;
-        const yeniTemel = { ozet, holdings };
+        const yeniTemel = { ozet, holdings, risk };
         setTemel(yeniTemel);
         paylasilanOnbellek = { userId: kullanici, temel: yeniTemel };
         setError(null);
@@ -97,7 +107,7 @@ export function usePortfolioData(): PortfolioState {
   const canliVeri = temel !== null;
 
   const data: PortfolioPageData = canliVeri
-    ? toPortfolioPageData({ summary: temel.ozet, holdings: temel.holdings })
+    ? toPortfolioPageData({ summary: temel.ozet, holdings: temel.holdings, risk: temel.risk })
     : canli
       ? BOS_PORTFOLIO
       : mockPortfolioPage;

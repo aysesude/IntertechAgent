@@ -25,7 +25,7 @@ export const RISK_SCALE_MAX = 7;
  * "kırmızı = yüksek risk" evrensel bir okuma ve temayla kaymamalı (aynı
  * gerekçe `utils/colors.ts` içindeki DANGER için de yazılı).
  */
-const LEVEL_COLORS = [
+export const LEVEL_COLORS = [
   "#14A44D",
   "#5FBF3B",
   "#A9C63C",

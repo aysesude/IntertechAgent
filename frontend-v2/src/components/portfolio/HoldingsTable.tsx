@@ -2,15 +2,10 @@ import { useState, type KeyboardEvent } from "react";
 import { AnimatePresence } from "framer-motion";
 import type { Holding } from "@/types/finance";
 import { Card } from "@/components/common/Card";
+import { LEVEL_COLORS } from "@/components/dashboard/RiskLevelBar";
 import { formatPct } from "@/utils/format";
 import { POSITIVE, NEGATIVE } from "@/utils/colors";
 import { HoldingReturnDetail } from "@/components/portfolio/HoldingReturnDetail";
-
-const RISK_STYLES: Record<NonNullable<Holding["risk"]>, string> = {
-  Yüksek: "text-danger bg-danger-tint",
-  Orta: "text-ink-muted bg-line2",
-  Düşük: "text-brand bg-brand-tint",
-};
 
 const FILTERS = ["Hisse", "Emtia", "Tümü"] as const;
 
@@ -116,12 +111,19 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
                     )}
                   </td>
                   <td className="py-3.5 text-right">
-                    {h.risk === null ? (
+                    {/* Risk sütunu /holdings'ten DEĞİL, /api/risk'teki
+                        asset_metrics[]'ten geliyor (bkz. adapters/portfolio.ts).
+                        7 kademeli ölçek — Risk sayfasındaki RiskAssetsTable ile
+                        aynı LEVEL_COLORS rampası, aynı anlam. */}
+                    {h.risk === null || h.riskOrdinal === null ? (
                       <span className="rounded-md bg-line2 px-2.5 py-1 text-[11.5px] font-semibold text-ink-faint">
                         —
                       </span>
                     ) : (
-                      <span className={`rounded-md px-2.5 py-1 text-[11.5px] font-semibold ${RISK_STYLES[h.risk]}`}>
+                      <span
+                        className="rounded-md px-2.5 py-1 text-[11.5px] font-semibold text-white"
+                        style={{ background: LEVEL_COLORS[h.riskOrdinal - 1] }}
+                      >
                         {h.risk}
                       </span>
                     )}

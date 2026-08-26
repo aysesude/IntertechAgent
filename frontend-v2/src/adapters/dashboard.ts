@@ -1,4 +1,4 @@
-import type { ApiRiskAssessment, ApiRiskLevel } from "@/api/risk";
+import type { ApiRiskAssessment } from "@/api/risk";
 import type {
   ApiHoldingsValuation,
   ApiPerformanceResult,
@@ -9,10 +9,16 @@ import type {
 } from "@/api/portfolio";
 import { DARK_ASSET_CLASS_COLORS } from "@/data/assetColors";
 import { formatDateDMY, formatSignedTRY, formatTRY } from "@/utils/format";
-import { ASSET_CLASS_IDS, ASSET_CLASS_LABELS } from "@/adapters/shared";
+import {
+  ASSET_CLASS_IDS,
+  ASSET_CLASS_LABELS,
+  LIGHT_ASSET_CLASS_COLORS,
+  RISK_LEVEL_LABELS,
+  RISK_LEVEL_ORDINALS,
+  RISK_PROFILE_LABELS,
+} from "@/adapters/shared";
 import type {
   AssetAllocationSlice,
-  AssetClassId,
   DashboardData,
   PerformanceRange,
   PortfolioSummary,
@@ -35,18 +41,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Varlık sınıfı eşlemesi
 // ---------------------------------------------------------------------------
-
-// Donut'un açık tema renkleri. Koyu tema paleti tek kaynaktan
-// (`DARK_ASSET_CLASS_COLORS`) okunuyor; ikisi ayrı çünkü koyu temada
-// kontrast için farklı bir ölçek kullanılıyor.
-const LIGHT_ASSET_CLASS_COLORS: Record<AssetClassId, { color: string; highlight: string }> = {
-  stocks: { color: "#1E3A8A", highlight: "#3B82F6" },
-  precious: { color: "#B45309", highlight: "#F59E0B" },
-  fx: { color: "#047857", highlight: "#10B981" },
-  bond: { color: "#5B21B6", highlight: "#8B5CF6" },
-  cash: { color: "#475569", highlight: "#94A3B8" },
-  crypto: { color: "#334155", highlight: "#64748B" },
-};
 
 /** Grafik dönemi ↔ backend penceresi. */
 export const WINDOW_BY_RANGE: Record<RangeKey, ApiWindow> = {
@@ -223,38 +217,6 @@ export function toTransactions(liste: ApiTransactionList, limit = 6): Transactio
 // ---------------------------------------------------------------------------
 // Risk
 // ---------------------------------------------------------------------------
-
-/** 7 kademeli etiketin Türkçe karşılığı. Tek kaynak burası. */
-const RISK_LEVEL_LABELS: Record<ApiRiskLevel, string> = {
-  very_low: "Çok Düşük",
-  low: "Düşük",
-  low_medium: "Düşük-Orta",
-  medium: "Orta",
-  medium_high: "Orta-Yüksek",
-  high: "Yüksek",
-  very_high: "Çok Yüksek",
-};
-
-/**
- * Kademenin SIRA numarası (1-7). `RISK_LEVEL_LABELS` ile aynı sırayı izler;
- * ikisi ayrıştığında gösterge yanlış rengi verir, bu yüzden yan yana duruyorlar.
- */
-const RISK_LEVEL_ORDINALS: Record<ApiRiskLevel, number> = {
-  very_low: 1,
-  low: 2,
-  low_medium: 3,
-  medium: 4,
-  medium_high: 5,
-  high: 6,
-  very_high: 7,
-};
-
-const RISK_PROFILE_LABELS: Record<ApiRiskAssessment["risk_profile"], string> = {
-  conservative: "Korumacı",
-  balanced: "Dengeli",
-  growth: "Büyüme",
-  aggressive: "Agresif",
-};
 
 export function toRiskSummary(risk: ApiRiskAssessment): RiskSummary {
   return {
