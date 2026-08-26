@@ -171,7 +171,10 @@ finans-danismani/
 | `GET /api/portfolio/{user_id}/benchmark` | endeks kıyaslaması |
 | `GET /api/risk/{user_id}` | risk değerlendirmesi |
 | `GET /api/users/{user_id}/risk-profile` · `PUT` | risk profili oku/güncelle |
-| `GET /api/market/news` | belge araması (RAG) |
+| `GET /api/market/indicators` | gösterge şeridi (fiyat + günlük değişim) |
+| `GET /api/market/headlines` | canlı piyasa gündemi (BloombergHT) |
+| `GET /api/market/influence/{user_id}` | pozisyonların ağırlığı ve günlük değişimi |
+| `GET /api/market/calendar/{user_id}` | hisselerinin yaklaşan KAP bildirimleri |
 
 Kullanıcıya özel her uç `Depends(get_current_user)` + `verify_user_access`
 ister — veri izolasyonu tek bir kapıdan geçer (`app/api/deps.py`).

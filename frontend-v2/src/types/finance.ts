@@ -234,26 +234,41 @@ export interface MarketIndicator {
   id: string;
   label: string;
   value: string;
-  changePct: number;
+  /** Hesaplanamadıysa `null` — 0 YAZILMAZ, "değişmedi" ile "bilinmiyor" ayrı. */
+  changePct: number | null;
+  /** Fiyatın ait olduğu gün ("22.08.2026"). Bugün olmak zorunda değil. */
+  priceDate: string;
+  /** `stale` ise fiyat beklenenden eski; arayüz bunu söylemek zorunda. */
+  stale: boolean;
 }
 
-export interface NewsItem {
+export /**
+ * Haber kartı.
+ *
+ * `tag`, `aiSummary`, `impact`, `sourceCount` NULLABLE: canlı kaynak
+ * (BloombergHT son dakika) yalnızca başlık ve zaman veriyor. Bu alanları
+ * doldurmak için model çalıştırmak, başlık dışında veri olmadığı için
+ * detay uydurmak demekti (CLAUDE.md "Uydurmama"). Arayüz "—" gösterir.
+ */
+interface NewsItem {
   id: string;
-  tag: string;
+  tag: string | null;
   isPortfolioRelevant: boolean;
   source: string;
   time: string;
   title: string;
-  aiSummary: string;
-  impact: "Düşük" | "Orta" | "Yüksek";
-  sourceCount: number;
+  aiSummary: string | null;
+  impact: "Düşük" | "Orta" | "Yüksek" | null;
+  sourceCount: number | null;
 }
 
 export interface InfluenceRow {
   id: string;
   name: string;
-  changePct: number;
-  weightPct: number;
+  /** Günlük değişim; fiyat geçmişi yoksa `null`. */
+  changePct: number | null;
+  /** Portföy ağırlığı; fiyatı bulunamayan varlıkta `null`. */
+  weightPct: number | null;
 }
 
 export interface CalendarEvent {

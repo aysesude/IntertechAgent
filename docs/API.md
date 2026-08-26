@@ -546,9 +546,108 @@ Oturumdaki tüm mesajları kronolojik sırada döner:
 ```
 404 → `{"detail": "Chat session not found for session_id ..."}`
 
-### İskelet route'lar
+## Piyasa uçları
 
-- `GET /api/market/news` → `501` + `{"detail": "TODO: ..."}`
+Piyasa ekranını besler. Üç uç, üç ayrı kaynak.
+
+### `GET /api/market/indicators`
+
+Gösterge şeridi: BIST 100, USD/TRY, EUR/TRY, gram altın. Kaynak `price_history`
+tablosu; token ister ama kullanıcıya özel değildir.
+
+```json
+{
+  "as_of": "2026-08-24",
+  "indicators": [
+    {
+      "symbol": "XU100", "name": "BIST 100 Endeksi", "asset_class": "stock",
+      "price": 14514.82, "change_percent": 0.82,
+      "price_date": "2026-08-22", "source": "yfinance", "stale": false
+    }
+  ],
+  "missing_symbols": []
+}
+```
+
+`change_percent` bir önceki **işlem** gününe göredir (takvim günü değil —
+piyasa hafta sonu kapalı). Seride tek nokta varsa `null` döner, `0` DEĞİL:
+"değişmedi" ile "hesaplanamadı" farklı şeylerdir (AK 5.5). `price_date` ve
+`source` her satırda döner ve arayüz ikisini de göstermek zorundadır (AK 5.1,
+5.3).
+
+### `GET /api/market/headlines`
+
+Genel piyasa gündemi — istek anında BloombergHT son dakika akışından **canlı**
+çekilir, veritabanına yazılmaz. Sağlayıcı 5 dakikalık önbellek tutar ve bu
+önbellek sohbet tarafındaki `get_live_market_headlines` tool'uyla paylaşılır.
+
+```json
+{
+  "headlines": [
+    { "title": "TCMB: REEL SEKTÖRÜN NET DÖVİZ POZİSYONU...", "published_at": "2026-08-24T14:38:00" }
+  ],
+  "source_name": "BloombergHT",
+  "source_url": "https://www.bloomberght.com/sondakika"
+}
+```
+
+Madde başına **URL YOKTUR**: akıştaki maddelerin ayrı adresi bulunmuyor
+(ölçüldü), kaynak listenin tamamına giden tek adrestir. Özet, etki seviyesi
+ve kaynak sayısı da yoktur — kaynak yalnızca başlık ve zaman veriyor,
+üretmek uydurma olurdu.
+
+503 → `{"detail": "Piyasa gündemine şu an ulaşılamıyor."}`. Boş liste
+DÖNMEZ: "ulaşılamadı" ile "haber yok" aynı şey değil.
+
+### `GET /api/market/influence/{user_id}`
+
+Kullanıcının en ağırlıklı pozisyonları ve günlük değişimleri. Nakit hariç
+(fiyatı, dolayısıyla değişimi yok).
+
+```json
+{
+  "as_of": "2026-08-24",
+  "rows": [
+    {
+      "symbol": "ASELS", "name": "Aselsan", "asset_class": "stock",
+      "weight_percent": 16.4, "change_percent": 0.25
+    }
+  ]
+}
+```
+
+Kullanıcıya özeldir: `Depends(get_current_user)` + `verify_user_access`
+(AK 5.4). 403 → başkasının portföyü, 401 → token yok.
+
+### `GET /api/market/calendar/{user_id}`
+
+Kullanıcının **hisselerinin** yaklaşan KAP bildirim takvimi. Makro takvim
+(TCMB PPK, TÜİK, ABD TÜFE) DEĞİLDİR — onun doğrulanmış bir kaynağı yok.
+
+```json
+{
+  "entries": [
+    {
+      "symbol": "ASELS", "company": "ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.",
+      "subject": "Finansal Rapor", "period": "9 Aylık",
+      "start_date": "2026-10-01", "due_date": "2026-11-09"
+    }
+  ],
+  "source_name": "KAP",
+  "source_url": "https://www.kap.org.tr/tr"
+}
+```
+
+KAP tek bir tarih değil bir **dosyalama penceresi** yayımlıyor; `due_date`
+aralığın sonudur ve kullanıcı için bağlayıcı olan gün odur. Arayüz bu günü
+gösterir.
+
+Şirket başına bir HTTP isteği atılır (pykap toplu sorgu sunmuyor), bu yüzden
+liste kullanıcının en ağırlıklı 6 hissesiyle sınırlıdır. Bir şirket düşerse
+diğerleri düşmez.
+
+Boş liste **hata değildir**: kullanıcının hissesi olmayabilir ya da yakın
+dönemde beklenen bildirim bulunmayabilir. 503 → KAP'a hiç ulaşılamadı.
 
 ## MCP Tool'ları
 
