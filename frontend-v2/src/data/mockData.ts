@@ -1,6 +1,7 @@
 import type {
   AIRecommendation,
   AssetAllocationSlice,
+  AssetClassId,
   AssetClassSummary,
   AssetPerformer,
   CalendarEvent,
@@ -301,6 +302,7 @@ function makeHolding(
   id: string,
   name: string,
   assetClass: string,
+  assetClassId: AssetClassId,
   risk: Holding["risk"],
   currentUnitPrice: number,
   unitLabel: string,
@@ -312,6 +314,7 @@ function makeHolding(
     id,
     name,
     assetClass,
+    assetClassId,
     risk,
     currentUnitPrice,
     unitLabel,
@@ -324,37 +327,37 @@ function makeHolding(
 }
 
 export const mockHoldings: Holding[] = [
-  makeHolding("h1", "ASELS", "Hisse · Savunma", "Orta", 78.4, "adet", [
+  makeHolding("h1", "ASELS", "Hisse · Savunma", "stocks", "Orta", 78.4, "adet", [
     { purchaseDate: "2025-10-12", quantity: 500, unitCost: 65.5 },
     { purchaseDate: "2026-01-19", quantity: 400, unitCost: 70.0 },
     { purchaseDate: "2026-03-05", quantity: 340, unitCost: 75.0 },
   ]),
-  makeHolding("h2", "GARAN", "Hisse · Bankacılık", "Düşük", 56.4, "adet", [
+  makeHolding("h2", "GARAN", "Hisse · Bankacılık", "stocks", "Düşük", 56.4, "adet", [
     { purchaseDate: "2025-09-08", quantity: 1500, unitCost: 48.0 },
     { purchaseDate: "2025-12-02", quantity: 1300, unitCost: 52.5 },
     { purchaseDate: "2026-02-14", quantity: 1000, unitCost: 55.0 },
   ]),
-  makeHolding("h3", "THYAO", "Hisse · Ulaştırma", "Yüksek", 312.75, "adet", [
+  makeHolding("h3", "THYAO", "Hisse · Ulaştırma", "stocks", "Yüksek", 312.75, "adet", [
     { purchaseDate: "2025-08-20", quantity: 200, unitCost: 330.0 },
     { purchaseDate: "2025-11-15", quantity: 200, unitCost: 315.0 },
     { purchaseDate: "2026-01-30", quantity: 140, unitCost: 300.0 },
   ]),
-  makeHolding("h4", "Gram Altın", "Emtia", "Düşük", 4312, "gr", [
+  makeHolding("h4", "Gram Altın", "Emtia", "precious", "Düşük", 4312, "gr", [
     { purchaseDate: "2025-07-10", quantity: 60, unitCost: 3900 },
     { purchaseDate: "2025-11-02", quantity: 45, unitCost: 4050 },
     { purchaseDate: "2026-02-20", quantity: 40, unitCost: 4180 },
   ]),
-  makeHolding("h5", "USD Mevduat", "Döviz", "Orta", 41.86, "$", [
+  makeHolding("h5", "USD Mevduat", "Döviz", "fx", "Orta", 41.86, "$", [
     { purchaseDate: "2025-09-01", quantity: 4000, unitCost: 39.5 },
     { purchaseDate: "2025-12-10", quantity: 2400, unitCost: 40.8 },
     { purchaseDate: "2026-02-25", quantity: 2000, unitCost: 42.5 },
   ]),
-  makeHolding("h6", "EUR Mevduat", "Döviz", "Orta", 48.75, "€", [
+  makeHolding("h6", "EUR Mevduat", "Döviz", "fx", "Orta", 48.75, "€", [
     { purchaseDate: "2025-10-05", quantity: 1500, unitCost: 47.8 },
     { purchaseDate: "2026-01-08", quantity: 1200, unitCost: 48.9 },
     { purchaseDate: "2026-03-01", quantity: 600, unitCost: 49.2 },
   ]),
-  makeHolding("h7", "Eurobond 2029", "Tahvil", "Düşük", 1.0325, "₺", [
+  makeHolding("h7", "Eurobond 2029", "Tahvil", "bond", "Düşük", 1.0325, "₺", [
     { purchaseDate: "2025-06-15", quantity: 100_000, unitCost: 0.995 },
     { purchaseDate: "2025-10-20", quantity: 60_000, unitCost: 1.01 },
     { purchaseDate: "2026-01-05", quantity: 40_000, unitCost: 1.02 },

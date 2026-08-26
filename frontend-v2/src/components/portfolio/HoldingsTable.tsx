@@ -6,7 +6,7 @@ import { formatPct } from "@/utils/format";
 import { POSITIVE, NEGATIVE } from "@/utils/colors";
 import { HoldingReturnDetail } from "@/components/portfolio/HoldingReturnDetail";
 
-const RISK_STYLES: Record<Holding["risk"], string> = {
+const RISK_STYLES: Record<NonNullable<Holding["risk"]>, string> = {
   Yüksek: "text-danger bg-danger-tint",
   Orta: "text-ink-muted bg-line2",
   Düşük: "text-brand bg-brand-tint",
@@ -14,10 +14,13 @@ const RISK_STYLES: Record<Holding["risk"], string> = {
 
 const FILTERS = ["Hisse", "Emtia", "Tümü"] as const;
 
+// Türkçe etiketi ayrıştırmak yerine kararlı `assetClassId` üzerinden filtrele
+// — "Hisse · Savunma" gibi alt kırılımlı etiketler backend'den gelmiyor,
+// prefix eşleşmesi gerçek veriyle sessizce kırılırdı.
 function classForHolding(holding: Holding, filter: (typeof FILTERS)[number]) {
   if (filter === "Tümü") return true;
-  if (filter === "Hisse") return holding.assetClass.startsWith("Hisse");
-  return holding.assetClass === "Emtia";
+  if (filter === "Hisse") return holding.assetClassId === "stocks";
+  return holding.assetClassId === "precious";
 }
 
 interface HoldingsTableProps {
@@ -73,34 +76,59 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
             </tr>
           </thead>
           <tbody>
-            {visible.map((h) => (
-              <tr
-                key={h.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`${h.name} için getiri detaylarını aç`}
-                onClick={() => setSelected(h)}
-                onKeyDown={(e) => handleRowKeyDown(e, h)}
-                className="cursor-pointer border-t border-line2 transition-colors hover:bg-black/[0.02] dark:border-transparent dark:hover:bg-white/[0.04]"
-              >
-                <td className="py-3.5">
-                  <div className="text-sm font-semibold">{h.name}</div>
-                  <div className="text-xs text-ink-faint">{h.assetClass}</div>
-                </td>
-                <td className="py-3.5 text-[13.5px] text-ink-soft">{h.quantity}</td>
-                <td className="py-3.5 text-right text-[13.5px] font-semibold">{h.formattedValue}</td>
-                <td className="py-3.5 text-right">
-                  <span className="text-[13.5px] font-semibold" style={{ color: h.returnPct >= 0 ? POSITIVE : NEGATIVE }}>
-                    {formatPct(h.returnPct)}
-                  </span>
-                </td>
-                <td className="py-3.5 text-right">
-                  <span className={`rounded-md px-2.5 py-1 text-[11.5px] font-semibold ${RISK_STYLES[h.risk]}`}>
-                    {h.risk}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {visible.map((h) => {
+              // Getiri detay paneli parti/lot kırılımı gösteriyor
+              // (HoldingReturnDetail); backend'de bu ucun karşılığı yok, o
+              // yüzden `lots` her zaman boş geliyor (bkz. adapters/portfolio.ts).
+              // Panel boş bir kırılımla açılıp yanıltmak yerine satır
+              // tamamen tıklanamaz kalıyor — backend lot ucu geldiğinde bu
+              // koşulu kaldırmak yeterli olacak.
+              const detayVar = h.lots.length > 0;
+              return (
+                <tr
+                  key={h.id}
+                  role={detayVar ? "button" : undefined}
+                  tabIndex={detayVar ? 0 : undefined}
+                  aria-label={detayVar ? `${h.name} için getiri detaylarını aç` : undefined}
+                  onClick={detayVar ? () => setSelected(h) : undefined}
+                  onKeyDown={detayVar ? (e) => handleRowKeyDown(e, h) : undefined}
+                  className={
+                    "border-t border-line2 transition-colors dark:border-transparent " +
+                    (detayVar ? "cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.04]" : "")
+                  }
+                >
+                  <td className="py-3.5">
+                    <div className="text-sm font-semibold">{h.name}</div>
+                    <div className="text-xs text-ink-faint">{h.assetClass}</div>
+                  </td>
+                  <td className="py-3.5 text-[13.5px] text-ink-soft">{h.quantity}</td>
+                  <td className="py-3.5 text-right text-[13.5px] font-semibold">{h.formattedValue}</td>
+                  <td className="py-3.5 text-right">
+                    {h.returnPct === null ? (
+                      <span className="text-[13.5px] font-semibold text-ink-faint">—</span>
+                    ) : (
+                      <span
+                        className="text-[13.5px] font-semibold"
+                        style={{ color: h.returnPct >= 0 ? POSITIVE : NEGATIVE }}
+                      >
+                        {formatPct(h.returnPct)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3.5 text-right">
+                    {h.risk === null ? (
+                      <span className="rounded-md bg-line2 px-2.5 py-1 text-[11.5px] font-semibold text-ink-faint">
+                        —
+                      </span>
+                    ) : (
+                      <span className={`rounded-md px-2.5 py-1 text-[11.5px] font-semibold ${RISK_STYLES[h.risk]}`}>
+                        {h.risk}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

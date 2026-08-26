@@ -176,7 +176,8 @@ export interface AssetClassSummary {
   name: string;
   value: number;
   formattedValue: string;
-  returnPct: number;
+  /** `null`: sınıf bazlı getiri hesaplanamadı (holdings verisi yok). */
+  returnPct: number | null;
   weightPct: number;
   icon: AssetClassId;
 }
@@ -194,12 +195,21 @@ export interface HoldingLot {
 export interface Holding {
   id: string;
   name: string;
+  /** Görüntülenen Türkçe etiket, ör. "Hisse · Savunma". Filtre için DEĞİL — bkz. assetClassId. */
   assetClass: string;
+  /** Filtre/eşleme için kararlı kimlik — Türkçe etiketi ayrıştırmak kırılgan olurdu. */
+  assetClassId: AssetClassId;
   quantity: string;
   value: number;
   formattedValue: string;
-  returnPct: number;
-  risk: "Düşük" | "Orta" | "Yüksek";
+  /** `null`: fiyatı bulunamadı (`price_missing`), getiri hesaplanamıyor. */
+  returnPct: number | null;
+  /**
+   * `null`: kaynağı yok. Backend `/holdings` ucu henüz enstrüman bazlı risk
+   * seviyesi döndürmüyor (`assets.risk_level` DB'de var ama şemaya
+   * eklenmedi) — ekran bu durumda "—" gösterir, uydurmaz (AK 5.5).
+   */
+  risk: "Düşük" | "Orta" | "Yüksek" | null;
   currentUnitPrice: number;
   unitLabel: string;
   lots: HoldingLot[];
