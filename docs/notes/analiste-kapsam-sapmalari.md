@@ -5,7 +5,8 @@
 
 # Kapsam sapmaları — analist onayı bekliyor
 
-Altı madde var. Dördü veri/kapsam kararı, ikisi **çelişki bildirimi**.
+Yedi madde var. Dördü veri/kapsam kararı, ikisi **çelişki bildirimi**, biri
+**ertelenmiş bir istek** (6. madde).
 
 ---
 
@@ -161,7 +162,37 @@ yerliyle aynı kademeye mi (5) çekilsin?
 
 ---
 
-## 5. Ölçek SRRI değil — adlandırma uyarısı
+## 6. Bilerek uyumsuz demo kullanıcısı — ERTELENDİ
+
+**İstenen:** seed'de 3-5 kullanıcı anket puanının izin vermediği varlık
+tutsun ("profil düşürmüş" varsayımıyla), ki uyumsuzluk-uyarısı yolu demoda
+görünsün.
+
+**Yapılmadı.** İki gerekçe:
+
+**(a) Ürün Sahibi bu kararı daha önce geri aldı.** `data/seed_ledger.py`
+içinde kayıtlı (Not 5, 2026-08): önceki tasarım kasıtlı olarak uyumsuz
+kombinasyonlar üretiyordu, PO bunu geri aldı — *"dummy veri artık
+gerçekçi/tutarlı olmalı; uyumsuzluk-uyarısı yolu zaten kendi birim
+testleriyle doğrulanıyor, dummy veride bunun için kasıtlı bir bozukluğa
+gerek yok."*
+
+**(b) Uyumsuzluk bugün hiçbir yerde deterministik olarak görünmüyor.** Tek
+yol risk ajanının `profil_sapmasi` sinyali; o da LLM'in takdirine bağlı ve
+`agents/risk_agent.py` **gerçek `risk_survey_score`'u değil, hâlâ geçici
+dummy puanı** okuyor. Uyumsuz kullanıcı eklenseydi demoda güvenilir biçimde
+hiçbir şey göstermezdi.
+
+**Ön koşul:** gerçek anket puanının risk ajanına bağlanması ve uygunluk
+ihlali için deterministik bir uyarı yolu. İkisi olduğunda bu madde yeniden
+değerlendirilmeli.
+
+**Bu arada uyum tarafı yapıldı:** seed portföyleri artık puana uyuyor,
+ölçülen **31/50 → 0/50**.
+
+---
+
+## 7. Ölçek SRRI değil — adlandırma uyarısı
 
 Sistemde **iki ayrı 1-7 ölçeği** var ve karıştırılmaya çok müsait:
 

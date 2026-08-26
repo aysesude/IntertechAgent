@@ -225,6 +225,34 @@ Seviye normalde `ASSET_CLASS_ADVICE_RISK_LEVEL[sınıf]`'tan gelir, ama
 | `XAGTRY` `XPTTRY` | PRECIOUS_METAL (4) | **5** | Ölçülen %65,9 / %55,3 — yerli hissenin üstünde |
 | `BHE` | STOCK (5) | **7** | Serbest fon — nitelikli yatırımcı, kaldıraç izni |
 
+#### Seed portföyleri puana UYAR
+`data/seed_ledger._uygun_arketip` arketipin varlıklarını kullanıcının anket
+puanına göre süzer ve kalan ağırlıkları orantılı yeniden dağıtır (nakit
+dahil, ki `cash_heavy` nakit ağırlıklı kalsın).
+
+Süzgeç olmadan Ürün Sahibi ilkesi ("profil önce belirlenir, portföy ona göre
+kurulur") dummy veride ihlal ediliyordu ve bu **yapısaldı**: dört arketipin
+dördünde de hisse, kıymetli maden ve döviz vardı, oysa muhafazakâr bandın
+(1-2) izin verdiği tek sınıf tahvil, dengeli bandın (3-4) izin vermediği tek
+sınıf hisse. Ölçülen: **31/50 kullanıcı** puanının üstünde varlık tutuyordu,
+şimdi **0/50**.
+
+Süzme **varlık** düzeyinde yapılır, sınıf düzeyinde değil: büyüme bandı (5)
+hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
+
+Merdiven demo verisinde görünür hâlde:
+
+| puan | portföy |
+|---|---|
+| 1 | `IOO` + %66 nakit |
+| 2 | `AYR, IOO` |
+| 3 | `AKE, AYR, CHFTRY, EURTRY, GBPTRY, IOO` |
+| 5 | `AKE, AYR, CEYREK, CHFTRY, EREGL, FROTO, GBPTRY, TURSG, YARIM` |
+| 7 | `AFT, CUMHUR, EUREN, KO, NVDA, USDTRY` |
+
+`MIN_HOLDINGS_PER_USER` bu yüzden 5'ten **1'e** indi: 1 puanlık kullanıcının
+alabileceği tek varlık `IOO`. Eksiklik değil, kuralın kendisi.
+
 #### Anket puanı nerede duruyor
 `users.risk_survey_score` (1-7, nullable, CHECK'li). **Puan yetkili alan,
 `users.risk_profile` ondan türer** (`config.risk_profile_for_survey_score`):
