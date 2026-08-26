@@ -230,7 +230,6 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     _stock("BRSAN", "Borusan Boru", "479.000000"),
     _stock("BRYAT", "Borusan Yatırım", "2847.500000"),
     _stock("CCOLA", "Coca-Cola İçecek", "51.500000"),
-    _stock("CVKMD", "CVK Maden", "14.210000"),
     _stock("CWENE", "CW Enerji", "17.991449"),
     _stock("CANTE", "Çan2 Termik", "2.650000"),
     _stock("CIMSA", "Çimsa", "50.549999"),
@@ -248,7 +247,6 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     _stock("ESEN", "Esenboğa Elektrik", "9.720000"),
     _stock("EUREN", "Europen Endüstri", "7.900000"),
     _stock("EUPWR", "Europower Enerji", "30.000000"),
-    _stock("FENER", "Fenerbahçe Futbol", "12.710000"),
     _stock("FROTO", "Ford Otosan", "118.300003"),
     _stock("GSRAY", "Galatasaray Sportif", "1.690000"),
     _stock("GENIL", "Gen İlaç", "14.046666"),
@@ -312,6 +310,28 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     _stock("VESTL", "Vestel", "40.680000"),
     _stock("YKBNK", "Yapı Kredi Bankası", "34.080002"),
     _stock("ZOREN", "Zorlu Enerji", "4.100000"),
+    # FENER ve CVKMD BİLEREK DIŞARIDA.
+    #
+    # İkisinin de fiyat serisinde GERÇEK OLMAYAN bir çöküş var:
+    #   FENER  26.12.2025:  9,54 -> 29.12.2025:  3,46  (-%63,7)
+    #   CVKMD  31.07.2026: 37,82 -> 03.08.2026: 14,42  (-%61,9)
+    #
+    # Bu bir değer kaybı değil, sermaye artırımı: fiyat bölünür ama yatırımcının
+    # ADEDİ artar, serveti değişmez. yfinance bunu normalde düzeltiyor (BIMAS
+    # 14.05.2026'da ikiye bölündü, seride hiç kopukluk yok) ama bu iki şirket
+    # için kurumsal olay kaydı EKSİK — FENER'in bilinen bölünmeleri 2005'te
+    # bitiyor, CVKMD'nin Ağustos 2026 işlemi hiç kayıtlı değil.
+    #
+    # Ölçülen hasar: volatilite FENER'de %53,6 yerine %83,0, CVKMD'de %59,8
+    # yerine %86,3 çıkıyor. Asıl sorun K/Z'de: bölünme öncesi alıp tutan
+    # kullanıcı defterde eski adetle duruyor, yeni fiyatla değerleniyor ve
+    # portföyü %64 erimiş görünüyor — oysa hiçbir şey kaybetmemiş.
+    #
+    # Tüm BIST 100 tarandı: yalnızca bu iki olay var (diğer 8 bölünme sorunsuz
+    # düzeltilmiş). İki hisse için elle bölünme kaydı tutmak ya da ">%50 düşüş
+    # = bölünme" gibi bir sezgisel yazmak (gerçekten çöken bir hisseyi bölünme
+    # sanma riski) kazandırdığından fazlasını götürürdü. 98 hisse yeterli;
+    # bilerek bozuk veri dağıtmaktansa dışarıda bırakmak doğru.
     # --- Kıymetli maden: gram fiyatlar (ons vadeli × USDTRY) ---
     _gram_metal("XAUTRY", "Gram Altın", "GC=F", "2450.00"),
     _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00"),
