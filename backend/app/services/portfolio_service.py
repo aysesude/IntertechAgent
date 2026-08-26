@@ -1,7 +1,7 @@
 """Portföy ile ilgili tüm SQL sorguları burada. API katmanı ve MCP tool'ları
 bu modülü çağırır, kendileri sorgu yazmaz."""
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
@@ -34,7 +34,7 @@ from app.services.ledger_service import (
     position_as_of,
     total_deposits_as_of,
 )
-from app.services.price_service import WINDOW_DAYS, bucket_last, resolve_granularity
+from app.services.price_service import bucket_last, resolve_granularity, window_start_date
 from app.services.valuation_service import (
     FX_SYMBOL_BY_CURRENCY,
     PriceBook,
@@ -48,7 +48,13 @@ _TWO_DECIMALS = Decimal("0.01")
 
 # Kıyaslama endeksleri. XU100 evrende henüz tanımlı değil; varlık bulunamazsa
 # sessizce atlanır, evrene eklendiği gün ek kod olmadan listeye girer.
-BENCHMARK_SYMBOLS = ("XU100", "XAUTRY", "USDTRY")
+# Arayüzdeki "Varlıklar Arası Karşılaştırmalı Getiri" kartının çubukları.
+# Sıra kartta soldan sağa aynen korunur (bkz. `_benchmark_entries`).
+#
+# EURTRY 26 Ağustos 2026'da eklendi: kart beş enstrüman gösteriyor
+# (portföy + BIST100 + USD + EUR + altın) ama uç yalnızca üçünü
+# döndürüyordu, dolayısıyla euro çubuğu gerçek veriye bağlanamıyordu.
+BENCHMARK_SYMBOLS = ("XU100", "USDTRY", "EURTRY", "XAUTRY")
 
 
 def _round2(value: Decimal) -> Decimal:
@@ -525,8 +531,7 @@ def get_portfolio_performance(db: Session, user_id: UUID, window: TimeWindow) ->
     ).scalar()
     as_of = last_price_date or date.today()
 
-    window_days = WINDOW_DAYS[window]
-    window_start = as_of - timedelta(days=window_days)
+    window_start = window_start_date(window, as_of)
     start = max(inception, window_start)
     truncated = inception > window_start
     if start > as_of:
@@ -760,13 +765,26 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
     if portfolio is None:
         raise NotFoundError(f"Portfolio not found for user_id {user_id}")
 
+    # BAŞLANGIÇ = İLK VARLIK ALIMI, ilk işlem değil.
+    #
+    # Portföyler önce nakitle fonlanıyor (DEPOSIT), varlıklar günler sonra
+    # alınıyor. `min(transaction_date)` o nakit yatırma gününü veriyordu ve
+    # `position_as_of` orada boş dönüyordu — çünkü o gün gerçekten hiçbir
+    # varlık yoktu. Ölçüldü: 12 aylık pencerede 50 kullanıcının 50'si de
+    # `InsufficientDataError` alıyordu, diğer pencerelerde 2-7 kullanıcı.
+    #
+    # Bu kıyaslama saf FİYAT getirisini ölçüyor; hiçbir şeye sahip olmadığın
+    # bir günden fiyat getirisi ölçülemez. `asset_id IS NOT NULL` süzgeci
+    # nakit ayaklarını (DEPOSIT/WITHDRAWAL) eleyip ilk gerçek pozisyon gününü
+    # veriyor.
     inception_dt = db.execute(
         select(func.min(Transaction.transaction_date)).where(
-            Transaction.portfolio_id == portfolio.id
+            Transaction.portfolio_id == portfolio.id,
+            Transaction.asset_id.is_not(None),
         )
     ).scalar()
     if inception_dt is None:
-        raise InsufficientDataError(f"No transactions for portfolio {portfolio.id}")
+        raise InsufficientDataError(f"No asset transactions for portfolio {portfolio.id}")
     inception = inception_dt.date()
 
     portfolio_asset_ids = (
@@ -788,7 +806,7 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
     ).scalar()
     end_date = last_price_date or date.today()
 
-    window_start = end_date - timedelta(days=WINDOW_DAYS[window])
+    window_start = window_start_date(window, end_date)
     start_date = max(inception, window_start)
     truncated = inception > window_start
 

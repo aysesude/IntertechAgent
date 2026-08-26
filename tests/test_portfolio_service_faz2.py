@@ -373,3 +373,94 @@ def test_benchmark_freezes_t0_quantities_and_compares_with_index(db_session, per
     # XAUTRY 1000 -> 1100 = %10. XU100 evrende yok, listeye hic girmez.
     assert endeksler == {"XAUTRY": Decimal("10.00")}
     assert result.excluded_symbols == []
+
+
+# ---------------------------------------------------------------------------
+# Karsilastirmali getiri karti: YTD penceresi, EUR cubugu, nakit-once fonlama
+# ---------------------------------------------------------------------------
+
+
+def test_benchmark_semboller_kartin_bes_cubuguyla_ortusuyor():
+    """Kart BES cubuk gosteriyor: portfoy + BIST100 + USD + EUR + Altin.
+
+    EURTRY listeye 26 Agustos 2026'da eklendi; oncesinde uc sembol vardi ve
+    euro cubugu gercek veriye baglanamiyordu. Sira kartta soldan saga aynen
+    korunur, bu yuzden tuple olarak kilitleniyor.
+    """
+    from app.services.portfolio_service import BENCHMARK_SYMBOLS
+
+    assert BENCHMARK_SYMBOLS == ("XU100", "USDTRY", "EURTRY", "XAUTRY")
+
+
+def test_ytd_penceresi_1_ocaktan_baslar(db_session, performance_fixture):
+    """YTD digerlerinin aksine SABIT UZUNLUKTA DEGIL.
+
+    `WINDOW_DAYS` sozlugunde yeri yok; `window_start_date` onu ayri ele
+    aliyor. Sabit gun sayilsaydi ocak ayinda gecen yila tasardi.
+    """
+    result = get_benchmark_comparison(db_session, performance_fixture.id, TimeWindow.YTD)
+
+    assert result.start_date == date(2026, 1, 1)
+    assert result.window is TimeWindow.YTD
+
+
+def test_window_start_date_ytd_yil_basini_verir():
+    from app.services.price_service import window_start_date
+
+    assert window_start_date(TimeWindow.YTD, date(2026, 8, 26)) == date(2026, 1, 1)
+    # Yilin ilk gunu: pencere sifir uzunlukta, gecen yila TASMAZ.
+    assert window_start_date(TimeWindow.YTD, date(2026, 1, 1)) == date(2026, 1, 1)
+    # Sabit pencereler eskisi gibi.
+    assert window_start_date(TimeWindow.M1, date(2026, 8, 26)) == date(2026, 7, 27)
+
+
+def test_benchmark_nakit_once_yatirilmissa_da_calisir(db_session):
+    """Portfoy once nakitle fonlanip varlik GUNLER SONRA alinabilir.
+
+    Baslangic `min(transaction_date)` alindiginda o gun DEPOSIT gunu oluyordu
+    ve `position_as_of` orada bos donuyordu — hicbir varlik yoktu. Olculdu:
+    12 aylik pencerede seed'li 50 kullanicinin 50'si de InsufficientDataError
+    aliyordu, yani kartin "Yillik" dugmesi hicbir kullanicida calismiyordu.
+
+    Dogrusu ILK VARLIK ALIMI: fiyat getirisi, hicbir seye sahip olmadigin bir
+    gunden olculemez.
+    """
+    user = User(email="nakit-once@example.com", full_name="Nakit Once")
+    stock = Asset(symbol="TST2", name="Test Hisse 2", asset_class=AssetClass.STOCK, currency="TRY")
+    db_session.add_all([user, stock])
+    db_session.flush()
+
+    portfolio = Portfolio(user_id=user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    db_session.add_all(
+        [
+            PriceHistory(
+                asset_id=stock.id, price_date=date(2026, 1, 10), close_price=Decimal("100")
+            ),
+            PriceHistory(
+                asset_id=stock.id, price_date=date(2026, 1, 20), close_price=Decimal("150")
+            ),
+            # Nakit 1 Ocak'ta yatiyor, varlik 10 Ocak'ta aliniyor.
+            _tx(portfolio.id, TransactionType.DEPOSIT, date(2026, 1, 1), cash="1000"),
+            _tx(
+                portfolio.id,
+                TransactionType.BUY,
+                date(2026, 1, 10),
+                asset_id=stock.id,
+                quantity="10",
+                cash="-1000",
+                price="100",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    result = get_benchmark_comparison(db_session, user.id, TimeWindow.M1)
+
+    # Baslangic ILK ALIM gunu, nakit yatirma gunu degil.
+    assert result.start_date == date(2026, 1, 10)
+    assert result.truncated_to_inception is True
+    # 100 -> 150 = %50
+    assert result.portfolio_return_percent == Decimal("50.00")
