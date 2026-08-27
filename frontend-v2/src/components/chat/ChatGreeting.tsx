@@ -1,3 +1,4 @@
+import { AI_BALON_SINIFLARI } from "@/components/chat/ChatBubble";
 import { MessageMarkdown } from "@/components/chat/MessageMarkdown";
 import { useWordReveal } from "@/chat/useWordReveal";
 
@@ -57,12 +58,17 @@ export function ChatGreeting({ userName }: { userName?: string }) {
 
   return (
     <div className="flex animate-fadeUp flex-col items-start gap-1">
-      <div className="relative">
+      {/* Genişlik sınırı sarmalayıcıda, balonda değil — gerekçesi
+          ChatBubble'da. Balon sınıfları da oradan geliyor ki iki asistan
+          balonu birbirinden ayrışmasın. */}
+      <div className="relative max-w-[90%]">
         <span
           aria-hidden="true"
           className="pointer-events-none absolute -left-2.5 -top-2.5 h-11 w-11 rounded-full bg-[color-mix(in_srgb,var(--color-brand)_25%,transparent)] blur-lg"
         />
-        <div className="relative max-w-[84%] rounded-[14px] rounded-bl-[4px] bg-brand px-[18px] py-3.5 text-sm leading-[1.65] text-white">
+        <div
+          className={`relative w-fit rounded-[14px] px-[18px] py-3.5 text-sm leading-[1.65] ${AI_BALON_SINIFLARI}`}
+        >
           <MessageMarkdown text={gorunen} />
         </div>
       </div>
