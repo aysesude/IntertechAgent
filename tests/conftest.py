@@ -26,6 +26,12 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-anahtari-yalnizca-testler-icin")
 # `ANCHOR_DATE` override yolunun da her kosuda sinanmasini sagliyor.
 os.environ.setdefault("ANCHOR_DATE", "2026-08-01")
 
+# Islem ucu uretimde fiyati saglayicidan CANLI cekiyor (~0,4 sn/sembol).
+# Testlerde KAPALI: aksi halde test paketi aga bagimli olur, cevrimdisi
+# kosmaz ve BIST acikken/kapaliyken farkli sonuc uretir. Canli yol kendi
+# testlerinde `_canli_cek` degistirilerek sinaniyor.
+os.environ.setdefault("TRADE_LIVE_PRICE_ENABLED", "false")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

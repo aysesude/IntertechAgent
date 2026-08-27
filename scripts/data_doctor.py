@@ -30,6 +30,7 @@ from sqlalchemy import func, select
 
 from app.core.db import SessionLocal
 from app.models import Asset, Holding, Portfolio, PriceHistory, Transaction, TransactionType
+from app.services.trade_service import USER_ORDER_NOTE
 
 # Günlük yüzde eşiği. Sentetik ve gerçek serinin ekleme yerinde fiyat bir
 # günde kat değiştirebiliyor (ölçülen: TCD 5,42 -> 35,63); normal bir piyasa
@@ -117,12 +118,24 @@ def main() -> int:
 
         uyum = 0
         eksik = 0
+        kullanici_emri = 0
         sapmalar: list[tuple] = []
         for islem in db.execute(
             select(Transaction).where(
                 Transaction.transaction_type.in_([TransactionType.BUY, TransactionType.SELL])
             )
         ).scalars():
+            # KULLANICI EMIRLERI BU KONTROLUN DISINDA.
+            #
+            # Bu kontrol seed'in urettigi veriyi denetliyor: "islem fiyati o
+            # gunun kapanisiyla ayni mi", yani "backfill seed'den sonra mi
+            # kostu". Al/Sat ekranindan gecen emir ise GUN ICI fiyattan
+            # yaziliyor (bkz. trade_service) ve kapanistan farkli olmasi
+            # NORMAL. Ayirt edilmezse doktor her gercek islemi sahte bir
+            # bulgu olarak raporlar ve asil sinyali bogardi.
+            if islem.note == USER_ORDER_NOTE:
+                kullanici_emri += 1
+                continue
             gun = islem.transaction_date.date()
             gecmis = kitap.get((islem.asset_id, gun))
             if gecmis is None:
@@ -143,6 +156,7 @@ def main() -> int:
         print(f"  uyumlu         : {uyum}")
         print(f"  UYUMSUZ        : {len(sapmalar)}")
         print(f"  o gun fiyat yok: {eksik}")
+        print(f"  kullanici emri : {kullanici_emri} (kapsam disi - gun ici fiyat)")
         if sapmalar:
             bulgular.append(
                 f"{len(sapmalar)} islem o tarihteki fiyattan FARKLI yazilmis "
