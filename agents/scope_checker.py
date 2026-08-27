@@ -47,6 +47,25 @@ def _matches_word(query: str, phrase: str, *, exact: bool = False) -> bool:
     return re.search(pattern, query) is not None
 
 
+def _kavram_sorusu_mu(query: str) -> bool:
+    """Sorgu bir KAVRAM sorusu kalıbı taşıyor mu?
+
+    Kalıplar `scope.yaml` içindeki `kavram_kapsami.soru_kaliplari`'ndan okunur;
+    burada liste tutulmaz (NFR: kapsam kuralları koda gömülmez). Bölüm eksikse
+    hiçbir sorgu kavram sorusu sayılmaz — yapılandırma kaybı davranışı eski
+    hâline döndürür, kimseyi sessizce içeri almaz.
+
+    Alt dize araması bilinçli: kalıpların hepsi çok kelimeli ve ayırt edici
+    ("ne demek", "nasıl hesaplanır", "kaç günde"). Kelime sınırı aramak
+    çekim ekli biçimleri gereksiz yere kaçırırdı ve bu kontrol zaten
+    REDDETMİYOR — yalnızca bir reddi engelliyor.
+
+    Girdi `_normalize`'dan geçmiş olmalıdır (check_scope öyle çağırıyor).
+    """
+    kaliplar = (scope_config.get("kavram_kapsami") or {}).get("soru_kaliplari") or []
+    return any(_normalize(kalip) in query for kalip in kaliplar)
+
+
 def check_scope(query: str) -> dict:
     """
     Kullanıcı girdisini scope.yaml kurallarına göre değerlendirir.
@@ -129,7 +148,28 @@ def check_scope(query: str) -> dict:
     # `tam_eslesme_fiiller` — "yatır" toleransla "yatırım"ı yutuyordu.
     tam_eslesme = {_normalize(f) for f in islem_talebi.get("tam_eslesme_fiiller", [])}
 
-    if not is_istisna:
+    # Kavram sorusu EMİR DEĞİLDİR.
+    #
+    # Fiil listesi ("al", "sat", "alım", "satım", "emir") emir kipini yakalamak
+    # için yazıldı, ama kelime sınırı bile bu kelimeleri soruların içinde de
+    # buluyordu: "fon alım satımı kaç günde gerçekleşir", "limit emir ne demek"
+    # ve "alım satım komisyonu nasıl hesaplanır" UNAUTHORIZED_ACTION'a
+    # düşüyordu — üçü de "bunu benim için yap" demiyor, işleyişi soruyor.
+    #
+    # Kapı `kavram_kapsami.soru_kaliplari` ile açılıyor: sorgu bir soru kalıbı
+    # taşıyorsa fiil kontrolü atlanır. Emir kipinde soru kalıbı bulunmaz, o
+    # yüzden "10 lot THYAO al" ve "Hesabıma 10.000 TL yatır" hâlâ reddedilir
+    # (tests/test_scope_checker.py'deki tablo testi her iki yönü de tutuyor).
+    #
+    # Bu kapı yalnızca FİİL kapısını açar. "limit emir ne demek" hâlâ
+    # reddediliyor ama başka bir kapıdan: "limit" bankacılık ürünleri
+    # sınıfının etiketi (varlik_siniflari.kapsam_disi). Aynı sınıftaki
+    # "Emlak Konut"/"Yapı Kredi" çakışması gibi ayrı bir iş.
+    #
+    # NEDEN ŞİMDİ. Kavram sorularını cevaplayacak bir ajan yokken bu red
+    # zararsızdı: soru zaten cevapsız kalacaktı. `web_research_agent` geldiğine
+    # göre reddetmek artık cevabı olan bir soruya YANLIŞ cevap vermek demek.
+    if not is_istisna and not _kavram_sorusu_mu(query_lower):
         for fiil in fiiller:
             if _matches_word(query_lower, fiil, exact=_normalize(fiil) in tam_eslesme):
                 return {
