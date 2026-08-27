@@ -373,6 +373,77 @@ Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
 - `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
   çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
 
+### Al / Sat (`/api/trade`)
+
+Projedeki **ilk para hareket ettiren** uç ailesi. Dördü de
+`verify_user_access` ister (AK 5.4) — başkasının portföyünde işlem yapmak bu
+projedeki en ağır yetki ihlali olurdu.
+
+**FİYAT İSTEK GÖVDESİNDE ALINMAZ.** İstemciye fiyat yazdırmak, tarayıcı
+üzerinden istenen fiyattan alım yapmaya açık kapı bırakırdı; fiyat her zaman
+sunucudaki son kapanıştan okunur.
+
+#### `GET /api/trade/{user_id}/assets`
+
+Ekranın listesi: varlıklar, son kapanış, uygunluk, eldeki miktar, nakit.
+
+```json
+{
+  "survey_score": 5, "cash_balance": 100000.0,
+  "assets": [{
+    "symbol": "AAPL", "name": "Apple", "risk_level": 6,
+    "price": 200.0, "price_date": "2026-08-27", "price_stale": false,
+    "can_buy": false,
+    "block_reason": "Bu varlığın risk seviyesi 6, sizin anket puanınız 5. …",
+    "held_quantity": 0, "quantity_step": 1
+  }]
+}
+```
+
+Uygun olmayan varlıklar listeden **düşmez**, `can_buy=false` +
+`block_reason` ile döner. Sessizce elemek, kullanıcının o varlığın var
+olduğunu bile görmemesi demek olurdu.
+
+#### `POST /api/trade/{user_id}/preview`
+
+`{ "symbol": "THYAO", "side": "buy", "quantity": 10 }` → ne ödeneceği,
+komisyon, işlem sonrası bakiye ve pozisyon. **Deftere yazmaz.**
+
+Miktar sınıfın hassasiyetine **aşağı** yuvarlanır (hisse tam sayı, maden
+0,01) ve yuvarlanmış hâli yanıtta döner — kullanıcının yazdığından farklı
+olabilir ve bu gösterilmeli. Yukarı yuvarlamak istemediği kadar alım
+yaptırırdı.
+
+#### `POST /api/trade/{user_id}/execute`
+
+Aynı gövde; emri deftere yazar ve `holdings` önbelleğini yeniden kurar.
+Doğrulamaların tamamı `preview` ile **aynı yoldan** geçer — iki ayrı kontrol
+listesi olsaydı biri güncellenip diğeri unutulurdu.
+
+#### `POST /api/trade/{user_id}/deposit`
+
+`{ "amount": 50000 }` → yeni bakiye. **Gerçek bir ödeme akışı değildir;**
+bakiyesi biten kullanıcının demo akışında kilitlenmemesi için var.
+
+#### Kurallar
+
+- **Alım engellenir, satım asla.** Puanının üstündeki varlık alınamaz ama
+  elindeki her zaman satılabilir — uyumsuzluktan çıkışın tek yolu odur.
+- **Kur işlem anında dondurulur** (`transactions.fx_rate_to_try`). Sonradan
+  hesaplansaydı geçmiş bir alımın TRY maliyeti bugünkü kura göre değişir ve
+  kâr/zarar oynardı.
+- **Komisyon yok** (ürün kararı, 27 Ağustos 2026).
+- **İşlem tarihi bugündür**, fiyat son kapanış. Cron akşam koştuğu için
+  sabah/hafta sonu yapılan işlemde ikisi farklı güne düşebilir; `price_date`
+  ve `price_stale` bunu söyler, arayüz göstermek zorundadır.
+- Fiyatı olmayan varlık **işlem görmez** — fiyat uydurulmaz (AK 5.5).
+- Defter kuralı ihlalleri (`LedgerError`) **422** döner: kullanıcının
+  düzeltebileceği bir durumdur, sunucu hatası değil.
+
+**MCP tool'u yazılmadı ve yazılmamalı.** `scope.yaml` alım/satım fiillerini
+`UNAUTHORIZED_ACTION` sayıyor; sohbet üzerinden bir modelin emir geçebilmesi,
+prompt enjeksiyonuyla portföyün ele geçirilmesi demek olurdu.
+
 ### Kullanıcı risk profili ve anket puanı
 
 Projedeki tek YAZAN uç ailesi; geri kalan her REST ucu salt okur. Dördü de

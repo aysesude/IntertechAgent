@@ -26,7 +26,13 @@ from faker import Faker
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import AssetClass, RiskProfile, settings, survey_score_band
+from app.core.config import (
+    ASSET_QUANTITY_PRECISION,
+    AssetClass,
+    RiskProfile,
+    settings,
+    survey_score_band,
+)
 from app.core.security import hash_password
 from app.models import Asset, PriceHistory, Transaction, TransactionType
 from app.providers.universe import SPEC_BY_SYMBOL
@@ -55,13 +61,10 @@ STOCK_FEE_RATE = Decimal("0.0015")
 # tamamı artık TEFAS borçlanma araçları fonu (bkz. providers/universe.py) ve
 # fonlar küsuratlı alınır; birim fiyatları 0,14 TL mertebesinde olduğundan tam
 # sayıya yuvarlamak da gereksiz bir sapma bırakıyordu.
-QUANTITY_PRECISION: dict[AssetClass, Decimal] = {
-    AssetClass.STOCK: Decimal(1),
-    AssetClass.PRECIOUS_METAL: Decimal("0.01"),
-    AssetClass.CURRENCY: Decimal(1),
-    AssetClass.BOND: Decimal("0.01"),
-    AssetClass.CASH: Decimal("0.01"),
-}
+# Tanım `core/config.ASSET_QUANTITY_PRECISION`'a taşındı: işlem ucu da aynı
+# yuvarlamayı kullanıyor ve iki kopya olsaydı seed ile kullanıcı emirleri
+# farklı hassasiyetle yazılabilirdi.
+QUANTITY_PRECISION = ASSET_QUANTITY_PRECISION
 
 # Portföy arketipleri: sınıf ağırlıkları + sınıf başına kaç varlık seçileceği.
 # Tamamen rastgele seçim tüm portföyleri birbirine benzetiyordu; AK-2.6
