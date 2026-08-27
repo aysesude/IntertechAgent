@@ -757,6 +757,18 @@ class Settings(BaseSettings):
     # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
     evds_api_key: str | None = None
 
+    # logostream.dev — şirket logoları (api.logostream.dev/stocks/symbol/{TICKER}).
+    #
+    # ANAHTAR QUERY STRING'DE GİDİYOR (`?key=...`); ölçüldü: header ile
+    # denendiğinde "Missing API Key", `?key=` ile "Invalid API Key" dönüyor.
+    # Bu yüzden istek TARAYICIDAN ATILMAZ — `<img src>` içindeki anahtarı
+    # sayfayı açan herkes görür ve kotayı üçüncü şahıslar harcar. Logolar
+    # backend üzerinden proxy'lenir, anahtar sunucuda kalır.
+    #
+    # Boşsa logo katmanı sessizce devre dışı kalır ve arayüz harf rozetine
+    # düşer — özellik yokluğu bir hata değil, eksik bir süs.
+    logostream_api_key: str | None = None
+
     # --- Sabitler (sihirli sayı yerine config) ---
     supported_asset_classes: list[AssetClass] = list(AssetClass)
 
