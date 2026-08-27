@@ -90,7 +90,7 @@ export function PasswordResetCard({ onBack }: PasswordResetCardProps) {
   const kimlikGonder = async (e: FormEvent) => {
     e.preventDefault();
     if (!gecerliTcKimlikNo(tckn)) {
-      setHata("Geçerli bir T.C. kimlik numarası girin.");
+      setHata("T.C. kimlik numarası 11 haneli olmalı.");
       return;
     }
     setHata(null);

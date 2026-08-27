@@ -131,7 +131,7 @@ export function RegisterCard({ onBack }: RegisterCardProps) {
       return;
     }
     if (!gecerliTcKimlikNo(tckn)) {
-      setError("T.C. kimlik numarası geçersiz.");
+      setError("T.C. kimlik numarası 11 haneli olmalı.");
       return;
     }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
