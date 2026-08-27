@@ -16,6 +16,13 @@ sse-starlette>=2.1.3
 httpx>=0.27.2
 python-dotenv>=1.0.1
 
+# Kimlik doğrulama (app/core/security.py)
+# bcrypt doğrudan kullanılıyor, passlib üzerinden değil: passlib'in bcrypt
+# backend'i 4.x ile uyumsuz ve proje bakımsız; ihtiyacımız olan iki fonksiyon
+# (hashpw/checkpw) zaten bcrypt'in kendi API'sinde.
+bcrypt>=4.2.0
+PyJWT>=2.9.0
+
 langgraph>=0.2.28
 fastmcp>=3.4.6
 # ==0.5.5 kasıtlı sabit: docker-compose.yml'deki chroma server image'ı da
@@ -37,9 +44,13 @@ yfinance>=0.2.43
 pandas>=2.2.2
 tefas-crawler>=0.3.4
 lxml>=5.3.0
+# KAP canlı bildirim sorgusu (app/providers/kap_p.py). Resmi degil, MIT
+# lisansli, PyPI'de aktif bakimli (bkz. kap_p.py docstring'i).
+pykap>=0.2.0
 
 pytest>=8.3.3
 pytest-asyncio>=0.24.0
 
 ruff>=0.6.9
 black>=24.8.0
+PyYAML>=6.0.1

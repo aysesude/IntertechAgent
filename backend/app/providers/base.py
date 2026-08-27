@@ -3,7 +3,7 @@ sentetik) aynı arayüzü konuşur. Dummy <-> canlı geçişi bu sayede konfigü
 meselesidir (CLAUDE.md A1 varsayımının kod karşılığı)."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
@@ -32,6 +32,21 @@ class PricePoint:
     price_date: date
     close_price: Decimal
     source: PriceSource
+
+
+@dataclass(frozen=True)
+class NewsItem:
+    """Tek bir canlı piyasa haberi başlığı (bkz. providers/yfinance_p.py
+    YFinanceProvider.fetch_news, app/services/macro_news_ingest.py).
+
+    `published_at` her zaman UTC'dir (kaynak sağlayıcı ne verirse versin
+    burada normalize edilir) — DB'deki `DateTime(timezone=True)` kolonuyla
+    tutarlı kalsın diye."""
+
+    headline: str
+    source: str
+    url: str
+    published_at: datetime
 
 
 @runtime_checkable

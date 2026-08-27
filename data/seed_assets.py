@@ -1,5 +1,9 @@
 """Varlık evrenini (providers/universe.py) DB'ye yazar.
 
+`assets.risk_level` de burada doldurulur. O sütun türev bir kopyadır —
+tanımı `universe.py`'de durur, DB'ye yalnızca SQL'den sorgulanabilsin diye
+yazılır (alım/satım engeli ve risk ajanı veriye DB üzerinden bakacak).
+
 Upsert mantığı: sembole göre eşleşen varlık güncellenir, olmayan eklenir,
 HİÇBİRİ SİLİNMEZ (fiyat geçmişi ve işlem FK'ları var; varlık kapatılacaksa
 is_active=False yapılır). Evrenden çıkarılan semboller pasife çekilir.
@@ -10,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Asset
 from app.providers.universe import ASSET_UNIVERSE, SPEC_BY_SYMBOL
+from app.services.advice_eligibility import asset_risk_level
 
 
 def seed_assets(session: Session) -> dict[str, Asset]:
@@ -29,6 +34,11 @@ def seed_assets(session: Session) -> dict[str, Asset]:
         asset.data_source = spec.data_source
         asset.provider_symbol = spec.provider_symbol
         asset.derived_factor = spec.derived_factor
+        # Seviye HER koşuda koddan yeniden yazılır: `assets.risk_level` türev
+        # bir kopyadır, tanım noktası `universe.py`'dir. Yalnızca bir kez
+        # yazılsaydı, kodda seviye değiştiğinde DB eski değerde kalır ve iki
+        # kaynak sessizce ayrışırdı.
+        asset.risk_level = asset_risk_level(spec.symbol, spec.asset_class)
         return asset
 
     by_symbol: dict[str, Asset] = {}

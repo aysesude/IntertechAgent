@@ -51,11 +51,24 @@ jobs:
       - name: Testler (pytest)
         run: pytest
 
+  # İŞ ADI `frontend`, KLASÖR `frontend-v2` — kasıtlı.
+  #
+  # Bu iş projenin tek arayüzünü kontrol ediyor, dolayısıyla adı doğru: v2
+  # artık "ikinci arayüz" değil, arayüzün kendisi. Klasör adı ayrı bir iş
+  # olarak sonra hizalanacak (bkz. docker-compose.yml).
+  #
+  # Ad ayrıca PRATİK bir zorunluluk: `frontend` dal koruma kural setlerinde
+  # ZORUNLU kontrol olarak kayıtlı ve o kayıt yalnızca depo admini tarafından
+  # değiştirilebilir. İş silinseydi ya da başka bir adla koşsaydı, kontrol hiç
+  # rapor göndermez ve her PR "bekliyor" durumunda sonsuza kadar kilitlenirdi
+  # — nitekim bir kez tam olarak bu oldu. Bu işi yeniden adlandırırken kural
+  # setinin de güncellenmesi gerekir.
   frontend:
+    # Bu iş olmadan arayüzdeki tip hataları CI'dan sessizce geçerdi.
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: frontend-v2
     steps:
       - uses: actions/checkout@v4
 
@@ -63,15 +76,22 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: frontend-v2/package-lock.json
 
       - run: npm ci
 
-      - name: Lint (eslint)
+      - name: Tip kontrolü (tsc)
+        # eslint yok: taşınan proje eslint yapılandırmasıyla gelmedi.
+        # Test dosyaları da bu kapsamda.
         run: npm run lint
 
+      - name: Testler (vitest)
+        # AuthContext ve useApiResource testleri burada koşar. İkisi de
+        # tarayıcıda fark edilen gerçek hataların gerileme testlerini içeriyor
+        # (beyaz ekran, sessizce mock veriye düşme).
+        run: npm test
+
       - name: Derleme kontrolü
-        # Derlenmiyorsa canlıya alınamaz — tip hatalarını burada yakalarız.
         run: npm run build
         env:
           VITE_API_BASE_URL: http://localhost:8000

@@ -14,11 +14,60 @@ from pathlib import Path
 _TEST_DB_PATH = Path(tempfile.gettempdir()) / f"finans_danismani_test_{uuid.uuid4().hex}.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH}"
 
+# `Settings.jwt_secret_key` bilerek varsayilansiz (bkz. config.py) — .env
+# olmadan calisan testler icin burada sabitleniyor. Testte gercek bir sirra
+# ihtiyac yok, sadece imzalanan token'in ayni anahtarla cozulebilmesi yeterli.
+os.environ.setdefault("JWT_SECRET_KEY", "test-anahtari-yalnizca-testler-icin")
+
+# Ankraj testlerde SABITLENIR. Uretimde varsayilan olarak bos birakilir ve
+# seed onu gercek fiyat verisinin bittigi gune baglar (bkz. data/anchor.py) —
+# ama testler icin bu yanlis olurdu: uretilen defterin tarihleri fixture'daki
+# fiyatlara, dolayisiyla testin kostugu GUNE bagli hale gelirdi. Sabit tarih,
+# `ANCHOR_DATE` override yolunun da her kosuda sinanmasini sagliyor.
+os.environ.setdefault("ANCHOR_DATE", "2026-08-01")
+
+# Islem ucu uretimde fiyati saglayicidan CANLI cekiyor (~0,4 sn/sembol).
+# Testlerde KAPALI: aksi halde test paketi aga bagimli olur, cevrimdisi
+# kosmaz ve BIST acikken/kapaliyken farkli sonuc uretir. Canli yol kendi
+# testlerinde `_canli_cek` degistirilerek sinaniyor.
+os.environ.setdefault("TRADE_LIVE_PRICE_ENABLED", "false")
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models import Base
+from app.core.security import create_access_token
+from app.models import Base, User
+
+
+def auth_headers(user: User) -> dict[str, str]:
+    """Kullanıcı adına geçerli bir Bearer başlığı üretir.
+
+    Testler token'ı `/api/auth/login` üzerinden almıyor: giriş akışının kendisi
+    ayrıca test ediliyor (test_auth_api.py), diğer testlerin ona bağımlı olması
+    giriş bozulduğunda ilgisiz onlarca testi birden kırardı.
+    """
+    token, _ = create_access_token(user.id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def client_for():
+    """Bir kullanıcı adına kimlik doğrulanmış TestClient üreten fabrika.
+
+    `client_for(user)` o kullanıcının token'ını taşır; `client_for()` hiç token
+    göndermez (401/403 yollarını sınamak için).
+    """
+
+    def _make(user: User | None = None) -> TestClient:
+        from app.main import app  # geç import: DATABASE_URL yukarıda ayarlanmış olmalı
+
+        if user is None:
+            return TestClient(app)
+        return TestClient(app, headers=auth_headers(user))
+
+    return _make
 
 
 @pytest.fixture(scope="session")

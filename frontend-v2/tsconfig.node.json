@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    // Composite proje emit'i kapatamaz (TS6310), ama tsc -b'nin ürettiği
+    // vite.config.js / .d.ts build çıktısıdır, kaynak değil — proje köküne
+    // düşmesin diye node_modules altına yönlendiriliyor. (Kaynak depoda
+    // yanlışlıkla commit edilmiş bir vite.config.js vardı, taşınırken silindi.)
+    "outDir": "./node_modules/.tmp/tsconfig-node"
+  },
+  "include": ["vite.config.ts", "vitest.config.ts"]
+}

@@ -35,7 +35,18 @@ class TefasProvider:
         points: list[PricePoint] = []
         for _, row in frame.iterrows():
             price = row["price"]
-            if price is None:
+            # SIFIR FİYAT ATILIR, `None` gibi.
+            #
+            # TEFAS, fonun KURULUŞUNDAN ÖNCEKİ tarihler için 0.0 döndürüyor —
+            # hata değil, "o gün bu fon henüz yoktu" demenin biçimi. Ölçüldü:
+            # A1 Capital para piyasası fonunda 365 günlük istekte 14 satır.
+            #
+            # Süzülmezse bu sıfırlar `price_history`'ye gerçek fiyat olarak
+            # yazılır ve zinciri baştan sona bozar: portföy o gün 0 TL değerlenir,
+            # günlük getiri hesabı sıfıra bölünür, 0 → 1,40 geçişi volatiliteyi
+            # uçurur. Mevcut fonlarda tetiklenmiyor (hepsinin geçmişi pencereden
+            # uzun) ama yeni ve genç bir fon eklendiği anda devreye girerdi.
+            if price is None or float(price) <= 0:
                 continue
             row_date = row["date"]
             price_date = row_date.date() if hasattr(row_date, "date") else row_date
