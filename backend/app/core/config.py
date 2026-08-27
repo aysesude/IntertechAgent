@@ -776,6 +776,19 @@ class Settings(BaseSettings):
     # kullanıcıya söylenmelidir.
     current_price_stale_days: int = 4
 
+    # İşlem (Al/Sat) fiyatı sağlayıcıdan CANLI çekilsin mi?
+    #
+    # `price_service.get_current_prices` bilerek canlı çağırmıyor — o yol
+    # sohbetin içinden geçiyor ve saniyeler eklemek yanıtı geciktirirdi.
+    # İşlem farklı: kullanıcının bilinçli, tek seferlik bir eylemi ve
+    # fiyatın doğruluğu gecikmeden daha önemli. Ölçüldü (27 Ağustos 2026,
+    # BIST açıkken): sembol başına ~0,4 sn, THYAO'da kayıtlı kapanışla
+    # canlı fiyat arasında %0,97 fark.
+    #
+    # Kapatılabilir olması A1 varsayımının gereği: ağ yokken demo yine
+    # çalışmalı, o zaman son kapanışa düşülür ve bu kullanıcıya SÖYLENİR.
+    trade_live_price_enabled: bool = True
+
     # TCMB EVDS tarihsel seriler için ücretsiz API anahtarı (evds2.tcmb.gov.tr).
     # Anahtar yoksa tarihsel kur yfinance'ten çekilir (yedek kaynak).
     evds_api_key: str | None = None

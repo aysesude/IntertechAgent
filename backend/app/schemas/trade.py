@@ -41,6 +41,9 @@ class TradableAsset(BaseModel):
     # Son kapanış. `price_date` "bugün" DEĞİL: piyasa hafta sonu ve tatilde
     # kapalı. Arayüz tarihi göstermek zorunda, yoksa kullanıcı canlı fiyat
     # sanır.
+    # Listedeki fiyat KAYITLI kapanıştır, canlı değil: 141 varlık için
+    # sağlayıcıya gitmek ~56 saniye sürerdi (ölçüldü). Canlı fiyat yalnızca
+    # kullanıcı bir varlık seçtiğinde, ön izlemede çekilir.
     price: Money | None
     price_date: date | None
     price_source: str | None
@@ -110,6 +113,10 @@ class TradePreview(BaseModel):
     price: Money
     price_date: date
     price_stale: bool
+    # Fiyat sağlayıcıdan O AN mı çekildi, yoksa kayıtlı son kapanış mı?
+    # Kullanıcı neyi onayladığını bilmeli: gün içi fiyatla dünkü kapanış
+    # arasında yüzde birlik farklar oluyor (ölçüldü).
+    price_is_live: bool
     currency: str
     fx_rate_to_try: Money
     gross_try: Money

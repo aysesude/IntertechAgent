@@ -433,9 +433,29 @@ bakiyesi biten kullanıcının demo akışında kilitlenmemesi için var.
   hesaplansaydı geçmiş bir alımın TRY maliyeti bugünkü kura göre değişir ve
   kâr/zarar oynardı.
 - **Komisyon yok** (ürün kararı, 27 Ağustos 2026).
-- **İşlem tarihi bugündür**, fiyat son kapanış. Cron akşam koştuğu için
-  sabah/hafta sonu yapılan işlemde ikisi farklı güne düşebilir; `price_date`
-  ve `price_stale` bunu söyler, arayüz göstermek zorundadır.
+- **Fiyat sağlayıcıdan CANLI çekilir** (`price_is_live: true`). Ölçüldü
+  (27 Ağustos 2026, BIST açıkken): sembol başına ~0,4 sn ve THYAO'da kayıtlı
+  kapanışla arasında **%0,97 fark**. Sohbet ucunun aksine burada canlı
+  çağrı yapılıyor: işlem kullanıcının bilinçli, tek seferlik eylemi ve
+  fiyatın doğruluğu gecikmeden önemli.
+- **Liste ucu canlı ÇEKMEZ**, kayıtlı kapanışı verir: 141 varlık için
+  sağlayıcıya gitmek ~56 saniye sürerdi. Canlı fiyat yalnızca kullanıcı bir
+  varlık seçtiğinde (`preview`) çekilir.
+- **Canlı çekim düşerse kayıtlı kapanışa düşülür** ve `price_is_live: false`
+  döner — ağ tökezlediğinde işlem engellenmez ama hangi fiyatın kullanıldığı
+  söylenir. İkisi de yoksa işlem YAPILMAZ; fiyat uydurulmaz.
+- **Ön izlemedeki fiyat onayda da geçerlidir.** Fiyat sunucuda 45 saniye
+  tutulur; kullanıcı gördüğü rakamdan başka bir fiyattan işlem görmez.
+  İstemciye fiyat yazdırmak çözüm değil — o zaman tarayıcı istediği fiyatı
+  gönderirdi.
+- **İşlem tarihi bugündür.** Kullanıcı emirleri deftere `note` ile
+  işaretlenir ve `scripts/data_doctor` §3 kontrolünün **dışında** tutulur: o
+  kontrol "işlem fiyatı o günün kapanışıyla aynı mı" diye bakıyor ve seed
+  verisini denetlemek için var; gün içi fiyattan geçen gerçek bir emrin
+  kapanıştan farklı olması normaldir.
+- **`TRADE_LIVE_PRICE_ENABLED=false`** ile canlı çekim kapatılabilir (A1:
+  ağsız demo). Testlerde `conftest.py` bunu kapatıyor — açık kalsaydı test
+  paketi ağa bağımlı olur, BIST açıkken/kapalıyken farklı sonuç üretirdi.
 - Fiyatı olmayan varlık **işlem görmez** — fiyat uydurulmaz (AK 5.5).
 - Defter kuralı ihlalleri (`LedgerError`) **422** döner: kullanıcının
   düzeltebileceği bir durumdur, sunucu hatası değil.

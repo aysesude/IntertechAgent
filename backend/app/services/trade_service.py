@@ -16,8 +16,10 @@ aynı gerekçe yazılı (`user_service`), ama orada beyan değişiyordu — bura
 para hareket ediyor.
 """
 
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime, timezone
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from typing import NamedTuple
 from uuid import UUID
 
 from sqlalchemy import select
@@ -26,6 +28,8 @@ from sqlalchemy.orm import Session
 from app.core.config import ASSET_QUANTITY_PRECISION, AssetClass, settings
 from app.core.exceptions import NotFoundError, ValidationAppError
 from app.models import Asset, Portfolio, PriceHistory, TransactionType, User
+from app.providers.registry import latest_chain
+from app.providers.universe import SPEC_BY_SYMBOL
 from app.schemas.trade import (
     TradableAsset,
     TradableList,
@@ -40,6 +44,15 @@ from app.services.ledger_service import (
     rebuild_holdings,
     record_transaction,
 )
+
+# Kullanıcı emirlerinin defterdeki imzası.
+#
+# `scripts/data_doctor` §3 her BUY/SELL'in fiyatını O GÜNÜN kapanışıyla
+# karşılaştırıyor; o kontrol seed'in ürettiği veriyi denetlemek için var
+# ("backfill seed'den sonra mı koştu"). Kullanıcı emri GÜN İÇİ fiyattan
+# yazılıyor ve kapanıştan farklı olması normal — ayırt edilmezse doktor
+# her gerçek işlemi sahte bir bulgu olarak raporlardı.
+USER_ORDER_NOTE = "Kullanıcı emri (Al/Sat ekranı)"
 
 _TRY_QUANT = Decimal("0.0001")
 _ZERO = Decimal(0)
@@ -79,6 +92,86 @@ def _son_fiyat(db: Session, asset_id: UUID) -> PriceHistory | None:
     ).scalar_one_or_none()
 
 
+class CanliFiyat(NamedTuple):
+    """Bir emrin fiyatı ve nereden geldiği."""
+
+    fiyat: Decimal
+    gun: date
+    canli: bool
+
+
+# Ön izleme ile onay arasındaki fiyat, aynı kalmalı.
+#
+# Kullanıcı bir rakam görüp onaylıyor; onaya kadar geçen saniyelerde fiyat
+# yeniden çekilseydi ONAYLADIĞINDAN BAŞKA bir fiyattan işlem görürdü. İstemciye
+# fiyat yazdırmak da çözüm değil (bkz. şema başlığı), o yüzden fiyat kısa
+# ömürlü olarak SUNUCUDA tutuluyor: ön izleme doldurur, onay aynı değeri
+# okur. Süre dolduysa yeniden çekilir — bayat bir fiyattan işlem yapmak,
+# fiyatın oynamasından kötüdür.
+_FIYAT_TTL_SN = 45
+_fiyat_onbellegi: dict[str, tuple[float, CanliFiyat]] = {}
+
+
+def _onbellekten(sembol: str) -> CanliFiyat | None:
+    kayit = _fiyat_onbellegi.get(sembol)
+    if kayit is None:
+        return None
+    yazilma, deger = kayit
+    if time.monotonic() - yazilma > _FIYAT_TTL_SN:
+        _fiyat_onbellegi.pop(sembol, None)
+        return None
+    return deger
+
+
+def temizle_fiyat_onbellegi() -> None:
+    """Önbelleği boşaltır. YALNIZCA TESTLER İÇİN."""
+    _fiyat_onbellegi.clear()
+
+
+def _canli_cek(sembol: str) -> CanliFiyat | None:
+    """Sağlayıcıdan o anki fiyatı çeker; başarısızsa `None`.
+
+    Ölçüldü (27 Ağustos 2026, BIST açıkken): sembol başına ~0,4 sn ve
+    kayıtlı kapanışla arasında THYAO'da %0,97 fark vardı. İşlem, kullanıcının
+    bilinçli tek seferlik eylemi olduğu için bu gecikme kabul edilebilir —
+    sohbet akışında olmazdı.
+
+    Hata YUTULUR ve `None` döner: ağ tökezlediğinde işlem tamamen
+    engellenmemeli, kayıtlı kapanışa düşülüp bu kullanıcıya söylenmeli
+    (zarif düşüş).
+    """
+    spec = SPEC_BY_SYMBOL.get(sembol)
+    if spec is None or not settings.trade_live_price_enabled:
+        return None
+    onbellek = _onbellekten(sembol)
+    if onbellek is not None:
+        return onbellek
+    for saglayici, saglayici_sembolu in latest_chain(spec):
+        try:
+            nokta = saglayici.fetch_latest(saglayici_sembolu)
+        except Exception:  # sağlayıcı hataları çeşitli tiplerde gelir
+            continue
+        if nokta is not None and nokta.close_price > 0:
+            deger = CanliFiyat(Decimal(nokta.close_price), nokta.price_date, True)
+            _fiyat_onbellegi[sembol] = (time.monotonic(), deger)
+            return deger
+    return None
+
+
+def _islem_fiyati(db: Session, asset: Asset) -> CanliFiyat:
+    """Emrin fiyatı: önce canlı, olmazsa kayıtlı son kapanış.
+
+    İkisi de yoksa işlem YAPILMAZ — fiyat uydurulmaz (AK 5.5).
+    """
+    canli = _canli_cek(asset.symbol)
+    if canli is not None:
+        return canli
+    kayit = _son_fiyat(db, asset.id)
+    if kayit is None:
+        raise ValidationAppError(f"{asset.symbol} için fiyat alınamadı; işlem yapılamaz.")
+    return CanliFiyat(Decimal(kayit.close_price), kayit.price_date, False)
+
+
 def _fx_kuru(db: Session, currency: str) -> Decimal:
     """TRY dışı varlık için o anki kur. TRY ise 1.
 
@@ -92,10 +185,11 @@ def _fx_kuru(db: Session, currency: str) -> Decimal:
     if sembol is None:
         raise ValidationAppError(f"{currency} için kur kaynağı tanımlı değil")
     asset = db.execute(select(Asset).where(Asset.symbol == sembol)).scalar_one_or_none()
-    fiyat = _son_fiyat(db, asset.id) if asset else None
-    if fiyat is None:
+    if asset is None:
         raise ValidationAppError(f"{sembol} kuru bulunamadı; {currency} işlemi yapılamaz")
-    return Decimal(fiyat.close_price)
+    # Kur da fiyatla aynı yoldan: canlı, olmazsa kayıtlı. Varlığı gün içi
+    # fiyattan alıp kuru dünden almak, TRY maliyeti tutarsız yapardı.
+    return _islem_fiyati(db, asset).fiyat
 
 
 def _yuvarla(quantity: Decimal, asset_class: AssetClass) -> Decimal:
@@ -188,9 +282,7 @@ def preview_trade(
     if asset is None:
         raise NotFoundError(f"Varlık bulunamadı: {symbol}")
 
-    fiyat_kaydi = _son_fiyat(db, asset.id)
-    if fiyat_kaydi is None:
-        raise ValidationAppError(f"{asset.symbol} için kayıtlı fiyat yok; işlem yapılamaz.")
+    islem_fiyati = _islem_fiyati(db, asset)
 
     miktar = _yuvarla(quantity, asset.asset_class)
     if miktar <= 0:
@@ -211,7 +303,7 @@ def preview_trade(
             f"Elinizde {elde} adet {asset.symbol} var, {miktar} adet satılamaz."
         )
 
-    fiyat = Decimal(fiyat_kaydi.close_price)
+    fiyat = islem_fiyati.fiyat
     kur = _fx_kuru(db, asset.currency)
     brut = (miktar * fiyat * kur).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP)
     komisyon = (brut * FEE_RATE).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP)
@@ -223,15 +315,16 @@ def preview_trade(
             f"Yetersiz bakiye: {nakit_once} TL var, bu işlem {-nakit_delta} TL istiyor."
         )
 
-    yas = (datetime.now(timezone.utc).date() - fiyat_kaydi.price_date).days
+    yas = (datetime.now(timezone.utc).date() - islem_fiyati.gun).days
     return TradePreview(
         symbol=asset.symbol,
         name=asset.name,
         side=side,
         quantity=miktar,
         price=fiyat,
-        price_date=fiyat_kaydi.price_date,
+        price_date=islem_fiyati.gun,
         price_stale=yas > settings.current_price_stale_days,
+        price_is_live=islem_fiyati.canli,
         currency=asset.currency,
         fx_rate_to_try=kur,
         gross_try=brut,
@@ -268,7 +361,7 @@ def execute_trade(
         currency=onizleme.currency,
         fx_rate_to_try=onizleme.fx_rate_to_try,
         fee_try=onizleme.fee_try,
-        note="Kullanıcı emri (Al/Sat ekranı)",
+        note=USER_ORDER_NOTE,
     )
     # Defter tek gerçek; `holdings` ondan TÜRETİLEN önbellek. Yeniden
     # kurulmazsa portföy ekranı işlemi hiç olmamış gibi gösterir.

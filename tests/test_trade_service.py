@@ -191,8 +191,9 @@ class TestDefterKurallari:
             preview_trade(db_session, kullanici.id, "THYAO", TradeSide.SELL, Decimal(1))
 
     def test_fiyati_olmayan_varlik_islem_gormez(self, db_session, kullanici):
-        # Fiyat uydurmak yerine açıkça reddet (AK 5.5).
-        with pytest.raises(ValidationAppError, match="kayıtlı fiyat yok"):
+        # Fiyat uydurmak yerine açıkça reddet (AK 5.5). Canlı çekim de
+        # kayıtlı kapanış da yoksa işlem YAPILMAZ.
+        with pytest.raises(ValidationAppError, match="fiyat alınamadı"):
             preview_trade(db_session, kullanici.id, "AKBNK", TradeSide.BUY, Decimal(1))
 
     def test_taninmayan_sembol(self, db_session, kullanici):
@@ -328,3 +329,97 @@ def test_sinif_hassasiyeti_madende_kesirli(db_session, kullanici):
     # Aynı kesir hissede AŞAĞI yuvarlanır — hassasiyet sınıfa bağlı.
     hisse = preview_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal("2.55"))
     assert hisse.quantity == Decimal(2)
+
+
+class TestCanliFiyat:
+    """Canlı çekim yolu.
+
+    Testlerde ayar KAPALI (bkz. conftest) — aksi halde paket ağa bağımlı
+    olur ve BIST açıkken/kapalıyken farklı sonuç üretir. Burada `_canli_cek`
+    değiştirilerek yol sınanıyor.
+    """
+
+    def test_canli_fiyat_kayitli_kapanisi_EZER(self, db_session, kullanici, monkeypatch):
+        # Ölçüldü: BIST açıkken THYAO'da kayıtlı kapanışla canlı fiyat
+        # arasında %0,97 fark vardı. Kayıtlıdan işlem yapmak, kullanıcıya
+        # dünkü fiyattan alım yaptırmak olurdu.
+        from app.services import trade_service
+
+        monkeypatch.setattr(
+            trade_service,
+            "_canli_cek",
+            lambda sembol: (
+                trade_service.CanliFiyat(Decimal("305.50"), datetime.now(timezone.utc).date(), True)
+                if sembol == "THYAO"
+                else None
+            ),
+        )
+
+        onizleme = preview_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(1))
+
+        assert onizleme.price == Decimal("305.50")  # kayıtlı fiyat 100 idi
+        assert onizleme.price_is_live is True
+
+    def test_canli_cekim_DUSERSE_kayitli_kapanisa_dusulur(self, db_session, kullanici, monkeypatch):
+        """Ağ tökezlediğinde işlem tamamen engellenmemeli (zarif düşüş) ama
+        kullanıcıya hangi fiyatın kullanıldığı SÖYLENMELİ."""
+        from app.services import trade_service
+
+        monkeypatch.setattr(trade_service, "_canli_cek", lambda sembol: None)
+
+        onizleme = preview_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(1))
+
+        assert onizleme.price == Decimal("100.0000")
+        assert onizleme.price_is_live is False
+
+    def test_onay_ONIZLEMEDEKI_fiyattan_gecer(self, db_session, kullanici, monkeypatch):
+        """Kullanıcı bir rakam görüp onaylıyor.
+
+        Onaya kadar geçen saniyelerde fiyat yeniden çekilseydi ONAYLADIĞINDAN
+        başka bir fiyattan işlem görürdü. Fiyat kısa ömürlü olarak sunucuda
+        tutuluyor; istemciye fiyat yazdırmak çözüm değil (o zaman tarayıcı
+        istediği fiyatı gönderirdi).
+        """
+        from app.services import trade_service
+
+        trade_service.temizle_fiyat_onbellegi()
+        cagri_sayisi = {"n": 0}
+
+        def sahte_zincir(spec):
+            class Saglayici:
+                def fetch_latest(self, sembol):
+                    cagri_sayisi["n"] += 1
+                    # Her çağrıda FARKLI fiyat: önbellek çalışmazsa onay
+                    # ön izlemeden başka bir rakamla geçerdi.
+                    from app.providers.base import PricePoint
+
+                    return PricePoint(
+                        datetime.now(timezone.utc).date(),
+                        Decimal(100 + cagri_sayisi["n"]),
+                        PriceSource.YFINANCE,
+                    )
+
+            return [(Saglayici(), spec.symbol)]
+
+        monkeypatch.setattr(trade_service.settings, "trade_live_price_enabled", True)
+        monkeypatch.setattr(trade_service, "latest_chain", sahte_zincir)
+
+        onizleme = preview_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(1))
+        sonuc = execute_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(1))
+
+        assert sonuc.preview.price == onizleme.price
+        trade_service.temizle_fiyat_onbellegi()
+
+    def test_kullanici_emri_defterde_ISARETLI(self, db_session, kullanici):
+        """`data_doctor` §3 işlem fiyatını o günün KAPANIŞIYLA karşılaştırıyor.
+
+        O kontrol seed verisini denetlemek için var; kullanıcı emri gün içi
+        fiyattan yazılıyor ve kapanıştan farklı olması normal. Ayırt
+        edilmezse doktor her gerçek işlemi sahte bulgu olarak raporlardı.
+        """
+        from app.services.trade_service import USER_ORDER_NOTE
+
+        sonuc = execute_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(1))
+        islem = db_session.get(Transaction, sonuc.transaction_id)
+
+        assert islem.note == USER_ORDER_NOTE
