@@ -16,19 +16,38 @@ import type { ChatMessage } from "@/types/finance";
  * ve iki farklı tempodaki animasyon yan yana iki ayrı olay gibi okunuyor.
  * Göz hızlı olanı takip ediyor, o da söyleyecek şeyi olmayan yarısı.
  *
+ * Kayık 30'dan 40 piksele büyütüldü: salınım genliği boyuta oranlı, yani
+ * küçükken hareket birkaç piksel kalıyor ve "bekliyor" mu "dondu" mu
+ * anlaşılmıyordu. Etiket de 13 px'ten 14'e — balonun kendi metniyle aynı
+ * boy, iki ayrı yazı ölçüsü yan yana durmasın.
+ *
  * Bileşen kendi `role="status" aria-live="polite"` sarmalayıcısını
  * getiriyor; buraya ikinci bir canlı bölge eklenmemeli.
  */
 function DusunuyorIsareti() {
   return (
     <PaperBoatThinking
-      size={30}
+      size={40}
       label="VİRA düşünüyor"
       showDots={false}
-      className="text-[13px] font-medium text-white/80"
+      className="text-sm font-medium text-ink-soft"
     />
   );
 }
+
+/**
+ * VİRA'nın balonu — karşılama (`ChatGreeting`) ile ORTAK.
+ *
+ * İki yerde ayrı ayrı yazılsaydı biri değiştiğinde diğeri geride kalır ve
+ * sohbette iki farklı tonda "asistan balonu" görünürdü.
+ *
+ * Nötr zemin, marka rengi DEĞİL. Kullanıcı ve asistan balonları aynı
+ * `bg-brand` tonundaydı; kimin konuştuğu ancak hizadan anlaşılıyordu.
+ * Ayrım için asistan tarafı nötr yapıldı, çünkü uzun olan taraf o: markdown
+ * listeleri, tablolar ve rakamlar doygun bir zemin üzerinde yorucu okunuyor.
+ * Vurgu rengi kısa olan tarafta, kullanıcının kendi mesajında kalıyor.
+ */
+export const AI_BALON_SINIFLARI = "rounded-bl-[4px] bg-line2 text-ink";
 
 export function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
@@ -45,7 +64,16 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className={`flex animate-fadeUp flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
-      <div className={isAiBubble ? "relative" : ""}>
+      {/* GENİŞLİK SINIRI BURADA, balonda değil.
+          `max-w-[84%]` balonun kendisindeydi ve balonun kapsayan bloğu bu
+          sarmalayıcı — genişliği ise içeriğe göre (shrink-to-fit) belirlenen
+          bir kutu. Yüzde, kendisi içeriğe bağlı bir genişliğe göre
+          çözülünce tarayıcı doğal metin genişliğinin %84'ünü uyguluyordu:
+          bol yer varken bile KISA mesajlar ikinci satıra düşüyor, yalnızca
+          bekleme işaretini taşıyan balon ise işarete dar geliyordu.
+          Sarmalayıcı satırın tam genişliğine sahip olduğu için yüzde burada
+          beklendiği gibi çözülüyor. %84 -> %90. */}
+      <div className={`max-w-[90%] ${isAiBubble ? "relative" : ""}`}>
         {isAiBubble && (
           // Baloncuğun arkasında ufak, marka rengiyle uyumlu bir highlight —
           // dashboard'daki mavi tonla (bkz. --color-brand) aynı kaynaktan,
@@ -57,10 +85,12 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
         )}
         <div
           className={
-            "relative max-w-[84%] rounded-[14px] px-[18px] py-3.5 text-sm leading-[1.65] " +
+            "relative w-fit rounded-[14px] px-[18px] py-3.5 text-sm leading-[1.65] " +
             (message.error
               ? "rounded-bl-[4px] border border-danger/30 bg-danger-tint text-ink-soft dark:border-transparent"
-              : `${isUser ? "rounded-br-[4px]" : "rounded-bl-[4px]"} bg-brand text-white`)
+              : isUser
+                ? "rounded-br-[4px] bg-brand text-white"
+                : AI_BALON_SINIFLARI)
           }
         >
           {isUser ? (
@@ -78,7 +108,7 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
                 // Akış tamamlanmadan koptu: elde kalan metin gösteriliyor ama
                 // eksik olduğu söylenmeli, yarım cevap tam sanılmasın.
                 <p
-                  className={`m-0 mt-1.5 text-[11.5px] italic ${message.error ? "text-ink-faint" : "text-white/70"}`}
+                  className="m-0 mt-1.5 text-[11.5px] italic text-ink-faint"
                 >
                   Yanıt tamamlanamadı, bağlantı kesildi.
                 </p>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AssistantAvatar } from "@/components/chat/AssistantAvatar";
 import { ChatBubble } from "@/components/chat/ChatBubble";
+import { ChatGreeting } from "@/components/chat/ChatGreeting";
 import { DownloadIcon, PlusIcon, SendIcon } from "@/components/icons";
 import { useChat } from "@/chat/ChatProvider";
 import { downloadTranscript } from "@/chat/transcript";
@@ -86,11 +87,16 @@ export function ChatPage() {
           ref={scrollRef}
           className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-6"
         >
-          {messages.length === 0 && (
-            <p className="m-0 text-sm text-ink-faint">
-              Portföyünüz, riskiniz veya piyasa hakkında bir soru sorun.
-            </p>
-          )}
+          {/* Karşılama akışın EN ÜSTÜNDE sabit durur ve `messages` dizisine
+              GİRMEZ (gerekçesi ChatGreeting içinde). Mesaj gelince kaybolmaz:
+              gerçek bir karşılama kaydırınca yukarıda kalır, kaybolan şey
+              karşılama değil yer tutucu olurdu.
+
+              Eski boş-durum metni ("Portföyünüz, riskiniz veya piyasa
+              hakkında bir soru sorun.") kaldırıldı — karşılama onun işini
+              zaten yapıyor ve altındaki öneri çipleri somut soruları
+              veriyor. */}
+          <ChatGreeting userName={user.name} />
           {messages.map((m) => (
             <ChatBubble key={m.id} message={m} />
           ))}

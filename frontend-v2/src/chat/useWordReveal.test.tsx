@@ -11,9 +11,23 @@ import { useWordReveal } from "./useWordReveal";
  * koruyor.
  */
 
-function Panel({ metin, aktif }: { metin: string; aktif: boolean }) {
-  const gorunen = useWordReveal(metin, aktif);
+function Panel({
+  metin,
+  aktif,
+  bastanBasla,
+}: {
+  metin: string;
+  aktif: boolean;
+  bastanBasla?: boolean;
+}) {
+  const gorunen = useWordReveal(metin, aktif, { bastanBasla });
   return <span data-testid="gorunen">{gorunen}</span>;
+}
+
+/** Görünen metindeki kelime sayısı. */
+function kelimeSayisi(): number {
+  const metin = gorunen().trim();
+  return metin === "" ? 0 : metin.split(/\s+/).length;
 }
 
 function gorunen(): string {
@@ -133,6 +147,61 @@ describe("useWordReveal", () => {
     const metin = Array.from({ length: 60 }, (_, i) => `k${i}`).join(" ");
     const { rerender } = render(<Panel metin="" aktif />);
     rerender(<Panel metin={metin} aktif />);
+    expect(gorunen()).toBe(metin);
+  });
+});
+
+describe("tempo", () => {
+  it("bir turda EN FAZLA üç kelime açılır", () => {
+    // Asıl pürüz hız değil SIÇRAMAYDI: tavan yokken tamamlanmış uzun bir
+    // yanıtın ilk turunda ekrana tek seferde 10 kelime düşüyordu, metin
+    // kelime kelime değil öbek öbek beliriyordu.
+    const uzun = Array.from({ length: 300 }, (_, i) => `k${i}`).join(" ");
+    const { rerender } = render(<Panel metin="" aktif />);
+    rerender(<Panel metin={uzun} aktif />);
+
+    turlariIlerlet(24);
+    expect(kelimeSayisi()).toBeLessThanOrEqual(3);
+
+    turlariIlerlet(24);
+    expect(kelimeSayisi()).toBeLessThanOrEqual(6);
+  });
+
+  it("uzun metinde bile makul sürede yetişir", () => {
+    // Tavan, yetişmeyi TAMAMEN kapatmamalı: sunucu bitirmişken ekranın
+    // saniyelerce yazıyor olması yanıtı gecikmiş gösterir.
+    const uzun = Array.from({ length: 200 }, (_, i) => `k${i}`).join(" ");
+    const { rerender } = render(<Panel metin="" aktif={false} />);
+    rerender(<Panel metin={uzun} aktif={false} />);
+
+    turlariIlerlet(2500);
+
+    expect(gorunen()).toBe(uzun);
+  });
+});
+
+describe("bastanBasla", () => {
+  it("tam metinle mount olsa bile SIFIRDAN açar", () => {
+    // Karşılama mesajı için: metin ilk render'da elimizde ama sohbetin geri
+    // kalanıyla aynı ritimde belirmeli.
+    const metin = Array.from({ length: 40 }, (_, i) => `kelime${i}`).join(" ");
+    render(<Panel metin={metin} aktif={false} bastanBasla />);
+
+    expect(gorunen()).toBe("");
+
+    turlariIlerlet(24);
+    expect(kelimeSayisi()).toBeGreaterThan(0);
+
+    turlariIlerlet(2000);
+    expect(gorunen()).toBe(metin);
+  });
+
+  it("VARSAYILAN kapalı — geçmiş mesajlar yeniden yazılmaz", () => {
+    // Bayrak yanlışlıkla varsayılan açık yapılırsa sohbet geçmişi her
+    // yeniden çizimde baştan yazılmaya başlar; okunmuş bir metnin silinip
+    // yeniden yazılması hata gibi görünür.
+    const metin = Array.from({ length: 40 }, (_, i) => `kelime${i}`).join(" ");
+    render(<Panel metin={metin} aktif={false} />);
     expect(gorunen()).toBe(metin);
   });
 });
