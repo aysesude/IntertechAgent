@@ -166,6 +166,16 @@ export function HoldingReturnDetail({ holding, onClose }: HoldingReturnDetailPro
             <div className="mt-5 text-[11px] font-semibold uppercase tracking-[.7px] text-ink-faint">
               Getiri Detayları
             </div>
+            {/* Backend'de kalan-adet bazlı parti/lot takibi yok (FIFO/LIFO
+                bilerek kapsam dışı, bkz. ledger_service.py) — aşağıdaki liste
+                ham alış işlemleridir, satışlarla düzeltilmez. Kısmi satışı
+                olan bir enstrümanda bu yüzden toplamlar üstteki ÖZET'ten
+                farklı çıkabilir; bunu sessizce geçmek yerine belirtiyoruz
+                (AK 5.5). */}
+            <p className="m-0 mt-1 text-[11px] leading-snug text-ink-faint">
+              Ham alış işlemleri listelenir; kısmi satış olduysa kalan miktar
+              ayrımı yapılmaz.
+            </p>
           </div>
 
           {/* min-h-0 şart: flex item'ların varsayılan min-height'ı "auto"

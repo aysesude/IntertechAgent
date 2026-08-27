@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchHoldings,
   fetchPortfolioSummary,
+  fetchTransactions,
   type ApiHoldingsValuation,
   type ApiPortfolioSummary,
+  type ApiTransactionList,
 } from "@/api/portfolio";
 import { fetchRiskAssessment, type ApiRiskAssessment } from "@/api/risk";
 import { isApiConfigured } from "@/api/client";
@@ -32,6 +34,12 @@ interface TemelVeri {
    * risk sütunu "—" kalır; başka hiçbir alan buna bağımlı değil.
    */
   risk: ApiRiskAssessment | null;
+  /**
+   * Yalnızca Getiri Detayları panelindeki ham alış geçmişi için (bkz.
+   * adapters/portfolio.ts:lotsFromBuys). Düşerse `null` — satırlar
+   * tıklanamaz kalır, başka hiçbir alan buna bağımlı değil.
+   */
+  transactions: ApiTransactionList | null;
 }
 
 /**
@@ -88,10 +96,13 @@ export function usePortfolioData(): PortfolioState {
       // Yalnızca risk sütunu için (bkz. TemelVeri.risk) — düşerse `null`,
       // sayfanın geri kalanı bundan bağımsız çizilmeye devam eder.
       fetchRiskAssessment(kullanici).catch(() => null),
+      // Yalnızca Getiri Detayları panelindeki ham alış geçmişi için (bkz.
+      // TemelVeri.transactions) — düşerse `null`, satırlar tıklanamaz kalır.
+      fetchTransactions(kullanici).catch(() => null),
     ])
-      .then(([ozet, holdings, risk]) => {
+      .then(([ozet, holdings, risk, transactions]) => {
         if (nesil.current !== benimNesil) return;
-        const yeniTemel = { ozet, holdings, risk };
+        const yeniTemel = { ozet, holdings, risk, transactions };
         setTemel(yeniTemel);
         paylasilanOnbellek = { userId: kullanici, temel: yeniTemel };
         setError(null);
@@ -107,7 +118,12 @@ export function usePortfolioData(): PortfolioState {
   const canliVeri = temel !== null;
 
   const data: PortfolioPageData = canliVeri
-    ? toPortfolioPageData({ summary: temel.ozet, holdings: temel.holdings, risk: temel.risk })
+    ? toPortfolioPageData({
+        summary: temel.ozet,
+        holdings: temel.holdings,
+        risk: temel.risk,
+        transactions: temel.transactions,
+      })
     : canli
       ? BOS_PORTFOLIO
       : mockPortfolioPage;
