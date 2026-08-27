@@ -106,6 +106,28 @@ async def detect_intent(state: OrchestratorState) -> dict:
         }
 
     # 2. LLM Tabanlı Niyet Tespiti
+    #
+    # KAVRAM SORULARININ TAMAMI WEB_RESEARCH'E GİDER — arşivde belgesi olsa
+    # bile. Önce denenen ayrım ("arşivde belgesi varsa MARKET") iki yerden
+    # birden kırıldı:
+    #
+    # 1. Sınıflandırıcı arşivde ne olduğunu bilemez; kararı tahmine bağlıyordu.
+    # 2. Belgenin VAR OLMASI, GETİRİLEBİLECEĞİ anlamına gelmiyor.
+    #    `rag/retriever.py` bir sonucu ancak sorguyla paylaşılan kelimelerden
+    #    en az biri JENERİK DEĞİLSE kabul ediyor; `_GENERIC_FINANCE_TERMS`
+    #    içinde `temettu`, `halka`, `arz` var — 31 şirket profilinin tamamında
+    #    geçtikleri için oraya konmak zorunda kalındı (bkz. o listenin
+    #    yorumları). Sonuç: "temettü nedir" sorgusu,
+    #    `REFERANS_kurumsal-olay-terimleri.md` içinde "## Temettü (Kâr Payı)"
+    #    başlığı AYNEN dururken bile hiçbir zaman sonuç döndüremiyor ve
+    #    kullanıcı "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi
+    #    bulunamadı" görüyordu (ölçüldü, 27 Ağustos; teşhis kelime kapısında).
+    #
+    # Bir terim ne kadar yaygınsa o kadar çok belgede geçiyor, o kadar jenerik
+    # işaretleniyor ve tanımı o kadar bulunamıyor: en çok sorulan kavramlar
+    # yapısal olarak en çok başarısız olanlar. Ayrım bu yüzden arşiv
+    # üyeliğine değil SORUNUN TÜRÜNE bağlandı — kavram/prosedür mü, yoksa
+    # belirli bir şirkete/döneme ait veri mi.
     llm = get_llm_client()
     system_prompt = (
         "Sen bir niyet sınıflandırma motorusun. Kullanıcının sorusunu aşağıdaki "
@@ -114,16 +136,15 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "PORTFOLIO — kullanıcının kendi varlıkları: değeri, dağılımı, getirisi, "
         "işlem geçmişi, tek tek pozisyonları.\n"
         "  Örnek: 'portföyüm ne durumda', 'geçen ay ne aldım', 'varlıklarımı listele'\n"
-        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz "
-        "(döviz, altın, gümüş, platin dahil kıymetli madenler); ayrıca ARŞİVDE "
-        "BELGESİ OLAN teknik konular: muhasebe standartları, finansal oran "
-        "tanımları, kurumsal olay terimleri ve düzenleyici çerçeve.\n"
+        "MARKET — BELİRLİ bir şirkete, varlığa ya da döneme ait VERİ: piyasa "
+        "haberleri, şirket bilançoları, açıklanmış rakamlar, güncel "
+        "fiyat/kur/faiz (döviz, altın, gümüş, platin dahil kıymetli madenler). "
+        "Kavramın kendisi değil, o kavramın BİR ŞİRKETTEKİ değeri.\n"
         "  Örnek: 'Aselsan haberleri', 'dolar kuru ne durumda', 'BIST bugün nasıl', "
         "'gram altın kaç TL', 'gümüş fiyatı nedir', 'platin ne kadar', "
-        "'TFRS 16 nedir', 'F/K oranı nasıl hesaplanır', 'temettü nedir', "
-        "'halka arz nasıl olur', 'konsolide finansal tablo ne demek', "
-        "'2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam soruluyor, "
-        "TAHMIN değil)\n"
+        "'THYAO'nun F/K oranı kaç', 'Tüpraş 2. çeyrek bilançosu nasıl', "
+        "'Akbank'ın 2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam "
+        "soruluyor, TAHMIN değil)\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -132,11 +153,15 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
         "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
         "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
-        "WEB_RESEARCH — genel finans kavramlarının ne anlama geldiği, nasıl "
-        "işlediği, nasıl hesaplandığı; yaygın uygulamalar ve süreçler. "
-        "Kullanıcının kendi verisiyle ya da güncel bir piyasa değeriyle ilgisi "
-        "yoktur ve ARŞİVDE BELGESİ DE YOKTUR (arşivde varsa MARKET).\n"
-        "  Örnek: 'lot ne demek', 'borsa saat kaçta kapanır', "
+        "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
+        "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
+        "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
+        "girer. Kavram sorusunun tamamı buraya gelir — soruda BELİRLİ bir "
+        "şirket ya da dönem geçmiyorsa MARKET DEĞİLDİR.\n"
+        "  Örnek: 'lot ne demek', 'temettü nedir', 'halka arz nasıl olur', "
+        "'borsa saat kaçta kapanır', 'takas kaç gün sürer', "
+        "'F/K oranı nasıl hesaplanır', 'TFRS 16 nedir', "
+        "'konsolide finansal tablo ne demek', 'SPK ne iş yapar', "
         "'şirketler ne sıklıkla temettü verir', 'portföy kârı nasıl hesaplanır', "
         "'hisse ile fon arasındaki fark ne'\n\n"
         "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı;\n"
@@ -157,12 +182,16 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
         "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
         "'riskim nedir' → sadece RISK.\n"
-        "TANIM mı DEĞER mi: bir kavramın ne olduğu soruluyorsa MARKET ya da "
-        "WEB_RESEARCH (arşivde belgesi varsa MARKET, yoksa WEB_RESEARCH); "
-        "aynı kavramın kullanıcıdaki DEĞERİ soruluyorsa ilgili ajan. "
-        "'temettü nedir' → MARKET, 'lot ne demek' → WEB_RESEARCH, "
-        "'ne kadar temettü aldım' → PORTFOLIO. "
-        "'kâr nasıl hesaplanır' → WEB_RESEARCH, 'ne kadar kâr ettim' → PORTFOLIO.\n"
+        "KAVRAM mı VERİ mi — tek ayrım bu:\n"
+        "  Kavramın ya da sürecin KENDİSİ soruluyorsa → WEB_RESEARCH\n"
+        "  Aynı kavramın BELİRLİ BİR ŞİRKETTEKİ değeri → MARKET\n"
+        "  Aynı kavramın KULLANICIDAKİ değeri → PORTFOLIO\n"
+        "  'temettü nedir' → WEB_RESEARCH · 'Akbank'ın temettüsü ne kadar' → "
+        "MARKET · 'ne kadar temettü aldım' → PORTFOLIO\n"
+        "  'F/K oranı nasıl hesaplanır' → WEB_RESEARCH · 'THYAO'nun F/K'sı kaç' "
+        "→ MARKET\n"
+        "  'kâr nasıl hesaplanır' → WEB_RESEARCH · 'ne kadar kâr ettim' → "
+        "PORTFOLIO\n"
         "TAHMIN ve KAPSAM_DISI TEK BAŞINA yazılır, başka etiketle birlikte değil.\n"
         "TAKİP SORUSU: Soru kendi başına anlaşılmıyorsa ('bunu açıkla', 'peki "
         "ya', 'neden böyle') ÖNCEKİ KONUŞMA'da neyin konuşulduğuna bak ve o "

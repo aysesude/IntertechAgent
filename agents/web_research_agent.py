@@ -5,10 +5,24 @@ Adı "web araştırması" ama bugün **web'e çıkmıyor**; cevabı dil modelini
 bilgisinden üretiyor. İsim, ileride eklenecek dış arama yolunu şimdiden
 işaretliyor — bugün o kod yazılmadı, çünkü kullanılmayan yol ölü koddur.
 
-NEDEN RAG DEĞİL. `data/documents/` altındaki belgelerin tamamı haber, bilanço,
-analist raporu ve makro veri; tek bir kavram belgesi yok. "Lot ne demek"
-sorusunda RAG ya hiçbir şey bulur ya da gevşek eşleşen bir bilanço parçası
-döndürür — boşa gecikme, üstüne alakasız cevap riski.
+NEDEN RAG DEĞİL. Arşivde kavram belgesi var (`REFERANS_*.md`: finansal oran
+tanımları, kurumsal olay terimleri, TFRS, düzenleyici çerçeve) ama bir tanım
+sorusu onu GETİREMİYOR. `rag/retriever.py` bir sonucu ancak sorguyla paylaşılan
+kelimelerden en az biri JENERİK DEĞİLSE kabul ediyor; `_GENERIC_FINANCE_TERMS`
+listesinde `temettu`, `halka`, `arz` var — 31 şirket profilinin tamamında
+geçtikleri için oraya konmak zorunda kalındılar, yoksa uydurma şirket sorguları
+gerçek şirket verisi döndürüyordu. Sonuç: "temettü nedir",
+`REFERANS_kurumsal-olay-terimleri.md` içinde "## Temettü (Kâr Payı)" başlığı
+AYNEN dururken bile "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi
+bulunamadı" dönüyordu (ölçüldü, 27 Ağustos).
+
+Kısır döngü şu: bir terim ne kadar yaygınsa o kadar çok şirket belgesinde
+geçiyor, o kadar jenerik işaretleniyor, tanımı o kadar bulunamıyor. En çok
+sorulan kavramlar yapısal olarak en çok başarısız olanlar. Bu yüzden kavram ve
+prosedür sorularının TAMAMI buraya geliyor; RAG'a belge, haber ve bilanço
+soruları kalıyor (yönlendirme: `orchestrator.detect_intent`, "KAVRAM mı VERİ
+mi"). Bedeli, bu cevapların `Kaynaklar:` listesi taşımaması — prompt kuralı 5
+bunu resmî kaynağa yönlendirme zorunluluğuyla kısmen karşılıyor.
 
 NEDEN CANLI TOOL DEĞİL. Güncel fiyat/kur/haber zaten başka kapılardan geliyor
 (`live_news_tools`, `price_tools`, Piyasa Ajanı). Bu ajan onların alanına
@@ -26,9 +40,13 @@ hesaplanır" sorusuna ders kitabı cevabı vermek, açıklamayla ekrandaki rakam
 birbirini yalanlaması demek. Tanımların kaynağı `docs/API.md`; oradaki kural
 değişirse prompt da güncellenmeli.
 
-Kapsam kararı burada verilmez. Hangi kavramın kapsam içi olduğu
-`agents/scope.yaml` içindeki `kavram_kapsami` bölümünde tanımlı ve kontrolü
-`scope_checker` yapar (NFR: kapsam kuralları koda gömülmez). Bu ajan yalnızca
+Kapsam kararı burada verilmez; kurallar `agents/scope.yaml`'da (NFR: kapsam
+kuralları koda gömülmez). `scope_checker` kapsam dışı varlık sınıflarını
+(kripto, türev, gayrimenkul) reddediyor ve `kavram_kapsami.soru_kaliplari`'nı
+kavram sorusunu işlem talebinden ayırmak için okuyor — o kapı olmadan "fon alım
+satımı kaç günde gerçekleşir" UNAUTHORIZED_ACTION'a düşüyordu. `kapsam_ici_konular`
+ve `kapsam_disi_konular` başlıkları ise BUGÜN YALNIZCA prompt'ta uygulanıyor
+(kural 9), kural motorunda karşılığı yok — takip işi. Bu ajan koddan yalnızca
 `kisitli_konular` bayrağını okuyup prompt'a ek kural bloğu ekler.
 """
 
