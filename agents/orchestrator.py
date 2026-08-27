@@ -195,7 +195,15 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "TAHMIN ve KAPSAM_DISI TEK BAŞINA yazılır, başka etiketle birlikte değil.\n"
         "TAKİP SORUSU: Soru kendi başına anlaşılmıyorsa ('bunu açıkla', 'peki "
         "ya', 'neden böyle') ÖNCEKİ KONUŞMA'da neyin konuşulduğuna bak ve o "
-        "konunun etiketini ver."
+        "konunun etiketini ver.\n"
+        "TEKLİF KABULÜ: Asistanın ÖNCEKİ mesajı bir tahmin isteğini reddedip "
+        "YERİNE bir ALTERNATİF önermişse ('...tahmin yapmıyorum ama geçmiş "
+        "performansı/güncel durumu/açıklanmış sonuçları paylaşabilirim' "
+        "gibi) ve kullanıcının şimdiki mesajı bu alternatifi KABUL ediyorsa "
+        "('paylaş', 'evet', 'olur', 'lütfen', 'tamam' gibi kısa bir onay), "
+        "önceki reddi TEKRARLAMA — asistanın teklif ettiği ALTERNATİFİN "
+        "etiketini ver (ör. MARKET). Reddi tekrarlamak, kullanıcının kabul "
+        "ettiği teklifi hiç yerine getirmemek demektir."
     )
 
     # Sınıflandırıcı sohbet geçmişini de görür.
