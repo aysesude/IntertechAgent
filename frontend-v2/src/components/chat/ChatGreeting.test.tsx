@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChatGreeting, karsilamaMetni } from "./ChatGreeting";
+import { ChatGreeting, karsilamaMetni, __karsilamaDurumunuSifirla } from "./ChatGreeting";
 
 /**
  * Karşılama, sohbetin ilk izlenimi ve tek görevi beklenti ayarlamak.
@@ -12,6 +12,7 @@ import { ChatGreeting, karsilamaMetni } from "./ChatGreeting";
  */
 
 beforeEach(() => {
+  __karsilamaDurumunuSifirla();
   vi.useFakeTimers();
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: false,
@@ -92,5 +93,31 @@ describe("ChatGreeting", () => {
     ilerlet(5000);
 
     expect(document.body.textContent).toContain("açıkça söylerim");
+  });
+});
+
+describe("tekrar animasyona girmemesi", () => {
+  it("ikinci mount'ta ANINDA görünür, yeniden yazılmaz", () => {
+    // `ChatProvider` sayfaların üstünde duruyor, yani sohbet geçmişi sayfa
+    // değiştirince yaşıyor; ama `AnimatePresence mode="wait"` sayfayı
+    // unmount ettiği için bu bileşen her dönüşte yeniden mount oluyordu.
+    // Sonuç: on mesajlık bir sohbete geri döndüğünüzde karşılama, duran
+    // mesajların ÜSTÜNDE kendini yeniden yazıyordu.
+    const { unmount } = render(<ChatGreeting userName="Çağan" />);
+    ilerlet(5000);
+    expect(document.body.textContent).toContain("açıkça söylerim");
+    unmount();
+
+    render(<ChatGreeting userName="Çağan" />);
+
+    // Tek bir kare bile ilerletmeden metnin tamamı yerinde.
+    expect(document.body.textContent).toContain("açıkça söylerim");
+  });
+
+  it("ilk mount'ta HÂLÂ animasyona giriyor", () => {
+    // Bayrak yanlış tarafa kayarsa karşılama hiç açılmaz ve kimse fark
+    // etmez — eksilen şey görünmeyen bir animasyon olur.
+    render(<ChatGreeting userName="Çağan" />);
+    expect(document.body.textContent).not.toContain("açıkça söylerim");
   });
 });
