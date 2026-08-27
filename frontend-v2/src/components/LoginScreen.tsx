@@ -248,14 +248,10 @@ export function LoginScreen({
     if (submitted) return;
     // İstemci doğrulaması yalnızca kullanıcı konforu içindir; asıl kapı
     // sunucudadır (backend/app/schemas/auth.py).
-    if (tckn.length !== 11) {
-      setError("T.C. kimlik numarası 11 haneli olmalı.");
-      return;
-    }
-    // Sağlama istemcide kontrol ediliyor: yanlış yazılan numara ağa
-    // çıkmadan yakalanıyor. Sunucu bunu bilerek yapmıyor (bkz. utils/tckn.ts).
+    // Yalnızca BİÇİM kontrolü (11 hane, rakam). Sağlama doğrulaması bilerek
+    // yok — gerekçesi utils/tckn.ts başlığında.
     if (!gecerliTcKimlikNo(tckn)) {
-      setError("T.C. kimlik numarası geçersiz.");
+      setError("T.C. kimlik numarası 11 haneli olmalı.");
       return;
     }
     if (password.length !== 6) {
