@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { PortfolioPage } from "@/pages/PortfolioPage";
+import { TradePage } from "@/pages/TradePage";
 import { MarketPage } from "@/pages/MarketPage";
 import { RiskPage } from "@/pages/RiskPage";
 import { ChatPage } from "@/pages/ChatPage";
@@ -41,6 +42,10 @@ const SCREEN_PATHS: Record<ScreenId, string> = {
   market: "/market",
   risk: "/risk",
   chat: "/chat",
+  // Al/Sat üst gezinmede YOK: portföyün alt sayfası, oradan giriliyor.
+  // Yine de `ScreenId`'de yeri var ki `screenFromPath` onu tanısın —
+  // tanımasaydı /trade adresinde Header yanlışlıkla Dashboard'ı vurgulardı.
+  trade: "/trade",
 };
 
 const SCREEN_IDS = Object.keys(SCREEN_PATHS) as ScreenId[];
@@ -153,6 +158,14 @@ function AppShell() {
                     element={
                       <PageTransition>
                         <PortfolioPage />
+                      </PageTransition>
+                    }
+                  />
+                  <Route
+                    path={SCREEN_PATHS.trade}
+                    element={
+                      <PageTransition>
+                        <TradePage />
                       </PageTransition>
                     }
                   />

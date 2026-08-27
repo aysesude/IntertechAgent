@@ -77,7 +77,13 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
         <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:block">
           <div className="flex items-center gap-1 rounded-full bg-line2 p-1 dark:bg-white/5">
             {NAV_ITEMS.map((item) => {
-              const active = item.id === activeScreen;
+              // Al/Sat gezinmede ayrı bir madde DEĞİL, portföyün alt
+              // sayfası — oradayken Portfolio vurgulu kalır. Aksi halde
+              // hiçbir madde yanmaz ve kullanıcı nerede olduğunu gezinmeden
+              // okuyamaz.
+              const active =
+                item.id === activeScreen ||
+                (activeScreen === "trade" && item.id === "portfolio");
               return (
                 <button
                   key={item.id}

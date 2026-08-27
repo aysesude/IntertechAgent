@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { PageHeading } from "@/components/common/PageHeading";
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
@@ -9,6 +10,7 @@ import { usePortfolioData } from "@/hooks/usePortfolioData";
 
 export function PortfolioPage() {
   const { data, loading, error, isDemoData, refetch } = usePortfolioData();
+  const navigate = useNavigate();
 
   return (
     <div className="relative min-h-screen">
@@ -21,7 +23,12 @@ export function PortfolioPage() {
             ? "Portföy verisi yükleniyor…"
             : `${data.instrumentCount} enstrüman, ${data.assetClassCount} varlık sınıfı.`
         }
-        actions={<Button>Yeni Pozisyon Ekle</Button>}
+        actions={
+          // Al/Sat ekranının giriş noktası. Düğme zaten buradaydı ama hiçbir
+          // yere gitmiyordu; ekran hazır olduğuna göre adı da işini
+          // anlatıyor — "Yeni Pozisyon Ekle" satışı dışarıda bırakıyordu.
+          <Button onClick={() => navigate("/trade")}>Al / Sat</Button>
+        }
       />
 
       {/* Backend'in üç hata kodu üç FARKLI durumdur (bkz. DashboardPage,
