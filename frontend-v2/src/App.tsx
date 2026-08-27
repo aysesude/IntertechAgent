@@ -11,6 +11,7 @@ import { MarketPage } from "@/pages/MarketPage";
 import { RiskPage } from "@/pages/RiskPage";
 import { ChatPage } from "@/pages/ChatPage";
 import { LoginScreen } from "@/components/LoginScreen";
+import { SurveyGate } from "@/components/survey/SurveyGate";
 import {
   PageTransition,
   LoginExitOverlay,
@@ -66,7 +67,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { status, notice, user, login, logout } = useAuth();
+  const { status, notice, user, account, login, logout } = useAuth();
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -94,6 +95,20 @@ function AppShell() {
   // kapatmak (ya da tersi) göz alıcı bir titreme yaratırdı.
   if (status === "checking") {
     return <div className="min-h-screen bg-surface" />;
+  }
+
+  // ANKETİ DOLDURMAMIŞ KULLANICI UYGULAMAYA GİREMEZ.
+  //
+  // Uygunluk kontrolü (`advice_eligibility`) anket puanına dayanıyor; puansız
+  // kullanıcı uygulamayı gezebilseydi portföyünü görür ama tavsiye katmanı
+  // sessizce kapalı olurdu — eksikliği fark etmez, "sistem bana bir şey
+  // söylemiyor" diye düşünürdü. Eksik olanı söylemek, sessizce yarım
+  // çalışmaktan iyidir.
+  //
+  // Kontrol BURADA, tek noktada: her sayfaya ayrı ayrı korumak, yeni bir
+  // sayfa eklendiğinde unutulmaya açık olurdu.
+  if (authenticated && account !== null && account.risk_survey_score === null) {
+    return <SurveyGate userId={account.id} fullName={account.full_name} />;
   }
 
   return (

@@ -1,17 +1,27 @@
 """Yatırımcı risk profili anketinin uçları.
 
-İkisi de KİMLİK DOĞRULAMASI İSTEMEZ ve bu bilinçli: anket kayıt akışının
-içinde, kullanıcı henüz yokken doldurulur. Hiçbiri veri yazmaz — sorular
-salt okunur, skorlama saf hesaptır. Anket sonucu ancak `/api/auth/register`
-ile kullanıcıya bağlanır.
+`/questions` ve `/score` KİMLİK DOĞRULAMASI İSTEMEZ ve bu bilinçli: ikisi de
+veri yazmaz — sorular salt okunur, skorlama saf hesaptır. Kayıt akışında
+kullanıcı henüz yokken de çağrılabilmeleri gerekiyor.
+
+`/submit/{user_id}` YAZAR, dolayısıyla oturum ve sahiplik kontrolü ister:
+anket puanı tüm uygunluk kontrolünün dayandığı beyandır, başkasının puanını
+değiştirebilmek onu ele geçirmek olurdu (AK 5.4).
 """
 
 import logging
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user, verify_user_access
+from app.core.db import get_db
+from app.core.exceptions import NotFoundError
+from app.models import User
 from app.schemas.survey import SurveyQuestions, SurveyResult, SurveyScoreRequest
 from app.services import survey_service
+from app.services.user_service import set_user_risk_survey
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +63,42 @@ async def score_survey(payload: SurveyScoreRequest) -> SurveyResult:
         sonuc = survey_service.skorla(payload.answers)
     except survey_service.SurveyAnswerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    yorum = await survey_service.yorum_uret(sonuc)
+    return SurveyResult(**sonuc, yorum=yorum)
+
+
+@router.post("/submit/{user_id}", response_model=SurveyResult)
+async def submit_survey(
+    user_id: UUID,
+    payload: SurveyScoreRequest,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+) -> SurveyResult:
+    """Anketi skorlar VE sonucu kullanıcıya kaydeder.
+
+    Giriş yapmış ama anketi henüz doldurmamış kullanıcı için. Skorlama yine
+    sunucuda: gönderilen tek şey ham cevaplardır, puan değil.
+
+    Durdurucu kural tetiklendiğinde HİÇBİR ŞEY KAYDEDİLMEZ ama sonuç yine de
+    döner — arayüz kullanıcıya hangi çelişkiyi düzeltmesi gerektiğini
+    gösterebilsin diye. `sonuc_uretildi: false` geldiğinde puan yazılmamıştır.
+
+    `risk_profile` puandan türetilerek birlikte güncellenir
+    (`user_service.set_user_risk_survey`); ikisi tek işlemde yazılır.
+    """
+    verify_user_access(user_id, current_user)
+
+    try:
+        sonuc = survey_service.skorla(payload.answers)
+    except survey_service.SurveyAnswerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if sonuc["sonuc_uretildi"] and sonuc["profil_seviyesi"] is not None:
+        try:
+            set_user_risk_survey(db, user_id, sonuc["profil_seviyesi"])
+        except NotFoundError as exc:
+            raise HTTPException(status_code=404, detail=exc.message) from exc
 
     yorum = await survey_service.yorum_uret(sonuc)
     return SurveyResult(**sonuc, yorum=yorum)
