@@ -1,4 +1,4 @@
-export type ScreenId = "dashboard" | "portfolio" | "market" | "risk" | "chat";
+export type ScreenId = "dashboard" | "portfolio" | "market" | "risk" | "chat" | "trade";
 
 export interface User {
   name: string;
