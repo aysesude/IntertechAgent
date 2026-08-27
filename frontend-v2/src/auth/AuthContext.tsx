@@ -55,6 +55,14 @@ interface AuthContextValue {
    * belirlediği şifreyi hemen yeniden yazmaya zorlardı.
    */
   register: (payload: RegisterRequest) => Promise<void>;
+  /**
+   * Kullanıcı kaydını sunucudan tazeler.
+   *
+   * Anket tamamlandığında gerekiyor: `risk_survey_score` sunucuda değişiyor
+   * ama oturumdaki kopya eski kalıyor ve anket ekranı kalkmıyordu. Sayfayı
+   * yeniden yüklemek yerine tek bir istek.
+   */
+  refreshAccount: () => Promise<void>;
   logout: () => void;
 }
 
@@ -180,6 +188,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  const refreshAccount = useCallback(async () => {
+    // Hata YUTULUYOR: bu bir tazeleme, kritik yol değil. Başarısız olursa
+    // eldeki (eski ama geçerli) kayıtla devam edilir; token gerçekten
+    // düşmüşse zaten global 401 işleyicisi oturumu kapatır.
+    try {
+      setAccount(await fetchCurrentUser());
+    } catch {
+      /* yukarıdaki gerekçe */
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -194,9 +213,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       login,
       register,
+      refreshAccount,
       logout,
     }),
-    [status, notice, account, login, register, logout],
+    [status, notice, account, login, register, refreshAccount, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

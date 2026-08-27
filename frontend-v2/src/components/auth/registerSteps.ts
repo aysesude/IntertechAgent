@@ -50,5 +50,8 @@ export const SURVEY_STEPS: SurveyStep[] = [
   },
 ];
 
-/** Sihirbazın tüm aşamaları. Anket adımları arada. */
-export type WizardStage = "hesap" | "anket" | "sonuc" | "aktarim";
+/**
+ * Kayıt sihirbazının aşamaları. Anket ARTIK BURADA DEĞİL — ilk girişe
+ * taşındı (components/survey/SurveyGate.tsx), kayıt iki adıma indi.
+ */
+export type WizardStage = "hesap" | "aktarim";
