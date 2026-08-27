@@ -1,27 +1,29 @@
-"""Giriş doğrulama (FR-0).
+"""Giriş doğrulama ve kayıt (FR-0).
 
-`user_service.py` gibi bu da dar bir yazma kapısıdır: yalnızca `last_login_at`
-alanını günceller. Kayıt (register), şifre değiştirme ve şifre sıfırlama
-BİLEREK YOK — demo kullanıcıları `make seed` ile üretilir, kendi kimliklerini
-değiştiremezler.
+`user_service.py` gibi bu da dar bir yazma kapısıdır: kullanıcı oluşturma,
+`last_login_at` ve şifre yenileme. Başka hiçbir yol `users` tablosuna yazmaz.
 
 NEDEN AJANA AÇILMIYOR. `user_service`'teki gerekçenin aynısı, daha da güçlü
 hâli: bu fonksiyonlar için MCP tool'u yazılmadı ve yazılmamalı. Sohbet
-üzerinden bir modelin kimlik doğrulama yapabilmesi, prompt enjeksiyonuyla
-("şu kullanıcı olarak giriş yap") oturum ele geçirilmesi demek olurdu.
+üzerinden bir modelin kimlik doğrulama ya da hesap açma yapabilmesi, prompt
+enjeksiyonuyla ("şu kullanıcı olarak giriş yap") oturum ele geçirilmesi
+demek olurdu.
+
 """
 
 import secrets
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.config import risk_profile_for_survey_score, settings
 from app.core.exceptions import AuthenticationError, ValidationAppError
 from app.core.security import hash_password, verify_password
-from app.models import User
+from app.models import Portfolio, TransactionType, User
+from app.services.ledger_service import record_transaction
 
 # Kayıtlı olmayan bir T.C. kimlik numarası denendiğinde bcrypt'e doğrulatılan
 # kukla özet. Amacı: "kullanıcı yok" dalının "şifre yanlış" dalından belirgin
@@ -32,6 +34,74 @@ _DUMMY_HASH = hash_password("zamanlama-sizintisina-karsi-kukla-deger")
 
 # Kimlik ya da şifre hatalı — ikisi için de AYNI metin (bkz. AuthenticationError).
 _INVALID_CREDENTIALS = "T.C. kimlik numarası veya şifre hatalı."
+
+
+def register(
+    db: Session,
+    *,
+    full_name: str,
+    national_id: str,
+    email: str,
+    password: str,
+    survey_score: int,
+    initial_deposit_try: Decimal,
+) -> User:
+    """Yeni kullanıcı, portföyü ve açılış bakiyesiyle birlikte oluşturur.
+
+    ÜÇÜ TEK İŞLEMDE: kullanıcı, portföy ve açılış yatırımı. Ayrı ayrı
+    yazılsaydı arada bir hata portföysüz bir kullanıcı ya da parasız bir
+    portföy bırakırdı; ikisi de sistemin hiçbir yerinde beklenmeyen durumlar.
+    Commit çağıran uca (uç fonksiyonu) bırakılıyor, mevcut servis kalıbıyla
+    aynı.
+
+    AÇILIŞ BAKİYESİ DEFTERE YAZILIR. "Başka bankadan getirilen" tutar
+    `record_transaction(DEPOSIT)` ile kaydedilir — nakit bakiyeyi doğrudan
+    bir alana yazmak defterin tek gerçeklik kaynağı olması kuralını bozardı
+    ve portföy değeri işlemlerden yeniden üretilemez hâle gelirdi
+    (docs/DATA.md altın kural). Tutar 0 ise işlem HİÇ yazılmaz: sıfırlık bir
+    yatırım kaydı defteri kirletir.
+
+    `risk_profile` anket puanından TÜRETİLİR, ayrıca sorulmaz — iki ölçeğin
+    ayrışmaması için tek kaynak `risk_survey_score`.
+    """
+    mevcut = db.execute(
+        select(User).where((User.national_id == national_id) | (User.email == email))
+    ).scalar_one_or_none()
+    if mevcut is not None:
+        # Hangi alanın çakıştığı SÖYLENMEZ: "bu T.C. kimlik numarası kayıtlı"
+        # demek, numaraları tek tek deneyerek kimin müşteri olduğunu
+        # öğrenmeye açık bir araç yaratırdı (giriş ucundaki aynı gerekçe).
+        raise ValidationAppError("Bu bilgilerle bir hesap zaten var.")
+
+    if initial_deposit_try < 0:
+        raise ValidationAppError("Aktarılacak tutar negatif olamaz.")
+
+    user = User(
+        email=email,
+        full_name=full_name,
+        national_id=national_id,
+        password_hash=hash_password(password),
+        risk_survey_score=survey_score,
+        risk_profile=risk_profile_for_survey_score(survey_score),
+    )
+    db.add(user)
+    db.flush()
+
+    portfolio = Portfolio(user_id=user.id)
+    db.add(portfolio)
+    db.flush()
+
+    if initial_deposit_try > 0:
+        record_transaction(
+            db,
+            portfolio.id,
+            TransactionType.DEPOSIT,
+            transaction_date=datetime.now(UTC),
+            cash_amount_try=initial_deposit_try,
+            note="Açılış aktarımı",
+        )
+
+    return user
 
 
 def authenticate(db: Session, national_id: str, password: str) -> User:

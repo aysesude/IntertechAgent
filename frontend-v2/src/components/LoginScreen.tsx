@@ -14,6 +14,7 @@ import {
   NAVY_DARK,
 } from "@/components/auth/loginPalette";
 import { PasswordResetCard } from "@/components/auth/PasswordResetCard";
+import { RegisterCard } from "@/components/auth/RegisterCard";
 import { gecerliTcKimlikNo } from "@/utils/tckn";
 
 /**
@@ -229,10 +230,10 @@ export function LoginScreen({
   onSubmit,
   notice = null,
 }: LoginScreenProps) {
-  // "login" | "reset" — şifre yenileme akışı aynı kartın içinde açılıyor;
+  // "login" | "reset" | "register" — üçü de aynı kartın içinde açılıyor;
   // ayrı bir sayfaya gitmek arka plandaki eseri ve kart çerçevesini
   // yeniden kurmak demek olurdu.
-  const [mod, setMod] = useState<"login" | "reset">("login");
+  const [mod, setMod] = useState<"login" | "reset" | "register">("login");
   const [submitted, setSubmitted] = useState(false);
   const [tckn, setTckn] = useState("");
   const [password, setPassword] = useState("");
@@ -417,7 +418,13 @@ export function LoginScreen({
               gölgeden belli olurdu. */}
           <div
             data-login-card
-            className="w-full max-w-[452px] rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-transparent dark:bg-[linear-gradient(to_right,rgba(7,17,28,0.45)_0%,rgba(7,17,28,0.45)_55%,rgba(7,17,28,0.15)_80%,rgba(7,17,28,0)_100%)] dark:shadow-[0_28px_70px_-30px_rgba(0,0,0,0.3)] sm:p-8"
+            /* Kayıt modunda kart genişliyor: anket 18 soru ve 5×3'lük bir
+               ürün matrisi taşıyor, 452 pikselde seçenek metinleri üç satıra
+               kırılıyordu. Koyu temadaki sağa doğru eriyen zemin de bu
+               genişlikte korunuyor. */
+            className={`w-full rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-transparent dark:bg-[linear-gradient(to_right,rgba(7,17,28,0.45)_0%,rgba(7,17,28,0.45)_55%,rgba(7,17,28,0.15)_80%,rgba(7,17,28,0)_100%)] dark:shadow-[0_28px_70px_-30px_rgba(0,0,0,0.3)] sm:p-8 ${
+              mod === "register" ? "max-w-[560px]" : "max-w-[452px]"
+            }`}
           >
             <img
               src="/vira_logo_text.svg"
@@ -431,6 +438,8 @@ export function LoginScreen({
                 kurmak demek olurdu. Yalnızca kartın içeriği değişiyor. */}
             {mod === "reset" ? (
               <PasswordResetCard onBack={() => setMod("login")} />
+            ) : mod === "register" ? (
+              <RegisterCard onBack={() => setMod("login")} />
             ) : (
             <>
             <h2
@@ -553,6 +562,26 @@ export function LoginScreen({
                 {submitted ? "Giriş yapılıyor…" : "Giriş Yap"}
                 <ArrowIcon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
               </button>
+
+              {/* Hesabı olmayan kullanıcının tek çıkış yolu buydu: demo
+                  kullanıcıları `make seed` ile üretiliyordu ve dışarıdan
+                  gelen biri sisteme hiç giremiyordu. */}
+              <div className="flex items-center justify-center gap-1.5 pt-1">
+                <span className="text-[12.5px] text-[#5A7292] dark:text-[#B9C4DC]">
+                  Hesabın yok mu?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setMod("register");
+                  }}
+                  style={{ "--accent-dark-link": ACCENT_DARK_LINK } as CSSProperties}
+                  className="rounded text-[12.5px] font-semibold underline-offset-4 transition hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2557E8]/40 dark:text-[var(--accent-dark-link)] dark:hover:text-[#D98A99]"
+                >
+                  <span style={{ color: isDark ? undefined : BRAND }}>Üye ol</span>
+                </button>
+              </div>
             </form>
             </>
             )}
