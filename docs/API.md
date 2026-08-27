@@ -493,6 +493,23 @@ bakiyesi biten kullanıcının demo akışında kilitlenmemesi için var.
 `UNAUTHORIZED_ACTION` sayıyor; sohbet üzerinden bir modelin emir geçebilmesi,
 prompt enjeksiyonuyla portföyün ele geçirilmesi demek olurdu.
 
+#### Beklenen davranış: işlemden hemen sonra küçük bir K/Z görünür
+
+İşlem **canlı** fiyattan geçiyor, portföy ise **son kayıtlı kapanıştan**
+değerleniyor. Gün içinde bu ikisi farklı: 27 Ağustos'ta ölçülen örnek —
+THYAO canlı 304,50'den alındı, portföy 26 Ağustos kapanışı olan 308,50 ile
+değerledi, 10 adette **+40 TL** gerçekleşmemiş kâr çıktı.
+
+**Bu bir hata değil, doğru hesap:** kullanıcı dünkü kapanışın altından aldı,
+portföy de bunu söylüyor. Akşam toplama işi bugünün kapanışını yazınca fark
+kendiliğinden kapanıyor.
+
+Alternatiflerin hepsi daha kötüydü: portföyü de canlı değerlemek 141 sembol
+için ~56 saniye sürer; canlı fiyatı bugünün "kapanışı" diye `price_history`'ye
+yazmak gün içi bir kotasyondan sahte kapanış üretir; işlemi kayıtlı kapanıştan
+geçirmek ise kullanıcıya dünkü fiyattan alım yaptırırdı (ürün kararı canlı
+fiyat yönünde).
+
 ### Kullanıcı risk profili ve anket puanı
 
 Projedeki tek YAZAN uç ailesi; geri kalan her REST ucu salt okur. Dördü de
