@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AI_BALON_SINIFLARI } from "@/components/chat/ChatBubble";
 import { MessageMarkdown } from "@/components/chat/MessageMarkdown";
 import { useWordReveal } from "@/chat/useWordReveal";
@@ -48,13 +49,44 @@ export function karsilamaMetni(ad: string | undefined): string {
   ].join("\n\n");
 }
 
+/**
+ * Karşılama bu sekmede bir kez açıldı mı.
+ *
+ * `ChatProvider` sayfaların ÜSTÜNDE duruyor (App.tsx), yani sohbet geçmişi
+ * sayfa değiştirince yaşıyor; ama `AnimatePresence mode="wait"` sayfayı
+ * unmount ettiği için ChatGreeting her dönüşte yeniden mount oluyordu.
+ * Sonuç: on mesajlık bir sohbete geri döndüğünüzde karşılama, duran
+ * mesajların ÜSTÜNDE kendini yeniden yazıyordu.
+ *
+ * Modül düzeyinde tutuluyor çünkü React state'i unmount'u aşamıyor — aynı
+ * gerekçe `usePortfolioData`'daki paylaşılan önbellekte de yazılı.
+ *
+ * Tam sayfa yenilemede sıfırlanır ve karşılama yeniden açılır: o noktada
+ * sohbet de sıfırlandığı için ilk karşılaşma yeniden başlıyor demektir.
+ */
+let karsilamaAcildi = false;
+
+/** Modül bayrağını sıfırlar. YALNIZCA TESTLER İÇİN. */
+export function __karsilamaDurumunuSifirla(): void {
+  karsilamaAcildi = false;
+}
+
 export function ChatGreeting({ userName }: { userName?: string }) {
   const metin = karsilamaMetni(userName);
+
+  // Bayrak initializer'da OKUNUR, orada YAZILMAZ. StrictMode geliştirmede
+  // initializer'ı iki kez çağırıyor; mutasyon burada olsaydı ikinci çağrı
+  // "zaten açıldı" görür ve animasyon geliştirmede hiç oynamazdı.
+  const [bastanBasla] = useState(() => !karsilamaAcildi);
+  useEffect(() => {
+    karsilamaAcildi = true;
+  }, []);
+
   // `bastanBasla`: metin ilk render'da tam elimizde ama yine de kelime kelime
-  // açılsın — sohbetin geri kalanıyla aynı ritim. Varsayılan davranış
-  // (tamamlanmış metni anında göstermek) geçmiş mesajlar için doğru, burada
-  // değil.
-  const gorunen = useWordReveal(metin, false, { bastanBasla: true });
+  // açılsın — sohbetin geri kalanıyla aynı ritim. Kancanın varsayılanı
+  // (tamamlanmış metni anında göstermek) geçmiş mesajlar için doğru, ilk
+  // karşılaşmada değil.
+  const gorunen = useWordReveal(metin, false, { bastanBasla });
 
   return (
     <div className="flex animate-fadeUp flex-col items-start gap-1">
