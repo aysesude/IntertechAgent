@@ -64,12 +64,35 @@ _RESULT_KEY = {
     "get_asset_price_history": "price_history",
 }
 
+# `user_id` YALNIZCA kullanıcıya bağlı tool'lara enjekte edilir.
+#
+# `get_asset_price_history` portföyden bağımsız piyasa verisidir ve imzasında
+# `user_id` YOKTUR ("bu tool kullanıcıyı bilmez" —
+# mcp_server/tools/price_tools.py). fastmcp tanımadığı argümanı doğrulama
+# hatasıyla reddediyor, yani bu tool seçildiği her seferde çağrı düşüyordu —
+# üstelik ham pydantic hata metni kullanıcının ekranına kadar gidiyordu
+# (`orchestrator.merge_responses` hiçbir ajan başarılı olmadığında ajanın hata
+# metnini olduğu gibi akıtır).
+#
+# Liste elle tutuluyor ama kendi kendine bozulmuyor:
+# tests/test_portfolio_agent_tools.py bu kümeyi GERÇEK tool imzalarına karşı
+# doğruluyor, yani TOOLS'a yeni bir ad eklendiğinde test hatırlatır.
+_USER_SCOPED_TOOLS = frozenset(TOOLS) - {"get_asset_price_history"}
+
 # Plan başına tavan: modelin "ne olur ne olmaz hepsini çağırayım" davranışını
 # engeller. Her tool ücretli token ve bir DB sorgusu demek.
 _MAX_TOOLS_PER_PLAN = 3
 
 # Plan üretilemezse veya hiçbiri geçerli değilse: en ucuz ve en genel tool.
 _FALLBACK_PLAN = [("get_portfolio_summary", {})]
+
+# İstemci tarafında oluşan hatanın metni kullanıcıya GİTMEZ. Sunucu tarafında
+# `@tool_handler` bunu zaten yapıyor; istemcide kopan bir çağrının istisna
+# metni ise (bağlantı adresi, pydantic doğrulama izi) doğrudan merge adımına,
+# oradan ekrana düşüyordu. Sunucudaki karşılığıyla AYNI cümle —
+# mcp_server/tools/_base.py `DEFAULT_MESSAGES[INTERNAL_ERROR]`; ikinci bir
+# metin yazmak aynı durumu iki ayrı cümleyle anlatırdı. Ayrıntı loga gider.
+_CLIENT_ERROR_MESSAGE = "Beklenmeyen bir sorun oluştu, isteğiniz tamamlanamadı."
 
 _HISTORY_TURNS = 4
 
@@ -231,7 +254,9 @@ class PortfolioAgent(BaseAgent):
 
         `user_id` burada enjekte edilir; modelin ürettiği argümanlar arasında
         olsa bile ezilir. Modelin başka bir kullanıcının verisini istemesi
-        mümkün olmamalı.
+        mümkün olmamalı. Enjeksiyon YALNIZCA `_USER_SCOPED_TOOLS`'a yapılır:
+        kullanıcıdan bağımsız tool'lar bu argümanı tanımıyor ve fastmcp
+        tanımadığı argümanı doğrulama hatasıyla reddediyor.
 
         Zaman aşımı sunucu tarafında `@tool_handler` ile uygulanıyor; istemcide
         ikinci bir sınır koymak, sunucunun düzgün TIMEOUT zarfını göremeden
@@ -239,14 +264,16 @@ class PortfolioAgent(BaseAgent):
         """
 
         async def _one(name: str, arguments: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+            if name in _USER_SCOPED_TOOLS:
+                arguments = {**arguments, "user_id": user_id}
             try:
-                result = await client.call_tool(name, {**arguments, "user_id": user_id})
+                result = await client.call_tool(name, arguments)
                 return name, result.structured_content or {}
-            except Exception as exc:  # noqa: BLE001 - tek tool hatası ajanı düşürmesin
+            except Exception:  # noqa: BLE001 - tek tool hatası ajanı düşürmesin
                 logger.exception("[AJAN] portfolio: %s cagrisi basarisiz", name)
                 return name, {
                     "success": False,
-                    "error": {"code": "INTERNAL_ERROR", "message": str(exc)},
+                    "error": {"code": "INTERNAL_ERROR", "message": _CLIENT_ERROR_MESSAGE},
                 }
 
         pairs = await asyncio.gather(*(_one(name, args) for name, args in plan))
