@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { AnimatePresence } from "framer-motion";
 import type { Holding } from "@/types/finance";
+import { AssetLogo } from "@/components/common/AssetLogo";
 import { Card } from "@/components/common/Card";
 import { LEVEL_COLORS } from "@/components/dashboard/RiskLevelBar";
 import { formatPct } from "@/utils/format";
@@ -93,8 +94,16 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
                   }
                 >
                   <td className="py-3.5">
-                    <div className="text-sm font-semibold">{h.name}</div>
-                    <div className="text-xs text-ink-faint">{h.assetClass}</div>
+                    {/* `h.id` sembolün ta kendisi (bkz. adapters/portfolio).
+                        Logosu olmayan varlık — fon, döviz, maden — harf
+                        rozetine düşer; bileşen bunu kendi hallediyor. */}
+                    <div className="flex items-center gap-2.5">
+                      <AssetLogo symbol={h.id} size={28} />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{h.name}</div>
+                        <div className="text-xs text-ink-faint">{h.assetClass}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="py-3.5 text-[13.5px] text-ink-soft">{h.quantity}</td>
                   <td className="py-3.5 text-right text-[13.5px] font-semibold">{h.formattedValue}</td>

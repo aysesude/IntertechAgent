@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, chat, market, portfolio, risk, trade, users
+from app.api import auth, chat, logos, market, portfolio, risk, trade, users
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -25,6 +25,7 @@ app.include_router(risk.router)
 app.include_router(market.router)
 app.include_router(chat.router)
 app.include_router(trade.router)
+app.include_router(logos.router)
 
 
 @app.get("/health")

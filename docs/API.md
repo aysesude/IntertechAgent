@@ -373,6 +373,35 @@ Sembol bazlı kapanış serisi. `granularity`: `auto` | `daily` | `weekly` |
 - `currency=try` çevirimi **o günün** kuruyla yapılır; bugünkü kurla geçmişi
   çevirmek tarihsel değeri bozar. `native` çevirim yapmaz.
 
+### `GET /api/logos/{symbol}`
+
+Şirket logosu (SVG). Logo yoksa **404** — arayüz `onError` ile harf rozetine
+düşer. Boş görsel döndürmek eksik logoyu görünmez bir kusura çevirirdi.
+
+**Kimlik doğrulaması İSTEMEZ**, bilerek: `<img>` etiketi `Authorization`
+başlığı gönderemez. Token'lı bir uç için logoyu `fetch` ile alıp blob URL
+üretmek gerekirdi ve tarayıcı önbelleği devre dışı kalırdı. Alternatif olan
+"SVG'yi JSON'la gönderip DOM'a gömmek" daha kötü: SVG script taşıyabilir,
+`<img>` içindeki SVG ise yalıtılıyor.
+
+Kotayı koruyan şey kimlik değil **kümenin sonlu olması**: yalnızca evrendeki
+hisseler sorgulanıyor (120 sembol) ve her biri ilk çağrıda önbelleğe düşüyor.
+Uç, keyfi ticker'lar için genel bir logo proxy'si olarak kullanılamaz.
+
+**Yalnızca hisse sorgulanır.** Faz 0 ölçümü (141 varlık): BIST 97/103, ABD
+21/21. Ama TEFAS fon kodları üç harfli ve başka borsalarda gerçek ticker —
+`IOO`, `AKE`, `TCD`, `TI2`, `AFT`, `GTA`, `BHE` için sağlayıcı **başka
+şirketlerin** logosunu döndürüyor. Ayıraç `sub_type`: fonun alt türü var,
+borsada işlem gören hissenin yok (sınıfa bakmak yetmez — hisse fonları da
+`AssetClass.STOCK`).
+
+Yer tutucu logo sayılmaz: sağlayıcı bulamadığında 404 değil, sabit `#1E1E1E`
+kare + ilk üç harf döndürüyor; ayıraç zeminin rengi (boyut değil, gerçek
+logolar 489-9698 bayt arasında değişiyor).
+
+`LOGOSTREAM_API_KEY` boşsa katman sessizce devre dışı kalır ve her varlık
+rozete düşer — logo bir süs, yokluğu hata değil.
+
 ### Al / Sat (`/api/trade`)
 
 Projedeki **ilk para hareket ettiren** uç ailesi. Dördü de
