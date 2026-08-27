@@ -1,0 +1,804 @@
+{
+  "meta": {
+    "ad": "Yatırımcı Risk Profili Testi",
+    "surum": "2.1",
+    "dil": "tr",
+    "temel_alinan": "SPK / TSPB yerindelik testi asgari içeriği + davranışsal ek sorular",
+    "not": "Eğitim/staj projesi içindir. Gerçek müşteriye yatırım danışmanlığı sunumunda kullanılamaz.",
+    "tek_dogruluk_kaynagi": "Bu dosya testin tek kaynağıdır. demo.html ve skorlama.py bunu okur. Soru, seçenek veya ağırlık değişikliği YALNIZCA burada yapılır; sonra derle.py çalıştırılır."
+  },
+  "sinir_bolgesi_esigi": 3,
+  "sorular": {
+    "A1": {
+      "b": "A",
+      "t": "Yaş aralığınız nedir?",
+      "o": [
+        [
+          "a",
+          "18 – 30"
+        ],
+        [
+          "b",
+          "31 – 50"
+        ],
+        [
+          "c",
+          "51 – 65"
+        ],
+        [
+          "d",
+          "66 ve üzeri"
+        ]
+      ]
+    },
+    "A2": {
+      "b": "A",
+      "t": "Eğitim durumunuz nedir?",
+      "o": [
+        [
+          "a",
+          "İlköğretim / Ortaöğretim"
+        ],
+        [
+          "b",
+          "Lise"
+        ],
+        [
+          "c",
+          "Lisans ve üstü"
+        ]
+      ]
+    },
+    "A4": {
+      "b": "A",
+      "t": "Müşteri sınıfınız nedir?",
+      "o": [
+        [
+          "a",
+          "Genel müşteri"
+        ],
+        [
+          "b",
+          "Profesyonel müşteri"
+        ],
+        [
+          "c",
+          "Talebe dayalı profesyonel müşteri"
+        ]
+      ]
+    },
+    "B1": {
+      "d": "kap",
+      "t": "Aylık net geliriniz nedir?",
+      "u": "TL",
+      "o": [
+        [
+          "a",
+          "0 – 50.000",
+          4
+        ],
+        [
+          "b",
+          "50.001 – 100.000",
+          9
+        ],
+        [
+          "c",
+          "100.001 – 150.000",
+          13
+        ],
+        [
+          "d",
+          "150.001 ve üzeri",
+          15
+        ]
+      ]
+    },
+    "B2": {
+      "d": "kap",
+      "t": "Aylık net gelirinizin türü nedir?",
+      "w": "Gelirin istikrarı, bir kayıp sonrası toparlanma kapasitesini belirler.",
+      "o": [
+        [
+          "a",
+          "Ücret (maaş)",
+          12
+        ],
+        [
+          "b",
+          "Serbest meslek geliri",
+          7
+        ],
+        [
+          "c",
+          "Emekli aylığı",
+          10
+        ],
+        [
+          "d",
+          "Diğer (kira, faiz, temettü vb.)",
+          15
+        ]
+      ]
+    },
+    "B3": {
+      "d": "kap",
+      "t": "Sermaye piyasası işlemlerine ayırabileceğiniz tasarruf tutarınız nedir?",
+      "u": "TL",
+      "o": [
+        [
+          "a",
+          "0 – 500.000",
+          5
+        ],
+        [
+          "b",
+          "500.001 – 2.500.000",
+          15
+        ],
+        [
+          "c",
+          "2.500.001 – 10.000.000",
+          25
+        ],
+        [
+          "d",
+          "10.000.000 üstü",
+          30
+        ]
+      ]
+    },
+    "B4": {
+      "d": "kap",
+      "t": "Düzenli ödemek zorunda olduğunuz mali yükümlülükleriniz gelirinizin ne kadarını oluşturuyor?",
+      "w": "Kredi, ipotek ve benzeri sabit ödemeler.",
+      "o": [
+        [
+          "a",
+          "Yükümlülüğüm yok",
+          15
+        ],
+        [
+          "b",
+          "Gelirimin %30'undan azı",
+          10
+        ],
+        [
+          "c",
+          "Gelirimin %30 – %50'si",
+          5
+        ],
+        [
+          "d",
+          "Gelirimin %50'sinden fazlası",
+          0
+        ]
+      ]
+    },
+    "B5": {
+      "d": "kap",
+      "t": "Yatırım dışında tuttuğunuz nakit kaç aylık giderinizi karşılar?",
+      "w": "Acil durum fonu olmayan yatırımcı, düşüşte zorunlu satış yapmak durumunda kalır.",
+      "o": [
+        [
+          "a",
+          "Böyle bir birikimim yok",
+          0
+        ],
+        [
+          "b",
+          "1 – 3 ay",
+          5
+        ],
+        [
+          "c",
+          "3 – 6 ay",
+          10
+        ],
+        [
+          "d",
+          "6 aydan fazla",
+          15
+        ]
+      ]
+    },
+    "B6": {
+      "d": "kap",
+      "t": "Yatırdığınız tutarı önümüzdeki 12 ay içinde plansız şekilde çekmek zorunda kalma ihtimaliniz nedir?",
+      "w": "Bu soru puan vermez — kapasite skoruna tavan uygular. Kısa vadede çekilecek para, ne kadar büyük olursa olsun risk kapasitesi yaratmaz.",
+      "cap": true,
+      "o": [
+        [
+          "a",
+          "Çok yüksek",
+          20
+        ],
+        [
+          "b",
+          "Yüksek",
+          40
+        ],
+        [
+          "c",
+          "Düşük",
+          100
+        ],
+        [
+          "d",
+          "Böyle bir ihtimal görmüyorum",
+          100
+        ]
+      ]
+    },
+    "C1": {
+      "d": "kap",
+      "t": "Yatırımınızı ne kadar süreyle sermaye piyasalarında değerlendirmeyi düşünüyorsunuz?",
+      "o": [
+        [
+          "a",
+          "Kısa vadeli (0 – 6 ay)",
+          0
+        ],
+        [
+          "b",
+          "Orta vadeli (6 – 12 ay)",
+          3
+        ],
+        [
+          "c",
+          "Uzun vadeli (1 – 3 yıl)",
+          7
+        ],
+        [
+          "d",
+          "Daha uzun vadeli (3 yıldan uzun)",
+          10
+        ]
+      ]
+    },
+    "C2": {
+      "b": "C",
+      "t": "Bu yatırımla ulaşmak istediğiniz temel amaç nedir?",
+      "w": "Skorlanmaz; sonuç metnini ve amaç–profil tutarlılık kontrolünü besler.",
+      "o": [
+        [
+          "a",
+          "Anaparamı olduğu gibi korumak"
+        ],
+        [
+          "b",
+          "Enflasyona karşı alım gücümü korumak"
+        ],
+        [
+          "c",
+          "Düzenli nakit gelir elde etmek"
+        ],
+        [
+          "d",
+          "Uzun vadede sermayemi büyütmek"
+        ],
+        [
+          "e",
+          "Belirli bir hedefe biriktirmek (ev, eğitim, emeklilik)"
+        ]
+      ]
+    },
+    "C3": {
+      "d": "tol",
+      "t": "Risk ve getiri tercihiniz nedir?",
+      "w": "TSPB asgari içeriğinin çekirdek sorusu ve testin en ağırlıklı tek maddesi.",
+      "o": [
+        [
+          "a",
+          "Riskten olabildiğince kaçınırım; güvenli araçlarla az ama düzenli getiri isterim. Anaparam aynen korunsun.",
+          0
+        ],
+        [
+          "b",
+          "Enflasyonun üzerinde getiri için düşük riskli ürünlere yatırım yapabilirim. Anaparadan çok az kaybetmeyi göze alabilirim.",
+          10
+        ],
+        [
+          "c",
+          "Genelde orta riskli ürünleri tercih ederim; uzun vadede getiriyi artırmak için riskli ürünlere makul ölçüde yer veririm.",
+          20
+        ],
+        [
+          "d",
+          "Yüksek getiri beklentisiyle her türlü riskteki ürüne yatırım yapabilirim. Anaparadan kaybetmeyi göze alabilirim.",
+          30
+        ],
+        [
+          "e",
+          "Çok yüksek getiri isterim ve çok yüksek riskli ürünlere yatırım yapabilirim. Anaparayı tamamen kaybetmeyi göze alabilirim.",
+          40
+        ]
+      ]
+    },
+    "D1": {
+      "d": "tol",
+      "t": "100.000 TL'lik yatırımınız üç ay içinde 80.000 TL'ye gerilerse ne yaparsınız?",
+      "w": "Yüzde yerine TL tutar kullanıldı; soyut yüzdeler davranışsal tepkiyi zayıf ölçüyor.",
+      "o": [
+        [
+          "a",
+          "Tamamını satar, daha fazla kaybetmekten kaçınırım",
+          0
+        ],
+        [
+          "b",
+          "Bir kısmını satar, riskimi azaltırım",
+          8
+        ],
+        [
+          "c",
+          "Hiçbir şey yapmaz, planıma sadık kalırım",
+          17
+        ],
+        [
+          "d",
+          "Fırsat olarak görür, yatırımımı artırırım",
+          25
+        ]
+      ]
+    },
+    "D2": {
+      "d": "tol",
+      "t": "Bir yıl vadeli şu iki yatırımdan hangisini tercih edersiniz?",
+      "w": "Belirlilik primi ölçümü. Beklenen getiriler kasıtlı olarak birbirine yakın tutuldu.",
+      "o": [
+        [
+          "a",
+          "Kesin %25 getiri",
+          0
+        ],
+        [
+          "b",
+          "%50 ihtimalle %60 getiri, %50 ihtimalle %5 getiri",
+          10
+        ],
+        [
+          "c",
+          "%50 ihtimalle %90 getiri, %50 ihtimalle %20 kayıp",
+          20
+        ]
+      ]
+    },
+    "D3": {
+      "d": "tol",
+      "t": "Piyasalarda sert bir düşüş yaşandığında kendinizi nasıl tanımlarsınız?",
+      "o": [
+        [
+          "a",
+          "Ciddi kaygı duyar, portföyümü sürekli kontrol ederim",
+          0
+        ],
+        [
+          "b",
+          "Rahatsız olurum ama günlük hayatımı etkilemez",
+          5
+        ],
+        [
+          "c",
+          "Dalgalanmayı normal karşılar, planıma sadık kalırım",
+          11
+        ],
+        [
+          "d",
+          "Sakin kalırım, alım fırsatı olarak değerlendiririm",
+          15
+        ]
+      ]
+    },
+    "E2": {
+      "d": "bil",
+      "t": "Bir hisse senedi portföyünü farklı sektörlere dağıtmak öncelikle neyi azaltır?",
+      "obj": true,
+      "o": [
+        [
+          "a",
+          "Piyasanın genelinden kaynaklanan sistematik riski",
+          0
+        ],
+        [
+          "b",
+          "Tek bir şirket veya sektöre özgü riski",
+          10
+        ],
+        [
+          "c",
+          "Enflasyon riskini",
+          0
+        ],
+        [
+          "d",
+          "Bilmiyorum",
+          0
+        ]
+      ]
+    },
+    "E3": {
+      "d": "bil",
+      "t": "Piyasa faiz oranları yükseldiğinde, elinizdeki sabit kuponlu tahvilin fiyatına ne olur?",
+      "obj": true,
+      "o": [
+        [
+          "a",
+          "Yükselir",
+          0
+        ],
+        [
+          "b",
+          "Düşer",
+          10
+        ],
+        [
+          "c",
+          "Değişmez",
+          0
+        ],
+        [
+          "d",
+          "Bilmiyorum",
+          0
+        ]
+      ]
+    },
+    "E4": {
+      "d": "bil",
+      "t": "Yıllık enflasyonun %40 olduğu bir yılda yatırımınız %35 getiri sağladı. Hangisi doğrudur?",
+      "obj": true,
+      "w": "Nominal yanılsama testi. Yüksek enflasyon ortamında “anaparam korunsun” tercihinin bilinçli olup olmadığını ayırt eder.",
+      "o": [
+        [
+          "a",
+          "Pozitif getiri sağladığı için alım gücüm arttı",
+          0
+        ],
+        [
+          "b",
+          "Nominal olarak kazandım ancak alım gücüm azaldı",
+          10
+        ],
+        [
+          "c",
+          "Alım gücüm aynen korunmuştur",
+          0
+        ],
+        [
+          "d",
+          "Bilmiyorum",
+          0
+        ]
+      ]
+    }
+  },
+  "urun_matrisi": {
+    "satirlar": [
+      {
+        "k": "r1",
+        "n": "Çok düşük riskli",
+        "ex": "Repo–ters repo, BPP, Yatırımcı Bilgi Formunda risk değeri 1 olan fonlar",
+        "w": 1
+      },
+      {
+        "k": "r2",
+        "n": "Düşük riskli",
+        "ex": "Hazine bonosu, devlet tahvili, hazine kira sertifikaları, risk değeri 2–3 olan fonlar",
+        "w": 2
+      },
+      {
+        "k": "r3",
+        "n": "Orta riskli",
+        "ex": "Ortaklık payı, eurobond, özel sektör borçlanma araçları, risk değeri 4 olan fonlar",
+        "w": 3
+      },
+      {
+        "k": "r4",
+        "n": "Yüksek riskli",
+        "ex": "VİOP türev işlemleri, varant, yatırım kuruluşu sertifikası, risk değeri 5–6 olan fonlar",
+        "w": 4
+      },
+      {
+        "k": "r5",
+        "n": "Çok yüksek riskli",
+        "ex": "Tezgâhüstü türevler, yapılandırılmış borçlanma araçları, kaldıraçlı alım satım (FX), risk değeri 7 olan fonlar",
+        "w": 4
+      }
+    ],
+    "sutunlar": [
+      {
+        "k": "bilgi",
+        "l": "Bilgi",
+        "o": [
+          [
+            "0",
+            "Bilgim yok",
+            0
+          ],
+          [
+            "1",
+            "Kısıtlı",
+            1
+          ],
+          [
+            "2",
+            "Yeterli",
+            2
+          ]
+        ]
+      },
+      {
+        "k": "siklik",
+        "l": "Sıklık",
+        "o": [
+          [
+            "0",
+            "Hiç",
+            0
+          ],
+          [
+            "1",
+            "Nadiren",
+            1
+          ],
+          [
+            "2",
+            "Ara sıra",
+            2
+          ],
+          [
+            "3",
+            "Sıklıkla",
+            3
+          ]
+        ]
+      },
+      {
+        "k": "hacim",
+        "l": "Hacim",
+        "o": [
+          [
+            "0",
+            "İşlem yok"
+          ],
+          [
+            "1",
+            "1 – 500 B"
+          ],
+          [
+            "2",
+            "500 B – 5 M"
+          ],
+          [
+            "3",
+            "5 M+"
+          ]
+        ]
+      }
+    ]
+  },
+  "profiller": [
+    {
+      "lv": 1,
+      "ad": "Korumacı",
+      "lo": 0,
+      "hi": 12,
+      "cat": 2,
+      "vol": 0.03,
+      "eris": 0.075,
+      "al": {
+        "PPF": 80,
+        "KVB": 20
+      },
+      "ac": "Öncelik anaparanın nominal korunması. Getiri beklentisi para piyasası faizi civarında."
+    },
+    {
+      "lv": 2,
+      "ad": "Temkinli",
+      "lo": 13,
+      "hi": 25,
+      "cat": 2,
+      "vol": 0.07,
+      "eris": 0.18,
+      "al": {
+        "PPF": 35,
+        "KVB": 30,
+        "BRC": 20,
+        "DOV": 15
+      },
+      "ac": "Çok sınırlı dalgalanma karşılığında mevduat üstü getiri hedeflenir."
+    },
+    {
+      "lv": 3,
+      "ad": "Ölçülü",
+      "lo": 26,
+      "hi": 40,
+      "cat": 3,
+      "vol": 0.11,
+      "eris": 0.28,
+      "al": {
+        "PPF": 25,
+        "KVB": 20,
+        "BRC": 25,
+        "DOV": 18,
+        "ALT": 12
+      },
+      "ac": "Kur ve kıymetli maden yoluyla enflasyona karşı ilk korunma katmanı açılır."
+    },
+    {
+      "lv": 4,
+      "ad": "Dengeli",
+      "lo": 41,
+      "hi": 55,
+      "cat": 4,
+      "vol": 0.15,
+      "eris": 0.38,
+      "al": {
+        "PPF": 15,
+        "BRC": 25,
+        "DOV": 15,
+        "ALT": 15,
+        "HSF": 30
+      },
+      "ac": "Büyüme ve koruma dengelenir. Hisse fonu portföye ilk kez girer."
+    },
+    {
+      "lv": 5,
+      "ad": "Büyüme Odaklı",
+      "lo": 56,
+      "hi": 70,
+      "cat": 4,
+      "vol": 0.22,
+      "eris": 0.55,
+      "al": {
+        "PPF": 5,
+        "BRC": 18,
+        "DOV": 12,
+        "ALT": 15,
+        "HSF": 35,
+        "BIST": 15
+      },
+      "ac": "Sermaye büyümesi ağırlık kazanır. Tekil hisse sınırlı payla açılır."
+    },
+    {
+      "lv": 6,
+      "ad": "Atak",
+      "lo": 71,
+      "hi": 85,
+      "cat": 5,
+      "vol": 0.28,
+      "eris": 0.7,
+      "al": {
+        "BRC": 13,
+        "DOV": 8,
+        "ALT": 12,
+        "HSF": 38,
+        "BIST": 22,
+        "SRB": 7
+      },
+      "ac": "Uzun vadeli büyüme önceliklidir. Kısa vadede sert düşüşler beklenir."
+    },
+    {
+      "lv": 7,
+      "ad": "Agresif",
+      "lo": 86,
+      "hi": 100,
+      "cat": 5,
+      "vol": 0.36,
+      "eris": 0.9,
+      "al": {
+        "BRC": 5,
+        "DOV": 5,
+        "ALT": 10,
+        "HSF": 30,
+        "BIST": 38,
+        "SRB": 12
+      },
+      "ac": "Anaparanın büyük bölümünün kaybı ihtimali kabul edilir."
+    }
+  ],
+  "araclar": {
+    "PPF": {
+      "ad": "Para piyasası fonu",
+      "kat": 1,
+      "c": "#1E5C48"
+    },
+    "KVB": {
+      "ad": "Kısa vadeli borçlanma fonu",
+      "kat": 2,
+      "c": "#35735A"
+    },
+    "BRC": {
+      "ad": "Borçlanma araçları fonu",
+      "kat": 2,
+      "c": "#4E8A66"
+    },
+    "DOV": {
+      "ad": "Döviz",
+      "kat": 2,
+      "c": "#7A9B5A"
+    },
+    "ALT": {
+      "ad": "Altın",
+      "kat": 3,
+      "c": "#B8770F"
+    },
+    "BIST": {
+      "ad": "BIST 100 tekil hisse",
+      "kat": 3,
+      "c": "#6B2444"
+    },
+    "HSF": {
+      "ad": "Hisse senedi fonu",
+      "kat": 4,
+      "c": "#8A3355"
+    },
+    "SRB": {
+      "ad": "Serbest fon",
+      "kat": 5,
+      "c": "#3D1428"
+    }
+  },
+  "arac_sirasi": [
+    "PPF",
+    "KVB",
+    "BRC",
+    "DOV",
+    "ALT",
+    "BIST",
+    "HSF",
+    "SRB"
+  ],
+  "spk_kategori_adlari": [
+    "Çok düşük riskli",
+    "Düşük riskli",
+    "Orta riskli",
+    "Yüksek riskli",
+    "Çok yüksek riskli"
+  ],
+  "c3_kategori_tavani": {
+    "a": 2,
+    "b": 2,
+    "c": 3,
+    "d": 4,
+    "e": 5
+  },
+  "kurallar": [
+    {
+      "kod": "TK1",
+      "durdurucu": true,
+      "mesaj": "Belirttiğiniz risk tercihi ile geçmiş işlem hacminiz örtüşmüyor. Test sonuç üretmedi; lütfen cevaplarınızı gözden geçirin. (TSPB şablonundaki resmî kural.)"
+    },
+    {
+      "kod": "TK2",
+      "durdurucu": false,
+      "mesaj": "Risk almaya istekli görünüyorsunuz ancak mali durumunuz bu düzeyde bir kaybı taşımaya elverişli değil. Profiliniz mali kapasitenize göre belirlendi."
+    },
+    {
+      "kod": "TK3",
+      "durdurucu": false,
+      "mesaj": "6 aydan kısa bir vadede riskli varlıklarda oluşan kaybı telafi edecek zamanınız olmayabilir."
+    },
+    {
+      "kod": "TK4",
+      "durdurucu": false,
+      "mesaj": "Yüksek riskli ürünlere ilgi duyduğunuzu belirttiniz ancak bu ürünlerdeki bilgi ve tecrübeniz sınırlı görünüyor. Profiliniz bu nedenle sınırlandırıldı."
+    },
+    {
+      "kod": "TK5",
+      "durdurucu": false,
+      "mesaj": "Acil durum birikiminiz bulunmuyor. Piyasa düşüşlerinde zorunlu satış yapmak durumunda kalabilirsiniz."
+    },
+    {
+      "kod": "TK6",
+      "durdurucu": false,
+      "mesaj": "Anapara korumasını öncelikli amaç olarak belirttiniz; bu amaç, seçilen profilin dalgalanma düzeyiyle tam örtüşmüyor."
+    },
+    {
+      "kod": "TK7",
+      "durdurucu": false,
+      "mesaj": "Amacınız enflasyona karşı alım gücünüzü korumak, ancak profiliniz yalnızca düşük riskli TL araçlara izin veriyor. Bu araçlar anaparayı nominal olarak korur; yüksek enflasyon döneminde reel kayıp oluşabilir. Vadenizi uzatmayı değerlendirin."
+    }
+  ]
+}

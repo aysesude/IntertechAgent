@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPostNoContent } from "./client";
+import type { SurveyAnswers } from "./survey";
 
 /**
  * Giriş uçları. Şekiller backend/app/schemas/auth.py ile birebir eşleşir.
@@ -28,6 +29,36 @@ export function login(nationalId: string, password: string): Promise<TokenRespon
     // kapatma akışını tetiklememeli.
     { skipUnauthorizedHandler: true },
   );
+}
+
+export interface RegisterRequest {
+  full_name: string;
+  national_id: string;
+  email: string;
+  password: string;
+  survey_answers: SurveyAnswers;
+  /** "Başka bankadan getirilen" açılış tutarı. Metin gönderiliyor: `number`
+   *  büyük tutarlarda kayan nokta hatası taşır, sunucu tarafı `Decimal`. */
+  initial_deposit_try: string;
+}
+
+export interface RegisterResponse extends TokenResponse {
+  risk_survey_score: number;
+  profil_adi: string;
+}
+
+/**
+ * Hesap açar. Anket cevapları SUNUCUDA yeniden skorlanır; buradan gönderilen
+ * bir puan olsa bile yok sayılır.
+ *
+ * Token da döner — kullanıcı kayıttan sonra bir de giriş ekranından geçmez.
+ */
+export function register(payload: RegisterRequest): Promise<RegisterResponse> {
+  return apiPost<RegisterResponse>("/api/auth/register", payload, {
+    // Kayıt akışı giriş yapmamış kullanıcı içindir; buradan dönen bir hata
+    // "oturum düştü" demek değildir.
+    skipUnauthorizedHandler: true,
+  });
 }
 
 /** Elimizdeki token hâlâ geçerli mi ve kime ait? Sayfa yenilendiğinde çağrılır. */

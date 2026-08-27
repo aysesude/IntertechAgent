@@ -10,7 +10,9 @@ import {
 import {
   fetchCurrentUser,
   login as loginRequest,
+  register as registerRequest,
   type AuthUser,
+  type RegisterRequest,
 } from "@/api/auth";
 import { isApiConfigured, setAccessToken, setUnauthorizedHandler } from "@/api/client";
 import type { User } from "@/types/finance";
@@ -46,6 +48,13 @@ interface AuthContextValue {
   user: User;
   /** Başarılıysa çözülür; başarısızsa kullanıcıya gösterilebilir bir hata fırlatır. */
   login: (nationalId: string, password: string) => Promise<void>;
+  /**
+   * Hesap açar ve DOĞRUDAN oturum açar.
+   *
+   * Kayıt yanıtı token taşıyor; ayrıca `login` çağırmak kullanıcıyı yeni
+   * belirlediği şifreyi hemen yeniden yazmaya zorlardı.
+   */
+  register: (payload: RegisterRequest) => Promise<void>;
   logout: () => void;
 }
 
@@ -162,6 +171,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  const register = useCallback(async (payload: RegisterRequest) => {
+    const yanit = await registerRequest(payload);
+    setNotice(null);
+    writeStoredToken(yanit.access_token);
+    setAccessToken(yanit.access_token);
+    setAccount(yanit.user);
+    setStatus("authenticated");
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -175,9 +193,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: "Bireysel Yatırımcı",
       },
       login,
+      register,
       logout,
     }),
-    [status, notice, account, login, logout],
+    [status, notice, account, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
