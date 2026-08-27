@@ -402,17 +402,28 @@ export const mockDashboard: DashboardData = {
 
 export function computePerformanceStats(range: PerformanceRange): PerformanceStats {
   const portfolioValues = range.points.map((p) => p.portfolio);
+  // Boş seri (yeni/boş portföy) — Math.max/min(...[]) ±Infinity döner;
+  // high/low/profit'in nullable karşılığı yok (tip: number), 0 en doğrusu.
+  // returnPct nullable OLDUĞU için burada da "hesaplanamadı" (null) dönülür,
+  // 0 (uydurma "değişim yok" iddiası) değil — UI zaten null'ı "—" gösterir
+  // (bkz. PerformanceChart.tsx).
+  if (portfolioValues.length === 0) {
+    return { high: 0, low: 0, returnPct: null, profit: 0 };
+  }
   const high = Math.max(...portfolioValues);
   const low = Math.min(...portfolioValues);
   const son = range.points[range.points.length - 1];
+  const ilkDeger = portfolioValues[0];
   return {
     high,
     low,
     // Gerçek veride TWR backend'den gelir; tasarım verisinde ham değişimle
-    // taklit ediliyor (bu dosya yalnızca API tanımsızken devrede).
+    // taklit ediliyor (bu dosya yalnızca API tanımsızken devrede). İlk nokta
+    // 0 ise (henüz hiç para yatırılmamış yeni hesap) bölme 0/0 = NaN
+    // üretirdi ("NaN%" görünürdü) — bu durumda "hesaplanamadı" (null)
+    // dönülür, uydurma bir yüzde değil (AK 5.5).
     returnPct:
-      range.returnPct ??
-      ((portfolioValues[portfolioValues.length - 1] - portfolioValues[0]) / portfolioValues[0]) * 100,
+      range.returnPct ?? (ilkDeger === 0 ? null : ((portfolioValues[portfolioValues.length - 1] - ilkDeger) / ilkDeger) * 100),
     profit: son.portfolio - son.invested,
   };
 }
