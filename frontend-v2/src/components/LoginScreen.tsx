@@ -22,8 +22,10 @@ import { gecerliTcKimlikNo } from "@/utils/tckn";
  * Arka plan sanat eseri: light modda Halit, "Boğaziçi Yalıları", 1920
  * (yağlıboya) — görsel hiçbir şekilde manipüle edilmiyor, sadece
  * okunabilirlik için üstüne çok hafif beyaz gradient katmanları biniyor.
- * Dark modda ayrı bir tablo (ay ışığında deniz) kullanılıyor, kendi
- * overlay'iyle — bkz. resolvedTheme'e göre seçilen backgroundArt.
+ * Dark modda ayrı bir tablo (ay ışığında deniz) kullanılıyor; görsel
+ * kendisi manipüle edilmiyor, üstüne düz/yönsüz %38 opaklıkta bir siyah
+ * katman + sol tarafı biraz daha koyultan ince bir soldan-sağa gradyan
+ * biniyor (bkz. resolvedTheme'e göre seçilen backgroundArt).
  *
  * Asset:  src/assets/login/bogazici-yalilari.jpg (light)
  *         src/assets/login/ay-isigi-deniz.jpg (dark)
@@ -281,7 +283,7 @@ export function LoginScreen({
           değil, yüksek görünürlükte (opaklık ~1) ana görsel. --- */}
       <img
         src={isDark ? moonlitSeaArt : bosphorusArt}
-        alt={isDark ? "Ay ışığında deniz manzarası" : "Halit, Boğaziçi Yalıları, 1920"}
+        alt={isDark ? "" : "Halit, Boğaziçi Yalıları, 1920"}
         className="absolute inset-0 h-full w-full object-cover"
         style={{
           objectPosition: `${OBJECT_POS_X * 100}% ${OBJECT_POS_Y * 100}%`,
@@ -290,8 +292,31 @@ export function LoginScreen({
         draggable={false}
       />
 
+      {/* --- Dark modda görselin tamamına EŞİT, çok hafif bir siyah katman —
+          yön/vinyet yok (o zaman görsel "bozulmuş" hissettiriyordu), sadece
+          düz %38 opaklıkla dark tema zeminine biraz daha yakınlaştırıyor. --- */}
+      {isDark && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundColor: "rgba(4,7,12,0.38)", zIndex: Z_LAYER.background }}
+        />
+      )}
+
+      {/* --- Sol taraf (başlık/form bölgesi) bir tık daha koyu — hafif bir
+          soldan-sağa gradyan, üstteki düz katmana ek olarak biniyor. --- */}
+      {isDark && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(4,7,12,0.18) 0%, rgba(4,7,12,0.06) 32%, rgba(4,7,12,0) 55%)",
+            zIndex: Z_LAYER.background,
+          }}
+        />
+      )}
+
       {/* --- Okunabilirlik katmanları (çok hafif) — SADECE light mod, hiç
-          değiştirilmedi. Dark modda bunların yerine aşağıdaki vignette var. --- */}
+          değiştirilmedi. Dark modda yukarıdaki düz katman var. --- */}
       {!isDark && (
         <>
           <div
@@ -321,38 +346,26 @@ export function LoginScreen({
         </>
       )}
 
-      {/* --- Dark mod: köşelerden merkeze doğru açılan bir vignette — sol ve
-          sağ kenarlar (başlık bloğunun ve login kartının arkası) koyulaşır,
-          ortadaki dar dikey şerit (ay + suya düşen yansıma) elips şeklinde
-          şeffaf bırakılır, tablonun can alıcı noktası kapanmaz. --- */}
-      {isDark && (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 40% 95% at 48% 50%, rgba(6,10,16,0) 0%, rgba(6,10,16,0) 45%, rgba(6,10,16,0.55) 75%, rgba(6,10,16,0.88) 100%)",
-            zIndex: Z_LAYER.background,
-          }}
-        />
-      )}
-
-      {/* --- Dark mod: SADECE sol taraf (başlık bloğunun arkası) için ek
-          karartma — ACCENT_DARK (#96384A) yukarıdaki radial vignette'in
-          bu bölgedeki ara-ton opaklığı üzerinde tek başına 3:1'in altında
-          kalıyordu. Üstteki vignette'e DOKUNULMADI (sağ/orta hâlâ aynı);
-          bu ayrı katman ~%12 ek opaklıkla sadece x≈0-28 arasını
-          karartıp x≈42'de sıfıra iniyor — ay/yansıma (merkez ~48%) ve
-          login kartı (sağda, çok daha ileride) etkilenmiyor. --- */}
-      {isDark && (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(6,10,16,0.12) 0%, rgba(6,10,16,0.12) 28%, rgba(6,10,16,0) 42%)",
-            zIndex: Z_LAYER.background,
-          }}
-        />
-      )}
+      {/* --- Eser künyesi: arka plandaki tabloya ait, sağ alt köşede — çok
+          küçük ve düşük kontrastlı, arka planla bütünleşsin diye bilerek
+          dikkat çekmiyor. pointer-events-none: salt dekoratif, tıklamayı
+          engellemesin. Sol üstteki başlık/kart alanlarından uzak durduğu
+          için hiçbir içerikle çakışmıyor; max-w ile mobilde de taşmıyor.
+          text-shadow: görsel doğrudan altında olduğu için (kart/zemin değil)
+          okunabilirlik payı — light'ta beyaz halo, dark'ta siyah halo. --- */}
+      <p
+        className="pointer-events-none absolute bottom-3 right-4 max-w-[62%] text-right text-[9px] font-medium leading-snug tracking-wide text-[#4A6488]/60 dark:text-[#9AACC7]/70 sm:bottom-4 sm:right-6 sm:max-w-[46%] sm:text-[10px]"
+        style={{
+          zIndex: Z_LAYER.background + 1,
+          textShadow: isDark
+            ? "0 1px 3px rgba(0,0,0,0.6)"
+            : "0 1px 3px rgba(255,255,255,0.55)",
+        }}
+      >
+        {isDark
+          ? "Arkhip İvanoviç Kuinci — Лунная ночь (Ay Işığında Gece)"
+          : "Halit Paşa — Boğaziçi Yalıları"}
+      </p>
 
       {/* --- Tema toggle: Header login ekranında görünmüyor, bu yüzden
           burada küçük, sabit boyutlu bir düğme var — mevcut hiçbir öğeyle
@@ -391,17 +404,20 @@ export function LoginScreen({
 
           <div className="hidden lg:block">
             <FeatureCards />
-            <p className="mt-5 text-[11px] font-medium tracking-wide text-[#4A6488]/70 dark:text-[#9AACC7]">
-              {isDark ? "Ay Işığında Deniz" : "Halit · Boğaziçi Yalıları · 1920"}
-            </p>
           </div>
         </div>
 
         {/* Sağ: login kartı */}
         <div className="flex items-center justify-center lg:justify-end lg:py-10 lg:pr-6">
+          {/* Koyu temada zemin artık soldan sağa eriyen bir gradient (düz
+              renk DEĞİL): sol/orta (form içeriği) okunur kalırken, kartın
+              sağ kenarı tamamen şeffaflaşıp arka plan tablosuyla kaynaşıyor
+              — kutu orada fark edilmesin diye kasıtlı. Gölge de aynı sebeple
+              yumuşatıldı, aksi halde şeffaf kenarda bile kutunun silueti
+              gölgeden belli olurdu. */}
           <div
             data-login-card
-            className="w-full max-w-[452px] rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-[#19100B]/[0.32] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.55)] sm:p-8"
+            className="w-full max-w-[452px] rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-transparent dark:bg-[linear-gradient(to_right,rgba(7,17,28,0.45)_0%,rgba(7,17,28,0.45)_55%,rgba(7,17,28,0.15)_80%,rgba(7,17,28,0)_100%)] dark:shadow-[0_28px_70px_-30px_rgba(0,0,0,0.3)] sm:p-8"
           >
             <img
               src="/vira_logo_text.svg"
