@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ApiHoldingRow, ApiHoldingsValuation, ApiPortfolioSummary } from "@/api/portfolio";
+import type {
+  ApiHoldingRow,
+  ApiHoldingsValuation,
+  ApiPortfolioSummary,
+  ApiTransactionList,
+  ApiTransactionRow,
+} from "@/api/portfolio";
 import type { ApiAssetRiskMetrics, ApiRiskAssessment } from "@/api/risk";
 import { toAssetClassSummaries, toHoldings, toPortfolioPageData } from "./portfolio";
 
@@ -58,6 +64,28 @@ function assetRiskMetrics(ustuneYaz: Partial<ApiAssetRiskMetrics> = {}): ApiAsse
     risk_level: "high",
     ...ustuneYaz,
   };
+}
+
+// transaction_date canlı backend'de tam ISO datetime ("2025-08-28T11:00:00Z"),
+// sadece tarih değil (curl ile doğrulandı) — testler bunu yansıtır.
+function transactionRow(ustuneYaz: Partial<ApiTransactionRow> = {}): ApiTransactionRow {
+  return {
+    transaction_date: "2026-01-19T11:00:00Z",
+    type: "buy",
+    symbol: "TUPRS",
+    quantity: 100,
+    price: 150,
+    currency: "TRY",
+    fx_rate_to_try: 1,
+    fee_try: 0,
+    cash_amount_try: -15_000,
+    position_after: 100,
+    ...ustuneYaz,
+  };
+}
+
+function transactionList(transactions: ApiTransactionRow[]): ApiTransactionList {
+  return { user_id: "u1", start_date: null, end_date: null, transactions };
 }
 
 function riskAssessment(assetMetrics: ApiAssetRiskMetrics[]): ApiRiskAssessment {
@@ -315,11 +343,88 @@ describe("toHoldings", () => {
     expect(h.value).toBe(559_419.0);
     expect(h.returnPct).toBe(126.91);
   });
+
+  // --- Getiri Detayları paneli: ham alış geçmişi, /transactions'tan
+  // sembole göre eşleniyor (bkz. adapters/portfolio.ts:lotsFromBuys).
+  // Kalan-adet bazlı DEĞİL — backend'de FIFO/LIFO parti takibi yok. ---
+
+  describe("lots (ham alış geçmişi)", () => {
+    function tekHolding(): ApiHoldingsValuation {
+      return {
+        user_id: "u1",
+        as_of: "2026-08-20",
+        holdings: [holdingRow({ symbol: "TUPRS" })],
+        best_performer: null,
+        worst_performer: null,
+        excluded_symbols: [],
+      };
+    }
+
+    it("transactions === null iken lots boş kalır", () => {
+      const [h] = toHoldings(tekHolding(), null, null);
+      expect(h.lots).toEqual([]);
+    });
+
+    it("sembole ait 'buy' işlemlerini lots'a çevirir — TL karşılığı price * fx_rate_to_try", () => {
+      const transactions = transactionList([
+        transactionRow({ transaction_date: "2026-01-19T11:00:00Z", quantity: 100, price: 150, fx_rate_to_try: 1 }),
+      ]);
+      const [h] = toHoldings(tekHolding(), null, transactions);
+      expect(h.lots).toHaveLength(1);
+      expect(h.lots[0].purchaseDate).toBe("2026-01-19T11:00:00Z");
+      expect(h.lots[0].quantity).toBe(100);
+      expect(h.lots[0].unitCost).toBe(150);
+    });
+
+    it("döviz cinsinden işlemde birim maliyeti kur ile TL'ye çevirir", () => {
+      const transactions = transactionList([
+        transactionRow({ symbol: "TUPRS", price: 10, currency: "USD", fx_rate_to_try: 34.5 }),
+      ]);
+      const [h] = toHoldings(tekHolding(), null, transactions);
+      expect(h.lots[0].unitCost).toBe(345);
+    });
+
+    it("başka sembole ait işlemler bu holding'in lots'una sızmaz", () => {
+      const transactions = transactionList([transactionRow({ symbol: "GARAN" })]);
+      const [h] = toHoldings(tekHolding(), null, transactions);
+      expect(h.lots).toEqual([]);
+    });
+
+    it("'sell' işlemleri alış geçmişine dahil edilmez", () => {
+      const transactions = transactionList([
+        transactionRow({ type: "buy", transaction_date: "2026-01-19T11:00:00Z", quantity: 100 }),
+        transactionRow({ type: "sell", transaction_date: "2026-03-01T11:00:00Z", quantity: 40 }),
+      ]);
+      const [h] = toHoldings(tekHolding(), null, transactions);
+      expect(h.lots).toHaveLength(1);
+      expect(h.lots[0].purchaseDate).toBe("2026-01-19T11:00:00Z");
+    });
+
+    it("price===null olan satır (birim maliyet hesaplanamaz) uydurulmadan atlanır", () => {
+      const transactions = transactionList([transactionRow({ price: null })]);
+      const [h] = toHoldings(tekHolding(), null, transactions);
+      expect(h.lots).toEqual([]);
+    });
+
+    it("birden fazla alım en yeni tarih en üstte sıralanır", () => {
+      const transactions = transactionList([
+        transactionRow({ transaction_date: "2026-01-05T11:00:00Z" }),
+        transactionRow({ transaction_date: "2026-06-15T11:00:00Z" }),
+        transactionRow({ transaction_date: "2026-03-10T11:00:00Z" }),
+      ]);
+      const [h] = toHoldings(tekHolding(), null, transactions);
+      expect(h.lots.map((l) => l.purchaseDate)).toEqual([
+        "2026-06-15T11:00:00Z",
+        "2026-03-10T11:00:00Z",
+        "2026-01-05T11:00:00Z",
+      ]);
+    });
+  });
 });
 
 describe("toPortfolioPageData", () => {
   it("instrumentCount/assetClassCount özetten gelir, riskSummary kaynağı olmadığı için boş", () => {
-    const data = toPortfolioPageData({ summary: OZET, holdings: null, risk: null });
+    const data = toPortfolioPageData({ summary: OZET, holdings: null, risk: null, transactions: null });
     expect(data.instrumentCount).toBe(3);
     expect(data.assetClassCount).toBe(3);
     expect(data.riskSummary).toEqual([]);
@@ -335,7 +440,7 @@ describe("toPortfolioPageData", () => {
       excluded_symbols: [],
     };
     const risk = riskAssessment([assetRiskMetrics({ asset_symbol: "TUPRS", risk_level: "low_medium" })]);
-    const data = toPortfolioPageData({ summary: OZET, holdings, risk });
+    const data = toPortfolioPageData({ summary: OZET, holdings, risk, transactions: null });
     expect(data.holdings[0].risk).toBe("Düşük-Orta");
   });
 });

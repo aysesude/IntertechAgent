@@ -1,8 +1,15 @@
-import type { ApiAssetClass, ApiHoldingRow, ApiHoldingsValuation, ApiPortfolioSummary } from "@/api/portfolio";
+import type {
+  ApiAssetClass,
+  ApiHoldingRow,
+  ApiHoldingsValuation,
+  ApiPortfolioSummary,
+  ApiTransactionList,
+  ApiTransactionRow,
+} from "@/api/portfolio";
 import type { ApiAssetRiskMetrics, ApiRiskAssessment } from "@/api/risk";
 import { ASSET_CLASS_IDS, ASSET_CLASS_LABELS, RISK_LEVEL_LABELS, RISK_LEVEL_ORDINALS } from "@/adapters/shared";
 import { formatQuantityByUnit, formatTRY } from "@/utils/format";
-import type { AssetClassSummary, Holding, PortfolioPageData } from "@/types/finance";
+import type { AssetClassSummary, Holding, HoldingLot, PortfolioPageData } from "@/types/finance";
 
 /**
  * Backend'in portföy/holdings çıktısını Portfolio sayfasının görünüm
@@ -105,7 +112,49 @@ function riskMetricsBySymbol(risk: ApiRiskAssessment | null): Map<string, ApiAss
   return harita;
 }
 
-function toHolding(h: ApiHoldingRow, riskBySymbol: Map<string, ApiAssetRiskMetrics>): Holding {
+/**
+ * Alım işlemlerini sembole göre gruplar — `toHolding`'in "Getiri Detayları"
+ * panelinde gösterdiği HAM alış geçmişi için (bkz. HoldingReturnDetail.tsx).
+ *
+ * Backend'de kalan-adet bazlı parti/lot takibi (FIFO/LIFO) YOK (bilerek
+ * kapsam dışı, bkz. ledger_service.py) — bu yüzden burada yalnızca "buy"
+ * işlemleri, satışlarla düzeltilmeden, olduğu gibi listeleniyor. Yani bir
+ * enstrümanda kısmi satış olduysa bu liste GERÇEKTE elde kalandan fazla
+ * gösterebilir; panel bunu açıkça belirtiyor (AK 5.5 — sessizce yanıltmaz).
+ * `price` alanı `null` olan satırlar (birim maliyet hesaplanamaz) atlanır.
+ */
+function buyTransactionsBySymbol(
+  transactions: ApiTransactionList | null,
+): Map<string, ApiTransactionRow[]> {
+  const harita = new Map<string, ApiTransactionRow[]>();
+  if (transactions === null) return harita;
+  for (const t of transactions.transactions) {
+    if (t.type !== "buy" || t.symbol === null || t.price === null) continue;
+    const liste = harita.get(t.symbol) ?? [];
+    liste.push(t);
+    harita.set(t.symbol, liste);
+  }
+  return harita;
+}
+
+function lotsFromBuys(buys: ApiTransactionRow[]): HoldingLot[] {
+  return buys
+    .map((t, i): HoldingLot => ({
+      id: `${t.symbol}-${t.transaction_date}-${i}`,
+      purchaseDate: t.transaction_date,
+      quantity: t.quantity,
+      // price/currency cinsinden; TL karşılığı için işlem anındaki kur.
+      unitCost: (t.price as number) * t.fx_rate_to_try,
+    }))
+    // En yeni alım en üstte — bir işlem geçmişi listesi gibi okunsun diye.
+    .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate));
+}
+
+function toHolding(
+  h: ApiHoldingRow,
+  riskBySymbol: Map<string, ApiAssetRiskMetrics>,
+  buysBySymbol: Map<string, ApiTransactionRow[]>,
+): Holding {
   const unitLabel = unitLabelFor(h.asset_class, h.currency);
   // Risk seviyesi `/holdings`TEN DEĞİL: bu uçta `risk_level` alanı hiç yok.
   // Kaynağı `/api/risk/{user_id}` — `metrics.asset_metrics[]`, sembole göre
@@ -129,16 +178,22 @@ function toHolding(h: ApiHoldingRow, riskBySymbol: Map<string, ApiAssetRiskMetri
     riskOrdinal,
     currentUnitPrice: h.current_price_try ?? 0,
     unitLabel,
-    // Parti/lot kırılımı için backend ucu yok (bkz. HoldingReturnDetail'deki
-    // not) — satır tıklaması bu yüzden devre dışı.
-    lots: [],
+    // Ham alış geçmişi — bkz. buyTransactionsBySymbol/lotsFromBuys. Kalan-adet
+    // bazlı DEĞİL (backend'de yok); satır tıklaması listede en az bir alım
+    // varsa açık (bkz. HoldingsTable.tsx).
+    lots: lotsFromBuys(buysBySymbol.get(h.symbol) ?? []),
   };
 }
 
-export function toHoldings(holdings: ApiHoldingsValuation | null, risk: ApiRiskAssessment | null): Holding[] {
+export function toHoldings(
+  holdings: ApiHoldingsValuation | null,
+  risk: ApiRiskAssessment | null,
+  transactions: ApiTransactionList | null = null,
+): Holding[] {
   if (holdings === null) return [];
   const riskBySymbol = riskMetricsBySymbol(risk);
-  return holdings.holdings.map((h) => toHolding(h, riskBySymbol));
+  const buysBySymbol = buyTransactionsBySymbol(transactions);
+  return holdings.holdings.map((h) => toHolding(h, riskBySymbol, buysBySymbol));
 }
 
 // ---------------------------------------------------------------------------
@@ -150,12 +205,14 @@ export interface PortfolioPageSources {
   holdings: ApiHoldingsValuation | null;
   /** Yalnızca Pozisyonlar tablosundaki risk sütunu için (bkz. toHolding). Düşerse `null` — tablo diğer her şeyle birlikte çizilir, sadece risk "—" kalır. */
   risk: ApiRiskAssessment | null;
+  /** Yalnızca Getiri Detayları panelindeki ham alış geçmişi için (bkz. lotsFromBuys). Düşerse `null` — satırlar tıklanamaz kalır, başka hiçbir alan etkilenmez. */
+  transactions: ApiTransactionList | null;
 }
 
 export function toPortfolioPageData(kaynak: PortfolioPageSources): PortfolioPageData {
   return {
     assetClasses: toAssetClassSummaries(kaynak.summary, kaynak.holdings),
-    holdings: toHoldings(kaynak.holdings, kaynak.risk),
+    holdings: toHoldings(kaynak.holdings, kaynak.risk, kaynak.transactions),
     // Kaynağı yok (bkz. PR planı) — PortfolioPage zaten bunu render etmiyor
     // (RiskSummaryCard bağlı değil), boş dizi uydurmadan daha doğru.
     riskSummary: [],

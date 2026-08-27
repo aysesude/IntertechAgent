@@ -73,12 +73,11 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
           </thead>
           <tbody>
             {visible.map((h) => {
-              // Getiri detay paneli parti/lot kırılımı gösteriyor
-              // (HoldingReturnDetail); backend'de bu ucun karşılığı yok, o
-              // yüzden `lots` her zaman boş geliyor (bkz. adapters/portfolio.ts).
-              // Panel boş bir kırılımla açılıp yanıltmak yerine satır
-              // tamamen tıklanamaz kalıyor — backend lot ucu geldiğinde bu
-              // koşulu kaldırmak yeterli olacak.
+              // Getiri detay paneli (HoldingReturnDetail) bu enstrümanın ham
+              // alış işlemlerini gösterir (bkz. adapters/portfolio.ts —
+              // lotsFromBuys, /transactions'tan sembole göre eşleniyor).
+              // Hiç alım işlemi bulunamazsa (istek düştü ya da o sembolde
+              // kayıt yok) satır tıklanamaz kalır, boş bir panel açılmaz.
               const detayVar = h.lots.length > 0;
               return (
                 <tr
