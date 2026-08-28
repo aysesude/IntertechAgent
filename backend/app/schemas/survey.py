@@ -73,6 +73,11 @@ class SurveyResult(BaseModel):
     sinir_bolgesinde: bool
     kurallar: list[SurveyRule]
     sonuc_uretildi: bool
+    # Sonucu kullanıcının KENDİ cevaplarına bağlayan olgular. Deterministik
+    # üretilir (`survey_service._gerekceler`), LLM'e sorulmaz: hangi cevabın
+    # sonucu belirlediği ölçülmüş bir bilgidir, tahmin edilemez. `yorum` bu
+    # olguları cümleye döker; sağlayıcı düşerse liste yine de gelir.
+    gerekceler: list[str] = []
     # Sonucu kişiselleştiren metin. LLM üretir; ulaşılamazsa profil adından
     # türetilmiş sabit bir metne düşer, ASLA boş kalmaz.
     yorum: str

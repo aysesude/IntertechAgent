@@ -13,7 +13,6 @@ import pytest
 
 from app.services.survey_service import (
     SurveyAnswerError,
-    _yuksek_riskli_satirlar,
     config,
     skorla,
 )
@@ -271,54 +270,90 @@ def test_taninmayan_secenek_reddedilir():
 
 
 # ---------------------------------------------------------------------------
-# TK1'in kapsamı: hangi işlem geçmişi düşük risk beyanıyla ÇELİŞİR?
+# Gerekçeler: sonucu kullanıcının KENDİ cevaplarına bağlayan olgular
 # ---------------------------------------------------------------------------
 
 
-def test_tk1_dusuk_riskli_urundeki_hacmi_celiski_saymaz():
-    """Devlet tahvilinde işlem yapmış "riskten kaçınırım" beyanı ÇELİŞKİ DEĞİL.
+def test_tk1_referans_kapsamiyla_calisir():
+    """TK1 matrisin HERHANGİ bir satırındaki hacme bakar — düşük riskli
+    olanlar dahil.
 
-    Kural önce matrisin herhangi bir satırındaki hacme bakıyordu ve tam da
-    tutarlı davranan kullanıcıyı — parasını repo/BPP ve devlet tahvilinde
-    tutan muhafazakâr yatırımcıyı — reddediyordu. Reddedilen kullanıcı
-    kapatılamaz anket ekranında kalıyor, üstelik düzeltecek bir çelişkisi
-    de yok.
+    Bir ara yalnızca yüksek riskli satırlara daraltılmıştı; TSPB
+    şablonundan gelen kuralı kendi yorumumuzla değiştirmemek için geri
+    alındı. Bu test o kararı kilitler: kapsam yeniden daraltılırsa düşer ve
+    kararın bilinçli olduğunu hatırlatır.
     """
     cevaplar, _ = VAKALAR["emekli_koruma_odakli"]
-    # Aynı emekli, ama düşük riskli ürünlerde EN YÜKSEK hacim beyanıyla.
-    yogun_tahvil = {
-        **cevaplar,
-        "E1": _matris(
-            r1={"bilgi": "2", "siklik": "3", "hacim": "3"},
-            r2={"bilgi": "2", "siklik": "3", "hacim": "3"},
-        ),
-    }
+    yalnizca_tahvil = {**cevaplar, "E1": _matris(r2={"bilgi": "2", "siklik": "2", "hacim": "2"})}
 
-    sonuc = skorla(yogun_tahvil)
-
-    assert sonuc["sonuc_uretildi"] is True
-    assert not any(k["kod"] == "TK1" for k in sonuc["kurallar"])
-    # Daraltma profili riskli tarafa kaydırmıyor: tolerans hâlâ belirleyici.
-    assert sonuc["profil_seviyesi"] == 1
-
-
-def test_tk1_yuksek_riskli_urundeki_hacmi_hala_celiski_sayar():
-    """Daraltma kuralı işlevsiz bırakmadı: türev/kaldıraçlı işlem geçmişi
-    "riskten kaçınırım" beyanıyla bağdaşmaz ve reddedilmeye devam eder."""
-    cevaplar, _ = VAKALAR["emekli_koruma_odakli"]
-    viop = {**cevaplar, "E1": _matris(r4={"bilgi": "2", "siklik": "2", "hacim": "2"})}
-
-    sonuc = skorla(viop)
+    sonuc = skorla(yalnizca_tahvil)
 
     assert sonuc["sonuc_uretildi"] is False
     assert any(k["kod"] == "TK1" and k["durdurucu"] for k in sonuc["kurallar"])
 
 
-def test_tk1_yalnizca_yuksek_riskli_urunlere_bakar():
-    """Kuralın "yüksek riskli" yorumunu KİLİTLER.
+def test_reddedilen_kullanici_hangi_iki_beyanin_celistigini_ogrenir():
+    """Reddin gerekçesi SOMUT olmalı.
 
-    `_yuksek_riskli_satirlar` matrisin en yüksek ağırlıklı satırlarını
-    seçiyor. Matris değişir de bu seçim orta riskli ürünleri kapsamaya
-    başlarsa, kural sessizce genişler ve daraltma geri alınmış olur.
+    Kuralın kapsamı geniş tutulduğuna göre, reddedilen kullanıcının elindeki
+    tek şey açıklamadır. "Cevaplarınız çelişiyor" demek yetmez; hangi şıkkı
+    seçtiği ve hangi satırda hangi hacmi bildirdiği yazılı olmalı.
     """
-    assert set(_yuksek_riskli_satirlar()) == {"r4", "r5"}
+    cevaplar, _ = VAKALAR["celiskili_beyan_tk1"]
+
+    gerekceler = skorla(cevaplar)["gerekceler"]
+
+    metin = " ".join(gerekceler)
+    # Kullanıcının C3'te seçtiği şıkkın METNİ geçmeli, "C3" kodu değil.
+    assert "Riskten olabildiğince kaçınırım" in metin
+    # Hacim bildirdiği satır ve bildirdiği aralık da geçmeli.
+    assert "Yüksek riskli" in metin
+    assert "5 M+" in metin
+    assert not any("C3" == g.strip() for g in gerekceler)
+
+
+def test_profil_uretilse_de_gerekce_verilir():
+    """Gerekçe yalnızca reddedilene değil HERKESE üretilir: "profilim neden
+    bu çıktı" sorusu sonuç üretildiğinde de soruluyor."""
+    cevaplar, _ = VAKALAR["genc_calisan_tecrubesiz_iddiali"]
+
+    sonuc = skorla(cevaplar)
+
+    assert sonuc["sonuc_uretildi"] is True
+    assert sonuc["gerekceler"]
+    # Bu vakada bağlayıcı olan kapasite (43) — tolerans 100.
+    assert any("kapasiteniz" in g for g in sonuc["gerekceler"])
+    # Bilgi tavanı da uygulanmıştı; gerekçede görünmeli.
+    assert any("bilgi ve deneyim" in g.lower() for g in sonuc["gerekceler"])
+
+
+def test_gerekce_baglayici_boyutu_dogru_secer():
+    """Tolerans bağlayıcıysa gerekçe kapasiteyi suçlamamalı.
+
+    "Kısa vadeli likidite" vakasında kapasite 20, tolerans 68 — bağlayıcı
+    olan kapasite. Ters yazılsaydı kullanıcı yanlış cevabı düzeltmeye
+    çalışırdı.
+    """
+    cevaplar, _ = VAKALAR["kisa_vadeli_likidite_ihtiyaci"]
+
+    gerekceler = skorla(cevaplar)["gerekceler"]
+
+    assert any("kapasiteniz" in g for g in gerekceler)
+    assert not any("toleransınız belirledi" in g for g in gerekceler)
+    # Likidite tavanı uygulandığı için B6 cevabı da gerekçede olmalı.
+    assert any("12 ay" in g for g in gerekceler)
+
+
+def test_gerekceler_skoru_etkilemez():
+    """Gerekçe skorun TÜREVİ: hesaplanmasının sonuca dokunmaması gerekir."""
+    cevaplar, beklenen = VAKALAR["yuksek_varlikli_tecrubeli"]
+
+    sonuc = skorla(cevaplar)
+
+    assert (
+        sonuc["kapasite"],
+        sonuc["tolerans"],
+        sonuc["bilgi"],
+        sonuc["nihai_skor"],
+        sonuc["profil_seviyesi"],
+    ) == beklenen

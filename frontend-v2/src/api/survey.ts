@@ -84,6 +84,12 @@ export interface SurveyResult {
   sinir_bolgesinde: boolean;
   kurallar: SurveyRule[];
   sonuc_uretildi: boolean;
+  /**
+   * Sonucu kullanıcının KENDİ cevaplarına bağlayan olgular; sunucuda
+   * deterministik üretilir. `yorum` bunları cümleye döker — ama LLM
+   * düşerse bu liste yine gelir, o yüzden ekranda ikisi de gösterilir.
+   */
+  gerekceler: string[];
   /** Sonucu açıklayan kişiselleştirilmiş metin. Hiçbir zaman boş gelmez. */
   yorum: string;
 }
