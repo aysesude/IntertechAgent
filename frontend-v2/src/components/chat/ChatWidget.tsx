@@ -123,7 +123,11 @@ export function ChatWidget() {
         </div>
       )}
 
-      <div className={`fixed bottom-6 right-4 z-[61] w-[76px] flex-col items-center gap-1.5 sm:bottom-8 sm:right-8 ${open ? "hidden sm:flex" : "flex"}`}>
+      {/* Panel açıkken yüzen buton BİLEREK tamamen gizleniyor (masaüstünde
+          de) — önceden `sm:flex` ile masaüstünde açıkken de görünüyordu ve
+          X ikonuna dönüşüyordu; panelin kendi başlığındaki kapat düğmesiyle
+          (yukarıda) birlikte sağ üstte İKİ ayrı "çarpı" oluşuyordu. */}
+      <div className={`fixed bottom-6 right-4 z-[61] w-[76px] flex-col items-center gap-1.5 sm:bottom-8 sm:right-8 ${open ? "hidden" : "flex"}`}>
         <button
           onClick={() => setOpen((v) => !v)}
           // Sayfanın camsı kart yüzeyiyle (bkz. Card.tsx CARD_SURFACE_CLASS)
