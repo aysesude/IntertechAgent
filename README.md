@@ -12,7 +12,10 @@ dolu, canlı veri kaynakları bağlı.
 | Ortam | Adres | Branch |
 |---|---|---|
 | Test | https://test.34.159.243.0.nip.io (şifre korumalı) | `test` |
-| Canlı | https://app.34.159.243.0.nip.io | `main` |
+| Canlı | https://virafinance.org | `main` |
+
+İki ortam **ayrı veritabanları** kullanır. Testte açılan hesap canlıda yoktur;
+bu kasıtlıdır, sentetik test verisi demo ortamına sızmamalıdır.
 
 Her ikisi de PR merge'iyle kendiliğinden güncellenir (`.github/workflows/deploy.yml`);
 kimsenin sunucuya girmesi gerekmez. Çalışma düzeni: [docs/EKIP-OZETI.md](docs/EKIP-OZETI.md).
@@ -48,6 +51,25 @@ LLM'den geçmez:
 
 Dış kaynak düşerse blok sessizce atlanır; ana cevap ayakta kalır.
 
+**Yatırımcı profili ölçülür, sorulmaz.** Hesap açma iki adımdır (kimlik +
+açılış aktarımı); 18 soruluk SPK/TSPB uyumluluk anketi **ilk girişte**
+kapatılamaz bir ekranda doldurulur. Anket kayıt akışının içindeyken yarıda
+bırakılması hesabın hiç açılmamasına yol açıyordu — en pahalı adım en
+kırılgan adıma bağlıydı.
+
+Skorlama sunucudadır (`app/services/survey_service.py`); istemcinin
+gönderdiği puana güvenilmez. Üç boyut ayrı ölçülür ve **nihai puan
+`min(kapasite, tolerans)`** olur — ortalanmaz: parası olmayan cesur yatırımcı
+ile parası olan ama düşüşe dayanamayan yatırımcı aynı profile düşmemelidir.
+Bilgi puanı profile tavan uygular. Beyanlar birbiriyle çelişiyorsa (TK1)
+profil **üretilmez**: çelişkiden türetilmiş bir profil, üretilmemiş profilden
+kötüdür. Kullanıcıya hangi çelişkinin engellediği gösterilir ve cevaplarına
+döner.
+
+Açılış aktarımı ("başka bankadan para getir") gerçek bir para hareketi
+değildir: girilen tutar deftere bir `DEPOSIT` işlemi olarak yazılır, bakiye
+de her yerde olduğu gibi defterden üretilir.
+
 ## Teknoloji yığını
 
 - Backend: Python 3.11, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic
@@ -57,7 +79,7 @@ Dış kaynak düşerse blok sessizce atlanır; ana cevap ayakta kalır.
   `LLM_PROVIDER` ile `openai` / `azure` / `ollama` arasında geçilir. Canlı
   ortamda OpenAI (`gpt-5.6-luna`), yerelde Ollama kullanılabilir.
 - Frontend: React 18 + Vite + TypeScript, Tailwind, Recharts, TanStack Query
-- Test: pytest (32 test dosyası) · Lint: ruff + black + eslint
+- Test: pytest (44 dosya, ~490 test) + vitest (22 dosya) · Lint: ruff + black + eslint
 
 ## Sıfırdan kurulum
 
@@ -97,6 +119,17 @@ kullanıcılarının T.C. kimlik numarası ve ortak şifresi için:
 ```bash
 make demo-users
 ```
+
+Liste `— (giriş yok)` diyorsa o ortamda kimlik ve şifre alanları hiç
+doldurulmamıştır (migration bunları `NULL` ekler, bcrypt özeti migration
+içinde üretilemez) ve **hiç kimse giriş yapamaz**. Düzeltmesi:
+
+```bash
+make credentials    # yalnızca eksik iki alanı doldurur, veri silmez
+```
+
+Ya da `virafinance.org` üzerinden "Üye ol" ile yeni bir hesap açın; anket
+ilk girişte karşınıza çıkar.
 
 ## Makefile kısayolları
 
@@ -148,7 +181,7 @@ finans-danismani/
   backend/app/providers/  piyasa verisi sağlayıcıları (yfinance, TCMB, TEFAS, KAP, BloombergHT)
   backend/alembic/        migration zinciri
   agents/                 üç ajan + LangGraph orkestratör + kural tabanlı sorgu ayrıştırma
-  mcp_server/             MCP Server + 12 tool
+  mcp_server/             MCP Server + 13 tool
   rag/                    ingest / retriever / vector_store
   data/                   seed betikleri, backfill/daily_update CLI, documents/ (67 .md)
   frontend-v2/            VİRA arayüzü — tek arayüz (React + Vite + TS)
@@ -161,7 +194,11 @@ finans-danismani/
 | Uç | Açıklama |
 |---|---|
 | `POST /api/auth/login` · `GET /api/auth/me` | kimlik doğrulama (JWT) |
+| `POST /api/auth/register` | hesap açma + portföy + açılış aktarımı (tek işlem) |
 | `POST /api/auth/password-reset/{request,complete}` | şifre yenileme |
+| `GET /api/survey/questions` | anket soruları (oturum istemez) |
+| `POST /api/survey/score` | skorlar, kaydetmez |
+| `POST /api/survey/submit/{user_id}` | skorlar ve profili kullanıcıya yazar |
 | `POST /api/chat` | sohbet — Orchestrator → ajanlar → SSE stream |
 | `GET /api/chat/sessions/{id}/messages` | oturum geçmişi |
 | `GET /api/portfolio/{user_id}` | portföy özeti |
@@ -171,6 +208,10 @@ finans-danismani/
 | `GET /api/portfolio/{user_id}/benchmark` | endeks kıyaslaması |
 | `GET /api/risk/{user_id}` | risk değerlendirmesi |
 | `GET /api/users/{user_id}/risk-profile` · `PUT` | risk profili oku/güncelle |
+| `GET /api/users/{user_id}/risk-survey` · `PUT` | anket puanı oku/güncelle |
+| `GET /api/trade/{user_id}/assets` | işlem yapılabilir varlıklar |
+| `POST /api/trade/{user_id}/preview` · `execute` | emir önizleme / deftere yazma |
+| `POST /api/trade/{user_id}/deposit` | nakit girişi (defter işlemi) |
 | `GET /api/market/indicators` | gösterge şeridi (fiyat + günlük değişim) |
 | `GET /api/market/headlines` | canlı piyasa gündemi (BloombergHT) |
 | `GET /api/market/influence/{user_id}` | pozisyonların ağırlığı ve günlük değişimi |
@@ -186,7 +227,8 @@ Sözleşme ayrıntıları: [docs/API.md](docs/API.md).
 `get_portfolio_summary` · `get_holdings` · `get_portfolio_performance` ·
 `get_transactions` · `get_benchmark_comparison` · `get_portfolio_news` ·
 `get_current_prices` · `get_asset_price_history` · `search_market_news` ·
-`get_risk_assessment` · `get_live_kap_disclosures` · `get_live_market_headlines`
+`get_macro_news` · `get_risk_assessment` · `get_live_kap_disclosures` ·
+`get_live_market_headlines`
 
 Tool docstring'leri dokümantasyon değil **prompt parçasıdır**: ajan seçimini
 `client.list_tools()` ile okuduğu bu metinlere bakarak yapar. Ayrıntı:
@@ -194,8 +236,9 @@ Tool docstring'leri dokümantasyon değil **prompt parçasıdır**: ajan seçimi
 
 ## Kapsam dışı
 
-- Gerçek para hareketi, emir iletimi, aracı kurum entegrasyonu — sistem
-  yalnızca okur ve yorumlar
+- Gerçek para hareketi, emir iletimi, aracı kurum entegrasyonu — arayüzdeki
+  alım/satım ve "başka bankadan para getir" adımları yalnızca **deftere işlem
+  yazar**, dışarıya hiçbir talimat gitmez, banka bilgisi istenmez
 - Gelecek fiyat/getiri tahmini — sorulduğunda açıkça reddedilir
 - Kripto, türev ve gayrimenkul varlık sınıfları
 - Çoklu sohbet oturumu arayüzü (liste/arama/silme)

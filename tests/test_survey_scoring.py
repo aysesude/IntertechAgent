@@ -13,6 +13,7 @@ import pytest
 
 from app.services.survey_service import (
     SurveyAnswerError,
+    _yuksek_riskli_satirlar,
     config,
     skorla,
 )
@@ -267,3 +268,57 @@ def test_taninmayan_secenek_reddedilir():
 
     with pytest.raises(SurveyAnswerError):
         skorla({**cevaplar, "D1": "z"})
+
+
+# ---------------------------------------------------------------------------
+# TK1'in kapsamı: hangi işlem geçmişi düşük risk beyanıyla ÇELİŞİR?
+# ---------------------------------------------------------------------------
+
+
+def test_tk1_dusuk_riskli_urundeki_hacmi_celiski_saymaz():
+    """Devlet tahvilinde işlem yapmış "riskten kaçınırım" beyanı ÇELİŞKİ DEĞİL.
+
+    Kural önce matrisin herhangi bir satırındaki hacme bakıyordu ve tam da
+    tutarlı davranan kullanıcıyı — parasını repo/BPP ve devlet tahvilinde
+    tutan muhafazakâr yatırımcıyı — reddediyordu. Reddedilen kullanıcı
+    kapatılamaz anket ekranında kalıyor, üstelik düzeltecek bir çelişkisi
+    de yok.
+    """
+    cevaplar, _ = VAKALAR["emekli_koruma_odakli"]
+    # Aynı emekli, ama düşük riskli ürünlerde EN YÜKSEK hacim beyanıyla.
+    yogun_tahvil = {
+        **cevaplar,
+        "E1": _matris(
+            r1={"bilgi": "2", "siklik": "3", "hacim": "3"},
+            r2={"bilgi": "2", "siklik": "3", "hacim": "3"},
+        ),
+    }
+
+    sonuc = skorla(yogun_tahvil)
+
+    assert sonuc["sonuc_uretildi"] is True
+    assert not any(k["kod"] == "TK1" for k in sonuc["kurallar"])
+    # Daraltma profili riskli tarafa kaydırmıyor: tolerans hâlâ belirleyici.
+    assert sonuc["profil_seviyesi"] == 1
+
+
+def test_tk1_yuksek_riskli_urundeki_hacmi_hala_celiski_sayar():
+    """Daraltma kuralı işlevsiz bırakmadı: türev/kaldıraçlı işlem geçmişi
+    "riskten kaçınırım" beyanıyla bağdaşmaz ve reddedilmeye devam eder."""
+    cevaplar, _ = VAKALAR["emekli_koruma_odakli"]
+    viop = {**cevaplar, "E1": _matris(r4={"bilgi": "2", "siklik": "2", "hacim": "2"})}
+
+    sonuc = skorla(viop)
+
+    assert sonuc["sonuc_uretildi"] is False
+    assert any(k["kod"] == "TK1" and k["durdurucu"] for k in sonuc["kurallar"])
+
+
+def test_tk1_yalnizca_yuksek_riskli_urunlere_bakar():
+    """Kuralın "yüksek riskli" yorumunu KİLİTLER.
+
+    `_yuksek_riskli_satirlar` matrisin en yüksek ağırlıklı satırlarını
+    seçiyor. Matris değişir de bu seçim orta riskli ürünleri kapsamaya
+    başlarsa, kural sessizce genişler ve daraltma geri alınmış olur.
+    """
+    assert set(_yuksek_riskli_satirlar()) == {"r4", "r5"}

@@ -117,6 +117,20 @@ def _bant(skor: int) -> dict[str, Any]:
     raise SurveyConfigError(f"Profil bantları {skor} puanını kapsamıyor")
 
 
+def _yuksek_riskli_satirlar() -> tuple[str, ...]:
+    """Ürün matrisinin YÜKSEK riskli satırları (VİOP/varant, tezgâhüstü
+    türevler, kaldıraçlı FX).
+
+    Satırlar riske göre artan sırada ve `w` ağırlığı riskle birlikte artıyor;
+    en yüksek ağırlık yüksek riskli grubu işaretliyor. Bu yorum
+    `test_tk1_yalnizca_yuksek_riskli_urunlere_bakar` ile kilitli — matris
+    değişirse test düşer ve buranın gözden geçirilmesi gerektiğini söyler.
+    """
+    satirlar = config()["urun_matrisi"]["satirlar"]
+    en_yuksek = max(satir["w"] for satir in satirlar)
+    return tuple(satir["k"] for satir in satirlar if satir["w"] == en_yuksek)
+
+
 def _kurallar(
     cevaplar: dict[str, Any], kapasite: int, tolerans: int, bilgi: int, seviye: int
 ) -> list[dict[str, Any]]:
@@ -124,13 +138,29 @@ def _kurallar(
 
     Metin JSON'da, KOŞUL burada: metinler çevrilebilir ve gözden geçirilebilir
     olmalı, koşullar test edilebilir olmalı (kılavuzun bilinçli ayrımı).
+
+    TK1 YALNIZCA YÜKSEK RİSKLİ ÜRÜNLERE BAKAR. Kural başlangıçta matrisin
+    HERHANGİ bir satırındaki hacme bakıyordu; bu, repo/BPP ya da devlet
+    tahvilinde işlem geçmişi olan bir "riskten kaçınırım" beyanını da
+    reddediyordu. Oysa düşük riskli üründe hacim, düşük risk tercihiyle
+    çelişmez — tam tersine onu doğrular. Kuralın kastettiği çelişki,
+    beyanla BAĞDAŞMAYAN bir işlem geçmişi: türev, varant, kaldıraçlı FX.
+
+    Daraltma kimseyi korumasız bırakmıyor: TK1 tetiklenmediğinde profil
+    normal yoldan hesaplanıyor ve C3='a'/'b' diyen kullanıcı zaten
+    tolerans tarafından en muhafazakâr banda düşüyor (`nihai_skor` =
+    `min(kapasite, tolerans)`). Kural yalnızca "sonuç üret / üretme"
+    kararını veriyor, profili riskli tarafa kaydırmıyor.
     """
     kural_metni = {k["kod"]: k for k in config()["kurallar"]}
     e1 = cevaplar.get("E1") or {}
-    hacimler = [int(str((v or {}).get("hacim", "0")) or 0) for v in e1.values()]
+    yuksek_riskli_hacim = max(
+        (int(str((e1.get(k) or {}).get("hacim", "0")) or 0) for k in _yuksek_riskli_satirlar()),
+        default=0,
+    )
 
     tetik = {
-        "TK1": cevaplar.get("C3") in ("a", "b") and any(h >= 2 for h in hacimler),
+        "TK1": cevaplar.get("C3") in ("a", "b") and yuksek_riskli_hacim >= 2,
         "TK2": tolerans - kapasite >= 30,
         "TK3": cevaplar.get("C1") == "a" and seviye >= 4,
         "TK4": bilgi < 26 and cevaplar.get("C3") in ("d", "e"),
