@@ -202,8 +202,14 @@ export function toTransactions(liste: ApiTransactionList, limit = 6): Transactio
           ? `${TRANSACTION_LABELS[islem.type]} · ${islem.symbol}`
           : TRANSACTION_LABELS[islem.type],
         date: formatDateDMY(islem.transaction_date),
+        // Birim fiyat varlığın KENDİ para biriminde tutuluyor (ABD
+        // hisselerinde USD); TL karşılığı için işlemin DONDURULMUŞ kuruyla
+        // çarpılır. Bugünkü kurla çarpmak, geçmiş bir alımın TL maliyetini
+        // her gün değiştirirdi.
         detail: miktarVar
-          ? `${islem.quantity} adet${islem.price !== null ? ` · ${formatTRY(islem.price)}` : ""}`
+          ? `${islem.quantity} adet${
+              islem.price !== null ? ` · ${formatTRY(islem.price * islem.fx_rate_to_try)}` : ""
+            }`
           : "",
         amount: tutar,
         formattedAmount: formatSignedTRY(tutar),

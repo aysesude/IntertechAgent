@@ -8,7 +8,7 @@ import { TradePanel } from "@/components/trade/TradePanel";
 import { useTradeData } from "@/hooks/useTradeData";
 import { useCurrentUserId } from "@/auth/AuthContext";
 import { depositCash, type ApiTradableAsset, type ApiTradeSide } from "@/api/trade";
-import { formatTRY } from "@/utils/format";
+import { formatNumberTR, formatTRY, formatTRY2 } from "@/utils/format";
 import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
 
 /**
@@ -17,10 +17,15 @@ import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
  * Portföyün üstünde bir "ne olurdu" katmanı değil: buradaki her onay
  * defterin kendisine kayıt düşüyor ve portföy ekranı anında değişiyor.
  *
- * UYGUN OLMAYAN VARLIK LİSTEDEN DÜŞMEZ, kilitli görünür ve sebebi yazılır.
- * Sessizce elemek, kullanıcının o varlığın var olduğunu bile görmemesi
- * demek olurdu; kilidin sebebini söylemek anketin ne işe yaradığını da
- * anlatıyor.
+ * AL SEKMESİNDE YALNIZCA ALINABİLİR VARLIKLAR LİSTELENİR (28 Ağustos 2026
+ * ürün kararı). Önce kilitli gösteriliyorlardı; listenin büyük kısmı
+ * tıklanamaz satırdan oluşunca ekran kullanıcının yapabileceği şeyi
+ * gizler hale geldi. Gizlenenlerin VARLIĞI yine söyleniyor — listenin
+ * altındaki tek satır kaç tanesinin neden düştüğünü yazar, yoksa kullanıcı
+ * aradığı varlığı bulamayıp sistemi arızalı sanardı.
+ *
+ * Uç TAM LİSTEYİ dönmeye devam ediyor; eleme burada. Sayıyı hesaplayabilmek
+ * de, ileride "puanınızı yükseltirseniz şunlar açılır" ekranı da buna bağlı.
  */
 
 const SINIF_ETIKETLERI: Record<string, string> = {
@@ -43,19 +48,27 @@ export function TradePage() {
   const [bildirim, setBildirim] = useState<string | null>(null);
   const [yatiriliyor, setYatiriliyor] = useState(false);
 
-  const varliklar = useMemo(() => {
+  const { varliklar, gizlenen } = useMemo(() => {
     const hepsi = data?.assets ?? [];
     // SAT sekmesinde yalnızca elindekiler: satılamayacak varlıkları
     // listelemek, tıklanınca "elinizde yok" hatası vermekten kötü.
     const temel = sekme === "sell" ? hepsi.filter((a) => a.held_quantity > 0) : hepsi;
     const q = arama.trim().toLocaleLowerCase("tr");
-    return temel.filter(
+    const suzulmus = temel.filter(
       (a) =>
         (sinif === "Tümü" || a.asset_class === sinif) &&
         (q === "" ||
           a.symbol.toLocaleLowerCase("tr").includes(q) ||
           a.name.toLocaleLowerCase("tr").includes(q)),
     );
+    // Gizlenen sayısı ARAMA VE SINIF SÜZGECİNDEN SONRA sayılıyor: "Hisse"
+    // filtresindeyken tahvil tarafında kilitli 12 varlık olduğunu söylemek
+    // kullanıcının o an baktığı listeyle ilgisiz bir sayı olurdu.
+    if (sekme === "sell") return { varliklar: suzulmus, gizlenen: 0 };
+    return {
+      varliklar: suzulmus.filter((a) => a.can_buy),
+      gizlenen: suzulmus.filter((a) => !a.can_buy).length,
+    };
   }, [data, sekme, arama, sinif]);
 
   async function paraYatir() {
@@ -165,51 +178,64 @@ export function TradePage() {
             <p className="m-0 text-sm text-ink-faint">
               {sekme === "sell"
                 ? "Satabileceğiniz bir pozisyonunuz yok."
-                : "Aramanıza uyan varlık yok."}
+                : data?.survey_score === null
+                  ? "Risk anketiniz kayıtlı değil. Alım yapabilmek için önce anketi doldurmanız gerekiyor."
+                  : gizlenen > 0
+                    ? "Bu süzgece uyan ve risk puanınıza uygun varlık yok."
+                    : "Aramanıza uyan varlık yok."}
             </p>
           )}
 
           <div className="flex flex-col">
-            {varliklar.map((a) => {
-              // ALIMDA kilit uygulanır, SATIŞTA asla: elindeki uyumsuz
-              // varlıktan çıkışın tek yolu satmaktır.
-              const kilitli = sekme === "buy" && !a.can_buy;
-              return (
-                <button
-                  key={a.symbol}
-                  onClick={() => !kilitli && setSecili(a)}
-                  disabled={kilitli}
-                  className={
-                    "flex items-center gap-3 border-t border-line2 py-3 text-left transition-colors first:border-t-0 dark:border-transparent " +
-                    (kilitli
-                      ? "cursor-not-allowed opacity-55"
-                      : "hover:bg-black/[0.02] dark:hover:bg-white/[0.04]") +
-                    (secili?.symbol === a.symbol ? " bg-brand-tint dark:bg-white/[0.06]" : "")
-                  }
-                >
-                  <AssetLogo symbol={a.symbol} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{a.name}</div>
-                    <div className="truncate text-xs text-ink-faint">
-                      {a.symbol} · {SINIF_ETIKETLERI[a.asset_class] ?? a.asset_class}
-                      {sekme === "sell" && ` · ${a.held_quantity} adet`}
-                    </div>
-                    {kilitli && a.block_reason && (
-                      <div className="mt-0.5 text-[11.5px] font-medium text-ink-soft">
-                        {a.block_reason}
-                      </div>
-                    )}
+            {/* Al sekmesinde liste zaten yalnızca alınabilirleri içeriyor,
+                Sat sekmesinde kilit hiç uygulanmıyor (elindeki uyumsuz
+                varlıktan çıkışın tek yolu satmaktır) — bu yüzden burada
+                tıklanamaz satır YOK. */}
+            {varliklar.map((a) => (
+              <button
+                key={a.symbol}
+                onClick={() => setSecili(a)}
+                className={
+                  "flex items-center gap-3 border-t border-line2 py-3 text-left transition-colors first:border-t-0 hover:bg-black/[0.02] dark:border-transparent dark:hover:bg-white/[0.04]" +
+                  (secili?.symbol === a.symbol ? " bg-brand-tint dark:bg-white/[0.06]" : "")
+                }
+              >
+                <AssetLogo symbol={a.symbol} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{a.name}</div>
+                  <div className="truncate text-xs text-ink-faint">
+                    {a.symbol} · {SINIF_ETIKETLERI[a.asset_class] ?? a.asset_class}
+                    {sekme === "sell" && ` · ${a.held_quantity} adet`}
                   </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-[13.5px] font-semibold">
-                      {a.price === null ? "—" : formatTRY(a.price)}
-                    </div>
-                    <div className="text-[11px] text-ink-faint">seviye {a.risk_level}</div>
+                </div>
+                <div className="shrink-0 text-right">
+                  {/* GÖSTERİLEN RAKAM TL. Varlığın kendi fiyatı (ABD
+                      hisselerinde USD) yalnızca ikinci satırda, birimiyle
+                      birlikte yazılıyor — TL işaretiyle dolar rakamı
+                      göstermek varlığı 40 kat ucuz gösteriyordu. */}
+                  <div className="text-[13.5px] font-semibold">
+                    {a.price_try === null ? "—" : formatTRY2(a.price_try)}
                   </div>
-                </button>
-              );
-            })}
+                  <div className="text-[11px] text-ink-faint">
+                    {a.currency !== "TRY" && a.price !== null
+                      ? `${formatNumberTR(a.price, 2)} ${a.currency} · `
+                      : ""}
+                    seviye {a.risk_level}
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
+
+          {/* Gizlenenlerin SAYISI söyleniyor: aradığı varlığı bulamayan
+              kullanıcı, listenin neden kısa olduğunu bilmezse hatayı
+              sistemde ya da kendinde arar. */}
+          {!loading && sekme === "buy" && gizlenen > 0 && (
+            <p className="m-0 mt-3 border-t border-line2 pt-3 text-[11.5px] text-ink-faint dark:border-transparent">
+              Risk puanınıza ({data?.survey_score}/7) uymayan ya da fiyatı alınamayan {gizlenen}{" "}
+              varlık listelenmiyor.
+            </p>
+          )}
         </Card>
 
         <Card className="p-6">

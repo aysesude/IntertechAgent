@@ -45,6 +45,16 @@ class TradableAsset(BaseModel):
     # sağlayıcıya gitmek ~56 saniye sürerdi (ölçüldü). Canlı fiyat yalnızca
     # kullanıcı bir varlık seçtiğinde, ön izlemede çekilir.
     price: Money | None
+    # Aynı fiyatın TL karşılığı. TRY varlıkta `price` ile aynı, TRY dışında
+    # kurla çarpılmış hali. AYRI ALAN, bilerek: arayüz iki rakamı da
+    # gösteriyor ("₺9.412 (230,00 USD)") ve çevrimi tarayıcıda yapmak,
+    # ön izlemedeki sunucu hesabıyla ayrışan ikinci bir hesap demek olurdu.
+    price_try: Money | None
+    # `price` → `price_try` çevriminde kullanılan kur (TRY varlıkta 1).
+    # Listede KAYITLI kur kullanılır, canlı değil: liste zaten kayıtlı
+    # kapanışları gösteriyor, kuru canlı çekmek fiyatla kuru farklı anlara
+    # ait yapardı.
+    fx_rate_to_try: Money | None
     price_date: date | None
     price_source: str | None
     price_stale: bool
