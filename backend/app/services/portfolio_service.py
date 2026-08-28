@@ -307,6 +307,45 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
 # ---------------------------------------------------------------------------
 
 
+def get_held_asset_classes(db: Session, user_id: UUID) -> set[AssetClass]:
+    """Kullanıcının GÜNCEL olarak (miktar > 0) elinde tuttuğu varlık
+    sınıflarının kümesi.
+
+    `get_holdings_valuation`'ın küçük bir alt kümesi gibi görünebilir ama
+    BİLEREK ayrı ve daha ucuz: fiyat/değer hesabına hiç girmez, yalnızca
+    "hangi SINIFLARDAN var" sorusuna cevap verir — Sinyal 5'in (profil_sapmasi,
+    bkz. docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md) ve
+    `advice_eligibility`'nin girdisi SINIF SAHİPLİĞİDİR, değer değil.
+
+    Tamamen satılmış (miktar 0) pozisyonlar sayılmaz. Fiyatı bulunamayan
+    (`price_missing`) varlıklar İSE burada DIŞLANMAZ — sınıf sahipliği
+    fiyatlanabilirlikten bağımsızdır (`get_holdings_valuation`'da
+    `price_missing` yalnızca DEĞER alanlarını etkiler, bkz. o fonksiyonun
+    docstring'i); fiyatı geçici olarak bulunamayan bir hisse hâlâ elde bir
+    hissedir.
+
+    Portföyü olmayan bir kullanıcı için boş küme döner, `NotFoundError`
+    FIRLATMAZ — tek çağıranı (anket-olayı okuma) "elde hiçbir şey yok"
+    durumunu geçerli, hata olmayan bir girdi olarak ele alıyor.
+    """
+    portfolio = db.execute(
+        select(Portfolio).where(Portfolio.user_id == user_id)
+    ).scalar_one_or_none()
+    if portfolio is None:
+        return set()
+
+    holdings = (
+        db.execute(
+            select(Holding)
+            .where(Holding.portfolio_id == portfolio.id, Holding.quantity > 0)
+            .options(joinedload(Holding.asset))
+        )
+        .scalars()
+        .all()
+    )
+    return {h.asset.asset_class for h in holdings}
+
+
 def get_holdings_valuation(db: Session, user_id: UUID) -> HoldingsValuation:
     """Portföydeki varlıkları tek tek değerler.
 

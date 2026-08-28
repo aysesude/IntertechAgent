@@ -158,10 +158,15 @@ o kod yolunu 22 varlık paylaşıyor, yani AKE kaldırılsa bile yol ölmez.
 **Ölçülen volatiliteler yerli hissenin altında** (ABD ortalaması %28,8'e
 karşı BIST %38,6) ve ABD tarafında SRRI gerçekten ayrışıyor: BRK-B %14,7 (5),
 KO/PG/MCD ~%19 (6), AMD %72,1 (7). Yerli hissede on beşin on beşi de 7
-alıyordu. Buna rağmen risk sıralamasında yabancı hisse yerlinin **bir kademe
-üstünde** olacak; gerekçe volatilite değil erişim ve karmaşıklıktır (kur
+alıyordu.
+
+**2026-08-28 kararı (Yağız):** yabancı hisse eskiden uygunlukta yerlinin bir
+kademe üstündeydi (gerekçe volatilite değil erişim/karmaşıklıktı — kur
 maruziyeti, sınır ötesi saklama, yerel yatırımcı korumasının bulunmaması,
-vergi). Bkz. `providers/universe._foreign_stock`.
+vergi). Bu ayrım kaldırıldı: "risk ile alakalı değil" — erişim kısıtı anket
+puanından türeyen profille belirlenir, ayrı bir varlık-düzeyi istisnası
+değil. Yabancı hisse artık yerliyle AYNI kademede (5). Bkz.
+`providers/universe._foreign_stock`.
 
 ### Uygunluk risk seviyesi (1-7)
 
@@ -173,19 +178,29 @@ tavsiye alır ne de portföyünde bulunması uyumlu sayılır
 |---|---|---|
 | 1 | Serbest nakit, para piyasası fonu | %0 · IOO %1,42 |
 | 2 | TL borçlanma araçları fonu | AYR %1,5 · APT %7,1 · AK2 %10,0 |
-| 3 | Döviz, eurobond fonu | USDTRY ~%1 · AKE %4,6 |
-| 4 | Kıymetli maden, altın fonu | gram altın %24 · GTA %25,6 |
-| 5 | Yerli hisse, yerli hisse fonu | BIST ort. %38,6 |
-| 6 | Yabancı hisse, yabancı hisse fonu | ABD ort. %28,8 |
+| 3 | Kıymetli maden, altın fonu | gram altın %24 · GTA %25,6 |
+| 4 | Döviz, eurobond fonu | USDTRY ~%1 · AKE %4,6 |
+| 5 | Hisse (yerli VE yabancı), hisse fonu, serbest fon HARİÇ | BIST ort. %38,6 · ABD ort. %28,8 |
+| 6 | *(kullanılmıyor — bkz. not)* | — |
 | 7 | **Serbest fon** (SPK III-52.1) | BHE %22,8 |
+
+**2026-08-28 kararı (Yağız):** tablo bir kez daha değişti. Döviz ve kıymetli
+maden yer değiştirdi (kendi ölçümümüz değil `gerek.md`'nin sıralaması esas
+alındı: döviz maden'in üstünde). Gümüş/platin'in maden'den, yabancı
+hissenin yerli hisseden ayrı kademede tutulması KALDIRILDI — "risk ile
+alakalı değil" gerekçesiyle, kategori bütünlüğü ölçümden önemli sayıldı.
+Sonucu: **seviye 6 artık boş** — 6'yı 5'ten ayıran tek şey yabancı hisseydi.
+Puan 5 ve puan 6 aynı varlık kümesini açar; yedi puanın altısı farklı bir
+sonuç verir (7. tek istisna hâlâ serbest fon). Bkz. `test_advice_
+eligibility.py::test_her_puan_bir_oncekinden_farkli_kume_acar`.
 
 **Bu ölçek SRRI değildir.** İkisi de 1-7 olduğu için karıştırılmaya müsait
 ama SRRI volatilite bandından hesaplanır; bu tablo *uygunluk* sıralamasıdır
 ("hangi ürün hangi yatırımcıya sunulabilir"). Volatilite sıralamayı
-doğrularken kullanıldı, belirlemedi — **ölçümle bilerek ayrışan iki yer** var
-ve ikisi de kodda gerekçesiyle yazılı: döviz TL tahvil fonunun üstünde
-(düşük oynaklığı TL'nin düzenli değer kaybının yan ürünü), yabancı hisse
-yerlinin üstünde (gerekçe volatilite değil erişim/karmaşıklık).
+doğrularken kullanıldı, belirlemedi — bugün ölçümle bilerek ayrışan tek yer
+döviz/maden sırası: döviz TL tahvil fonunun üstünde (düşük oynaklığı TL'nin
+düzenli değer kaybının yan ürünü) ama `gerek.md` gereği maden'in de üstünde,
+kendi ölçümümüz (maden döviz'den daha oynak çıktı) belirleyici sayılmadı.
 
 #### Seviye 7 neden serbest fon
 Serbest fonlar yalnızca **nitelikli yatırımcıya** satılır, diğer fon
@@ -219,11 +234,12 @@ Seviye normalde `ASSET_CLASS_ADVICE_RISK_LEVEL[sınıf]`'tan gelir, ama
 | Varlık | Sınıfı | Seviyesi | Neden |
 |---|---|---|---|
 | `IOO` | BOND (2) | **1** | Para piyasası fonu, nakit eşdeğeri |
-| `AKE` | BOND (2) | **3** | Eurobond — getirisi ağırlıklı olarak kurdan |
-| `AFT` | STOCK (5) | **6** | Yurt dışı hisse fonu |
-| 21 ABD hissesi | STOCK (5) | **6** | Sınır ötesi erişim |
-| `XAGTRY` `XPTTRY` | PRECIOUS_METAL (4) | **5** | Ölçülen %65,9 / %55,3 — yerli hissenin üstünde |
+| `AKE` | BOND (2) | **4** | Eurobond — getirisi ağırlıklı olarak kurdan (döviz kademesini takip eder) |
 | `BHE` | STOCK (5) | **7** | Serbest fon — nitelikli yatırımcı, kaldıraç izni |
+
+2026-08-28 kararıyla kaldırılan istisnalar: `AFT` ve 21 ABD hissesi artık
+STOCK sınıf varsayılanında (5), `XAGTRY`/`XPTTRY` artık PRECIOUS_METAL sınıf
+varsayılanında (3) — ikisi de ayrı kademe DEĞİL.
 
 #### Seed portföyleri puana UYAR
 `data/seed_ledger._uygun_arketip` arketipin varlıklarını kullanıcının anket
@@ -237,12 +253,15 @@ dördünde de hisse, kıymetli maden ve döviz vardı, oysa muhafazakâr bandın
 sınıf hisse. Ölçülen: **31/50 kullanıcı** puanının üstünde varlık tutuyordu,
 şimdi **0/50**.
 
-Süzme **varlık** düzeyinde yapılır, sınıf düzeyinde değil: büyüme bandı (5)
-hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
+Süzme **varlık** düzeyinde yapılır, sınıf düzeyinde değil — bugün bunun
+tek somut örneği serbest fon: büyüme bandı (5) hisse sınıfını (yerli VE
+yabancı) açar ama serbest fonu (7) açmaz.
 
-Merdiven demo verisinde görünür hâlde:
+Merdiven demo verisinde görünür hâlde (**2026-08-28 öncesi örnek — kalibrasyon
+değiştiği için `make seed` yeniden çalıştırılınca özellikle 5-6-7 puanlı
+satırlar değişecek**, çünkü 6 artık 5'ten farklı bir kademe açmıyor):
 
-| puan | örnek portföy |
+| puan | örnek portföy (eski kalibrasyon) |
 |---|---|
 | 1 | `IOO` + %66 nakit |
 | 2 | `AK2, APT` |
@@ -256,9 +275,16 @@ Merdiven demo verisinde görünür hâlde:
 Uyumluluk yetmiyor: üst kademenin gerçekten TUTULUYOR olması da gerekiyor.
 Süzgeç doğru çalışırken bile seçim aday havuzunda düzgün dağılımlıydı ve üst
 kademeler havuzda azınlıkta — hisse sınıfında **101 yerliye karşı 21 ABD
-hissesi ve tek bir serbest fon**. Ölçülen: 6-7 puanlı 13 kullanıcının yalnızca
-5'i yabancı varlık tutuyordu, `BHE`'yi **hiç kimse** tutmuyordu. 5, 6 ve 7
-puanlı portföyler ekranda ayırt edilemiyordu.
+hissesi ve tek bir serbest fon**. Ölçülen (26 Ağustos, o zamanki kalibrasyonla):
+6-7 puanlı 13 kullanıcının yalnızca 5'i yabancı varlık tutuyordu, `BHE`'yi
+**hiç kimse** tutmuyordu. 5, 6 ve 7 puanlı portföyler ekranda ayırt
+edilemiyordu.
+
+**2026-08-28'den sonra** bu garanti yalnızca 7 için anlamlı: 6'nın kendine
+özgü bir tepesi kalmadı (6 artık 5'le aynı kümeyi açıyor), `_tepe_kademe`
+puan 6 kullanıcılar için de 5 döner ve mekanizma otomatik olarak buna uyar
+— kod değişikliği gerekmedi (`data/seed_ledger._tepe_temsil_edilsin`
+elle 6/7 yazmıyor, `asset_risk_level`'ın döndürdüğü gerçek tepeyi kullanıyor).
 
 `_tepe_temsil_edilsin` kullanıcının erişebildiği en üst kademeden en az bir
 varlık seçilmesini garantiliyor. Aşağı kademelerde neredeyse işlemsiz (4

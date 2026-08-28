@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.config import (
     RISK_SURVEY_SCORE_MAX,
     RISK_SURVEY_SCORE_MIN,
+    AssetClass,
     RiskProfile,
 )
 
@@ -92,3 +93,29 @@ class UserRiskSurvey(BaseModel):
     score_band: tuple[int, int] | None
     score_min: int = RISK_SURVEY_SCORE_MIN
     score_max: int = RISK_SURVEY_SCORE_MAX
+
+
+class RiskSurveyEvent(BaseModel):
+    """Bekleyen bir anket-yeniden-doldurma OLAYININ okuma+tüketme sonucu.
+
+    Sinyal 5'in (profil_sapmasi, Yol A — bkz. docs/notes/
+    sinyal5-olay-tabanli-aktivasyon-tasarimi.md) TEK girdisi. Bu şema
+    `UserRiskSurvey`'den kasıtlı olarak AYRI: o kullanıcının MEVCUT
+    (statik) durumunu anlatır, bu ise bir OLAYI anlatır — aynı anda hem
+    "ne şimdi doğru" hem "ne az önce değişti" sorularına aynı şemayla cevap
+    vermek ikisini birbirine karıştırırdı.
+
+    `olay_var=False` olduğunda diğer iki alan anlamsızdır (varsayılan
+    değerleriyle döner) — çağıran taraf `olay_var`'a bakmadan bunları
+    OKUMAMALI.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    olay_var: bool
+    yeni_profil: RiskProfile | None = None
+    # Bu OLAY sonucunda kullanıcının GÜNCEL elinde kalan ama artık yeni
+    # profilin izin vermediği varlık sınıfları. `olay_var=True` olsa bile
+    # boş olabilir (anket yenilendi ama hiçbir ihlal doğurmadı) — bu, sinyal
+    # 5'in "yalnızca ihlal varsa üret" kuralının girdisidir.
+    izin_verilmeyen_ve_elde_olan_siniflar: list[AssetClass] = Field(default_factory=list)

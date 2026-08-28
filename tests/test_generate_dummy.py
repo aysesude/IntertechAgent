@@ -176,9 +176,10 @@ def test_hicbir_kullanici_anket_puaninin_ustunde_varlik_tutmuyor(engine):
     kullanıcıların HİÇBİRİ uyumlu olamıyordu.
 
     Süzme VARLIK düzeyinde olmalı, sınıf düzeyinde değil: büyüme bandı (5)
-    hisse sınıfını açar ama ABD hisselerini (6) ve serbest fonu (7) açmaz.
-    Sınıf düzeyinde süzülseydi bu test yine geçerdi ama büyüme profilli
-    kullanıcı AAPL tutuyor olurdu.
+    hisse sınıfını (yerli VE yabancı — 2026-08-28'den beri ayrı kademede
+    değiller) açar ama serbest fonu (7) açmaz. Sınıf düzeyinde süzülseydi bu
+    test yine geçerdi ama büyüme profilli kullanıcı BHE tutuyor olurdu
+    (evrendeki tek STOCK-sınıfı istisna artık BHE=7, AAPL/AFT değil).
     """
     from app.services.advice_eligibility import is_asset_advice_allowed
 
@@ -244,8 +245,11 @@ def test_kullanicinin_tepe_kademesi_portfoyunde_gorunur(engine):
     13 kullanıcının yalnızca 5'i yabancı varlık tutuyordu, `BHE`'yi ise
     HİÇ KİMSE tutmuyordu.
 
-    Sonucu demoda 5, 6 ve 7 puanlı portföylerin ayırt edilememesiydi — yani
-    merdivenin tepesi görünmüyordu. Bu test o durumu kilitliyor.
+    2026-08-28: yalnızca 7 kaldı. Yabancı hisseyi ayrı kademeden çıkaran
+    karardan sonra puan 6'nın kendine özgü bir "tepe"si yok — 6 artık 5'le
+    aynı kümeyi açıyor (bkz. tests/test_advice_eligibility.py). `BHE`
+    (seviye 7) evrendeki TEK ayrım kalan varlık, bu yüzden yalnızca 7 puanlı
+    kullanıcılar için bu garanti anlamlı.
     """
     from app.services.advice_eligibility import asset_risk_level
 
@@ -264,14 +268,14 @@ def test_kullanicinin_tepe_kademesi_portfoyunde_gorunur(engine):
                 default=0,
             )
 
-        for beklenen_tepe in (6, 7):
-            eslesen = [u for u in users if u.risk_survey_score == beklenen_tepe]
-            assert eslesen, f"seed'de {beklenen_tepe} puanlı kullanıcı yok"
-            eksik = [u.email for u in eslesen if tepe_seviye(u) < beklenen_tepe]
-            assert not eksik, (
-                f"{beklenen_tepe} puanlı olup {beklenen_tepe}. kademeden hiç varlık "
-                f"tutmayan kullanıcılar: {eksik}"
-            )
+        beklenen_tepe = 7
+        eslesen = [u for u in users if u.risk_survey_score == beklenen_tepe]
+        assert eslesen, f"seed'de {beklenen_tepe} puanlı kullanıcı yok"
+        eksik = [u.email for u in eslesen if tepe_seviye(u) < beklenen_tepe]
+        assert not eksik, (
+            f"{beklenen_tepe} puanlı olup {beklenen_tepe}. kademeden hiç varlık "
+            f"tutmayan kullanıcılar: {eksik}"
+        )
 
 
 def test_serbest_fon_demoda_en_az_bir_portfoyde(engine):

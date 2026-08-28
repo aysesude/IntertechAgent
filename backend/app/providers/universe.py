@@ -77,8 +77,11 @@ class AssetSpec:
     # ayrıldığında doldurulur ve iki yöne de gidebilir:
     #
     #   IOO  para piyasası fonu   sınıfı BOND=2, kendisi 1  (aşağı)
-    #   AKE  eurobond fonu        sınıfı BOND=2, kendisi 3  (yukarı)
-    #   AAPL ABD hissesi          sınıfı STOCK=5, kendisi 6 (yukarı)
+    #   AKE  eurobond fonu        sınıfı BOND=2, kendisi 4  (yukarı)
+    #   BHE  serbest fon          sınıfı STOCK=5, kendisi 7 (yukarı)
+    #
+    # AAPL/AFT (yabancı hisse) ve XAGTRY/XPTTRY (gümüş/platin) ARTIK burada
+    # değil — 2026-08-28 kararıyla ikisi de sınıf varsayılanına döndü.
     #
     # Neden hesaplanmıyor da elle yazılıyor: hesaplansaydı fiyat geçmişine
     # bağımlı olurdu — geçmişi henüz olmayan yeni varlıkta seviye üretilemez
@@ -110,10 +113,18 @@ def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
     tarafından kullanılıyordu — `docs/DATA.md` onu "evrendeki tek TRY dışı
     varlık" diye anıyordu; artık yirmi iki varlık bu yoldan geçiyor.
 
-    Uygunluk seviyesi 6, yani yerli hissenin (STOCK=5) bir üstü. Gerekçe
-    volatilite DEĞİL — ölçüm tersini söylüyor, ABD ortalaması %28,8'e karşı
-    BIST %38,6 — sınır ötesi erişimin kendisi: kur maruziyeti, saklama,
-    yerel yatırımcı korumasının bulunmaması, farklı vergi rejimi.
+    Uygunluk seviyesi YOK — sınıf varsayılanında (STOCK=5) kalır, yerli
+    hisseyle aynı kademede.
+
+    2026-08-28 kararı (Yağız): eskiden burada `risk_level=6` vardı (yerli
+    hissenin bir üstü). Gerekçesi zaten volatilite DEĞİLDİ — ölçüm tersini
+    söylüyor, ABD ortalaması %28,8'e karşı BIST %38,6 — sınır ötesi erişimin
+    kendisiydi (kur maruziyeti, saklama, yerel yatırımcı korumasının
+    bulunmaması, vergi). Karar bu ayrımı tamamen kaldırdı: erişim kısıtı
+    ANKET PUANINDAN türeyen profille belirlenir, bu "risk" tablosunun konusu
+    değil. Sonucu: puan 5 ve puan 6 artık aynı varlık kümesini açıyor (bkz.
+    `app/core/config.py` → `ASSET_CLASS_ADVICE_RISK_LEVEL` üstündeki karar
+    notu).
     """
     return AssetSpec(
         symbol=symbol,
@@ -123,7 +134,6 @@ def _foreign_stock(symbol: str, name: str, base_price: str) -> AssetSpec:
         currency="USD",
         data_source=PriceSource.YFINANCE,
         provider_symbol=symbol,
-        risk_level=6,
     )
 
 
@@ -149,12 +159,17 @@ def _gram_metal(
 ) -> AssetSpec:
     """Ons vadeli fiyattan türetilen gram metal.
 
-    `risk_level`: kıymetli maden sınıfı uygunlukta 4'tür ama sınıf içi
-    dağılım geniş — ölçüldü (365 gün, 26 Ağustos 2026): gram altın %28,6,
-    gümüş %65,9, platin %55,3. Gümüş ve platin YERLİ HİSSENİN (%38,6,
-    seviye 5) üstünde oynuyor, dolayısıyla ondan düşük bir kademede
-    duramazlar. Bu ikisi sanayi/spekülatif metal; perakende yatırımcının
-    "altın alıyorum" refleksiyle aynı yere konmaları yanlış olurdu.
+    `risk_level`: BUGÜN hiçbir çağıran taraf bu parametreyi vermiyor —
+    gümüş ve platin de sınıf varsayılanında (`PRECIOUS_METAL`) kalıyor.
+
+    2026-08-28 kararı (Yağız): eskiden gümüş/platin `risk_level=5` ile ayrı
+    bir kademeye çekilmişti çünkü sınıf içi dağılım geniş ölçülmüştü (365
+    gün, 26 Ağustos 2026: gram altın %28,6, gümüş %65,9, platin %55,3 —
+    ikincisi ve üçüncüsü yerli hissenin bile üstünde). Karar bu ayrımı geri
+    aldı: "ikisi de kıymetli maden, ayırma" — kategori bütünlüğü ölçümden
+    önemli. Parametre kaldırılmadı (bir gün farklı bir varlık için tekrar
+    gerekebilir) ama gümüş/platin çağrılarından `risk_level` argümanı
+    silindi.
     """
     return AssetSpec(
         symbol=symbol,
@@ -440,12 +455,12 @@ ASSET_UNIVERSE: list[AssetSpec] = [
     # sanma riski) kazandırdığından fazlasını götürürdü. 98 hisse yeterli;
     # bilerek bozuk veri dağıtmaktansa dışarıda bırakmak doğru.
     # --- Kıymetli maden: gram fiyatlar (ons vadeli × USDTRY) ---
-    # Gram altın sınıf varsayılanında (4) kalır: ölçülen %28,6, gram altından
-    # türetilen sikkelerle ve altın fonuyla (%25,6) aynı mertebede.
+    # Hepsi sınıf varsayılanında (3) kalır: ölçülen oynaklık farklı olsa da
+    # (gram altın %28,6, gümüş %65,9, platin %55,3) kategori bütünlüğü
+    # korunuyor — 2026-08-28 kararı, bkz. `_gram_metal` docstring'i.
     _gram_metal("XAUTRY", "Gram Altın", "GC=F", "2450.00"),
-    # Gümüş ve platin 5'e çekildi — gerekçe `_gram_metal` docstring'inde.
-    _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00", risk_level=5),
-    _gram_metal("XPTTRY", "Gram Platin", "PL=F", "1550.00", risk_level=5),
+    _gram_metal("XAGTRY", "Gram Gümüş", "SI=F", "38.00"),
+    _gram_metal("XPTTRY", "Gram Platin", "PL=F", "1550.00"),
     # --- Kıymetli maden: sikke (gram altından türetilir) ---
     _gold_coin("CEYREK", "Çeyrek Altın", "1.6030", "4020.00"),
     _gold_coin("YARIM", "Yarım Altın", "3.2060", "8040.00"),
@@ -485,8 +500,9 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         currency="USD",
         # Sınıfı BOND (=2) ama uygunluk açısından DÖVİZ ürünüdür: TL'li
         # yatırımcı için getirisinin büyük kısmı kurdan gelir. Bu yüzden
-        # döviz kademesinde (3), TL borçlanma fonlarının bir üstünde.
-        risk_level=3,
+        # döviz kademesinde (4 — 2026-08-28'den beri döviz/maden yer
+        # değiştirdiği için eskiden 3'tü), TL borçlanma fonlarının üstünde.
+        risk_level=4,
     ),
     _fund(
         "AYR",
@@ -505,11 +521,10 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         "Ak Portföy Yeni Teknolojiler Yabancı Hisse Senedi Fonu",
         AssetSubType.EQUITY_FUND,
         "0.669568",
-        # YABANCI hisse fonu: içeriği yurt dışı hisse, dolayısıyla yabancı
-        # hisse kademesinde (6). TI2 ve TCD yerli olduğu için 5'te (sınıf
-        # varsayılanı) kalır. Fonun kabuğu ikisinde de aynı — ayrımı yapan
-        # içeriktir.
-        risk_level=6,
+        # YABANCI hisse fonu ama artık ayrı bir kademesi yok: TI2/TCD ile
+        # aynı şekilde sınıf varsayılanında (5) kalır. 2026-08-28'den önce
+        # burada `risk_level=6` vardı ("yabancı hisse kademesi") — o ayrım
+        # kaldırıldı, bkz. `_foreign_stock` docstring'i.
     ),
     # PPF KALDIRILDI, yerine IOO geldi.
     #
