@@ -224,6 +224,33 @@ def test_her_puan_bir_oncekinden_farkli_kume_acar():
         assert onceki < sonraki, "puan arttikca kume GERCEKTEN buyumeli"
 
 
+def _migration_yolu(dosya_adi: str):
+    """Migration dosyasının yolunu bulur — HEM lokal koşumda (`backend/` ve
+    `tests/` repo kökünde kardeş klasör) HEM `docker compose exec -w / api
+    pytest /tests -q` ile koşulduğunda (compose `./backend:/app` mount eder;
+    container'da `/backend` diye bir yol YOKTUR, `backend/` içeriği doğrudan
+    `/app` altındadır) doğru sonucu verir.
+
+    2026-08-28: bu iki koşum biçimi arasındaki fark fark edilmeden bu testler
+    docker'da FileNotFoundError ile düşüyordu — merge/kod değişikliğiyle
+    ilgisi yoktu, salt yol varsayımı tekti.
+    """
+    from pathlib import Path
+
+    kok = Path(__file__).resolve().parents[1]
+    for aday_kok in (
+        kok / "backend" / "alembic" / "versions",
+        kok / "app" / "alembic" / "versions",
+    ):
+        aday = aday_kok / dosya_adi
+        if aday.exists():
+            return aday
+    raise FileNotFoundError(
+        f"{dosya_adi}: ne backend/alembic/versions ne app/alembic/versions altında bulundu "
+        f"(aranan kök: {kok})"
+    )
+
+
 class TestVeritabaninaYazilmasi:
     """`assets.risk_level` — kodun DB'deki TÜREV kopyası.
 
@@ -301,17 +328,9 @@ class TestVeritabaninaYazilmasi:
     def test_migration_ve_model_ayni_kisiti_tasiyor(self):
         """`docs/DATA.md` §8: testler migration koşmaz, dolayısıyla kısıt iki
         yere de yazılmalı; ayrıştıklarında kimse fark etmez."""
-        from pathlib import Path
-
         from app.models import Asset
 
-        migration = (
-            Path(__file__).resolve().parents[1]
-            / "backend"
-            / "alembic"
-            / "versions"
-            / "a3d75e1c9f04_asset_risk_level.py"
-        ).read_text(encoding="utf-8")
+        migration = _migration_yolu("a3d75e1c9f04_asset_risk_level.py").read_text(encoding="utf-8")
 
         kisit = next(
             c for c in Asset.__table__.constraints if c.name == "ck_assets_risk_level_range"
@@ -330,15 +349,8 @@ class TestVeritabaninaYazilmasi:
         migration'ın KENDİ İÇİNDE tutarlı olduğu doğrulanıyor.
         """
         import importlib.util
-        from pathlib import Path
 
-        yol = (
-            Path(__file__).resolve().parents[1]
-            / "backend"
-            / "alembic"
-            / "versions"
-            / "a3d75e1c9f04_asset_risk_level.py"
-        )
+        yol = _migration_yolu("a3d75e1c9f04_asset_risk_level.py")
         spec = importlib.util.spec_from_file_location("mig_risk_level", yol)
         modul = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(modul)

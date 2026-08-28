@@ -192,6 +192,33 @@ class TestUc:
         assert okuma.json()["score_band"] == [5, 5]
 
 
+def _migration_yolu(dosya_adi: str):
+    """Migration dosyasının yolunu bulur — HEM lokal koşumda (`backend/` ve
+    `tests/` repo kökünde kardeş klasör) HEM `docker compose exec -w / api
+    pytest /tests -q` ile koşulduğunda (compose `./backend:/app` mount eder;
+    container'da `/backend` diye bir yol YOKTUR, `backend/` içeriği doğrudan
+    `/app` altındadır) doğru sonucu verir.
+
+    2026-08-28: bu iki koşum biçimi arasındaki fark fark edilmeden bu testler
+    docker'da FileNotFoundError ile düşüyordu — merge/kod değişikliğiyle
+    ilgisi yoktu, salt yol varsayımı tekti.
+    """
+    from pathlib import Path
+
+    kok = Path(__file__).resolve().parents[1]
+    for aday_kok in (
+        kok / "backend" / "alembic" / "versions",
+        kok / "app" / "alembic" / "versions",
+    ):
+        aday = aday_kok / dosya_adi
+        if aday.exists():
+            return aday
+    raise FileNotFoundError(
+        f"{dosya_adi}: ne backend/alembic/versions ne app/alembic/versions altında bulundu "
+        f"(aranan kök: {kok})"
+    )
+
+
 class TestVeritabaniKisiti:
     """CHECK kısıtı hem MODELDE hem MIGRATION'da olmalı.
 
@@ -216,15 +243,9 @@ class TestVeritabaniKisiti:
 
     def test_migration_ve_model_ayni_kisiti_tasiyor(self):
         """Mekanik ama gerekli: ikisi ayrışırsa kimse fark etmez."""
-        from pathlib import Path
-
-        migration = (
-            Path(__file__).resolve().parents[1]
-            / "backend"
-            / "alembic"
-            / "versions"
-            / "f18c4a2e7b90_user_risk_survey_score.py"
-        ).read_text(encoding="utf-8")
+        migration = _migration_yolu("f18c4a2e7b90_user_risk_survey_score.py").read_text(
+            encoding="utf-8"
+        )
 
         kisit = next(
             c for c in User.__table__.constraints if c.name == "ck_users_risk_survey_score_range"
