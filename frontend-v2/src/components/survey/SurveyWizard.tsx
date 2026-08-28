@@ -159,6 +159,24 @@ export function SurveyWizard({
           {sonuc.sonuc_uretildi ? sonuc.profil_adi : "Profil belirlenemedi"}
         </h2>
 
+        {/* DURDURUCU KURALIN MESAJI EN ÜSTTE. Bu blok eskiden hiç
+            gösterilmiyordu (kurallar `!k.durdurucu` ile süzülüyordu) ve
+            kullanıcı "cevaplarınız çelişiyor" diyen genel bir metinle
+            kapatılamaz ekranda kalıyordu — hangi iki cevabı düzelteceğini
+            bilmeden. Sunucu kuralı zaten döndürüyor; tek eksik onu
+            göstermekti. */}
+        {sonuc.kurallar
+          .filter((k) => k.durdurucu)
+          .map((k) => (
+            <p
+              key={k.kod}
+              role="alert"
+              className="mt-4 rounded-xl border border-[#E63946]/30 bg-[#E63946]/[0.06] px-3.5 py-3 text-[13px] leading-snug text-[#8C2F38] dark:border-[#FF8A90]/25 dark:bg-[#FF8A90]/[0.08] dark:text-[#FFB3B7]"
+            >
+              {k.mesaj}
+            </p>
+          ))}
+
         {sonuc.sonuc_uretildi && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             {(
