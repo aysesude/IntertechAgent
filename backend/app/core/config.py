@@ -546,6 +546,12 @@ class AssetSubType(str, Enum):
     DEMAND_DEPOSIT = "demand_deposit"
     GOLD_COIN = "gold_coin"
     HEDGE_FUND = "hedge_fund"  # SPK "serbest fon" — bkz. universe._FUND_ASSET_CLASS
+    # Aşağıdaki ikisi TUTULAMAZ varlıklar (`AssetSpec.tradable=False`): yalnızca
+    # fiyatlanıp saklanırlar, kullanıcı portföyüne giremezler. `asset_class`
+    # onlar için şemanın zorunlu kıldığı bir kutu (ikisi de STOCK'ta duruyor);
+    # ne olduklarını söyleyen alan burasıdır.
+    INDEX = "index"  # BIST 100, S&P 500
+    COMMODITY = "commodity"  # Brent
 
 
 class IngestStatus(str, Enum):

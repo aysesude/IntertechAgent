@@ -42,7 +42,36 @@ logger = logging.getLogger(__name__)
 # tanımlı olanlardan seçildi; XU100 fiyatlanıp saklanıyor çünkü kıyaslama
 # zaten ona dayanıyor. Liste sabit: ekranın üst şeridi kullanıcıdan bağımsız
 # bir "piyasa nabzı", portföye göre değişmemeli.
-VARSAYILAN_GOSTERGELER: tuple[str, ...] = ("XU100", "USDTRY", "EURTRY", "XAUTRY")
+VARSAYILAN_GOSTERGELER: tuple[str, ...] = (
+    "XU100",
+    "USDTRY",
+    "EURTRY",
+    "XAUTRY",
+    "XAGTRY",
+    "BRENT",
+    "SPX",
+)
+
+# Şeritteki gösterim sırası. `get_current_prices` çıktısının sırasına
+# güvenilmiyor; ayrıca türetilmiş gösterge (EURUSD) o listede hiç yok.
+# Burada olmayan bir sembol sona eklenir — çağıran kendi listesini
+# verdiğinde (test, ileride kullanıcı seçimi) gösterge kaybolmasın.
+SERIT_SIRASI: tuple[str, ...] = (
+    "XU100",
+    "USDTRY",
+    "EURTRY",
+    "EURUSD",
+    "XAUTRY",
+    "XAGTRY",
+    "BRENT",
+    "SPX",
+)
+
+# Para değeri OLMAYAN göstergeler: endeks puanı ve parite. Bunlarda
+# `currency` `None` döner ve arayüz simgesiz basar — "₺11.284" BIST 100 için
+# olmayan bir büyüklük iddiasıdır. Varlığın DB'deki `currency` alanı bu ayrımı
+# yapamıyor: XU100 satırı TRY görünür.
+BIRIMSIZ_SEMBOLLER: frozenset[str] = frozenset({"XU100", "SPX", "EURUSD"})
 
 # Değişim hesabı için çekilen pencere. En kısa pencere (1 ay) yeterli: yalnızca
 # son iki noktaya bakılıyor. Daha uzunu boşuna satır okur.
@@ -90,6 +119,51 @@ def gunluk_degisimler(db: Session, symbols: list[str]) -> dict[str, Decimal | No
     return {sembol: _degisim_yuzdesi(seri) for sembol, seri in gecmis.series.items()}
 
 
+def _eur_usd(gostergeler: dict[str, MarketIndicator]) -> MarketIndicator | None:
+    """EUR/USD paritesi: EUR/TRY ÷ USD/TRY.
+
+    VERİTABANINA YAZILMIYOR ve yeni bir varlık değil — iki gerçek fiyatın
+    oranı. `assets` tablosuna eklenseydi `derived_factor` (tek kaynaktan sabit
+    çarpan) kalıbına uymazdı: burada iki ayrı kaynak var ve işlem bölme.
+
+    Değişim yüzdesi de türetiliyor, yeniden sorgu YOK: EUR/TRY %e, USD/TRY %u
+    değiştiyse oran (1+e)/(1+u) katına çıkar. Bu bir yaklaşım değil, tam
+    eşitlik — iki serinin son iki noktası aynı iki güne aitse. İkisi de günlük
+    kur serisi olduğu için takvimleri ortak; biri hesaplanamadıysa parite de
+    hesaplanamamış sayılır (sıfır YAZILMAZ).
+
+    Tarih ikisinin ESKİSİ, bayatlık ise biri bile bayatsa bayat: türetilmiş
+    bir değer, girdilerinin en zayıfı kadar günceldir.
+    """
+    eur = gostergeler.get("EURTRY")
+    usd = gostergeler.get("USDTRY")
+    if eur is None or usd is None or not usd.price:
+        return None
+
+    oran = (eur.price / usd.price).quantize(Decimal("0.0001"))
+
+    degisim: Decimal | None = None
+    if eur.change_percent is not None and usd.change_percent is not None:
+        usd_kat = Decimal(1) + usd.change_percent / Decimal(100)
+        if usd_kat:
+            eur_kat = Decimal(1) + eur.change_percent / Decimal(100)
+            degisim = (eur_kat / usd_kat - Decimal(1)) * Decimal(100)
+
+    return MarketIndicator(
+        symbol="EURUSD",
+        name="EUR/USD",
+        asset_class=AssetClass.CURRENCY,
+        price=oran,
+        change_percent=degisim,
+        price_date=min(eur.price_date, usd.price_date),
+        # Kaynak "derived": rakam bir sağlayıcıdan gelmedi, iki fiyattan
+        # hesaplandı. Kullanıcı fiyatın nereden geldiğini görebilmeli (AK 5.1).
+        source="derived",
+        stale=eur.stale or usd.stale,
+        currency=None,
+    )
+
+
 def get_indicators(db: Session, symbols: list[str] | None = None) -> MarketIndicatorList:
     """Gösterge şeridi: güncel fiyat + bir önceki işlem gününe göre değişim.
 
@@ -109,8 +183,8 @@ def get_indicators(db: Session, symbols: list[str] | None = None) -> MarketIndic
         return MarketIndicatorList(as_of=date.today(), indicators=[], missing_symbols=istenen)
     degisimler = gunluk_degisimler(db, [p.symbol for p in fiyatlar.prices])
 
-    gostergeler = [
-        MarketIndicator(
+    gostergeler = {
+        p.symbol: MarketIndicator(
             symbol=p.symbol,
             name=p.name,
             asset_class=p.asset_class,
@@ -119,13 +193,21 @@ def get_indicators(db: Session, symbols: list[str] | None = None) -> MarketIndic
             price_date=p.price_date,
             source=p.source,
             stale=p.stale,
+            currency=None if p.symbol in BIRIMSIZ_SEMBOLLER else p.currency,
         )
         for p in fiyatlar.prices
-    ]
+    }
+
+    parite = _eur_usd(gostergeler)
+    if parite is not None:
+        gostergeler["EURUSD"] = parite
+
+    sirali = [gostergeler[s] for s in SERIT_SIRASI if s in gostergeler]
+    sirali += [g for s, g in gostergeler.items() if s not in SERIT_SIRASI]
 
     return MarketIndicatorList(
         as_of=fiyatlar.as_of,
-        indicators=gostergeler,
+        indicators=sirali,
         # İkisi birleştiriliyor: arayüz için ayrım anlamsız, ikisi de
         # "bu gösterge şeritte yok" demek.
         missing_symbols=[*fiyatlar.unknown_symbols, *fiyatlar.symbols_without_data],

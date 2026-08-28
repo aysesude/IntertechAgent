@@ -5,7 +5,7 @@ import type {
   ApiPortfolioInfluenceList,
 } from "@/api/market";
 import type { CalendarEvent, InfluenceRow, MarketIndicator, NewsItem } from "@/types/finance";
-import { formatDateDMY, formatNumberTR, formatTRY2 } from "@/utils/format";
+import { formatDateDMY, formatMoney2 } from "@/utils/format";
 
 /**
  * Piyasa ekranının ham uç verisini görünüm modeline çevirir.
@@ -25,25 +25,22 @@ const GOSTERGE_ETIKETLERI: Record<string, string> = {
   XU100: "BIST 100",
   USDTRY: "USD/TRY",
   EURTRY: "EUR/TRY",
+  EURUSD: "EUR/USD",
   XAUTRY: "Gram Altın",
+  XAGTRY: "Gram Gümüş",
+  BRENT: "Brent",
+  SPX: "S&P 500",
 };
-
-/**
- * Endeks puanı para değil: "14.514,82" doğru, "₺14.514,82" yanlış.
- * Sembole göre ayrılıyor çünkü `asset_class` bu ayrımı yapmıyor — XU100
- * evrende hisse sınıfında duruyor (fiyatlanabilmesi için).
- */
-const PARA_BIRIMSIZ_SEMBOLLER = new Set(["XU100"]);
-
-function fiyatBicimle(symbol: string, price: number): string {
-  return PARA_BIRIMSIZ_SEMBOLLER.has(symbol) ? formatNumberTR(price, 2) : formatTRY2(price);
-}
 
 export function toMarketIndicators(veri: ApiMarketIndicatorList): MarketIndicator[] {
   return veri.indicators.map((ind) => ({
     id: ind.symbol,
     label: GOSTERGE_ETIKETLERI[ind.symbol] ?? ind.name,
-    value: fiyatBicimle(ind.symbol, ind.price),
+    // Birim SUNUCUDAN geliyor (`currency`, birimsizse `null`). Eskiden burada
+    // "XU100 ise ₺ koyma" diye sabit bir sembol listesi vardı; şeride dolarla
+    // fiyatlanan Brent ve puanla ölçülen S&P 500 girince o liste her yeni
+    // göstergede elle güncellenmesi gereken bir yere dönüştü.
+    value: formatMoney2(ind.price, ind.currency),
     changePct: ind.change_percent,
     priceDate: formatDateDMY(ind.price_date),
     stale: ind.stale,

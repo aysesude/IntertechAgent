@@ -257,7 +257,11 @@ def get_tradable_assets(db: Session, user_id: UUID) -> TradableList:
     portfolio = _get_portfolio(db, user_id)
 
     pozisyonlar = position_as_of(db, portfolio.id, datetime.now(timezone.utc).date())
-    varliklar = db.execute(select(Asset).where(Asset.is_active)).scalars().all()
+    # `tradable` süzgeci ŞART: endeksler (XU100, SPX) ve emtia (BRENT)
+    # fiyatlanıp saklanıyor — kıyaslama ve piyasa şeridi onlara dayanıyor —
+    # ama satın alınamazlar. Süzgeç yokken BIST 100 endeksi Al/Sat listesinde
+    # sıradan bir hisse gibi görünüyordu.
+    varliklar = db.execute(select(Asset).where(Asset.is_active, Asset.tradable)).scalars().all()
 
     # Kur para birimi başına BİR KEZ okunur: evrende 22 USD varlık var ve
     # her satır için ayrı sorgu aynı kaydı yirmi iki kez okumak olurdu.
