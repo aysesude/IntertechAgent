@@ -15,6 +15,7 @@ import {
 } from "@/components/auth/loginPalette";
 import { PasswordResetCard } from "@/components/auth/PasswordResetCard";
 import { RegisterCard } from "@/components/auth/RegisterCard";
+import { SurveyGate } from "@/components/survey/SurveyGate";
 import { PaperBoatLogo } from "@/components/paper-boat/PaperBoat";
 import { gecerliTcKimlikNo } from "@/utils/tckn";
 
@@ -227,15 +228,30 @@ export type LoginScreenProps = {
    * zaman "çözüleceğini" yalnızca sonucu bekleyerek bilebiliriz.
    */
   onSubmit?: (credentials: { tckn: string; password: string }) => Promise<void> | void;
+  /**
+   * Dolu ise kart giriş formu yerine ANKETİ çizer.
+   *
+   * Anket bir süre ayrı bir tam sayfaydı; kullanıcı "üye ol"dan sonra
+   * bambaşka bir ekrana düşmüş gibi oluyordu. Aynı kartın içinde açılması
+   * için bu ekran ondan sorumlu — arka plandaki eseri, kart çerçevesini ve
+   * logoyu ikinci kez kurmanın anlamı yok.
+   *
+   * Kullanıcı BURADA GİRİŞ YAPMIŞ DURUMDA; ekran yalnızca kabuğu ödünç
+   * veriyor. Bu yüzden `onSubmit`/`notice` bu modda kullanılmaz.
+   */
+  anket?: { userId: string; fullName: string } | null;
 };
 
 export function LoginScreen({
   onSubmit,
   notice = null,
+  anket = null,
 }: LoginScreenProps) {
   // "login" | "reset" | "register" — üçü de aynı kartın içinde açılıyor;
   // ayrı bir sayfaya gitmek arka plandaki eseri ve kart çerçevesini
-  // yeniden kurmak demek olurdu.
+  // yeniden kurmak demek olurdu. Anket de aynı kartta, ama modu içeriden
+  // değil dışarıdan geliyor: o adıma kullanıcının puanı olmadığı için
+  // girilir, bir düğmeye basıldığı için değil.
   const [mod, setMod] = useState<"login" | "reset" | "register">("login");
   const [submitted, setSubmitted] = useState(false);
   const [tckn, setTckn] = useState("");
@@ -422,7 +438,7 @@ export function LoginScreen({
                kırılıyordu. Koyu temadaki sağa doğru eriyen zemin de bu
                genişlikte korunuyor. */
             className={`w-full rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-transparent dark:bg-[linear-gradient(to_right,rgba(7,17,28,0.45)_0%,rgba(7,17,28,0.45)_55%,rgba(7,17,28,0.15)_80%,rgba(7,17,28,0)_100%)] dark:shadow-[0_28px_70px_-30px_rgba(0,0,0,0.3)] sm:p-8 ${
-              mod === "register" ? "max-w-[560px]" : "max-w-[452px]"
+              anket || mod === "register" ? "max-w-[560px]" : "max-w-[452px]"
             }`}
           >
             {/* LOGO İKİ PARÇA ÇİZİLİYOR: gemi + yazı.
@@ -461,7 +477,9 @@ export function LoginScreen({
             {/* Şifre yenileme aynı kartın İÇİNDE açılıyor: ayrı bir sayfaya
                 gitmek arka plandaki eseri, kart çerçevesini ve logoyu yeniden
                 kurmak demek olurdu. Yalnızca kartın içeriği değişiyor. */}
-            {mod === "reset" ? (
+            {anket ? (
+              <SurveyGate userId={anket.userId} fullName={anket.fullName} />
+            ) : mod === "reset" ? (
               <PasswordResetCard onBack={() => setMod("login")} />
             ) : mod === "register" ? (
               <RegisterCard onBack={() => setMod("login")} />
