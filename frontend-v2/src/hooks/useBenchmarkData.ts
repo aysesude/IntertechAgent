@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchBenchmark, type ApiBenchmarkComparison, type ApiWindow } from "@/api/portfolio";
-import { isApiConfigured } from "@/api/client";
+import { ApiError, isApiConfigured } from "@/api/client";
 import { useCurrentUserId } from "@/auth/AuthContext";
 
 /**
@@ -55,6 +55,13 @@ export function useBenchmarkData(window: ApiWindow): BenchmarkState {
       })
       .catch((err: unknown) => {
         if (iptal) return;
+        // 409 (InsufficientDataError) gerçek bir hata DEĞİL: "bu dönemde
+        // henüz veri yok" anlamına gelir (bkz. backend/app/api/portfolio.py
+        // _http yorumu) ve İngilizce/teknik bir mesaj taşır ("No asset
+        // transactions for portfolio ..."). Bunu kırmızı bir hata olarak
+        // göstermek yerine, zaten var olan "Bu dönem için kıyaslama verisi
+        // yok." boş-durum metnine bırakılıyor — ikisini üst üste basmıyoruz.
+        if (err instanceof ApiError && err.status === 409) return;
         // Veri SIFIRLANMIYOR: eldeki seri eski dönemin ama gerçek. Onu
         // silip boş kart göstermek, hatayı da gizleyip kullanıcıyı veri
         // yokmuş sanısına düşürürdü. Hata mesajı ayrıca gösteriliyor.
