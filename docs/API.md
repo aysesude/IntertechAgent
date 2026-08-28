@@ -421,7 +421,9 @@ Ekranın listesi: varlıklar, son kapanış, uygunluk, eldeki miktar, nakit.
   "survey_score": 5, "cash_balance": 100000.0,
   "assets": [{
     "symbol": "AAPL", "name": "Apple", "risk_level": 6,
-    "price": 200.0, "price_date": "2026-08-27", "price_stale": false,
+    "currency": "USD",
+    "price": 200.0, "price_try": 8000.0, "fx_rate_to_try": 40.0,
+    "price_date": "2026-08-27", "price_stale": false,
     "can_buy": false,
     "block_reason": "Bu varlığın risk seviyesi 6, sizin anket puanınız 5. …",
     "held_quantity": 0, "quantity_step": 1
@@ -429,9 +431,20 @@ Ekranın listesi: varlıklar, son kapanış, uygunluk, eldeki miktar, nakit.
 }
 ```
 
-Uygun olmayan varlıklar listeden **düşmez**, `can_buy=false` +
-`block_reason` ile döner. Sessizce elemek, kullanıcının o varlığın var
-olduğunu bile görmemesi demek olurdu.
+`price` varlığın **kendi para birimindeki** fiyatı, `price_try` aynı fiyatın
+TL karşılığı (TRY varlıkta ikisi eşit, `fx_rate_to_try` 1). İkisi ayrı
+duruyor çünkü arayüz her ikisini de gösteriyor; çevrimi tarayıcıda yapmak,
+`preview`'deki sunucu hesabıyla ayrışabilecek ikinci bir hesap olurdu.
+Buradaki kur **kayıtlı** son kapanıştır — liste zaten kayıtlı fiyat
+gösteriyor, kuru canlı çekmek fiyatla kuru farklı anlara ait yapardı.
+`preview` ise ikisini de canlı çeker.
+
+Uygun olmayan varlıklar **uçtan düşmez**, `can_buy=false` + `block_reason`
+ile döner; arayüz onları Al sekmesinde gizler ve yerine kaç tanesinin
+gizlendiğini yazar (28 Ağustos 2026 ürün kararı). Elemenin sunucuda değil
+arayüzde olması bilinçli: sözleşme tam listeyi verdiği sürece sayı
+hesaplanabiliyor ve ileride "puanınızı yükseltirseniz şunlar açılır" ekranı
+aynı uçtan beslenebilir.
 
 #### `POST /api/trade/{user_id}/preview`
 

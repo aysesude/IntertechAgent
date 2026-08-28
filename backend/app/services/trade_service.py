@@ -192,6 +192,28 @@ def _fx_kuru(db: Session, currency: str) -> Decimal:
     return _islem_fiyati(db, asset).fiyat
 
 
+def _kayitli_kur(db: Session, currency: str) -> Decimal | None:
+    """Liste için kur: KAYITLI son kapanış, canlı değil.
+
+    `_fx_kuru` işlem anında canlı çekiyor; liste öyle yapamaz. Listedeki
+    fiyatlar zaten kayıtlı kapanış (141 varlık için sağlayıcıya gitmek ~56
+    saniye) ve kuru canlı çekmek, fiyatla kuru FARKLI ANLARA ait yapardı.
+
+    Kur bulunamazsa `None` — uydurulmaz; çağıran satırı TL'siz bırakır ve
+    alımı engeller (AK 5.5).
+    """
+    if currency == "TRY":
+        return Decimal(1)
+    sembol = _FX_SYMBOL_BY_CURRENCY.get(currency)
+    if sembol is None:
+        return None
+    asset = db.execute(select(Asset).where(Asset.symbol == sembol)).scalar_one_or_none()
+    if asset is None:
+        return None
+    kayit = _son_fiyat(db, asset.id)
+    return Decimal(kayit.close_price) if kayit is not None else None
+
+
 def _yuvarla(quantity: Decimal, asset_class: AssetClass) -> Decimal:
     """Miktarı sınıfın hassasiyetine AŞAĞI yuvarlar.
 
@@ -224,9 +246,12 @@ def _engel_sebebi(asset: Asset, survey_score: int | None) -> str | None:
 def get_tradable_assets(db: Session, user_id: UUID) -> TradableList:
     """Al/Sat ekranının listesi: evrendeki tutulabilir varlıklar + uygunluk.
 
-    Uygun OLMAYANLAR da listeden düşürülmez, KİLİTLİ gösterilir. Sessizce
-    elemek, kullanıcının o varlığın var olduğunu bile görmemesi demek olurdu;
-    kilidin sebebini söylemek anketin ne işe yaradığını da anlatıyor.
+    UÇ, UYGUN OLMAYANLARI DA DÖNER. Arayüz onları Al sekmesinde gizliyor
+    (28 Ağustos 2026 ürün kararı: kullanıcı alamayacağı varlıkla
+    uğraşmasın), ama eleme SUNUCUDA yapılmıyor: sözleşme tam listeyi
+    verdiği sürece arayüz kaç varlığın neden gizlendiğini sayabiliyor ve
+    ileride "puanınızı yükseltirseniz şunlar açılır" ekranı aynı uçtan
+    beslenebilir. Sunucuda elemek bu bilgiyi tamamen yok ederdi.
     """
     user = _get_user(db, user_id)
     portfolio = _get_portfolio(db, user_id)
@@ -234,11 +259,28 @@ def get_tradable_assets(db: Session, user_id: UUID) -> TradableList:
     pozisyonlar = position_as_of(db, portfolio.id, datetime.now(timezone.utc).date())
     varliklar = db.execute(select(Asset).where(Asset.is_active)).scalars().all()
 
+    # Kur para birimi başına BİR KEZ okunur: evrende 22 USD varlık var ve
+    # her satır için ayrı sorgu aynı kaydı yirmi iki kez okumak olurdu.
+    kurlar: dict[str, Decimal | None] = {}
+
     satirlar: list[TradableAsset] = []
     for asset in sorted(varliklar, key=lambda a: a.symbol):
         fiyat = _son_fiyat(db, asset.id)
         yas = (datetime.now(timezone.utc).date() - fiyat.price_date).days if fiyat else None
+        if asset.currency not in kurlar:
+            kurlar[asset.currency] = _kayitli_kur(db, asset.currency)
+        kur = kurlar[asset.currency]
+        fiyat_try = (
+            (Decimal(fiyat.close_price) * kur).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP)
+            if fiyat is not None and kur is not None
+            else None
+        )
+
         engel = _engel_sebebi(asset, user.risk_survey_score)
+        if engel is None and fiyat is not None and kur is None:
+            # Kuru olmayan varlık TL'ye çevrilemez; alım denemesi ön izlemede
+            # zaten hata verirdi. Sunup sonra reddetmektense burada söylenir.
+            engel = f"{asset.symbol} için {asset.currency}/TRY kuru bulunamadı."
         satirlar.append(
             TradableAsset(
                 symbol=asset.symbol,
@@ -247,6 +289,8 @@ def get_tradable_assets(db: Session, user_id: UUID) -> TradableList:
                 currency=asset.currency,
                 risk_level=asset_risk_level(asset.symbol, asset.asset_class),
                 price=Decimal(fiyat.close_price) if fiyat else None,
+                price_try=fiyat_try,
+                fx_rate_to_try=kur,
                 price_date=fiyat.price_date if fiyat else None,
                 price_source=fiyat.source.value if fiyat else None,
                 price_stale=yas is not None and yas > settings.current_price_stale_days,

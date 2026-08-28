@@ -8,7 +8,7 @@ import {
   type ApiTradePreview,
   type ApiTradeSide,
 } from "@/api/trade";
-import { formatTRY } from "@/utils/format";
+import { formatNumberTR, formatTRY, formatTRY2 } from "@/utils/format";
 
 /**
  * Seçilen varlık için emir paneli.
@@ -149,10 +149,16 @@ export function TradePanel({ userId, asset, side, onDone, onClose }: TradePanelP
               Miktar {String(onizleme.quantity).replace(".", ",")} olarak yuvarlandı.
             </p>
           )}
+          {/* Birim fiyat TL olarak yazılır; TRY dışı varlıkta kendi para
+              biriminden rakam parantez içinde ikinci bilgi olarak durur.
+              Kuruş gösteriliyor: fon birim fiyatları 0,11 TL mertebesinde
+              ve tam sayıya yuvarlanınca "₺0" görünüyordu. */}
           <Satir
             etiket="Birim fiyat"
-            deger={`${formatTRY(onizleme.price * onizleme.fx_rate_to_try)}${
-              onizleme.currency !== "TRY" ? ` (${onizleme.price} ${onizleme.currency})` : ""
+            deger={`${formatTRY2(onizleme.price * onizleme.fx_rate_to_try)}${
+              onizleme.currency !== "TRY"
+                ? ` (${formatNumberTR(onizleme.price, 2)} ${onizleme.currency})`
+                : ""
             }`}
           />
           <Satir etiket="Tutar" deger={formatTRY(onizleme.gross_try)} />

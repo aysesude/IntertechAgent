@@ -261,6 +261,27 @@ class TestListe:
         assert thyao.price_date == datetime.now(timezone.utc).date()
         assert thyao.price_stale is False
 
+    def test_TRY_disi_varligin_TL_karsiligi_doner(self, db_session, kullanici):
+        """Arayüz ₺ ile dolar rakamı göstermesin diye çevrim SUNUCUDA.
+
+        AAPL 200 USD, kur 40 → 8.000 TL. Tarayıcıda çarpılsaydı ön izlemedeki
+        sunucu hesabıyla ayrışabilecek ikinci bir hesap doğardı.
+        """
+        liste = get_tradable_assets(db_session, kullanici.id)
+        aapl = next(a for a in liste.assets if a.symbol == "AAPL")
+
+        assert aapl.currency == "USD"
+        assert aapl.price == Decimal("200.0000")
+        assert aapl.fx_rate_to_try == Decimal("40.0000")
+        assert aapl.price_try == Decimal("8000.0000")
+
+    def test_TRY_varlikta_kur_1_ve_iki_fiyat_esit(self, db_session, kullanici):
+        liste = get_tradable_assets(db_session, kullanici.id)
+        thyao = next(a for a in liste.assets if a.symbol == "THYAO")
+
+        assert thyao.fx_rate_to_try == Decimal(1)
+        assert thyao.price_try == thyao.price
+
     def test_eldeki_miktar_listede(self, db_session, kullanici):
         execute_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(7))
 
