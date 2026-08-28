@@ -7,6 +7,7 @@ import { holdingTotals, lotValue, lotPnl, lotReturnPct, lotDaysHeld } from "@/ut
 import { formatTRY2, formatSignedTRY2, formatPct, formatDateDMY, formatQuantityByUnit, formatNumberTR } from "@/utils/format";
 import { POSITIVE, NEGATIVE } from "@/utils/colors";
 import { XIcon } from "@/components/icons";
+import { useScrollLock } from "@/hooks/useScrollLock";
 
 interface HoldingReturnDetailProps {
   holding: Holding;
@@ -45,23 +46,8 @@ export function HoldingReturnDetail({ holding, onClose }: HoldingReturnDetailPro
 
   // Panel açıkken arkadaki sayfa scroll'u kilitlenir — aksi halde arka plan
   // kayarken sabit panel yerinde durur ve ikisi görsel olarak birbirinden
-  // kopar. Scrollbar kaybolunca sayfa genişliği artıp içerik kayacağı için
-  // (Windows/Linux gibi overlay olmayan scrollbar'larda) o genişlik kadar
-  // sağa padding eklenip telafi ediliyor.
-  useEffect(() => {
-    const { body, documentElement } = document;
-    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
-    const previousOverflow = body.style.overflow;
-    const previousPaddingRight = body.style.paddingRight;
-    body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
-      body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-    return () => {
-      body.style.overflow = previousOverflow;
-      body.style.paddingRight = previousPaddingRight;
-    };
-  }, []);
+  // kopar (bkz. useScrollLock: neden overflow:hidden YETERSİZ).
+  useScrollLock();
 
   // Escape, panelin kendi onKeyDown'ına (odak-bağımlı bubbling) DEĞİL,
   // document seviyesindeki bir listener'a bağlı — odak henüz panele
@@ -185,7 +171,7 @@ export function HoldingReturnDetail({ holding, onClose }: HoldingReturnDetailPro
               pr-2.5: macOS'un overlay scrollbar'ı yer kaplamadan içeriğin
               ÜSTÜNE biner — bu boşluk olmadan sağa hizalı değerlerin
               üzerine biniyordu. */}
-          <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2.5">
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2.5">
             <div className="flex flex-col gap-2.5 pb-1">
               {holding.lots.map((lot) => {
                 const value = lotValue(lot, holding.currentUnitPrice);
