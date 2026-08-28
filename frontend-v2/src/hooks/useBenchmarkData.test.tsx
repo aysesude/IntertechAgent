@@ -17,7 +17,15 @@ vi.mock("@/api/portfolio", () => ({
   fetchBenchmark: (...a: unknown[]) => fetchBenchmark(...a),
 }));
 
-vi.mock("@/api/client", () => ({ isApiConfigured: true }));
+class MockApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+vi.mock("@/api/client", () => ({ isApiConfigured: true, ApiError: MockApiError }));
 
 vi.mock("@/auth/AuthContext", () => ({
   useCurrentUserId: () => "user-1",
@@ -116,5 +124,21 @@ describe("useBenchmarkData", () => {
     // Eski dönemin verisi ama GERÇEK; silip boş kart göstermek kullanıcıyı
     // "veri yok" sanısına düşürürdü.
     expect(screen.getByTestId("getiri")).toHaveTextContent("10");
+  });
+
+  it("409 (bu dönemde veri yok) hata olarak GÖSTERİLMEZ", async () => {
+    fetchBenchmark
+      .mockResolvedValueOnce(yanit({ portfolio_return_percent: 10 }))
+      .mockRejectedValueOnce(new MockApiError("No asset transactions for portfolio x", 409));
+
+    const { rerender } = render(<Sonda pencere="12m" />);
+    await waitFor(() => expect(screen.getByTestId("getiri")).toHaveTextContent("10"));
+
+    rerender(<Sonda pencere="1m" />);
+
+    // Ham backend mesajı ("No asset transactions...") kullanıcıya
+    // gösterilmemeli — kart bunun yerine kendi boş-durum metnine düşer.
+    await waitFor(() => expect(fetchBenchmark).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("hata")).toHaveTextContent("-");
   });
 });
