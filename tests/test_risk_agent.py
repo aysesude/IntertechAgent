@@ -23,7 +23,21 @@ Sinyal 5 artık profil/ağırlık tabanlı değil, yalnızca anket-yeniden-doldu
 OLAYIYLA tetiklenmeli (bkz. agents/risk_agent.py modül docstring'i "2026-08-26
 eki"); böyle bir olay mekanizması henüz yok, sinyal kalıcı dormant. Bu
 dosyadaki ilgili testler kaldırıldı; `_build_signal_context` artık yalnızca
-holdings/haber/makro verisini birleştirdiğini doğrulayan testler kaldı."""
+holdings/haber/makro verisini birleştirdiğini doğrulayan testler kaldı.
+
+2026-08-28 eki (kod): Yol A'nın olay mekanizması yazıldı (bkz.
+agents/risk_agent.py modül docstring'i "2026-08-28 eki (kod)",
+docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md §4.5). `_build_signal_
+context` artık opsiyonel `yeni_profille_izinsiz_kalan_siniflar` parametresini
+kabul ediyor; `test_sinyal_baglami_anket_alanlari_hicbir_zaman_eklenmez` bu
+yüzden `test_sinyal_baglami_anket_alanlari_yalnizca_olay_varsa_eklenir` olarak
+güncellendi — artık "hiçbir zaman" değil "yalnızca olay/ihlal varsa". Eski
+dummy alanlarının (2026-08-26 eki) KALICI olarak eklenmeyeceği ayrı, hâlâ
+geçerli bir testte kaldı (`test_sinyal_baglami_eski_dummy_alanlari_
+hicbir_zaman_eklenmez`). `_assess_signals`'ın üçüncü tool çağrısı
+(`get_risk_survey_event`) burada TEST EDİLMİYOR — modülün başındaki ilkeyle
+aynı sebep: gerçek bir MCP çağrısı içeriyor, deterministik pytest yerine
+manuel/entegrasyon doğrulaması kullanılıyor."""
 
 import json
 
@@ -34,6 +48,7 @@ from agents.risk_agent import (
     _build_signal_context,
     _compact,
     _extract_json_object,
+    _kullanilmayan_kapasite,
     _live_macro_symbols_for_holdings,
     _macro_queries_for_holdings,
     _render_signal_prompt,
@@ -344,17 +359,120 @@ def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
     ]
 
 
-def test_sinyal_baglami_anket_alanlari_hicbir_zaman_eklenmez():
+def test_sinyal_baglami_eski_dummy_alanlari_hicbir_zaman_eklenmez():
     """2026-08-26 eki: Sinyal 5 artık profil/dummy puana bakmıyor (bkz.
     agents/risk_agent.py modül docstring'i) — `_build_signal_context`
     "survey_puani_dummy"/"survey_puani_dummy_uyarisi"/
-    "bu_puanla_izinli_siniflar" alanlarını ARTIK HİÇ üretmemeli; bu, önceki
-    "dummy puan varsa/yoksa" ayrımının yerini alan tek testtir."""
+    "bu_puanla_izinli_siniflar" alanlarını ARTIK HİÇ üretmemeli; bu KALICI
+    bir kısıt, Yol A'nın (2026-08-28) yeni alanlarıyla ilgisi yok."""
     context = _build_signal_context({"holdings": []}, {"assets": []})
 
     assert "survey_puani_dummy" not in context
     assert "survey_puani_dummy_uyarisi" not in context
     assert "bu_puanla_izinli_siniflar" not in context
+
+
+def test_sinyal_baglami_anket_alanlari_yalnizca_olay_varsa_eklenir():
+    """2026-08-28 eki (kod): Sinyal 5 Yol A'nın girdisi artık koşullu —
+    `yeni_profille_izinsiz_kalan_siniflar` verilmezse (ya da boş liste
+    geçilirse) `_build_signal_context` "anket_yeniden_dolduruldu"/
+    "yeni_profille_izinsiz_kalan_siniflar" alanlarını HİÇ eklememeli (bu,
+    önceki "hiçbir zaman eklenmez" testinin yerini alan güncellenmiş
+    versiyondur — artık kalıcı değil, koşullu bir dormant hâli)."""
+    context_olaysiz = _build_signal_context({"holdings": []}, {"assets": []})
+    assert "anket_yeniden_dolduruldu" not in context_olaysiz
+    assert "yeni_profille_izinsiz_kalan_siniflar" not in context_olaysiz
+
+    context_bos_liste = _build_signal_context(
+        {"holdings": []}, {"assets": []}, yeni_profille_izinsiz_kalan_siniflar=[]
+    )
+    assert "anket_yeniden_dolduruldu" not in context_bos_liste
+    assert "yeni_profille_izinsiz_kalan_siniflar" not in context_bos_liste
+
+
+def test_sinyal_baglami_anket_alanlari_ihlal_varsa_eklenir():
+    """Gerçek bir ihlal listesi verildiğinde `_build_signal_context` bunu
+    olduğu gibi taşımalı — burada da hiçbir sınıflandırma/karşılaştırma
+    YAPILMAZ, liste zaten deterministik olarak `user_service.
+    get_and_consume_risk_survey_event` tarafından hesaplanmış gelir."""
+    context = _build_signal_context(
+        {"holdings": []}, {"assets": []}, yeni_profille_izinsiz_kalan_siniflar=["stock"]
+    )
+
+    assert context["anket_yeniden_dolduruldu"] is True
+    assert context["yeni_profille_izinsiz_kalan_siniflar"] == ["stock"]
+
+
+# --- Sinyal 5, Yol B: _kullanilmayan_kapasite --------------------------------
+#
+# 2026-08-28 eki (Yol B kod): analist "hangi kapasite" sorusunu netleştirdi
+# ("risk seviyesi yüksek çıktı ama daha az riskli varlıkları var" -> (a)
+# advice_eligibility). bkz. docs/notes/sinyal5-olay-tabanli-aktivasyon-
+# tasarimi.md §4.8/§4.10: kullanılmayan sınıf var / yok / anket boş (None) /
+# tüm izinli sınıflar zaten elde — dört senaryo.
+
+
+def test_kullanilmayan_kapasite_anket_bossa_uretilmez():
+    """`risk_survey_score=None` (anket hiç doldurulmamış) — "izin verilen
+    sınıf" kavramı anketsiz tanımsızdır, uydurma yok."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "cash", "weight_percent": 100.0}]
+    }
+
+    assert _kullanilmayan_kapasite(holdings_data, None) == []
+
+
+def test_kullanilmayan_kapasite_var():
+    """CONSERVATIVE bandının alt ucu (puan=1) yalnızca NAKIT'e (seviye 1)
+    izin verir; kullanıcının elinde hiç NAKİT yoksa (yalnızca bond elinde)
+    NAKİT "kullanılmayan kapasite" olarak dönmeli."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "bond", "weight_percent": 100.0}]
+    }
+
+    # puan=2 -> NAKIT (1) ve TAHVIL (2) izinli; TAHVIL elde var, NAKİT yok.
+    assert _kullanilmayan_kapasite(holdings_data, 2) == ["cash"]
+
+
+def test_kullanilmayan_kapasite_tum_izinli_siniflar_elde_ise_bos():
+    """Puanın izin verdiği TEK sınıf (NAKİT, puan=1) zaten elde varsa
+    kullanılmayan bir kapasite kalmaz."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "cash", "weight_percent": 100.0}]
+    }
+
+    assert _kullanilmayan_kapasite(holdings_data, 1) == []
+
+
+def test_kullanilmayan_kapasite_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan bir varlık "elde tutulan sınıf" sayılmamalı —
+    diğer sinyal bağlamı fonksiyonlarıyla aynı ilke (bkz.
+    test_sinyal_baglami_fiyati_eksik_varligi_disliyor)."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "cash", "weight_percent": None, "price_missing": True}
+        ]
+    }
+
+    # puan=1 -> yalnızca NAKIT izinli; fiyatı eksik olduğu için "elde" sayılmaz.
+    assert _kullanilmayan_kapasite(holdings_data, 1) == ["cash"]
+
+
+def test_sinyal_baglami_kullanilmayan_kapasite_bossa_eklenmez():
+    """`kullanilmayan_kapasite` verilmezse/boşsa `_build_signal_context`
+    "kullanilmayan_kapasite" anahtarını HİÇ eklememeli — Yol A'nın
+    alanlarıyla aynı ilke."""
+    context = _build_signal_context({"holdings": []}, {"assets": []}, kullanilmayan_kapasite=[])
+
+    assert "kullanilmayan_kapasite" not in context
+
+
+def test_sinyal_baglami_kullanilmayan_kapasite_doluysa_eklenir():
+    context = _build_signal_context(
+        {"holdings": []}, {"assets": []}, kullanilmayan_kapasite=["stock"]
+    )
+
+    assert context["kullanilmayan_kapasite"] == ["stock"]
 
 
 def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():

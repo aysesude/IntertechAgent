@@ -94,6 +94,21 @@ class TestServis:
         assert taze.risk_survey_score == 6
         assert taze.risk_profile is RiskProfile.AGGRESSIVE
 
+    def test_puan_yazilinca_guncelleme_zamani_damgalaniyor(self, db_session):
+        """Sinyal 5 Yol A'nın (profil_sapmasi) tetikleyicisi budur — bkz.
+        docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md §4.3.
+        `risk_survey_updated_at` puan/profille AYNI transaction'da yazılmalı,
+        aksi hâlde "olay" bir sonraki değerlendirmeye kadar görünmez kalır."""
+        user = _kullanici(db_session)
+        assert user.risk_survey_updated_at is None
+
+        set_user_risk_survey(db_session, user.id, 6)
+
+        taze = db_session.execute(select(User).where(User.id == user.id)).scalar_one()
+        assert taze.risk_survey_updated_at is not None
+        # Tüketim henüz hiç olmadı: "bekleyen olay var" tanımı burada sağlanmalı.
+        assert taze.risk_survey_event_consumed_at is None
+
     def test_puan_yoksa_bant_da_yok(self, db_session):
         """Anketi doldurmamış kullanıcıya kayıtlı profilin bandını döndürmek,
         vermediği bir cevabı vermiş gibi göstermek olurdu (AK 5.5)."""
@@ -121,6 +136,23 @@ class TestServis:
         sonuc = get_user_risk_survey(db_session, user.id)
         assert sonuc.risk_survey_score is None
         assert sonuc.risk_profile is RiskProfile.CONSERVATIVE
+
+    def test_profil_dogrudan_yazma_guncelleme_zamanina_dokunmuyor(self, db_session):
+        """`set_user_risk_profile` (elle profil değiştirme) bir anket olayı
+        DEĞİLDİR — bkz. tasarım belgesi §4.3 "değişmez" kararı. Elle yapılan
+        bir değişikliğin Sinyal 5'i sahte biçimde tetiklemesi istenmiyor."""
+        user = _kullanici(db_session)
+        set_user_risk_survey(db_session, user.id, 6)
+        ilk_damga = db_session.execute(
+            select(User.risk_survey_updated_at).where(User.id == user.id)
+        ).scalar_one()
+
+        set_user_risk_profile(db_session, user.id, RiskProfile.CONSERVATIVE)
+
+        son_damga = db_session.execute(
+            select(User.risk_survey_updated_at).where(User.id == user.id)
+        ).scalar_one()
+        assert son_damga == ilk_damga
 
     def test_ayni_puan_tekrar_gonderilebilir(self, db_session):
         """İdempotent: anket ekranı aynı sonucu tekrar gönderebilir."""

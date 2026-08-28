@@ -3,7 +3,17 @@
 Kural ("seviye puandan büyükse tavsiye alamaz") iş analisti şartnamesinden;
 tablo 26 Ağustos 2026'da yeniden kalibre edildi (NAKIT 1, TAHVIL 2, DOVIZ 3,
 MADEN 4, HISSE 5) çünkü eski hâli yedi puandan yalnızca dört farklı sonuç
-üretiyordu. Gerekçe ve sapma notları `core/config.py` içinde.
+üretiyordu.
+
+2026-08-28 kararı (Yağız) tabloyu bir kez daha değiştirdi — güncel hâli
+NAKIT 1, TAHVIL 2, **MADEN 3, DOVIZ 4** (yer değiştirdi, kendi ölçümümüz
+değil `gerek.md` esas alındı), HISSE 5. Aynı kararla iki varlık-düzeyi
+istisnası da kaldırıldı: gümüş/platin artık maden sınıfından ayrılmıyor,
+yabancı hisse artık yerli hisseden ayrılmıyor ("risk ile alakalı değil").
+Sonucu: puan 5 ve puan 6 artık AYNI varlık kümesini açıyor — "yedi puanın
+yedisi de farklı sonuç verir" kuralı yalnızca ALTI farklı kümede tutuluyor
+(bkz. `test_her_puan_bir_oncekinden_farkli_kume_acar`). Gerekçe ve sapma
+notları `core/config.py` ve `providers/universe.py` içinde.
 
 Beklenen değerler tabloya bakılarak ELLE yazıldı, koddan türetilmedi — tablo
 yanlışlıkla değiştirilirse test bunu yakalamalı, sessizce uyum sağlamamalı.
@@ -28,11 +38,14 @@ _DOVIZ = AssetClass.CURRENCY
 _MADEN = AssetClass.PRECIOUS_METAL
 
 # Puan -> tavsiye edilebilecek sınıflar. Tablodan elle çıkarıldı.
+#
+# 2026-08-28: MADEN puan 3'te, DOVIZ puan 4'te açılıyor (eskiden tersiydi —
+# bkz. modül docstring'i).
 _BEKLENEN = {
     1: {_NAKIT},
     2: {_NAKIT, _TAHVIL},
-    3: {_NAKIT, _TAHVIL, _DOVIZ},
-    4: {_NAKIT, _TAHVIL, _DOVIZ, _MADEN},
+    3: {_NAKIT, _TAHVIL, _MADEN},
+    4: {_NAKIT, _TAHVIL, _MADEN, _DOVIZ},
     5: set(AssetClass),
     6: set(AssetClass),
     7: set(AssetClass),
@@ -52,8 +65,8 @@ def test_blocked_is_the_complement_of_allowed(puan, beklenen):
 def test_stock_advice_requires_score_five():
     """Hisse SINIFI seviyesi 5: 4 ve altı puanlar hisse tavsiyesi alamaz.
 
-    Yabancı hissenin ayrıca 6 istediğine dikkat — o kısıt varlık düzeyinde
-    kilitleniyor (bkz. `TestVarlikDuzeyi`), sınıf düzeyinde değil.
+    Yerli/yabancı ayrımı yok — ikisi de aynı sınıf seviyesinde (bkz.
+    `TestVarlikDuzeyi`, 2026-08-28 kararıyla kaldırılan ayrım).
     """
     assert not is_advice_allowed(AssetClass.STOCK, 4)
     assert is_advice_allowed(AssetClass.STOCK, 5)
@@ -67,8 +80,8 @@ def test_equal_level_is_allowed_not_blocked():
     olan bir kullanıcı tahvil tavsiyesi alamazdı — şartnamenin tam tersi.
     """
     assert is_advice_allowed(AssetClass.BOND, 2)
-    assert is_advice_allowed(AssetClass.CURRENCY, 3)
-    assert is_advice_allowed(AssetClass.PRECIOUS_METAL, 4)
+    assert is_advice_allowed(AssetClass.PRECIOUS_METAL, 3)
+    assert is_advice_allowed(AssetClass.CURRENCY, 4)
 
 
 def test_cash_is_allowed_at_every_score():
@@ -135,41 +148,50 @@ class TestVarlikDuzeyi:
         assert not is_advice_allowed(AssetClass.BOND, 1)
 
     def test_eurobond_fonu_sinifinin_USTUNDE(self):
-        """AKE: sınıfı BOND (=2) ama döviz ürünü, seviyesi 3."""
-        assert asset_risk_level("AKE", AssetClass.BOND) == 3
-        assert not is_asset_advice_allowed("AKE", AssetClass.BOND, 2)
-        assert is_asset_advice_allowed("AKE", AssetClass.BOND, 3)
+        """AKE: sınıfı BOND (=2) ama döviz ürünü, seviyesi 4.
 
-    def test_yabanci_hisse_yerlinin_bir_ustunde(self):
-        """ABD hissesi 6, BIST hissesi 5.
+        2026-08-28: döviz kademesi 3'ten 4'e taşındı (maden/döviz yer
+        değiştirdi); AKE kendi kademesini takip ettiği için o da 3'ten 4'e
+        taşındı — bkz. `providers/universe.py` AKE tanımı.
+        """
+        assert asset_risk_level("AKE", AssetClass.BOND) == 4
+        assert not is_asset_advice_allowed("AKE", AssetClass.BOND, 3)
+        assert is_asset_advice_allowed("AKE", AssetClass.BOND, 4)
 
-        Gerekçe volatilite DEĞİL — ölçüm tersini söylüyor (ABD %28,8, BIST
-        %38,6) — erişim ve karmaşıklık: kur, saklama, yerel yatırımcı
-        korumasının bulunmaması, vergi.
+    def test_yabanci_hisse_artik_yerliyle_ayni_kademede(self):
+        """2026-08-28 kararıyla kaldırılan ayrım: ABD hissesi ARTIK BIST
+        hissesiyle aynı kademede (5), önceden 6'ydı.
+
+        Karar "risk ile alakalı değil" gerekçesiyle geldi: erişim kısıtı
+        anket puanından türeyen profille belirlenir, ayrı bir varlık-düzeyi
+        istisnası değil.
         """
         assert asset_risk_level("THYAO", AssetClass.STOCK) == 5
-        assert asset_risk_level("AAPL", AssetClass.STOCK) == 6
+        assert asset_risk_level("AAPL", AssetClass.STOCK) == 5
         assert is_asset_advice_allowed("THYAO", AssetClass.STOCK, 5)
-        assert not is_asset_advice_allowed("AAPL", AssetClass.STOCK, 5)
+        assert is_asset_advice_allowed("AAPL", AssetClass.STOCK, 5)
 
-    def test_yabanci_hisse_FONU_da_alti_sayilir(self):
-        """AFT yurt dışı hisse fonu; TI2/TCD yerli. Kabuk aynı, içerik farklı."""
-        assert asset_risk_level("AFT", AssetClass.STOCK) == 6
+    def test_yabanci_hisse_FONU_da_artik_sinif_varsayilaninda(self):
+        """AFT yurt dışı hisse fonu; TI2/TCD yerli. Eskiden AFT 6'ydı, artık
+        üçü de sınıf varsayılanında (5) — bkz. `providers/universe.py` AFT
+        tanımı."""
+        assert asset_risk_level("AFT", AssetClass.STOCK) == 5
         assert asset_risk_level("TI2", AssetClass.STOCK) == 5
         assert asset_risk_level("TCD", AssetClass.STOCK) == 5
 
-    def test_gumus_ve_platin_altindan_bir_kademe_yukarida(self):
-        """Kıymetli maden sınıfı 4 ama sınıf içi dağılım geniş.
+    def test_gumus_ve_platin_artik_maden_sinifindan_ayrilmiyor(self):
+        """2026-08-28 kararıyla kaldırılan ayrım: gümüş/platin ARTIK kıymetli
+        maden sınıfından ayrı bir kademede değil (eskiden 5'ti, sınıf 4'ken).
 
-        Ölçüldü (365 gün): gram altın %28,6, gümüş %65,9, platin %55,3.
-        İkincisi ve üçüncüsü YERLİ HİSSENİN (%38,6, seviye 5) üstünde
-        oynuyor, dolayısıyla ondan düşük bir kademede duramazlar.
+        Ölçülen oynaklık farkı (365 gün: gram altın %28,6, gümüş %65,9,
+        platin %55,3) hâlâ doğru ama karar "ikisi de kıymetli maden, ayırma"
+        — kategori bütünlüğü ölçümden önemli sayıldı.
         """
-        assert asset_risk_level("XAUTRY", AssetClass.PRECIOUS_METAL) == 4
-        assert asset_risk_level("XAGTRY", AssetClass.PRECIOUS_METAL) == 5
-        assert asset_risk_level("XPTTRY", AssetClass.PRECIOUS_METAL) == 5
+        assert asset_risk_level("XAUTRY", AssetClass.PRECIOUS_METAL) == 3
+        assert asset_risk_level("XAGTRY", AssetClass.PRECIOUS_METAL) == 3
+        assert asset_risk_level("XPTTRY", AssetClass.PRECIOUS_METAL) == 3
         # Sikkeler gram ALTINDAN türetilir, onunla aynı kademede kalır.
-        assert asset_risk_level("CEYREK", AssetClass.PRECIOUS_METAL) == 4
+        assert asset_risk_level("CEYREK", AssetClass.PRECIOUS_METAL) == 3
 
     def test_evrende_olmayan_sembol_sinif_varsayilanina_duser(self):
         """Elle eklenmiş bir DB kaydı uygunluk kontrolünü çökertmemeli."""
@@ -211,17 +233,24 @@ def test_yedinci_seviye_yalnizca_serbest_fonu_acar():
 
 
 def test_her_puan_bir_oncekinden_farkli_kume_acar():
-    """Asıl ölçüt: yedi puanın YEDİSİNİN de somut bir karşılığı olmalı.
+    """26 Ağustos kalibrasyonunun ölçütü: yedi puanın mümkün olduğunca çoğunun
+    somut bir karşılığı olmalı.
 
     Eski tablo yedi puandan yalnızca DÖRT farklı sonuç üretiyordu (2, 5 ve 7
-    bir öncekine hiçbir şey eklemiyordu), yani anketin ayırt ettiği kademe
-    sayısı vaat edilenin yarısıydı. Yeniden kalibrasyonun sebebi buydu.
+    bir öncekine hiçbir şey eklemiyordu). Yeniden kalibrasyon bunu 1-5 ve 7
+    için düzeltti; 2026-08-28 kararıyla (yabancı hisseyi ayrı kademeden
+    çıkarmak) puan 5 ve 6 BİLİNÇLİ OLARAK aynı kümeyi açıyor — 6'yı 5'ten
+    ayıran TEK şey yabancı hisseydi, o ayrım "risk ile alakalı değil"
+    gerekçesiyle kaldırıldı. Sonuç: altı farklı küme, yedi puan.
     """
     kumeler = [_izinli_semboller(puan) for puan in range(1, 8)]
 
-    assert len(set(kumeler)) == 7, "yedi puan yedi farkli varlik kumesi acmali"
-    for onceki, sonraki in zip(kumeler, kumeler[1:]):
-        assert onceki < sonraki, "puan arttikca kume GERCEKTEN buyumeli"
+    assert len(set(kumeler)) == 6, "alti farkli varlik kumesi acmali (5 ve 6 kasitli ayni)"
+    for i, (onceki, sonraki) in enumerate(zip(kumeler, kumeler[1:]), start=1):
+        if i == 5:  # puan 5 -> 6: kasıtlı olarak AYNI küme
+            assert onceki == sonraki, "puan 5 ve 6 artik ayni kumeyi acmali"
+        else:
+            assert onceki < sonraki, "puan arttikca kume GERCEKTEN buyumeli"
 
 
 def _migration_yolu(dosya_adi: str):

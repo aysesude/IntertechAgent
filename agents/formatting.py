@@ -18,6 +18,22 @@ Biçim kararları kasıtlı:
 
 from typing import Any
 
+# Varlık sınıfı → Türkçe ad. Portföy ve Piyasa ajanlarının ikisi de bir varlık
+# sınıfını kullanıcıya göstermek zorunda kalıyor (2026-08-28); aynı gerekçeyle
+# yukarıdaki sayı biçimlendiricileri burada: kopyalanmış iki çeviri sözlüğü er
+# geç ayrışır (ör. biri günceller, diğeri unutulur) ve aynı sınıf iki ekranda
+# farklı adla görünür.
+ASSET_CLASS_TR = {
+    "stock": "Hisse Senedi",
+    "precious_metal": "Kıymetli Maden",
+    "currency": "Döviz",
+    # "Tahvil" DEĞİL: bu sınıfta doğrudan devlet tahvili yok, hepsi TEFAS
+    # borçlanma araçları fonu. "Tahvil" demek olmayan bir enstrümanı ima
+    # ediyordu; üstelik scope.yaml "tahvil"i kapsam dışı sayıyor.
+    "bond": "Borçlanma Araçları",
+    "cash": "Nakit",
+}
+
 
 def tr_amount(value: Any, *, signed: bool = False) -> str:
     """1234.5 -> '1.234,50'. `signed` ise işaret hep yazılır."""

@@ -99,6 +99,12 @@ def sahte_sunucu():
         gorulen["get_asset_price_history"] = {"symbols": symbols, "window": window}
         return {"success": True, "data": {"series": {}}}
 
+    @mcp.tool(name="get_user_risk_survey")
+    def _risk_survey(user_id: str) -> dict:
+        """Profil-uygunluk kontrolü için ucuz okuma (bkz. `_fetch_risk_survey_score`)."""
+        gorulen["get_user_risk_survey"] = {"user_id": user_id}
+        return {"success": True, "data": {"risk_survey_score": 3, "risk_profile": "balanced"}}
+
     return mcp, gorulen
 
 
@@ -175,3 +181,47 @@ async def test_bir_tool_patlarsa_digeri_yine_doner(sahte_sunucu):
 
     assert sonuc["get_portfolio_summary"]["success"] is False
     assert sonuc["get_holdings"]["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Profil-uygunluk: `_fetch_risk_survey_score` (bkz. agents/portfolio_agent.py
+# modül docstring'i "2026-08-28 eki")
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_risk_survey_score_basarili(sahte_sunucu):
+    mcp, _ = sahte_sunucu
+
+    async with Client(mcp) as client:
+        skor = await _ajan()._fetch_risk_survey_score(client, "kullanici-1")
+
+    assert skor == 3
+
+
+async def test_fetch_risk_survey_score_basarisizsa_none_doner():
+    """Tool `success: false` dönerse (ör. kullanıcı bulunamadı) kontrol
+    sessizce ATLANIR — uydurma yok."""
+    mcp = FastMCP("basarisiz")
+
+    @mcp.tool(name="get_user_risk_survey")
+    def _risk_survey(user_id: str) -> dict:
+        return {"success": False, "error": {"code": "NOT_FOUND", "message": "yok"}}
+
+    async with Client(mcp) as client:
+        skor = await _ajan()._fetch_risk_survey_score(client, "kullanici-1")
+
+    assert skor is None
+
+
+async def test_fetch_risk_survey_score_baglanti_hatasinda_none_doner():
+    """Bağlantı/çağrı istisnası ana akışı düşürmemeli — sessizce `None`."""
+    mcp = FastMCP("patlayan-anket")
+
+    @mcp.tool(name="get_user_risk_survey")
+    def _risk_survey(user_id: str) -> dict:
+        raise RuntimeError("kasitli")
+
+    async with Client(mcp) as client:
+        skor = await _ajan()._fetch_risk_survey_score(client, "kullanici-1")
+
+    assert skor is None

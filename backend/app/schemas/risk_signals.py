@@ -31,13 +31,20 @@ prompt seviyesinde istenir, kod bunu doğrulamaz.
   verilmiyor (bilinçli): LLM ağırlık + güncellik + ciddiyet + tetiklenen
   sinyal sayısına bakıp yorumluyor (bkz. risk_signals.md).
 - Sinyal 5'in (profil_sapmasi) "kullanıcı anketi yeniledi, profili düştü"
-  tetikleyicisi GERÇEK anket geçmişi olmadan TESPİT EDİLEMEZ; bu iş
-  analistine iletildi ve 2026-08-26'da son kez netleşti: sinyal ağırlığa/
-  profile bakan bir karşılaştırma DEĞİL, yalnızca gerçek bir
-  anket-yeniden-doldurma OLAYIYLA tetiklenmeli. Böyle bir olay mekanizması
-  projede henüz yok; bu yüzden Sinyal 5 şu an kalıcı olarak dormant (bkz.
-  agents/risk_agent.py modül docstring'i "2026-08-26 eki") — önceki "dummy
-  puanla izinli mi" karşılaştırması bu netleşmeyle KALDIRILDI.
+  tetikleyicisi GERÇEK anket geçmişi (anketin NE ZAMAN dolduğu, tek başına
+  puanın kendisi değil) olmadan TESPİT EDİLEMEZ; bu iş analistine iletildi ve
+  2026-08-26'da son kez netleşti: sinyal ağırlığa/profile bakan bir
+  karşılaştırma DEĞİL, yalnızca gerçek bir anket-yeniden-doldurma OLAYIYLA
+  tetiklenmeli. Böyle bir olay mekanizması projede henüz yok; bu yüzden
+  Sinyal 5 şu an kalıcı olarak dormant (bkz. agents/risk_agent.py modül
+  docstring'i "2026-08-26 eki") — önceki "dummy puanla izinli mi"
+  karşılaştırması bu netleşmeyle KALDIRILDI.
+- 2026-08-28 eki: kapsam genişledi, anketin KENDİSİ artık gerçek ve
+  sistemde var (`users.risk_survey_score`) — eksik olan hâlâ yalnızca olay
+  yakalama mekanizması. Ayrıca ikinci, olaysız bir tetikleyici onaylandı:
+  "risk kapasitesi kullanılmadığında" (bkz. risk_agent.py "2026-08-28 eki",
+  docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md). İkisi de henüz
+  kodda değil, `survey_score_is_dummy` hâlâ HER ZAMAN True.
 """
 
 from enum import Enum
@@ -108,8 +115,10 @@ class RiskSignalAssessment(BaseModel):
     rebalancing: str
     investment_strategy: str
     confidence: Literal["normal", "dusuk"]
-    # Anket henüz yok; Sinyal 5 (profil_sapmasi) 2026-08-26'dan beri kalıcı
-    # dormant (bkz. risk_agent.py modül docstring'i "2026-08-26 eki") — bu
-    # alan HER ZAMAN True döner. True iken kullanıcıya "anket sonucunuz" diye
-    # sunulmamalı.
+    # Anket puanının kendisi (`users.risk_survey_score`) GERÇEK ve sistemde
+    # VAR — eksik olan, Sinyal 5'in beklediği anket-yeniden-doldurma OLAYINI
+    # yakalayan mekanizma. O yüzden Sinyal 5 (profil_sapmasi) 2026-08-26'dan
+    # beri kalıcı dormant (bkz. risk_agent.py modül docstring'i "2026-08-26"
+    # ve "2026-08-28" ekleri) — bu alan HER ZAMAN True döner. True iken
+    # kullanıcıya "anket sonucunuz" diye sunulmamalı.
     survey_score_is_dummy: bool
