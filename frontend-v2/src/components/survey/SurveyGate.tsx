@@ -106,8 +106,8 @@ export function SurveyGate({ userId, fullName }: SurveyGateProps) {
               </div>
 
               <p className="mt-4 text-[12.5px] leading-relaxed text-[#7A8CA4] dark:text-[#9AACC7]">
-                Bu adım atlanamıyor: yatırımcı profili olmadan sana uygun
-                olmayan bir ürün önermemiz mümkün olurdu.
+                Bu adımı atlayamıyoruz. Profilini bilmeden sana uygun olup
+                olmadığından emin olamadığımız bir yatırım önerme riskimiz var.
               </p>
 
               <button

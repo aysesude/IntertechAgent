@@ -15,6 +15,7 @@ import {
 } from "@/components/auth/loginPalette";
 import { PasswordResetCard } from "@/components/auth/PasswordResetCard";
 import { RegisterCard } from "@/components/auth/RegisterCard";
+import { PaperBoatLogo } from "@/components/paper-boat/PaperBoat";
 import { gecerliTcKimlikNo } from "@/utils/tckn";
 
 /**
@@ -30,7 +31,9 @@ import { gecerliTcKimlikNo } from "@/utils/tckn";
  *
  * Asset:  src/assets/login/bogazici-yalilari.jpg (light)
  *         src/assets/login/ay-isigi-deniz.jpg (dark)
- * Logo:   public/vira_logo_text.svg  (mevcut marka dosyası, değiştirilmedi)
+ * Logo:   gemi `components/paper-boat` bileşeninden (sohbettekiyle aynı,
+ *         sallanan hâliyle), yazı `public/vira_wordmark.svg` — ikisi de
+ *         özgün `vira_logo_text.svg`'nin parçaları, çizim değiştirilmedi.
  */
 import bosphorusArt from "../assets/login/bogazici-yalilari.jpg";
 import moonlitSeaArt from "../assets/login/ay-isigi-deniz.jpg";
@@ -422,12 +425,33 @@ export function LoginScreen({
               mod === "register" ? "max-w-[560px]" : "max-w-[452px]"
             }`}
           >
-            <img
-              src="/vira_logo_text.svg"
-              alt="Vira"
-              className="h-11 w-auto dark:[filter:brightness(0)_invert(1)]"
-              draggable={false}
-            />
+            {/* LOGO İKİ PARÇA ÇİZİLİYOR: gemi + yazı.
+                Tek bir `<img>` olduğu sürece gemiye can veremiyorduk —
+                sohbetteki sallanma, çizimin gövde/yelken/dalga gruplarını ayrı
+                ayrı hareket ettiriyor ve bunun için SVG'nin DOM'da olması
+                gerekiyor. Gemi artık sohbettekiyle AYNI bileşen
+                (`components/paper-boat`), yazı ise özgün logodan kırpılmış
+                `vira_wordmark.svg`.
+
+                Sohbettekinden daha yavaş ve daha küçük genlikte: orada hareket
+                "cevap yazılıyor" demek, burada sadece ekranı canlı tutuyor.
+                Hızlı sallanan bir marka, okunmakta olan formdan dikkat
+                çalardı. */}
+            <div className="flex items-center gap-2.5">
+              <PaperBoatLogo
+                size={70}
+                sailing
+                speed={0.5}
+                amplitude={0.7}
+                style={{ color: navyColor }}
+              />
+              <img
+                src="/vira_wordmark.svg"
+                alt="Vira"
+                className="h-8 w-auto dark:[filter:brightness(0)_invert(1)]"
+                draggable={false}
+              />
+            </div>
 
             {/* Şifre yenileme aynı kartın İÇİNDE açılıyor: ayrı bir sayfaya
                 gitmek arka plandaki eseri, kart çerçevesini ve logoyu yeniden
