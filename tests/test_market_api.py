@@ -31,12 +31,14 @@ def anonim():
     return TestClient(app)
 
 
-def _fiyatli_varlik(db_session, symbol: str, kapanislar: list[tuple[date, int]]) -> Asset:
+def _fiyatli_varlik(
+    db_session, symbol: str, kapanislar: list[tuple[date, float]], currency: str = "TRY"
+) -> Asset:
     asset = Asset(
         symbol=symbol,
         name=f"{symbol} Testi",
         asset_class=AssetClass.STOCK,
-        currency="TRY",
+        currency=currency,
     )
     db_session.add(asset)
     db_session.flush()
@@ -183,3 +185,86 @@ def test_ak_5_5_taninmayan_gosterge_ekrani_dusurmez(db_session, client_for):
     body = response.json()
     assert body["indicators"] == []
     assert body["missing_symbols"], "eksik semboller sessizce yutulmamalı"
+
+
+# ---------------------------------------------------------------------------
+# Şerit: türetilmiş gösterge ve birim
+# ---------------------------------------------------------------------------
+
+CUMA = date(2026, 8, 7)
+PAZARTESI = date(2026, 8, 10)
+
+
+def _kur_evreni(db_session) -> None:
+    """EUR/TRY %10, USD/TRY %5 artmış iki günlük seri.
+
+    Tarihler SABİT (bkz. yukarıdaki hafta sonu dersi): göreli gün kullanmak
+    testi koştuğu güne bağımlı yapıyor.
+    """
+    _fiyatli_varlik(db_session, "EURTRY", [(CUMA, 40), (PAZARTESI, 44)])
+    _fiyatli_varlik(db_session, "USDTRY", [(CUMA, 40), (PAZARTESI, 42)])
+
+
+def test_eur_usd_paritesi_iki_kurdan_TURETILIR(db_session, client_for):
+    """Parite DB'de varlık değil; EUR/TRY ÷ USD/TRY olarak hesaplanır.
+
+    44 / 42 = 1,0476. Ayrıca birimsiz döner: "₺1,05" ya da "$1,05" paritenin
+    ne olduğu hakkında yanlış bir şey söylerdi.
+    """
+    _kur_evreni(db_session)
+    user = User(email="piyasa-parite@example.com", full_name="Parite")
+    db_session.add(user)
+    db_session.commit()
+
+    body = client_for(user).get("/api/market/indicators").json()
+    gostergeler = {g["symbol"]: g for g in body["indicators"]}
+
+    assert "EURUSD" in gostergeler
+    parite = gostergeler["EURUSD"]
+    assert parite["price"] == pytest.approx(1.0476, abs=1e-4)
+    assert parite["currency"] is None
+    assert parite["source"] == "derived"
+
+
+def test_parite_degisimi_iki_kurun_ORANINDAN_hesaplanir(db_session, client_for):
+    """(1 + %10) / (1 + %5) − 1 = %4,76. Bu bir yaklaşım değil, tam eşitlik."""
+    _kur_evreni(db_session)
+    user = User(email="piyasa-parite-degisim@example.com", full_name="Parite Degisim")
+    db_session.add(user)
+    db_session.commit()
+
+    body = client_for(user).get("/api/market/indicators").json()
+    parite = next(g for g in body["indicators"] if g["symbol"] == "EURUSD")
+
+    assert parite["change_percent"] == pytest.approx(4.7619, abs=1e-3)
+
+
+def test_kurlardan_biri_eksikse_parite_HIC_donmez(db_session, client_for):
+    """Uydurulmaz: tek kurdan parite çıkmaz (AK 5.5)."""
+    _fiyatli_varlik(db_session, "EURTRY", [(CUMA, 40), (PAZARTESI, 44)])
+    user = User(email="piyasa-parite-eksik@example.com", full_name="Eksik")
+    db_session.add(user)
+    db_session.commit()
+
+    body = client_for(user).get("/api/market/indicators").json()
+
+    assert all(g["symbol"] != "EURUSD" for g in body["indicators"])
+
+
+def test_endeks_birimsiz_yabanci_emtia_kendi_biriminde_doner(db_session, client_for):
+    """Endeks puanına para simgesi konmaz; Brent doları TL gibi gösterilmez."""
+    _fiyatli_varlik(db_session, "XU100", [(CUMA, 14400), (PAZARTESI, 14514)])
+    _fiyatli_varlik(db_session, "SPX", [(CUMA, 7700), (PAZARTESI, 7730)], currency="USD")
+    _fiyatli_varlik(db_session, "BRENT", [(CUMA, 87), (PAZARTESI, 88)], currency="USD")
+    _fiyatli_varlik(db_session, "USDTRY", [(CUMA, 40), (PAZARTESI, 42)])
+    user = User(email="piyasa-birim@example.com", full_name="Birim")
+    db_session.add(user)
+    db_session.commit()
+
+    body = client_for(user).get("/api/market/indicators").json()
+    gostergeler = {g["symbol"]: g for g in body["indicators"]}
+
+    assert gostergeler["XU100"]["currency"] is None
+    assert gostergeler["SPX"]["currency"] is None
+    assert gostergeler["BRENT"]["currency"] == "USD"
+    assert gostergeler["USDTRY"]["currency"] == "TRY"

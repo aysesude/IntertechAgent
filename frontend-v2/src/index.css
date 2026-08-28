@@ -179,3 +179,17 @@
   }
 }
 
+
+/* Piyasa şeridi — hareketi azalt.
+   Kayan şerit dikkat çekmek için var, ama hareket bazı kullanıcılarda baş
+   dönmesi yapıyor ve işletim sistemi bunu söyleyebiliyor. Ayar açıksa şerit
+   durur ve elle kaydırılan bir listeye döner: içerik kaybolmaz, yalnızca
+   kendiliğinden hareket etmez. */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+  .ticker-viewport {
+    overflow-x: auto;
+  }
+}

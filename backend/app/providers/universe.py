@@ -272,8 +272,44 @@ ASSET_UNIVERSE: list[AssetSpec] = [
         name="BIST 100",
         asset_class=AssetClass.STOCK,
         base_price=Decimal("11313.90"),
+        sub_type=AssetSubType.INDEX,
         data_source=PriceSource.YFINANCE,
         provider_symbol="XU100.IS",
+        tradable=False,
+    ),
+    # --- Gösterge şeridi: yabancı endeks ve emtia (tutulamaz) ---
+    #
+    # Piyasa ekranının üst şeridi için eklendi (28 Ağustos 2026). İkisi de
+    # PORTFÖYE GİREMEZ: `tradable=False`. Evrende 21 ABD hissesi varken ABD
+    # piyasasının nabzını gösteren bir şey yoktu; Brent ise enerji ithal eden
+    # bir ülkede kur ve enflasyon anlatısının parçası.
+    #
+    # `asset_class=STOCK`: şema bir sınıf istiyor ve emtia/endeks için kutu
+    # yok. Yeni bir `AssetClass` değeri enum migration'ı, risk tabloları ve
+    # arayüz etiketleri demekti — tutulamayan bir gösterge için ağır. Ne
+    # oldukları `sub_type`ta yazılı (XU100 da aynı yolu izliyor).
+    #
+    # base_price ölçüldü (28 Ağustos 2026 kapanışları, yfinance).
+    AssetSpec(
+        symbol="BRENT",
+        name="Brent Petrol",
+        asset_class=AssetClass.STOCK,
+        base_price=Decimal("88.04"),
+        currency="USD",
+        sub_type=AssetSubType.COMMODITY,
+        data_source=PriceSource.YFINANCE,
+        provider_symbol="BZ=F",
+        tradable=False,
+    ),
+    AssetSpec(
+        symbol="SPX",
+        name="S&P 500",
+        asset_class=AssetClass.STOCK,
+        base_price=Decimal("7730.99"),
+        currency="USD",
+        sub_type=AssetSubType.INDEX,
+        data_source=PriceSource.YFINANCE,
+        provider_symbol="^GSPC",
         tradable=False,
     ),
     # --- Hisse: BIST 100 endeksinin TAMAMI (yfinance) ---

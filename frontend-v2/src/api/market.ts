@@ -20,6 +20,9 @@ export interface ApiMarketIndicator {
   price_date: string;
   source: string;
   stale: boolean;
+  /** Fiyatın para birimi. `null` = BİRİMSİZ (endeks puanı, parite) —
+   *  arayüz simge koymaz. */
+  currency: string | null;
 }
 
 export interface ApiMarketIndicatorList {

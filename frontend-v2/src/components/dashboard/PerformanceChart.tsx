@@ -207,6 +207,14 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
             (bkz. buildChartOptions), remount'a gerek yok.
             Tema değişimi hâlâ remount ediyor: renkler options üzerinden
             geliyor ve yeniden çizim gerektiriyor. */}
+        {range === null && !loading ? (
+          /* Seri yoksa BOŞ bir grafik çizmek yerine sebebi yazıyoruz: boş
+             eksenler "portföyünüz sıfır" gibi okunuyordu. Yeni açılan bir
+             hesapta ilk işlem gününden önce seri gerçekten yoktur. */
+          <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-ink-faint">
+            Bu dönem için gösterilecek seri yok.
+          </div>
+        ) : (
         <Chart
           key={resolvedTheme}
           chartType="AreaChart"
@@ -228,6 +236,7 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
             },
           ]}
         />
+        )}
       </div>
 
       <div className="flex gap-5 border-t border-line2 px-0.5 pb-3.5 pt-3.5 dark:border-transparent">

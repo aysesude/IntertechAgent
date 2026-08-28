@@ -447,12 +447,20 @@ export const mockPortfolioPage: PortfolioPageData = {
 // ekranda "tasarım verisi" uyarısı çıkar (bkz. MarketPage).
 const MOCK_FIYAT_TARIHI = "22.08.2026";
 
+// Şeritteki sıra ve gösterge kümesi CANLI uçla aynı tutuluyor
+// (`market_service.SERIT_SIRASI`): tasarım verisi gerçek ekrandan başka
+// türlü görünürse, sunucusuz çalışan demo yanıltıcı olur. 2Y tahvil buradan
+// çıkarıldı — ücretsiz ve güvenilir bir kaynağı yok, dolayısıyla canlı
+// şeritte hiç yer almıyor.
 export const mockMarketIndicators: MarketIndicator[] = [
-  { id: "bist100", label: "BIST 100", value: "11.284", changePct: 1.24, priceDate: MOCK_FIYAT_TARIHI, stale: false },
-  { id: "usdtry", label: "USD/TRY", value: "41,86", changePct: -0.32, priceDate: MOCK_FIYAT_TARIHI, stale: false },
-  { id: "gold", label: "Gram Altın", value: "₺4.312", changePct: 0.87, priceDate: MOCK_FIYAT_TARIHI, stale: false },
-  { id: "bond2y", label: "2Y Tahvil", value: "%38,4", changePct: 0, priceDate: MOCK_FIYAT_TARIHI, stale: false },
-  { id: "brent", label: "Brent", value: "$71,20", changePct: -1.05, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "XU100", label: "BIST 100", value: "11.284,00", changePct: 1.24, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "USDTRY", label: "USD/TRY", value: "₺41,86", changePct: -0.32, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "EURTRY", label: "EUR/TRY", value: "₺48,74", changePct: -0.18, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "EURUSD", label: "EUR/USD", value: "1,1644", changePct: 0.14, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "XAUTRY", label: "Gram Altın", value: "₺4.312,00", changePct: 0.87, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "XAGTRY", label: "Gram Gümüş", value: "₺48,90", changePct: 1.32, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "BRENT", label: "Brent", value: "$71,20", changePct: -1.05, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "SPX", label: "S&P 500", value: "7.730,99", changePct: 0.41, priceDate: MOCK_FIYAT_TARIHI, stale: false },
 ];
 
 export const mockNews: NewsItem[] = [
