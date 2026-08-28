@@ -110,9 +110,50 @@ def test_ambiguous_message_mentions_risk_as_an_example():
     ],
 )
 async def test_detect_intent_parses_labels(monkeypatch, llm_reply, expected):
+    # "portföy" KÖKÜ BİLEREK YOK: bu test saf etiket-ayrıştırmasını sınıyor,
+    # 2026-08-27'de eklenen deterministik portföy güvencesi (aşağıdaki
+    # `test_portfoy_ifadesi_*` testleri) burada karışmasın diye "ASELSAN
+    # hakkında bilgi ver" kullanılıyor.
     monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM(llm_reply))
-    result = await detect_intent({"message": "portföyüm ne durumda", "history": []})
+    result = await detect_intent({"message": "ASELSAN hakkında bilgi ver", "history": []})
     assert result["intent"] == expected
+
+
+async def test_portfoy_ifadesi_llm_kacirsa_bile_etiketlenir(monkeypatch):
+    """2026-08-27, analist test turu, ölçüldü: "Portföyümdeki X şirketinin
+    son çeyrek gelir tablosunda dikkat çeken bir şey var mı" sorusu LLM
+    tarafından yalnızca MARKET etiketlenmiş, PORTFOLIO kaçmıştı —
+    portfolio_agent hiç çalışmadan market_agent, kullanıcının GERÇEK
+    holdings'ini hiç bilmeden portföyde OLMAYAN şirketler hakkında cevap
+    üretti (bkz. agents/market_query.py::portfoy_referansi_var_mi)."""
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("MARKET"))
+    result = await detect_intent(
+        {"message": "Portföyümdeki şirketlerin son çeyreği nasıldı", "history": []}
+    )
+    assert result["intent"] == "market+portfolio"
+
+
+async def test_portfoy_ifadesi_zaten_etiketliyse_tekrarlanmaz(monkeypatch):
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("PORTFOLIO, MARKET"))
+    result = await detect_intent(
+        {"message": "Portföyümdeki şirketlerin son çeyreği nasıldı", "history": []}
+    )
+    assert result["intent"] == "portfolio+market"
+
+
+async def test_portfoy_ifadesi_llm_sacmalarsa_bile_ambiguousa_dusmez(monkeypatch):
+    """Model hiç anlamlı etiket üretmezse eskiden AMBIGUOUS'a düşüyordu;
+    sorgu "portföyüm" gibi açık bir ifade taşıyorsa artık portfolio_agent'a
+    yönlenir — kullanıcı en azından gerçek holdings'ini görür."""
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("bilmiyorum"))
+    result = await detect_intent({"message": "portföyümde neler var", "history": []})
+    assert result["intent"] == "portfolio"
+
+
+async def test_portfoy_kelimesi_gecmeyen_sorguda_eski_davranis_korunur(monkeypatch):
+    monkeypatch.setattr("agents.orchestrator.get_llm_client", lambda: _FakeLLM("MARKET"))
+    result = await detect_intent({"message": "ASELSAN'ın son çeyreği nasıldı", "history": []})
+    assert result["intent"] == "market"
 
 
 async def test_detect_intent_falls_back_when_llm_fails(monkeypatch):
