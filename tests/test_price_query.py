@@ -174,3 +174,34 @@ def test_kac_dolar_kaliba_dahil_ama_kur_sorgusu_uretmez():
     assert fiyat_niyeti("AAPL kaç dolar?") == {"symbols": ["AAPL"], "history": False}
     # Gerçek kur sorusu bozulmamalı.
     assert fiyat_niyeti("Dolar kaç TL?") == {"symbols": ["USDTRY"], "history": False}
+
+
+class TestHedefFiyatNiyeti:
+    """Hedef fiyat (analist tavsiyesi) sorguları — target_prices tablosuna
+    gider, RAG'a ya da güncel fiyat yoluna DEĞİL (bkz.
+    app/services/target_price_ingest.py docstring'i: neden RAG değil)."""
+
+    def test_sirket_ile_birlikte_ticker_dondurur(self):
+        from agents.price_query import hedef_fiyat_niyeti
+
+        assert hedef_fiyat_niyeti("GARAN'ın hedef fiyatı ne?") == "GARAN"
+        assert hedef_fiyat_niyeti("ASELS için analist tavsiyesi ne?") == "ASELS"
+
+    def test_kalip_yoksa_none_doner(self):
+        from agents.price_query import hedef_fiyat_niyeti
+
+        assert hedef_fiyat_niyeti("GARAN'ın fiyatı ne kadar?") is None
+
+    def test_sirket_tespit_edilemezse_none_doner(self):
+        """Kalıp geçse bile şirket tespit edilemezse (genel bir kavram
+        sorusu) None döner — uydurma şirket varsayılmaz."""
+        from agents.price_query import hedef_fiyat_niyeti
+
+        assert hedef_fiyat_niyeti("Hedef fiyatlar nasıl belirlenir?") is None
+
+    def test_fiyat_niyeti_hedef_fiyat_sorusunu_kapsamiyor(self):
+        """fiyat_niyeti() bu sorguları kendi kapsamı dışında bırakmalı ki
+        market_agent hedef_fiyat_niyeti()'ni önce kontrol edebilsin —
+        ikisi çakışırsa güncel fiyat yolu (yanlışlıkla) kazanırdı."""
+        assert fiyat_niyeti("GARAN'ın hedef fiyatı ne?") is None
+        assert fiyat_niyeti("ASELS için analist tavsiyesi ne?") is None
