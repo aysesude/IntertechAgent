@@ -43,6 +43,13 @@ class MarketIndicator(BaseModel):
     price_date: date
     source: str
     stale: bool
+    # Fiyatın para birimi — arayüz simgeyi buradan seçer (TRY → ₺, USD → $).
+    #
+    # `None` = BİRİMSİZ: endeks puanı (BIST 100 "11.284", S&P 500 "7.730")
+    # ve parite (EUR/USD "1,0842") para değeri değildir; başına simge koymak
+    # yanlış bir büyüklük iddia eder. Varlığın DB'deki `currency` alanı bu
+    # ayrımı yapmıyor (XU100 satırı TRY görünür), o yüzden ayrı bir alan.
+    currency: str | None = None
 
 
 class MarketIndicatorList(BaseModel):

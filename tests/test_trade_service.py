@@ -261,6 +261,21 @@ class TestListe:
         assert thyao.price_date == datetime.now(timezone.utc).date()
         assert thyao.price_stale is False
 
+    def test_ENDEKS_ve_EMTIA_listede_YER_ALMAZ(self, db_session, kullanici):
+        """Fiyatlanan her varlık satın alınabilir değildir.
+
+        XU100/SPX endeks, BRENT emtia: kıyaslama ve piyasa şeridi onların
+        fiyatına dayanıyor ama portföye giremezler. `tradable` bayrağı DB'ye
+        yazılmadan önce BIST 100 endeksi Al/Sat listesinde sıradan bir hisse
+        gibi görünüyordu (sınıfı hisse, seviye 5).
+        """
+        semboller = {a.symbol for a in get_tradable_assets(db_session, kullanici.id).assets}
+
+        assert "XU100" not in semboller
+        assert "BRENT" not in semboller
+        assert "SPX" not in semboller
+        assert "THYAO" in semboller, "tutulabilir varlıklar süzgeçten etkilenmemeli"
+
     def test_TRY_disi_varligin_TL_karsiligi_doner(self, db_session, kullanici):
         """Arayüz ₺ ile dolar rakamı göstermesin diye çevrim SUNUCUDA.
 
