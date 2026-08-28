@@ -90,6 +90,8 @@ const TK5: SurveyRule = {
   durdurucu: false,
   mesaj: "Acil durum birikiminiz bulunmuyor.",
 };
+/** Sunucuda ölçülerek üretilen gerekçe — LLM metninden bağımsız gösterilir. */
+const GEREKCE = "Risk tercihi olarak şunu seçtiniz: “Riskten olabildiğince kaçınırım”";
 
 function sonuc(ek: Partial<SurveyResult>): SurveyResult {
   return {
@@ -107,6 +109,7 @@ function sonuc(ek: Partial<SurveyResult>): SurveyResult {
     sinir_bolgesinde: false,
     kurallar: [],
     sonuc_uretildi: false,
+    gerekceler: [GEREKCE],
     yorum: "Cevaplarınız arasında birbiriyle çelişen noktalar var.",
     ...ek,
   };
@@ -140,6 +143,27 @@ it("celiskide hangi cevabin duzeltilecegi ekranda yazar", async () => {
   expect(await screen.findByText("Profil belirlenemedi")).toBeTruthy();
   // Kritik olan bu: genel "çelişki var" metni değil, KURALIN KENDİ mesajı.
   expect(screen.getByText(TK1.mesaj)).toBeTruthy();
+  // Ve kullanıcının kendi cevabına atıf — sunucuda ölçülmüş gerekçe.
+  expect(screen.getByText(GEREKCE)).toBeTruthy();
+});
+
+it("profil uretildiginde de gerekce gosterilir", async () => {
+  // Gerekçe yalnızca reddedilene değil herkese: "profilim neden bu çıktı"
+  // sorusu sonuç üretildiğinde de soruluyor.
+  const onSubmit = vi.fn().mockResolvedValue(
+    sonuc({
+      sonuc_uretildi: true,
+      profil_seviyesi: 2,
+      profil_adi: "Korumacı",
+      gerekceler: ["Profilinizi mali kapasiteniz belirledi"],
+      yorum: "Ölçülen yatırımcı profiliniz: Korumacı.",
+    }),
+  );
+
+  await anketiBitir(onSubmit);
+
+  expect(await screen.findByText("Korumacı")).toBeTruthy();
+  expect(screen.getByText("Profilinizi mali kapasiteniz belirledi")).toBeTruthy();
 });
 
 it("celiskide kullanici cevaplarina geri donebilir", async () => {
