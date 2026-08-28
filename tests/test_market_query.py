@@ -268,3 +268,44 @@ class TestBirdenFazlaSirket:
         )
         assert sirket_sayisi("ASELSAN son çeyrek raporu") == 1
         assert sirket_sayisi("bugün piyasada ne oldu") == 0
+
+
+class TestPortfoyReferansi:
+    """`portfoy_referansi_var_mi`: orchestrator.detect_intent'teki LLM niyet
+    sınıflandırıcısı için deterministik güvence katmanı (2026-08-27, bkz.
+    fonksiyonun docstring'i). Kullanıcının "portföyümdeki X şirketi..." gibi
+    açık bir ifadesi kaçırılırsa portfolio_agent hiç çalışmaz ve
+    market_agent, kullanıcının gerçek holdings'ini hiç bilmeden portföyde
+    olmayan şirketler hakkında cevap üretebilir — bu ölçülmüş, gerçek bir
+    hatanın kaynağıydı."""
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "Portföyümdeki şirketlerle ilgili olumsuz haber var mı",
+            "portföyümde neler var",
+            "Portföyümü bir gözden geçirir misin",
+            "portföyümdeki hisseler nasıl gidiyor",
+        ],
+    )
+    def test_portfoy_ifadesi_tespit_edilir(self, query):
+        from agents.market_query import portfoy_referansi_var_mi
+
+        assert portfoy_referansi_var_mi(query) is True
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "ASELSAN'ın son çeyreği nasıldı",
+            "dolar kuru ne kadar",
+            "en riskli varlıklarım hangileri",
+        ],
+    )
+    def test_portfoy_gecmeyen_sorguda_false_doner(self, query):
+        """ "en riskli varlıklarım" gibi dolaylı ifadeler bilerek YAKALANMAZ —
+        bu fonksiyon yalnızca "portföy" kökünün kendisini arar, risk_agent'ın
+        niyet sınıflandırmasına karışmaz (RISK etiketi zaten LLM tarafından
+        ayrı ele alınıyor)."""
+        from agents.market_query import portfoy_referansi_var_mi
+
+        assert portfoy_referansi_var_mi(query) is False

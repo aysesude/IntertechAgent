@@ -142,6 +142,30 @@ def _gundem_blogu(headlines: list[dict[str, Any]], kaynak_url: str | None) -> st
     return blok
 
 
+def _yanlis_sirket_sonuclarini_ele(
+    results: list[dict[str, Any]], istenen_sirket: str
+) -> list[dict[str, Any]]:
+    """`execute()`'daki filtresiz yedek aramanın (bkz. orada) sonuçlarından,
+    sorguda AÇIKÇA tanınan `istenen_sirket`ten FARKLI bir şirkete ait
+    parçaları eler. `sirket` alanı boş (genel/makro) parçalar dokunulmadan
+    kalır.
+
+    NEDEN GEREKLİ (2026-08-27, analist test turu, ölçüldü): sorguda geçen
+    bir şirket için filtreli arama boş dönerse (ör. RAG'de o şirkete ait
+    yeterli doküman yok), `execute()` bir kez de FİLTRESİZ dener — dar bir
+    filtre yüzünden geçerli bir cevabın kaybolmaması için bilinçli eklenmiş
+    bir mekanizma. Ama filtre düşünce arama TÜM korpusa açılıyor ve
+    `rag/retriever.py`'deki mesafe+kelime-örtüşme eşiği ŞİRKET KİMLİĞİNE
+    değil LEKSİK örtüşmeye bakıyor: "İş Bankası'nın kurucusu kimdir" sorusu
+    "kurucu" kelimesini paylaştığı için ASELSAN'ın kuruluş belgesini
+    "ilgili" sayıp yanlış şirketi cevap diye sunmuştu. Sorgu belirli bir
+    şirketi AÇIKÇA sorduysa, filtresiz sonuçtaki BAŞKA bir şirkete ait
+    parçalar ASLA kullanılmaz: o şirket için kayıt yoktur denmesi, yanlış
+    şirketin bilgisini güvenle sunmaktan iyidir (AK 5.5, "uydurmama").
+    """
+    return [r for r in results if (r.get("metadata") or {}).get("sirket") in (None, istenen_sirket)]
+
+
 def _render_guncel_fiyat(data: dict[str, Any]) -> str:
     """Güncel fiyatları etiketli satırlara döker.
 
@@ -267,10 +291,27 @@ class MarketAgent(BaseAgent):
         # şirket adı belgelerde farklı kodla etiketlenmiştir). Filtreli arama
         # boş dönerse bir kez de filtresiz denenir — filtre bir hızlandırma ve
         # doğruluk aracıdır, cevabı büsbütün engellememeli.
+        istenen_sirket = filtreler.get("sirket")
         if not tool_result.get("success") and filtreler:
             tool_result = await self.call_mcp_tool(
                 "search_market_news", {"query": request.query, **ek_args}
             )
+
+            # GÜVENLİK AĞI: filtresiz yedek deneme başka bir şirketin
+            # dokümanını "ilgili" diye sunmasın (bkz. _yanlis_sirket_sonuclarini_ele).
+            if istenen_sirket and tool_result.get("success"):
+                ham_sonuclar = tool_result["data"].get("results") or []
+                elenmis = _yanlis_sirket_sonuclarini_ele(ham_sonuclar, istenen_sirket)
+                if not elenmis:
+                    tool_result = {
+                        "success": False,
+                        "error": {"message": f"{istenen_sirket} için kayıt bulunamadı."},
+                    }
+                elif len(elenmis) != len(ham_sonuclar):
+                    tool_result = {
+                        **tool_result,
+                        "data": {**tool_result["data"], "results": elenmis},
+                    }
 
         if not tool_result.get("success"):
             error = tool_result.get("error", {})
