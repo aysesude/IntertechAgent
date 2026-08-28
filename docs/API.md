@@ -277,7 +277,11 @@ Değer serisi + kümülatif yatırılan para. `window`: `1m` | `3m` | `6m` | `12
   sıfırlanmaz.
 - Seri **son fiyat gününde** biter, bugünde değil. Fiyat hattı geride kalmışsa
   bugüne uzatmak, son bilinen fiyatı tekrar çizip "değer değişmedi" yanılsaması
-  üretirdi.
+  üretirdi. Tek istisna: portföyün **doğum günü** (`inception`) fiyat hattının
+  sonundan sonraysa seri oraya kadar uzar. Günlük toplama işi akşam koştuğu
+  için bugün açılan bir hesapta fiyat hattı dünde durur; uzatılmasaydı pencere
+  bugünde başlayıp dünde biter ve uç `409` dönerdi — yeni kullanıcı ilk
+  alımından sonra Dashboard'u hiç göremiyordu (28 Ağustos 2026'da düzeltildi).
 - Hafta sonları seride yer almaz. Akış birikimi tüm günler üzerinden yapıldığı
   için cumartesi yatırılan para kaybolmaz.
 - `granularity` AUTO çözülür: `1m/3m/6m` → `daily`, `12m` → `weekly`. Kova
