@@ -20,7 +20,7 @@ yeni bir varlığın yanlışlıkla listeden düşmesindense yanlışlıkla list
 kalmasını seçiyor — ikincisi görünür, ilki sessiz.
 
 Revision ID: e4c17a8b3d90
-Revises: ddaac4267bba
+Revises: e8e6807ad5c4
 Create Date: 2026-08-28
 """
 
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e4c17a8b3d90"
-down_revision: str | None = "ddaac4267bba"
+down_revision: str | None = "e8e6807ad5c4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
