@@ -74,7 +74,7 @@ export function ChatPage() {
         <div className="flex shrink-0 items-center gap-[11px] border-b border-line2 px-[22px] py-4 dark:border-transparent">
           <AssistantAvatar />
           <div className="flex-1">
-            <div className="text-sm font-semibold">AI Asistan</div>
+            <div className="text-sm font-semibold">Vira Chat</div>
             <div className="text-xs text-ink-faint">Portföy verilerine bağlı · çevrimiçi</div>
           </div>
           <span className="h-2 w-2 animate-pulseDot rounded-full bg-brand" />

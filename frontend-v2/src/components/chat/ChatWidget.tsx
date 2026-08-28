@@ -33,7 +33,7 @@ export function ChatWidget() {
   return (
     <>
       {open && (
-        <div className="animate-slideUpPanel fixed inset-x-4 top-4 bottom-4 z-[60] flex flex-col overflow-hidden rounded-[14px] border border-line bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:border-transparent dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-[104px] sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
+        <div className="animate-slideUpPanel fixed inset-x-4 top-4 bottom-4 z-[60] flex flex-col overflow-hidden rounded-[14px] border border-transparent bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-16 sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
           <div className="flex shrink-0 items-center gap-[11px] bg-[#234FA2] px-[18px] py-4 dark:bg-[#7A2B39]">
             <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-white/18 text-white">
               <BotIcon size={16} />
