@@ -11,6 +11,7 @@ from app.models.base import Base, CreatedAtMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.holding import Holding
     from app.models.price_history import PriceHistory
+    from app.models.target_price import TargetPrice
     from app.models.transaction import Transaction
 
 
@@ -84,3 +85,4 @@ class Asset(UUIDMixin, CreatedAtMixin, Base):
     price_history: Mapped[list["PriceHistory"]] = relationship(back_populates="asset")
     holdings: Mapped[list["Holding"]] = relationship(back_populates="asset")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="asset")
+    target_prices: Mapped[list["TargetPrice"]] = relationship(back_populates="asset")

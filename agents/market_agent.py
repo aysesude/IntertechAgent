@@ -46,7 +46,7 @@ from agents.market_query import (
     guncellik_istegi_var_mi,
     sirket_sayisi,
 )
-from agents.price_query import fiyat_niyeti
+from agents.price_query import fiyat_niyeti, hedef_fiyat_niyeti
 from app.core.llm_client import get_llm_client
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_text(
@@ -172,6 +172,47 @@ def _render_guncel_fiyat(data: dict[str, Any]) -> str:
     return "Güncel fiyatlar\n" + "\n".join(satirlar)
 
 
+_HEDEF_FIYAT_YON_METNI = {
+    "yukseltme": "yükseltildi",
+    "dusurme": "düşürüldü",
+    "koruma": "korundu",
+}
+
+
+def _render_hedef_fiyat(data: dict[str, Any]) -> str:
+    """Hedef fiyat/analist tavsiyesi kayıtlarını LLM'den geçirmeden ham
+    satırlar olarak döker — `_kap_blogu` ile aynı gerekçe: bu GEÇMİŞTE
+    raporlanmış bir rakam, LLM'in yeniden yazması uydurma riski taşır
+    (bkz. app/services/target_price_ingest.py docstring'i)."""
+    satirlar: list[str] = []
+    for k in data.get("records") or []:
+        para = k.get("currency") or "TRY"
+        satir = (
+            f"{k.get('symbol')}: {k.get('institution')} — {k.get('recommendation')}, "
+            f"hedef fiyat {_tr_amount(k.get('target_price'))} {para} "
+            f"({_tarih_bicimle(k.get('report_date'))} tarihli rapor"
+        )
+        if k.get("price_at_report") is not None:
+            satir += f", rapor anındaki fiyat {_tr_amount(k['price_at_report'])} {para}"
+        satir += ")"
+        yon = k.get("revision_direction")
+        onceki = k.get("previous_target_price")
+        if yon and onceki is not None:
+            satir += (
+                f" — önceki hedef {_tr_amount(onceki)} {para}'den "
+                f"{_HEDEF_FIYAT_YON_METNI.get(yon, yon)}"
+            )
+        satirlar.append("- " + satir)
+
+    eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
+    if eksik:
+        satirlar.append("Hedef fiyatı bulunamayan: " + ", ".join(eksik))
+
+    if not satirlar:
+        return "Hedef fiyat: istenen varlık için kayıt yok."
+    return "Hedef fiyat / analist tavsiyesi\n" + "\n".join(satirlar)
+
+
 def _render_fiyat_gecmisi(data: dict[str, Any]) -> str:
     """Seriyi uç noktalara indirger: başlangıç, bitiş, değişim.
 
@@ -222,6 +263,17 @@ class MarketAgent(BaseAgent):
         fiyat = fiyat_niyeti(request.query)
         if fiyat is not None:
             return await self._fiyat_yaniti(fiyat)
+
+        # HEDEF FİYAT SORUSU RAG'E GİTMEZ, GÜNCEL FİYAT YOLUNA DA DÜŞMEZ.
+        #
+        # fiyat_niyeti() bu sorguları zaten kendi kapsamı dışında bırakıyor
+        # (bkz. price_query.py _ICERIK_KELIMELERI_RE'deki "hedef fiyat"
+        # bloğu) — burada AYRICA kontrol edilir çünkü bu, RAG dokümanlarında
+        # DEĞİL, target_prices tablosunda yaşayan üçüncü bir veri sınıfı
+        # (bkz. app/services/target_price_ingest.py docstring'i: neden RAG
+        # değil).
+        if (hedef_sirket := hedef_fiyat_niyeti(request.query)) is not None:
+            return await self._hedef_fiyat_yaniti(hedef_sirket)
 
         filtreler = filtre_cikar(request.query)
 
@@ -326,6 +378,23 @@ class MarketAgent(BaseAgent):
             agent_name=self.agent_name,
             success=True,
             summary_text=metin,
+            data=data,
+        )
+
+    async def _hedef_fiyat_yaniti(self, sirket: str) -> AgentResponse:
+        """Hedef fiyat/analist tavsiyesi yanıtı — LLM DEVREDE DEĞİL (bkz.
+        _fiyat_yaniti ile aynı gerekçe: ara bir LLM çağrısı rakamı yeniden
+        yazma riski taşır)."""
+        tool_result = await self.call_mcp_tool("get_target_prices", {"symbols": [sirket]})
+        if not tool_result.get("success"):
+            error = tool_result.get("error", {})
+            return self.error_response(error.get("message", "Hedef fiyat verisi alınamadı"))
+
+        data = tool_result["data"]
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=_render_hedef_fiyat(data),
             data=data,
         )
 

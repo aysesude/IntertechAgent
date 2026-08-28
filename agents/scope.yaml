@@ -42,6 +42,12 @@ varlik_siniflari:
     - id: kiymetli_maden_diger
       etiketler: [gümüş, gumus, gram gümüş, XAG, platin, gram platin, XPT]
 
+    # 2026-08-28: target_prices tablosu eklendi (bkz. app/services/
+    # target_price_ingest.py) — analist hedef fiyatı/tavsiyesi artık
+    # gerçekten desteklenen bir veri, kapsam dışı sayılmamalı.
+    - id: hedef_fiyat
+      etiketler: [hedef fiyat, hedef kapanış, analist tavsiyesi, analist hedef]
+
     - id: doviz
       etiketler: [dolar, usd, "$", euro, eur, "€", kur, döviz, parite,
                   sterlin, gbp, yen, jpy]
