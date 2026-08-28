@@ -51,7 +51,10 @@ export function AssetClassCards({ assetClasses }: AssetClassCardsProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   return (
-    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    // lg:grid-cols-5: sabit üst sınır 5 varlık sınıfı (bkz. ApiAssetClass /
+    // backend/app/core/config.py:AssetClass) — masaüstünde hepsi TEK SATIRDA
+    // yan yana dursun, 5. kart aşağı kaymasın diye kasıtlı olarak 4 değil 5.
+    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
       {assetClasses.map((ac) => {
         const Icon = ICONS[ac.icon];
         // Koyu temada Dashboard'daki Varlık Dağılımı donut'uyla aynı kaynaktan
