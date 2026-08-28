@@ -205,6 +205,30 @@ export function SurveyWizard({
           {sonuc.yorum}
         </p>
 
+        {/* GEREKÇELER HERKESE gösterilir, yalnızca reddedilene değil:
+            "profilim neden bu çıktı" sorusu profil üretilince de soruluyor.
+            Liste sunucuda ÖLÇÜLEREK üretiliyor; yukarıdaki `yorum` onu
+            cümleye döken LLM metni. İkisi birlikte duruyor ki sağlayıcı
+            düştüğünde kullanıcı yine de gerekçeyi görsün. */}
+        {sonuc.gerekceler.length > 0 && (
+          <div className="mt-4 rounded-xl border border-[#DCE3EC] bg-white/60 px-3.5 py-3 dark:border-transparent dark:bg-white/[0.05]">
+            <p className="text-[11.5px] font-medium uppercase tracking-wide text-[#7A8CA4] dark:text-[#9AACC7]">
+              Bu sonucu belirleyen cevaplarınız
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {sonuc.gerekceler.map((gerekce) => (
+                <li
+                  key={gerekce}
+                  className="flex gap-2 text-[12.5px] leading-snug text-[#5A7292] dark:text-[#B9C4DC]"
+                >
+                  <span aria-hidden="true">•</span>
+                  <span>{gerekce}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Sınır bölgesi uyarısı ATLANMIYOR: bant genişliği ~14 puan, tek bir
             cevap bant değiştirebilir. Söylenmezse aynı kişi testi iki hafta
             arayla çözdüğünde farklı sonuç alır ve ürüne güveni sarsılır. */}
