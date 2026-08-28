@@ -437,7 +437,12 @@ export function LoginScreen({
                 "cevap yazılıyor" demek, burada sadece ekranı canlı tutuyor.
                 Hızlı sallanan bir marka, okunmakta olan formdan dikkat
                 çalardı. */}
-            <div className="flex items-center gap-2.5">
+            {/* ORANLAR ÖZGÜN LOGODAN ÖLÇÜLDÜ, göz kararı seçilmedi:
+                yazı yüksekliği geminin %59'u, aradaki boşluk gemi
+                yüksekliğinin %10'u, yazının merkezi geminin merkezinden
+                3px yukarıda. Gemi 70px genişlikte ≈ 44px yüksekliğinde
+                (özgün logonun `h-11` hâliyle aynı). */}
+            <div className="flex items-center gap-1">
               <PaperBoatLogo
                 size={70}
                 sailing
@@ -448,7 +453,7 @@ export function LoginScreen({
               <img
                 src="/vira_wordmark.svg"
                 alt="Vira"
-                className="h-8 w-auto dark:[filter:brightness(0)_invert(1)]"
+                className="h-[26px] w-auto -translate-y-[3px] dark:[filter:brightness(0)_invert(1)]"
                 draggable={false}
               />
             </div>
