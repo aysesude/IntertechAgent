@@ -31,6 +31,9 @@ def seed_assets(session: Session) -> dict[str, Asset]:
         asset.currency = spec.currency
         asset.sub_type = spec.sub_type.value if spec.sub_type else None
         asset.is_active = True
+        # `tradable` de türev kopya (bkz. models/asset.py): endeks ve emtia
+        # fiyatlanır ama portföye giremez.
+        asset.tradable = spec.tradable
         asset.data_source = spec.data_source
         asset.provider_symbol = spec.provider_symbol
         asset.derived_factor = spec.derived_factor

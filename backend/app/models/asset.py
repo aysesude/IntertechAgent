@@ -11,6 +11,7 @@ from app.models.base import Base, CreatedAtMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.holding import Holding
     from app.models.price_history import PriceHistory
+    from app.models.target_price import TargetPrice
     from app.models.transaction import Transaction
 
 
@@ -43,6 +44,21 @@ class Asset(UUIDMixin, CreatedAtMixin, Base):
     sub_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Varlık silinmez (fiyat geçmişi + işlem FK'sı var); kapatılır.
     is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    # Kullanıcı portföyünde TUTULABİLİR mi.
+    #
+    # `is_active`ten farkı: pasif varlık artık FİYATLANMAZ, tutulamayan varlık
+    # ise fiyatlanır ama satın alınamaz — endeksler (XU100, SPX) ve emtia
+    # (BRENT) böyle. Kıyaslama ve gösterge şeridi onların fiyatına dayanıyor.
+    #
+    # Bayrak `universe.AssetSpec.tradable`ta tanımlı ve şimdiye kadar YALNIZCA
+    # seed'in defter üretiminde okunuyordu; DB'ye hiç yazılmadığı için Al/Sat
+    # listesi BIST 100 endeksini sıradan bir hisse gibi satılığa çıkarıyordu.
+    #
+    # TÜREV KOPYA, `risk_level` gibi: tanım noktası `universe.py`, `seed_assets`
+    # her koşuda buraya yeniden yazar.
+    tradable: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
     # Bu varlığın fiyatını hangi sağlayıcı besler (AK 5.1 SQL ile denetlenebilir).
@@ -84,3 +100,4 @@ class Asset(UUIDMixin, CreatedAtMixin, Base):
     price_history: Mapped[list["PriceHistory"]] = relationship(back_populates="asset")
     holdings: Mapped[list["Holding"]] = relationship(back_populates="asset")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="asset")
+    target_prices: Mapped[list["TargetPrice"]] = relationship(back_populates="asset")

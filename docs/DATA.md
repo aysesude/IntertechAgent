@@ -109,11 +109,11 @@ değişikliği geçmedi ve seed eski ankrajla koştu.
 çekilen değil. Geçmişi zaten tam olan bir sembol `0` yazar ve bu doğrudur;
 işarete bakın: `+` başarılı, `-` atlandı, `!` başarısız, `~` kısmi.
 
-### Varlık evreni (141 varlık)
+### Varlık evreni (143 varlık)
 
 | Sınıf | Adet | Kaynak |
 |---|---|---|
-| Hisse | 124 | yfinance (BIST 100'den 98 hisse + endeks + **21 ABD hissesi**) + TEFAS (3 hisse fonu + 1 serbest fon) |
+| Hisse | 126 | yfinance (BIST 100'den 98 hisse + **3 gösterge** + **21 ABD hissesi**) + TEFAS (3 hisse fonu + 1 serbest fon) |
 | Kıymetli maden | 8 | yfinance (3 gram) + türetilmiş (4 sikke) + TEFAS (altın fonu) |
 | Döviz | 4 | TCMB EVDS / today.xml, yedek yfinance |
 | Borçlanma Araçları | 5 | TEFAS (4 borçlanma fonu + 1 para piyasası fonu) |
@@ -121,6 +121,26 @@ işarete bakın: `+` başarılı, `-` atlandı, `!` başarısız, `~` kısmi.
 
 **Evrende sentetik varlık YOK.** Tamamı gerçek kaynaklı (AK 5.1).
 `test_no_asset_is_synthetic` bunu kilitliyor.
+
+#### Fiyatlanan ≠ satın alınabilen (`tradable`)
+
+Üç varlık fiyatlanıp saklanır ama **portföye giremez**: `XU100` (BIST 100),
+`SPX` (S&P 500) ve `BRENT`. İlki kıyaslamanın, üçü birden Piyasa ekranının
+gösterge şeridinin dayanağı. Bayrak `AssetSpec.tradable`ta tanımlı, `assets.
+tradable` sütununa **türev kopya** olarak yazılır (`risk_level` ile aynı
+kalıp: tanım noktası `universe.py`, `seed_assets` her koşuda üzerine yazar).
+
+`is_active` ile karıştırmayın: pasif varlık artık **fiyatlanmaz** (evrenden
+çıkmıştır), tutulamayan varlık fiyatlanır ama alınamaz.
+
+Bayrak DB'ye 28 Ağustos 2026'da taşındı (`e4c17a8b3d90`). Öncesinde yalnızca
+`seed_ledger` okuyordu ve Al/Sat listesi `is_active` dışında süzgeç
+uygulamadığı için **BIST 100 endeksi satın alınabilir görünüyordu** — sınıfı
+hisse, uygunluk seviyesi 5. Endeks ve emtianın `asset_class`'ı `STOCK`'tur;
+şema bir sınıf istiyor, emtia/endeks için kutu yok ve tutulamayan bir
+gösterge için yeni bir `AssetClass` değeri (enum migration + risk tabloları +
+arayüz etiketleri) ağır kaçardı. Ne oldukları `sub_type`ta yazılı
+(`index`, `commodity`).
 
 ### Nakit bir varlık DEĞİL
 `AssetClass.CASH` altında hiçbir varlık yoktur ve olmamalıdır
@@ -331,6 +351,11 @@ oynaklığı belirgin biçimde düşüktür (ölçülen %1,42 yıllık).
 varlık evrene girdi: `PPF` kodu "Para Piyasası Fonu" diye okunmuştu, oysa o
 kod *Azimut Portföy Akçe Serbest Fon*'a ait ve ölçülen oynaklığı %5,3.
 Fon eklerken kodu TEFAS'tan doğrulayın, adından çıkarmayın.
+
+**Portföye girmeyecek bir gösterge ekliyorsanız** `tradable=False` verin ve
+`sub_type`u doldurun (`INDEX`/`COMMODITY`). Unutulursa varlık Al/Sat
+listesinde satılığa çıkar; `test_ENDEKS_ve_EMTIA_listede_YER_ALMAZ` bunu
+kilitliyor.
 
 **Fon eklerken sınıfı elle vermeyin:** `_fund()` varlık sınıfını alt türden
 türetir (`_FUND_ASSET_CLASS`). Fonun ekonomik riski neyse sınıfı odur — para

@@ -15,6 +15,7 @@ from fastmcp import FastMCP
 from app.core.config import Granularity, PriceCurrency, TimeWindow
 from app.services.price_service import get_asset_price_history as fetch_price_history
 from app.services.price_service import get_current_prices as fetch_current_prices
+from app.services.target_price_service import get_target_prices as fetch_target_prices
 from mcp_server.tools._base import db_session, tool_handler
 
 
@@ -114,4 +115,39 @@ def register(mcp: FastMCP) -> list[str]:
         with db_session() as db:
             return fetch_current_prices(db, symbols).model_dump(mode="json")
 
-    return ["get_asset_price_history", "get_current_prices"]
+    @mcp.tool(name="get_target_prices")
+    @tool_handler()
+    def get_target_prices(symbols: list[str]) -> dict[str, Any]:
+        """Verilen sembollerin bilinen analist HEDEF FİYATINI/tavsiyesini
+        döndürür (ör. Şeker Yatırım "Tavsiye Listesi").
+
+        Ne zaman kullanılır: "GARAN'ın hedef fiyatı ne", "ASELS için analist
+        tavsiyesi ne" gibi sorular. Bu GÜNCEL PİYASA FİYATI DEĞİLDİR —
+        analistin belirlediği, GEÇMİŞTE raporlanmış bir hedeftir
+        (get_current_prices ile karıştırılmaz).
+
+        Ne zaman kullanılmaz: kullanıcının kendisinden GELECEK tahmini
+        isteniyorsa (bu tool yalnızca zaten raporlanmış rakamı okur, kendi
+        tahmin üretmez); güncel fiyat soruluyorsa (get_current_prices).
+
+        Args:
+            symbols: Sembol listesi, ör. ["GARAN", "ASELS"]. Boş olamaz.
+
+        Returns:
+            Başarılı: data.records = [{symbol, institution, recommendation,
+            target_price, currency, price_at_report, previous_target_price,
+            revision_direction, horizon_months, report_date, source_url}].
+            Bir sembol için birden fazla kurum kaydı olabilir. Tanınmayan
+            semboller unknown_symbols, tanınıp hedef fiyatı olmayanlar
+            symbols_without_data ile raporlanır.
+
+            `report_date` kaynağın kendi sayfa/rapor tarihidir — ANLIK
+            DEĞİL, yanıtta mutlaka gösterilmelidir (AK 5.1).
+
+            Hata: INVALID_ARGUMENT (boş liste) · NOT_FOUND (hiçbir sembol
+            tanınmadı).
+        """
+        with db_session() as db:
+            return fetch_target_prices(db, symbols)
+
+    return ["get_asset_price_history", "get_current_prices", "get_target_prices"]

@@ -1,19 +1,95 @@
-"""agents/market_agent.py: filtresiz yedek aramanın çapraz-şirket güvenlik ağı.
-
-`_yanlis_sirket_sonuclarini_ele` deterministik ve saf bir fonksiyon — LLM
-yok, tamamen kural tabanlı (bkz. market_query.py'nin modül başlığındaki
-"yanlış bir çıkarım sessiz bir hataya dönüşür" ilkesiyle aynı gerekçe).
-
-2026-08-27, analist test turunda ölçülen bir hatayı önlüyor: "İş Bankası'nın
-kurucusu kimdir" sorusu, RAG'de İş Bankası için yeterli doküman olmadığından
-`execute()`'un filtresiz yedek aramasına düşmüş ve retriever'ın mesafe+
-kelime-örtüşme eşiği (LEKSİK, şirket kimliğine değil) "kurucu" kelimesini
-paylaştığı için ASELSAN'ın kuruluş belgesini yanlışlıkla "ilgili" sayıp
-cevap diye sunmuştu (bkz. _yanlis_sirket_sonuclarini_ele docstring'i,
-agents/market_agent.py).
+"""agents/market_agent.py: LLM'den geçmeyen, saf/kural tabanlı yardımcı
+fonksiyonlar — render katmanı ve filtresiz-yedek-arama güvenlik ağı.
 """
 
-from agents.market_agent import _yanlis_sirket_sonuclarini_ele
+from agents.market_agent import _render_hedef_fiyat, _yanlis_sirket_sonuclarini_ele
+
+
+def test_render_hedef_fiyat_tek_kayit():
+    data = {
+        "records": [
+            {
+                "symbol": "GARAN",
+                "institution": "Şeker Yatırım",
+                "recommendation": "AL",
+                "target_price": 182.99,
+                "currency": "TRY",
+                "price_at_report": 133.00,
+                "previous_target_price": None,
+                "revision_direction": None,
+                "horizon_months": None,
+                "report_date": "2026-08-28",
+                "source_url": "https://www.sekeryatirim.com.tr/Arastirma/TavsiyeListesi",
+            }
+        ],
+        "unknown_symbols": [],
+        "symbols_without_data": [],
+    }
+    metin = _render_hedef_fiyat(data)
+    assert "GARAN" in metin
+    assert "Şeker Yatırım" in metin
+    assert "AL" in metin
+    assert "182,99" in metin
+    assert "28.08.2026" in metin
+    # Rapor anındaki fiyat da (kaynağın kendi bağlamı için) gösterilmeli.
+    assert "133,00" in metin
+
+
+def test_render_hedef_fiyat_revizyon_yonu_gosterilir():
+    """Önceki hedeften farklıysa yön ("yükseltildi"/"düşürüldü") ve eski
+    değer görünmeli — doküman "hedef yükseltildi mi düşürüldü mü" sorusunun
+    hedefin kendisinden daha bilgilendirici olduğunu söylüyor."""
+    data = {
+        "records": [
+            {
+                "symbol": "ASELS",
+                "institution": "Şeker Yatırım",
+                "recommendation": "AL",
+                "target_price": 495.00,
+                "currency": "TRY",
+                "price_at_report": 403.75,
+                "previous_target_price": 450.00,
+                "revision_direction": "yukseltme",
+                "horizon_months": None,
+                "report_date": "2026-08-28",
+                "source_url": "https://example.com",
+            }
+        ],
+        "unknown_symbols": [],
+        "symbols_without_data": [],
+    }
+    metin = _render_hedef_fiyat(data)
+    assert "yükseltildi" in metin
+    assert "450,00" in metin
+
+
+def test_render_hedef_fiyat_bulunamayan_sembol_belirtilir():
+    """Kayıt yoksa uydurma yapılmaz — hangi sembollerin bulunamadığı açıkça
+    belirtilir (CLAUDE.md "Uydurmama")."""
+    data = {"records": [], "unknown_symbols": ["XYZ"], "symbols_without_data": ["ZOREN"]}
+    metin = _render_hedef_fiyat(data)
+    assert "XYZ" in metin
+    assert "ZOREN" in metin
+
+
+def test_render_hedef_fiyat_bos_veri():
+    assert _render_hedef_fiyat(
+        {"records": [], "unknown_symbols": [], "symbols_without_data": []}
+    ) == ("Hedef fiyat: istenen varlık için kayıt yok.")
+
+
+# ---------------------------------------------------------------------------
+# _yanlis_sirket_sonuclarini_ele — filtresiz yedek aramanın çapraz-şirket
+# güvenlik ağı.
+#
+# 2026-08-27, analist test turunda ölçülen bir hatayı önlüyor: "İş Bankası'nın
+# kurucusu kimdir" sorusu, RAG'de İş Bankası için yeterli doküman olmadığından
+# `execute()`'un filtresiz yedek aramasına düşmüş ve retriever'ın mesafe+
+# kelime-örtüşme eşiği (LEKSİK, şirket kimliğine değil) "kurucu" kelimesini
+# paylaştığı için ASELSAN'ın kuruluş belgesini yanlışlıkla "ilgili" sayıp
+# cevap diye sunmuştu (bkz. _yanlis_sirket_sonuclarini_ele docstring'i,
+# agents/market_agent.py).
+# ---------------------------------------------------------------------------
 
 
 def _parca(sirket: str | None, baslik: str = "belge") -> dict:

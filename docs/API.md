@@ -277,7 +277,11 @@ Değer serisi + kümülatif yatırılan para. `window`: `1m` | `3m` | `6m` | `12
   sıfırlanmaz.
 - Seri **son fiyat gününde** biter, bugünde değil. Fiyat hattı geride kalmışsa
   bugüne uzatmak, son bilinen fiyatı tekrar çizip "değer değişmedi" yanılsaması
-  üretirdi.
+  üretirdi. Tek istisna: portföyün **doğum günü** (`inception`) fiyat hattının
+  sonundan sonraysa seri oraya kadar uzar. Günlük toplama işi akşam koştuğu
+  için bugün açılan bir hesapta fiyat hattı dünde durur; uzatılmasaydı pencere
+  bugünde başlayıp dünde biter ve uç `409` dönerdi — yeni kullanıcı ilk
+  alımından sonra Dashboard'u hiç göremiyordu (28 Ağustos 2026'da düzeltildi).
 - Hafta sonları seride yer almaz. Akış birikimi tüm günler üzerinden yapıldığı
   için cumartesi yatırılan para kaybolmaz.
 - `granularity` AUTO çözülür: `1m/3m/6m` → `daily`, `12m` → `weekly`. Kova
@@ -740,17 +744,24 @@ Piyasa ekranını besler. Üç uç, üç ayrı kaynak.
 
 ### `GET /api/market/indicators`
 
-Gösterge şeridi: BIST 100, USD/TRY, EUR/TRY, gram altın. Kaynak `price_history`
-tablosu; token ister ama kullanıcıya özel değildir.
+Gösterge şeridi: BIST 100, USD/TRY, EUR/TRY, EUR/USD, gram altın, gram gümüş,
+Brent, S&P 500. Kaynak `price_history` tablosu; token ister ama kullanıcıya özel
+değildir. Sıra sabittir (`market_service.SERIT_SIRASI`) — şerit kullanıcıdan
+bağımsız bir "piyasa nabzı", portföye göre değişmez.
 
 ```json
 {
-  "as_of": "2026-08-24",
+  "as_of": "2026-08-28",
   "indicators": [
     {
       "symbol": "XU100", "name": "BIST 100 Endeksi", "asset_class": "stock",
-      "price": 14514.82, "change_percent": 0.82,
+      "price": 14514.82, "change_percent": 0.82, "currency": null,
       "price_date": "2026-08-22", "source": "yfinance", "stale": false
+    },
+    {
+      "symbol": "EURUSD", "name": "EUR/USD", "asset_class": "currency",
+      "price": 1.1644, "change_percent": 0.14, "currency": null,
+      "price_date": "2026-08-27", "source": "derived", "stale": false
     }
   ],
   "missing_symbols": []
@@ -762,6 +773,19 @@ piyasa hafta sonu kapalı). Seride tek nokta varsa `null` döner, `0` DEĞİL:
 "değişmedi" ile "hesaplanamadı" farklı şeylerdir (AK 5.5). `price_date` ve
 `source` her satırda döner ve arayüz ikisini de göstermek zorundadır (AK 5.1,
 5.3).
+
+`currency` fiyatın para birimidir; **`null` = birimsiz**. Endeks puanı
+("11.284") ve parite ("1,1644") para değeri değildir, başlarına simge konmaz.
+Varlığın `assets.currency` alanı bu ayrımı yapamıyor — XU100 satırı TRY
+görünür — o yüzden ayrı bir alan. TRY dışı gösterge kendi biriminde döner
+(Brent `"USD"`), çevrilmez.
+
+**EUR/USD türetilmiş bir göstergedir**, `assets` tablosunda karşılığı yoktur:
+EUR/TRY ÷ USD/TRY olarak hesaplanır ve `source` alanı `"derived"` döner.
+Değişimi de iki kurun değişiminden çıkar — EUR/TRY %e, USD/TRY %u ise oran
+`(1+e)/(1+u)` katına çıkar; bu bir yaklaşım değil, iki serinin son iki noktası
+aynı iki güne aitse tam eşitlik. Kurlardan biri yoksa parite hiç dönmez
+(uydurulmaz), tarihi ikisinin **eskisi**, biri bayatsa parite de bayattır.
 
 ### `GET /api/market/headlines`
 

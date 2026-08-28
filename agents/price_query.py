@@ -252,7 +252,8 @@ def _icerir(normalized: str, kaliplar: tuple[str, ...]) -> bool:
 _ICERIK_KELIMELERI_RE = re.compile(
     r"\b(net kar|brut kar|faaliyet kari|favok|ciro|hasilat|nakit akis|"
     r"temettu|marj|segment|ortaklik yapisi|sermaye artir|yonetim kurulu|"
-    r"kurumsal olay|bilanco|gelir tablosu)\w*"
+    r"kurumsal olay|bilanco|gelir tablosu|hedef fiyat|hedef kapanis|"
+    r"analist tavsiye)\w*"
 )
 
 
@@ -277,3 +278,31 @@ def fiyat_niyeti(query: str) -> dict | None:
         return None
 
     return {"symbols": semboller, "history": gecmis}
+
+
+# "GARAN'ın hedef fiyatı ne?", "ASELS için analist tavsiyesi ne?" gibi
+# sorular — bir analist tarafından GEÇMİŞTE raporlanmış bir rakam, GÜNCEL
+# piyasa fiyatı DEĞİL (bkz. _ICERIK_KELIMELERI_RE'deki "hedef fiyat" bloğu:
+# fiyat_niyeti() bunları kendi kapsamına almıyor, market_agent bu fonksiyonu
+# fiyat_niyeti'nden ÖNCE kontrol eder).
+_HEDEF_FIYAT_KALIPLARI = ("hedef fiyat", "hedef kapanis", "analist tavsiye", "analist hedef")
+
+
+def hedef_fiyat_niyeti(query: str) -> str | None:
+    """Sorgu hedef fiyat/analist tavsiyesi soruyorsa tespit edilen TEK BIST
+    şirketinin ticker'ını döndürür, değilse None.
+
+    Şirket tespiti `market_query.sirket_tespit_et` ile yapılır (BIST ticker/
+    şirket adı eşlemesi — `varlik_tespit_et`'in kapsadığı döviz/emtia/yabancı
+    hisse takma adlarından farklı bir küme). Kalıp geçse bile şirket
+    tespit edilemezse (ör. "hedef fiyatlar nasıl belirlenir" gibi genel bir
+    kavram sorusu) None döner — RAG/kavram yoluna bırakılır, uydurma şirket
+    varsayılmaz.
+    """
+    normalized = _normalize(query)
+    if not any(k in normalized for k in _HEDEF_FIYAT_KALIPLARI):
+        return None
+
+    from agents.market_query import sirket_tespit_et
+
+    return sirket_tespit_et(query)

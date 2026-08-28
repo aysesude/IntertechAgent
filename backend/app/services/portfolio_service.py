@@ -530,6 +530,20 @@ def get_portfolio_performance(db: Session, user_id: UUID, window: TimeWindow) ->
         )
     ).scalar()
     as_of = last_price_date or date.today()
+    # Seri portföyün DOĞUMUNDAN önce bitemez.
+    #
+    # Fiyat hattı günlük iş akşam koştuğu için gün içinde bir gün geride
+    # olabiliyor. Bugün açılan bir hesap bugün alım yaptığında `inception`
+    # bugün, `last_price_date` dün oluyordu; `start = max(inception, ...)`
+    # bugüne, `as_of` düne düşüyor ve aşağıdaki `start > as_of` kontrolü
+    # `InsufficientDataError` fırlatıyordu. Sonuç: yeni kullanıcı ilk alımını
+    # yapar yapmaz Dashboard'u kaybediyordu (ölçüldü, 28 Ağustos 2026).
+    #
+    # `as_of`ı bugüne kadar UZATMIYORUZ — o, son bilinen fiyatı tekrar tekrar
+    # çizip "değer değişmedi" yanılsaması üretirdi (yukarıdaki not). Yalnızca
+    # `inception`a çekiliyor: portföyün var olduğu ilk gün seride yer almak
+    # zorunda ve o gün, özet ekranıyla aynı biçimde son kapanışla değerlenir.
+    as_of = max(as_of, inception)
 
     window_start = window_start_date(window, as_of)
     start = max(inception, window_start)
