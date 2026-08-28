@@ -5,6 +5,7 @@ import { ChatWidgetTitle } from "@/components/chat/ChatWidgetTitle";
 import { SendIcon, SparkleIcon, XIcon } from "@/components/icons";
 import { INVESTMENT_DISCLAIMER, mockWidgetStarterPrompts } from "@/data/mockData";
 import { useChat } from "@/chat/ChatProvider";
+import { useScrollNewUserMessageToTop } from "@/chat/useScrollNewUserMessageToTop";
 import { useTheme } from "@/context/ThemeContext";
 
 export function ChatWidget() {
@@ -17,6 +18,7 @@ export function ChatWidget() {
   // panel kapanıyor.
   const { messages, sending, sendMessage } = useChat();
   const [draft, setDraft] = useState("");
+  const getBubbleRef = useScrollNewUserMessageToTop(messages);
 
   // Üç nokta göstergesi yalnızca ilk token gelene kadar; sonrasında metin
   // zaten yazılıyor ve iki ayrı "bekle" sinyali göstermek gerekmiyor.
@@ -75,7 +77,7 @@ export function ChatWidget() {
                 </div>
               </div>
             ) : (
-              messages.map((m) => <ChatBubble key={m.id} message={m} />)
+              messages.map((m) => <ChatBubble key={m.id} message={m} ref={getBubbleRef(m)} />)
             )}
             {cevapBekleniyor && (
               <div className="flex">

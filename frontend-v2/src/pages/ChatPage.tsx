@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { AssistantAvatar } from "@/components/chat/AssistantAvatar";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatGreeting } from "@/components/chat/ChatGreeting";
 import { DownloadIcon, PlusIcon, SendIcon } from "@/components/icons";
 import { useChat } from "@/chat/ChatProvider";
+import { useScrollNewUserMessageToTop } from "@/chat/useScrollNewUserMessageToTop";
 import { downloadTranscript } from "@/chat/transcript";
 import { useAuth } from "@/auth/AuthContext";
 import { INVESTMENT_DISCLAIMER, mockChatPage } from "@/data/mockData";
@@ -12,11 +13,7 @@ export function ChatPage() {
   const { messages, sending, sendMessage, resetSession } = useChat();
   const { user } = useAuth();
   const [draft, setDraft] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, sending]);
+  const getBubbleRef = useScrollNewUserMessageToTop(messages);
 
   const handleSend = (text?: string) => {
     const value = text ?? draft;
@@ -83,10 +80,7 @@ export function ChatPage() {
         {/* `min-h-0` şart: flex çocuğunun varsayılan `min-height:auto` değeri
             içeriğin küçülmesini engeller ve kaydırma kutuya değil SAYFAYA
             taşardı. */}
-        <div
-          ref={scrollRef}
-          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-6"
-        >
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-6">
           {/* Karşılama akışın EN ÜSTÜNDE sabit durur ve `messages` dizisine
               GİRMEZ (gerekçesi ChatGreeting içinde). Mesaj gelince kaybolmaz:
               gerçek bir karşılama kaydırınca yukarıda kalır, kaybolan şey
@@ -98,7 +92,7 @@ export function ChatPage() {
               veriyor. */}
           <ChatGreeting userName={user.name} />
           {messages.map((m) => (
-            <ChatBubble key={m.id} message={m} />
+            <ChatBubble key={m.id} message={m} ref={getBubbleRef(m)} />
           ))}
           {/* "VİRA düşünüyor…" artık BURADA DEĞİL, yanıt balonunun içinde
               (bkz. ChatBubble). Beklenen yanıtın yerinde durması, ekranın
