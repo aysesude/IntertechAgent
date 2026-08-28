@@ -74,22 +74,29 @@ function buildChartOptions(isDark: boolean) {
     // brandColor ile birebir aynı (yukarıda tanımlı), tek kaynaktan.
     crosshair: { trigger: "focus", orientation: "vertical", color: brandColor, opacity: 0.35 },
     fontName: "Manrope",
-    // GEÇİŞ ANİMASYONU BİLEREK YOK (`animation` alanı kaldırıldı).
+    // GEÇİŞ ANİMASYONU: dönem değişince alan yeni şekle DOĞRU AKAR.
     //
-    // Önceden `animation: { duration: 600, easing: "out" }` vardı: amaç
-    // dönem değişince alanın yeni şekle akıcı geçmesiydi. Ama Google
-    // Charts'ın animasyon motoru satırları İNDEKSE göre eşleştirip
-    // interpolasyon yapıyor — DataTable'ın SATIR SAYISI değişmediği sürece
-    // sorunsuz. Pencereler arasında satır sayısı/aralığı büyük ölçüde
-    // farklı (bkz. price_service.py:resolve_granularity — 1A/3A/6A günlük
-    // ~30/90/180 satır, 1Y haftalık ~52 satır): dönem her değiştiğinde satır
-    // sayısı da değişiyor, bu da animasyonun ortasında noktaların birden
-    // sıçraması/kopması olarak görülüyordu ("dalgalanarak kırılarak" —
-    // canlıda doğrulandı, curveType'ı "none" yapmak da düzeltmedi, kök
-    // neden eğri matematiği değil satır-sayısı uyuşmazlığıydı). Sabit sayıda
-    // noktaya yeniden örnekleme (resample) yapmadan bu animasyon güvenle
-    // çalışmıyor; o daha büyük bir değişiklik, şimdilik animasyon kaldırıldı
-    // — geçiş anlık oluyor, kırık bir animasyondan kesinlikle daha iyi.
+    // `duration` olmadan Google Charts yeni seriyi anında basıyor (varsayılan
+    // süre sıfır). Bu yüzden burada duration verilmek ZORUNDA.
+    //
+    // `startup` BİLEREK YOK. Koddaki eski nota göre `startup: true` ile
+    // `duration` BİRLİKTE kullanıldığında çizim "Cannot read properties of
+    // undefined (reading 'Do')" ile tamamen çöküyor; bisection'la
+    // doğrulanmış. Muhtemel sebebi de bunu açıklıyor: startup animasyonu
+    // "önceki durumdan yeni duruma" akmaya çalışıyor ama ilk çizimde önceki
+    // durum yok. Geçişte ise iki durum da var, dolayısıyla duration tek
+    // başına sorunsuz olmalı.
+    //
+    // ÖDÜN: ilk çizimdeki "sıfırdan büyüme" efekti gitti. Bir kere oynayan
+    // bir efekt için, her dönem değişiminde çalışacak geçiş animasyonundan
+    // vazgeçmek doğru takas değil.
+    //
+    // Bu ayar tarayıcıda doğrulanmalı. Grafik boş kalır ve kırmızı hata
+    // kutusu çıkarsa tek satırlık geri alma: `animation` alanını
+    // `{ startup: true, easing: "out" }` yapmak (animasyon gider, çizim
+    // döner). Aşağıdaki `chartEvents` "error" dinleyicisi hatayı konsola
+    // yazıyor, sessizce yutulmuyor.
+    animation: { duration: 600, easing: "out" },
   };
 }
 
@@ -195,10 +202,9 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
             Bir ara key'e dönem de eklenmişti: amaç `startup` animasyonunu
             her dönem değişiminde tetiklemekti, ama sonucu grafiğin YENİDEN
             KURULMASI oldu; kullanıcı bunu "grafik siliniyor ve geri
-            geliyor" olarak gördü. Dönem artık key'e girmiyor, grafik
-            yerinde durup anında yeni şekle geçiyor (animasyon YOK, bkz.
-            buildChartOptions — pencereler arası satır sayısı uyuşmazlığı
-            yüzünden kaldırıldı).
+            geliyor" olarak gördü. İstenen davranış grafiğin yerinde durup
+            ŞEKİL DEĞİŞTİRMESİ. Onu artık `animation.duration` sağlıyor
+            (bkz. buildChartOptions), remount'a gerek yok.
             Tema değişimi hâlâ remount ediyor: renkler options üzerinden
             geliyor ve yeniden çizim gerektiriyor. */}
         <Chart
@@ -213,8 +219,9 @@ export function PerformanceChart({ range, activeRange, onRangeChange, loading = 
             {
               eventName: "error",
               // Google Charts çizim hatalarını sessizce yutmasın diye —
-              // bu olmadan hata sadece kartın içine kırmızı bir kutu olarak
-              // basılıyor, konsolda hiçbir iz kalmıyordu.
+              // bu olmadan (bkz. animation.duration çakışması) hata sadece
+              // kartın içine kırmızı bir kutu olarak basılıyor, konsolda
+              // hiçbir iz kalmıyordu.
               callback: ({ eventArgs }) => {
                 console.error("PerformanceChart (Google Charts) çizim hatası:", eventArgs);
               },
