@@ -14,6 +14,8 @@ import {
   NAVY_DARK,
 } from "@/components/auth/loginPalette";
 import { PasswordResetCard } from "@/components/auth/PasswordResetCard";
+import { RegisterCard } from "@/components/auth/RegisterCard";
+import { PaperBoatLogo } from "@/components/paper-boat/PaperBoat";
 import { gecerliTcKimlikNo } from "@/utils/tckn";
 
 /**
@@ -22,12 +24,16 @@ import { gecerliTcKimlikNo } from "@/utils/tckn";
  * Arka plan sanat eseri: light modda Halit, "Boğaziçi Yalıları", 1920
  * (yağlıboya) — görsel hiçbir şekilde manipüle edilmiyor, sadece
  * okunabilirlik için üstüne çok hafif beyaz gradient katmanları biniyor.
- * Dark modda ayrı bir tablo (ay ışığında deniz) kullanılıyor, kendi
- * overlay'iyle — bkz. resolvedTheme'e göre seçilen backgroundArt.
+ * Dark modda ayrı bir tablo (ay ışığında deniz) kullanılıyor; görsel
+ * kendisi manipüle edilmiyor, üstüne düz/yönsüz %38 opaklıkta bir siyah
+ * katman + sol tarafı biraz daha koyultan ince bir soldan-sağa gradyan
+ * biniyor (bkz. resolvedTheme'e göre seçilen backgroundArt).
  *
  * Asset:  src/assets/login/bogazici-yalilari.jpg (light)
  *         src/assets/login/ay-isigi-deniz.jpg (dark)
- * Logo:   public/vira_logo_text.svg  (mevcut marka dosyası, değiştirilmedi)
+ * Logo:   gemi `components/paper-boat` bileşeninden (sohbettekiyle aynı,
+ *         sallanan hâliyle), yazı `public/vira_wordmark.svg` — ikisi de
+ *         özgün `vira_logo_text.svg`'nin parçaları, çizim değiştirilmedi.
  */
 import bosphorusArt from "../assets/login/bogazici-yalilari.jpg";
 import moonlitSeaArt from "../assets/login/ay-isigi-deniz.jpg";
@@ -227,10 +233,10 @@ export function LoginScreen({
   onSubmit,
   notice = null,
 }: LoginScreenProps) {
-  // "login" | "reset" — şifre yenileme akışı aynı kartın içinde açılıyor;
+  // "login" | "reset" | "register" — üçü de aynı kartın içinde açılıyor;
   // ayrı bir sayfaya gitmek arka plandaki eseri ve kart çerçevesini
   // yeniden kurmak demek olurdu.
-  const [mod, setMod] = useState<"login" | "reset">("login");
+  const [mod, setMod] = useState<"login" | "reset" | "register">("login");
   const [submitted, setSubmitted] = useState(false);
   const [tckn, setTckn] = useState("");
   const [password, setPassword] = useState("");
@@ -245,14 +251,10 @@ export function LoginScreen({
     if (submitted) return;
     // İstemci doğrulaması yalnızca kullanıcı konforu içindir; asıl kapı
     // sunucudadır (backend/app/schemas/auth.py).
-    if (tckn.length !== 11) {
-      setError("T.C. kimlik numarası 11 haneli olmalı.");
-      return;
-    }
-    // Sağlama istemcide kontrol ediliyor: yanlış yazılan numara ağa
-    // çıkmadan yakalanıyor. Sunucu bunu bilerek yapmıyor (bkz. utils/tckn.ts).
+    // Yalnızca BİÇİM kontrolü (11 hane, rakam). Sağlama doğrulaması bilerek
+    // yok — gerekçesi utils/tckn.ts başlığında.
     if (!gecerliTcKimlikNo(tckn)) {
-      setError("T.C. kimlik numarası geçersiz.");
+      setError("T.C. kimlik numarası 11 haneli olmalı.");
       return;
     }
     if (password.length !== 6) {
@@ -281,7 +283,7 @@ export function LoginScreen({
           değil, yüksek görünürlükte (opaklık ~1) ana görsel. --- */}
       <img
         src={isDark ? moonlitSeaArt : bosphorusArt}
-        alt={isDark ? "Ay ışığında deniz manzarası" : "Halit, Boğaziçi Yalıları, 1920"}
+        alt={isDark ? "" : "Halit, Boğaziçi Yalıları, 1920"}
         className="absolute inset-0 h-full w-full object-cover"
         style={{
           objectPosition: `${OBJECT_POS_X * 100}% ${OBJECT_POS_Y * 100}%`,
@@ -290,8 +292,31 @@ export function LoginScreen({
         draggable={false}
       />
 
+      {/* --- Dark modda görselin tamamına EŞİT, çok hafif bir siyah katman —
+          yön/vinyet yok (o zaman görsel "bozulmuş" hissettiriyordu), sadece
+          düz %38 opaklıkla dark tema zeminine biraz daha yakınlaştırıyor. --- */}
+      {isDark && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundColor: "rgba(4,7,12,0.38)", zIndex: Z_LAYER.background }}
+        />
+      )}
+
+      {/* --- Sol taraf (başlık/form bölgesi) bir tık daha koyu — hafif bir
+          soldan-sağa gradyan, üstteki düz katmana ek olarak biniyor. --- */}
+      {isDark && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(4,7,12,0.18) 0%, rgba(4,7,12,0.06) 32%, rgba(4,7,12,0) 55%)",
+            zIndex: Z_LAYER.background,
+          }}
+        />
+      )}
+
       {/* --- Okunabilirlik katmanları (çok hafif) — SADECE light mod, hiç
-          değiştirilmedi. Dark modda bunların yerine aşağıdaki vignette var. --- */}
+          değiştirilmedi. Dark modda yukarıdaki düz katman var. --- */}
       {!isDark && (
         <>
           <div
@@ -321,38 +346,26 @@ export function LoginScreen({
         </>
       )}
 
-      {/* --- Dark mod: köşelerden merkeze doğru açılan bir vignette — sol ve
-          sağ kenarlar (başlık bloğunun ve login kartının arkası) koyulaşır,
-          ortadaki dar dikey şerit (ay + suya düşen yansıma) elips şeklinde
-          şeffaf bırakılır, tablonun can alıcı noktası kapanmaz. --- */}
-      {isDark && (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 40% 95% at 48% 50%, rgba(6,10,16,0) 0%, rgba(6,10,16,0) 45%, rgba(6,10,16,0.55) 75%, rgba(6,10,16,0.88) 100%)",
-            zIndex: Z_LAYER.background,
-          }}
-        />
-      )}
-
-      {/* --- Dark mod: SADECE sol taraf (başlık bloğunun arkası) için ek
-          karartma — ACCENT_DARK (#96384A) yukarıdaki radial vignette'in
-          bu bölgedeki ara-ton opaklığı üzerinde tek başına 3:1'in altında
-          kalıyordu. Üstteki vignette'e DOKUNULMADI (sağ/orta hâlâ aynı);
-          bu ayrı katman ~%12 ek opaklıkla sadece x≈0-28 arasını
-          karartıp x≈42'de sıfıra iniyor — ay/yansıma (merkez ~48%) ve
-          login kartı (sağda, çok daha ileride) etkilenmiyor. --- */}
-      {isDark && (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(6,10,16,0.12) 0%, rgba(6,10,16,0.12) 28%, rgba(6,10,16,0) 42%)",
-            zIndex: Z_LAYER.background,
-          }}
-        />
-      )}
+      {/* --- Eser künyesi: arka plandaki tabloya ait, sağ alt köşede — çok
+          küçük ve düşük kontrastlı, arka planla bütünleşsin diye bilerek
+          dikkat çekmiyor. pointer-events-none: salt dekoratif, tıklamayı
+          engellemesin. Sol üstteki başlık/kart alanlarından uzak durduğu
+          için hiçbir içerikle çakışmıyor; max-w ile mobilde de taşmıyor.
+          text-shadow: görsel doğrudan altında olduğu için (kart/zemin değil)
+          okunabilirlik payı — light'ta beyaz halo, dark'ta siyah halo. --- */}
+      <p
+        className="pointer-events-none absolute bottom-3 right-4 max-w-[62%] text-right text-[9px] font-medium leading-snug tracking-wide text-[#4A6488]/60 dark:text-[#9AACC7]/70 sm:bottom-4 sm:right-6 sm:max-w-[46%] sm:text-[10px]"
+        style={{
+          zIndex: Z_LAYER.background + 1,
+          textShadow: isDark
+            ? "0 1px 3px rgba(0,0,0,0.6)"
+            : "0 1px 3px rgba(255,255,255,0.55)",
+        }}
+      >
+        {isDark
+          ? "Arkhip İvanoviç Kuinci — Лунная ночь (Ay Işığında Gece)"
+          : "Halit Paşa — Boğaziçi Yalıları"}
+      </p>
 
       {/* --- Tema toggle: Header login ekranında görünmüyor, bu yüzden
           burada küçük, sabit boyutlu bir düğme var — mevcut hiçbir öğeyle
@@ -391,30 +404,67 @@ export function LoginScreen({
 
           <div className="hidden lg:block">
             <FeatureCards />
-            <p className="mt-5 text-[11px] font-medium tracking-wide text-[#4A6488]/70 dark:text-[#9AACC7]">
-              {isDark ? "Ay Işığında Deniz" : "Halit · Boğaziçi Yalıları · 1920"}
-            </p>
           </div>
         </div>
 
         {/* Sağ: login kartı */}
         <div className="flex items-center justify-center lg:justify-end lg:py-10 lg:pr-6">
+          {/* Koyu temada zemin artık soldan sağa eriyen bir gradient (düz
+              renk DEĞİL): sol/orta (form içeriği) okunur kalırken, kartın
+              sağ kenarı tamamen şeffaflaşıp arka plan tablosuyla kaynaşıyor
+              — kutu orada fark edilmesin diye kasıtlı. Gölge de aynı sebeple
+              yumuşatıldı, aksi halde şeffaf kenarda bile kutunun silueti
+              gölgeden belli olurdu. */}
           <div
             data-login-card
-            className="w-full max-w-[452px] rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-[#19100B]/[0.32] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.55)] sm:p-8"
+            /* Kayıt modunda kart genişliyor: anket 18 soru ve 5×3'lük bir
+               ürün matrisi taşıyor, 452 pikselde seçenek metinleri üç satıra
+               kırılıyordu. Koyu temadaki sağa doğru eriyen zemin de bu
+               genişlikte korunuyor. */
+            className={`w-full rounded-[26px] border border-white/70 bg-white/[0.45] p-7 backdrop-blur-2xl shadow-[0_28px_70px_-30px_rgba(11,38,83,0.45),0_2px_10px_-4px_rgba(11,38,83,0.12)] dark:border-transparent dark:bg-transparent dark:bg-[linear-gradient(to_right,rgba(7,17,28,0.45)_0%,rgba(7,17,28,0.45)_55%,rgba(7,17,28,0.15)_80%,rgba(7,17,28,0)_100%)] dark:shadow-[0_28px_70px_-30px_rgba(0,0,0,0.3)] sm:p-8 ${
+              mod === "register" ? "max-w-[560px]" : "max-w-[452px]"
+            }`}
           >
-            <img
-              src="/vira_logo_text.svg"
-              alt="Vira"
-              className="h-11 w-auto dark:[filter:brightness(0)_invert(1)]"
-              draggable={false}
-            />
+            {/* LOGO İKİ PARÇA ÇİZİLİYOR: gemi + yazı.
+                Tek bir `<img>` olduğu sürece gemiye can veremiyorduk —
+                sohbetteki sallanma, çizimin gövde/yelken/dalga gruplarını ayrı
+                ayrı hareket ettiriyor ve bunun için SVG'nin DOM'da olması
+                gerekiyor. Gemi artık sohbettekiyle AYNI bileşen
+                (`components/paper-boat`), yazı ise özgün logodan kırpılmış
+                `vira_wordmark.svg`.
+
+                Sohbettekinden daha yavaş ve daha küçük genlikte: orada hareket
+                "cevap yazılıyor" demek, burada sadece ekranı canlı tutuyor.
+                Hızlı sallanan bir marka, okunmakta olan formdan dikkat
+                çalardı. */}
+            {/* ORANLAR ÖZGÜN LOGODAN ÖLÇÜLDÜ, göz kararı seçilmedi:
+                yazı yüksekliği geminin %59'u, aradaki boşluk gemi
+                yüksekliğinin %10'u, yazının merkezi geminin merkezinden
+                3px yukarıda. Gemi 70px genişlikte ≈ 44px yüksekliğinde
+                (özgün logonun `h-11` hâliyle aynı). */}
+            <div className="flex items-center gap-1">
+              <PaperBoatLogo
+                size={70}
+                sailing
+                speed={0.5}
+                amplitude={0.7}
+                style={{ color: navyColor }}
+              />
+              <img
+                src="/vira_wordmark.svg"
+                alt="Vira"
+                className="h-[26px] w-auto -translate-y-[3px] dark:[filter:brightness(0)_invert(1)]"
+                draggable={false}
+              />
+            </div>
 
             {/* Şifre yenileme aynı kartın İÇİNDE açılıyor: ayrı bir sayfaya
                 gitmek arka plandaki eseri, kart çerçevesini ve logoyu yeniden
                 kurmak demek olurdu. Yalnızca kartın içeriği değişiyor. */}
             {mod === "reset" ? (
               <PasswordResetCard onBack={() => setMod("login")} />
+            ) : mod === "register" ? (
+              <RegisterCard onBack={() => setMod("login")} />
             ) : (
             <>
             <h2
@@ -537,6 +587,26 @@ export function LoginScreen({
                 {submitted ? "Giriş yapılıyor…" : "Giriş Yap"}
                 <ArrowIcon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
               </button>
+
+              {/* Hesabı olmayan kullanıcının tek çıkış yolu buydu: demo
+                  kullanıcıları `make seed` ile üretiliyordu ve dışarıdan
+                  gelen biri sisteme hiç giremiyordu. */}
+              <div className="flex items-center justify-center gap-1.5 pt-1">
+                <span className="text-[12.5px] text-[#5A7292] dark:text-[#B9C4DC]">
+                  Hesabın yok mu?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setMod("register");
+                  }}
+                  style={{ "--accent-dark-link": ACCENT_DARK_LINK } as CSSProperties}
+                  className="rounded text-[12.5px] font-semibold underline-offset-4 transition hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2557E8]/40 dark:text-[var(--accent-dark-link)] dark:hover:text-[#D98A99]"
+                >
+                  <span style={{ color: isDark ? undefined : BRAND }}>Üye ol</span>
+                </button>
+              </div>
             </form>
             </>
             )}

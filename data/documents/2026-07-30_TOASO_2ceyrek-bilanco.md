@@ -27,7 +27,10 @@ geriledi.
 ## İlk yarı (Ocak-Haziran 2026)
 
 Tofaş'ın ilk yarı net kârı, geçen yılın aynı dönemine göre yüzde 197
-artışla 6,3 milyar TL'ye ulaştı.
+artışla 6,3 milyar TL'ye ulaştı. İlk yarıda brüt kâr yüzde 62 artışla
+14,3 milyar TL'ye yükselirken, esas faaliyet kârı geçen yılın aynı
+döneminde kaydedilen 879,8 milyon TL'lik zarardan 2,9 milyar TL kâra
+döndü.
 
 ## Diğer göstergeler
 
@@ -36,6 +39,13 @@ milyar TL'ye, net borç/FAVÖK oranı ise 4,8x seviyesine ulaştı. Şirket,
 yılın ilk yarısında yurt içi otomobil pazarında yüzde 20,5 pazar
 payına ulaşırken, hafif ticari araç pazarında yüzde 48,2 payla
 liderliğini korudu.
+
+## Nakit akış tablosu
+
+İkinci çeyrekte serbest nakit akışı negatif 9,1 milyar TL olarak
+gerçekleşti; geçen yılın aynı dönemindeki negatif 7,7 milyar TL'ye
+kıyasla işletme sermayesi ihtiyacındaki artış nedeniyle açık
+derinleşti.
 
 ## Değerlendirme
 

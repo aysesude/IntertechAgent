@@ -65,15 +65,16 @@ async function sifreyiGonder(sifre = "778899", tekrar = "778899") {
 }
 
 describe("1. adım — kimlik", () => {
-  it("geçersiz T.C. kimlik numarasıyla ilerlemez", async () => {
+  it("eksik haneli T.C. kimlik numarasıyla ilerlemez", async () => {
     kur();
-    // Sağlaması tutmayan numara: 11 hane ama son hane bozuk.
-    yaz(/T\.C\. Kimlik/i, "55868501481");
+    // Sağlama kontrolü kaldırıldı (bkz. utils/tckn.ts): artık yalnızca
+    // BİÇİM bağlayıcı. 10 hane, dolayısıyla reddedilmeli.
+    yaz(/T\.C\. Kimlik/i, "5586850148");
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /doğrulama kodu gönder/i }));
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Geçerli bir T.C. kimlik numarası girin.");
+    expect(screen.getByRole("alert")).toHaveTextContent("T.C. kimlik numarası 11 haneli olmalı.");
     expect(screen.queryByLabelText(/Doğrulama Kodu/i)).not.toBeInTheDocument();
     // Geçersiz numarada sunucuya HİÇ gidilmemeli.
     expect(requestPasswordReset).not.toHaveBeenCalled();

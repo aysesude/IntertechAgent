@@ -38,3 +38,19 @@ def tr_percent(value: Any, *, signed: bool = False) -> str:
         return f"%{sayi}"
     isaret = "+" if float(value) >= 0 else "-"
     return f"{isaret}%{sayi}"
+
+
+def tr_date(value: Any) -> str:
+    """ISO tarihini GG.AA.YYYY biçimine çevirir: '2025-09-08T10:00:00Z' -> '08.09.2025'.
+
+    Ayrıştırılamayan değer olduğu gibi bırakılır, tarih uydurulmaz; değer yoksa
+    uzun tire (yukarıdaki biçim kararlarıyla aynı).
+    """
+    if value is None:
+        return "—"
+    text = str(value)[:10]
+    parts = text.split("-")
+    if len(parts) != 3:
+        return text or "—"
+    year, month, day = parts
+    return f"{day}.{month}.{year}"

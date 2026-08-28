@@ -34,6 +34,15 @@ giderleri çeyreklik bazda yüzde 5 artışla 38 milyar TL'ye yükseldi.
 31,010 milyar TL'ye ulaştı. Çeyrek sonu itibarıyla özkaynaklar, ilk
 çeyreğe göre yaklaşık yüzde 6 artışla 286,499 milyar TL oldu.
 
+## Nakit akış tablosu
+
+2026 2. çeyrekte işletme faaliyetlerinden net nakit akışı 193,47 milyar
+TL negatif gerçekleşti. Yatırım faaliyetlerinden 30,92 milyar TL,
+finansman faaliyetlerinden ise 165,06 milyar TL pozitif nakit akışı
+elde edildi; finansman tarafındaki artış büyük ölçüde mevduat
+hesaplarındaki net artıştan kaynaklandı. Dönem içindeki net nakit
+değişimi 11,38 milyar TL pozitif olarak gerçekleşti.
+
 ## Not
 
 Rakamlar konsolide finansal tablolara aittir. Bu belge KAP bildiriminin

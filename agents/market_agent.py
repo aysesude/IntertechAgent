@@ -44,6 +44,7 @@ from agents.market_query import (
     filtre_cikar,
     genel_gundem_istegi_var_mi,
     guncellik_istegi_var_mi,
+    sirket_sayisi,
 )
 from agents.price_query import fiyat_niyeti
 from app.core.llm_client import get_llm_client
@@ -271,8 +272,19 @@ class MarketAgent(BaseAgent):
             # Canlı kaynağa ulaşılamadı: aşağıdaki RAG yoluna düşülür. Boş
             # cevap vermektense arşivde ne varsa onu göstermek daha iyi.
 
+        # Çoklu şirketli sorgularda (karşılaştırma vb.) sabit top_k=5
+        # yetersiz kalıyordu: korpus büyüdükçe her şirketin kendi ilgili
+        # chunk'ı için rekabet arttı, 3 şirketten biri üst-5'in dışına
+        # düşüp cevaptan tamamen kayboluyordu (ölçüldü, 2026-08-26 — "Akbank,
+        # İş Bankası ve Yapı Kredi'nin ... karşılaştır" sorgusunda Yapı
+        # Kredi'nin net kâr chunk'ı düşmüştü). Tek şirketli/şirketsiz
+        # sorgularda davranış DEĞİŞMİYOR (top_k=5 kalıyor).
+        ek_args: dict[str, Any] = {}
+        if (n := sirket_sayisi(request.query)) > 1:
+            ek_args["top_k"] = min(5 * n, 20)
+
         tool_result = await self.call_mcp_tool(
-            "search_market_news", {"query": request.query, **filtreler}
+            "search_market_news", {"query": request.query, **filtreler, **ek_args}
         )
 
         # Yedek deneme: filtre tespiti yanılmış olabilir (ör. sorguda geçen
@@ -281,7 +293,9 @@ class MarketAgent(BaseAgent):
         # doğruluk aracıdır, cevabı büsbütün engellememeli.
         istenen_sirket = filtreler.get("sirket")
         if not tool_result.get("success") and filtreler:
-            tool_result = await self.call_mcp_tool("search_market_news", {"query": request.query})
+            tool_result = await self.call_mcp_tool(
+                "search_market_news", {"query": request.query, **ek_args}
+            )
 
             # GÜVENLİK AĞI: filtresiz yedek deneme başka bir şirketin
             # dokümanını "ilgili" diye sunmasın (bkz. _yanlis_sirket_sonuclarini_ele).

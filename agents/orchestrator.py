@@ -30,6 +30,7 @@ from agents.market_query import portfoy_referansi_var_mi
 from agents.portfolio_agent import PortfolioAgent
 from agents.risk_agent import RiskAgent
 from agents.scope_checker import check_scope
+from agents.web_research_agent import WebResearchAgent
 from app.core.config import settings
 from app.core.llm_client import get_llm_client
 
@@ -54,12 +55,13 @@ class OrchestratorState(TypedDict):
 # (OUT_OF_SCOPE, AMBIGUOUS vb.) ya da bunlardan bir veya birkaçının "+" ile
 # birleşmiş hâlidir ("risk", "portfolio+risk"). Alan orchestrator dışına
 # çıkmıyor; tek tüketicisi _route_after_intent.
-AGENT_INTENTS = ("portfolio", "market", "risk")
+AGENT_INTENTS = ("portfolio", "market", "risk", "web_research")
 
 AGENT_NODES = {
     "portfolio": "portfolio_agent",
     "market": "market_agent",
     "risk": "risk_agent",
+    "web_research": "web_research_agent",
 }
 
 
@@ -105,6 +107,28 @@ async def detect_intent(state: OrchestratorState) -> dict:
         }
 
     # 2. LLM Tabanlı Niyet Tespiti
+    #
+    # KAVRAM SORULARININ TAMAMI WEB_RESEARCH'E GİDER — arşivde belgesi olsa
+    # bile. Önce denenen ayrım ("arşivde belgesi varsa MARKET") iki yerden
+    # birden kırıldı:
+    #
+    # 1. Sınıflandırıcı arşivde ne olduğunu bilemez; kararı tahmine bağlıyordu.
+    # 2. Belgenin VAR OLMASI, GETİRİLEBİLECEĞİ anlamına gelmiyor.
+    #    `rag/retriever.py` bir sonucu ancak sorguyla paylaşılan kelimelerden
+    #    en az biri JENERİK DEĞİLSE kabul ediyor; `_GENERIC_FINANCE_TERMS`
+    #    içinde `temettu`, `halka`, `arz` var — 31 şirket profilinin tamamında
+    #    geçtikleri için oraya konmak zorunda kalındı (bkz. o listenin
+    #    yorumları). Sonuç: "temettü nedir" sorgusu,
+    #    `REFERANS_kurumsal-olay-terimleri.md` içinde "## Temettü (Kâr Payı)"
+    #    başlığı AYNEN dururken bile hiçbir zaman sonuç döndüremiyor ve
+    #    kullanıcı "Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi
+    #    bulunamadı" görüyordu (ölçüldü, 27 Ağustos; teşhis kelime kapısında).
+    #
+    # Bir terim ne kadar yaygınsa o kadar çok belgede geçiyor, o kadar jenerik
+    # işaretleniyor ve tanımı o kadar bulunamıyor: en çok sorulan kavramlar
+    # yapısal olarak en çok başarısız olanlar. Ayrım bu yüzden arşiv
+    # üyeliğine değil SORUNUN TÜRÜNE bağlandı — kavram/prosedür mü, yoksa
+    # belirli bir şirkete/döneme ait veri mi.
     llm = get_llm_client()
     system_prompt = (
         "Sen bir niyet sınıflandırma motorusun. Kullanıcının sorusunu aşağıdaki "
@@ -113,12 +137,15 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "PORTFOLIO — kullanıcının kendi varlıkları: değeri, dağılımı, getirisi, "
         "işlem geçmişi, tek tek pozisyonları.\n"
         "  Örnek: 'portföyüm ne durumda', 'geçen ay ne aldım', 'varlıklarımı listele'\n"
-        "MARKET — piyasa haberleri, şirket bilançoları, güncel fiyat/kur/faiz, "
-        "ayrıca finansal kavram/oran ve muhasebe standardı tanımları (F/K oranı, "
-        "TFRS/TMS muhasebe standartları, konsolide/solo finansal tablo farkı gibi).\n"
+        "MARKET — BELİRLİ bir şirkete, varlığa ya da döneme ait VERİ: piyasa "
+        "haberleri, şirket bilançoları, açıklanmış rakamlar, güncel "
+        "fiyat/kur/faiz (döviz, altın, gümüş, platin dahil kıymetli madenler). "
+        "Kavramın kendisi değil, o kavramın BİR ŞİRKETTEKİ değeri.\n"
         "  Örnek: 'Aselsan haberleri', 'dolar kuru ne durumda', 'BIST bugün nasıl', "
-        "'TFRS 16 nedir', 'F/K oranı nasıl hesaplanır', 'konsolide finansal tablo ne "
-        "demek'\n"
+        "'gram altın kaç TL', 'gümüş fiyatı nedir', 'platin ne kadar', "
+        "'THYAO'nun F/K oranı kaç', 'Tüpraş 2. çeyrek bilançosu nasıl', "
+        "'Akbank'ın 2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam "
+        "soruluyor, TAHMIN değil)\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -127,7 +154,24 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
         "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
         "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
-        "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı.\n"
+        "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
+        "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
+        "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
+        "girer. Kavram sorusunun tamamı buraya gelir — soruda BELİRLİ bir "
+        "şirket ya da dönem geçmiyorsa MARKET DEĞİLDİR.\n"
+        "  Örnek: 'lot ne demek', 'temettü nedir', 'halka arz nasıl olur', "
+        "'borsa saat kaçta kapanır', 'takas kaç gün sürer', "
+        "'F/K oranı nasıl hesaplanır', 'TFRS 16 nedir', "
+        "'konsolide finansal tablo ne demek', 'SPK ne iş yapar', "
+        "'şirketler ne sıklıkla temettü verir', 'portföy kârı nasıl hesaplanır', "
+        "'hisse ile fon arasındaki fark ne'\n\n"
+        "TAHMIN — gelecekteki bir fiyatın, kurun veya getirinin ne olacağı;\n"
+        "AÇIKÇA gelecek zaman/gelecek yıl belirten bir ifade GEREKİR "
+        "('olur', 'olacak', 'yükselecek mi', 'gelecek yıl'). Bir yıl "
+        "GEÇMESE veya belirtilse bile ('2026 temettüsü ne kadar' gibi) "
+        "soru zaten AÇIKLANMIŞ/RAPORLANMIŞ bir rakamı soruyorsa (gelecek "
+        "zaman eki YOK) bu TAHMIN DEĞİL, MARKET'tir — yıl geçmesi tek "
+        "başına tahmin sayılmaz.\n"
         "  Örnek: '2027de dolar kaç TL olur', 'altın yükselecek mi', "
         "'bu hisse gelecek yıl ne kadar olur'\n"
         "KAPSAM_DISI — finansla ya da kullanıcının portföyüyle ilgisi olmayan "
@@ -139,10 +183,28 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "yazma; yalnızca risk, denge veya öneri soruyorsa PORTFOLIO yazma. "
         "'nasıl dengelemeliyim' → sadece RISK (varlık dökümü istenmedi). "
         "'riskim nedir' → sadece RISK.\n"
+        "KAVRAM mı VERİ mi — tek ayrım bu:\n"
+        "  Kavramın ya da sürecin KENDİSİ soruluyorsa → WEB_RESEARCH\n"
+        "  Aynı kavramın BELİRLİ BİR ŞİRKETTEKİ değeri → MARKET\n"
+        "  Aynı kavramın KULLANICIDAKİ değeri → PORTFOLIO\n"
+        "  'temettü nedir' → WEB_RESEARCH · 'Akbank'ın temettüsü ne kadar' → "
+        "MARKET · 'ne kadar temettü aldım' → PORTFOLIO\n"
+        "  'F/K oranı nasıl hesaplanır' → WEB_RESEARCH · 'THYAO'nun F/K'sı kaç' "
+        "→ MARKET\n"
+        "  'kâr nasıl hesaplanır' → WEB_RESEARCH · 'ne kadar kâr ettim' → "
+        "PORTFOLIO\n"
         "TAHMIN ve KAPSAM_DISI TEK BAŞINA yazılır, başka etiketle birlikte değil.\n"
         "TAKİP SORUSU: Soru kendi başına anlaşılmıyorsa ('bunu açıkla', 'peki "
         "ya', 'neden böyle') ÖNCEKİ KONUŞMA'da neyin konuşulduğuna bak ve o "
-        "konunun etiketini ver."
+        "konunun etiketini ver.\n"
+        "TEKLİF KABULÜ: Asistanın ÖNCEKİ mesajı bir tahmin isteğini reddedip "
+        "YERİNE bir ALTERNATİF önermişse ('...tahmin yapmıyorum ama geçmiş "
+        "performansı/güncel durumu/açıklanmış sonuçları paylaşabilirim' "
+        "gibi) ve kullanıcının şimdiki mesajı bu alternatifi KABUL ediyorsa "
+        "('paylaş', 'evet', 'olur', 'lütfen', 'tamam' gibi kısa bir onay), "
+        "önceki reddi TEKRARLAMA — asistanın teklif ettiği ALTERNATİFİN "
+        "etiketini ver (ör. MARKET). Reddi tekrarlamak, kullanıcının kabul "
+        "ettiği teklifi hiç yerine getirmemek demektir."
     )
 
     # Sınıflandırıcı sohbet geçmişini de görür.
@@ -260,6 +322,12 @@ async def run_market_agent(state: OrchestratorState) -> dict:
 
 async def run_risk_agent(state: OrchestratorState) -> dict:
     agent = RiskAgent(mcp_server_url=settings.mcp_server_url)
+    response = await agent.execute(_build_request(state), on_token=None)
+    return {"agent_responses": [response]}
+
+
+async def run_web_research_agent(state: OrchestratorState) -> dict:
+    agent = WebResearchAgent(mcp_server_url=settings.mcp_server_url)
     response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
@@ -452,6 +520,7 @@ def _build_graph():
     graph.add_node("portfolio_agent", run_portfolio_agent)
     graph.add_node("market_agent", run_market_agent)
     graph.add_node("risk_agent", run_risk_agent)
+    graph.add_node("web_research_agent", run_web_research_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
@@ -464,6 +533,7 @@ def _build_graph():
             "portfolio_agent": "portfolio_agent",
             "market_agent": "market_agent",
             "risk_agent": "risk_agent",
+            "web_research_agent": "web_research_agent",
         },
     )
 
@@ -471,6 +541,7 @@ def _build_graph():
     graph.add_edge("portfolio_agent", "merge")
     graph.add_edge("market_agent", "merge")
     graph.add_edge("risk_agent", "merge")
+    graph.add_edge("web_research_agent", "merge")
     graph.add_edge("merge", END)
 
     return graph.compile()

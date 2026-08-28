@@ -21,7 +21,12 @@ sonuçlarını 5 Ağustos 2026 tarihinde Kamuyu Aydınlatma Platformu'na
 Holding, ikinci çeyrekte 19,7 milyar TL ana ortaklık net kârı açıklayarak
 13,6 milyar TL'lik piyasa beklentisini belirgin şekilde aştı. Bu, yıllık
 bazda yaklaşık yüzde 93 artışa denk geliyor. Konsolide vergi öncesi kâr
-83,6 milyar TL olarak gerçekleşti.
+83,6 milyar TL olarak gerçekleşti. Çeyrekte konsolide brüt kâr yüzde 21
+artışla 166,9 milyar TL'ye, net esas faaliyet kârı yüzde 69 artışla 71,6
+milyar TL'ye, FAVÖK ise yüzde 57 artışla 93,07 milyar TL'ye yükseldi.
+Segment net kâr katkısında enerji 20,7 milyar TL ile öne çıkarken,
+otomotiv segmentinin net kâr katkısı yüzde 60 azalışla 3,4 milyar TL'ye,
+finans segmentininki ise 2,2 milyar TL'ye geriledi.
 
 ## İlk 6 aylık dönem (2026 Ocak-Haziran)
 

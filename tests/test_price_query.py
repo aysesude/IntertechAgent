@@ -71,6 +71,29 @@ class TestFiyatNiyeti:
         assert fiyat_niyeti("dolar son 6 ayda nasıl gitti")["history"] is True
         assert fiyat_niyeti("gümüş son 2 haftada ne oldu")["history"] is True
 
+    def test_icerik_sorusu_bilanco_kalemi_gecince_fiyat_sayilmaz(self):
+        """Sorguda bir BIST ticker'ı ("ARCLK", "PGSUS", "KCHOL" gibi kodun
+        kendisi) VE "ne kadar" birlikte geçince bu tek başına PİYASA FİYATI
+        sanılıyordu (ölçümle doğrulandı, 2026-08-26): "ARCLK'nin serbest
+        nakit akışı ne kadar?" ve "PGSUS'un brüt kârı ne kadar oldu?" gibi
+        RAG'daki bilanço içeriğiyle yanıtlanması gereken sorular fiyat/
+        tarihçe tool'una yönlendirilip "kayıt bulunamadı" ya da alakasız
+        güncel fiyat döndürüyordu."""
+        assert fiyat_niyeti("ARCLK'nin serbest nakit akışı ne kadar?") is None
+        assert fiyat_niyeti("PGSUS'un brüt kârı ne kadar oldu?") is None
+        assert fiyat_niyeti("KCHOL'un FAVÖK marjı ne kadar?") is None
+        assert fiyat_niyeti("AKBNK'nin nakit akış tablosu nasıl?") is None
+
+    def test_icerik_sorusu_disinda_ticker_fiyat_sorgusu_bozulmaz(self):
+        """Düzeltme kapıyı kapatmamalı: ticker + "ne kadar" gerçek bir fiyat
+        sorusuysa (bilanço kalemi kelimesi geçmiyorsa) hâlâ fiyat tool'una
+        gitmeli."""
+        assert fiyat_niyeti("ARCLK ne kadar?") == {"symbols": ["ARCLK"], "history": False}
+        assert fiyat_niyeti("THYAO fiyatı ne kadar?") == {
+            "symbols": ["THYAO"],
+            "history": False,
+        }
+
     def test_iki_sart_birlikte_aranir(self):
         """Tek başına fiyat kalıbı ya da tek başına varlık adı YETMEZ."""
         # Fiyat kalıbı var, varlık yok -> portföy sorusu olabilir.

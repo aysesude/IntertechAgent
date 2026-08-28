@@ -1,6 +1,4 @@
-"""Giriş uçları (FR-0).
-
-Kayıt (register) ucu BİLEREK YOK: demo kullanıcıları `make seed` ile üretilir.
+"""Giriş ve kayıt uçları (FR-0).
 
 Şifre yenileme uçları DEMO akışıdır: e-posta gönderilmez, kod sunucuda
 üretilmez ve saklanmaz (yapılandırmadaki sabit kod kabul edilir), ama şifre
@@ -28,9 +26,11 @@ from app.schemas.auth import (
     PasswordResetComplete,
     PasswordResetInfo,
     PasswordResetRequest,
+    RegisterRequest,
+    RegisterResponse,
     TokenResponse,
 )
-from app.services import auth_service
+from app.services import auth_service, survey_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -55,7 +55,81 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
     return TokenResponse(
         access_token=token,
         expires_in=expires_in,
-        user=AuthUser(id=user.id, full_name=user.full_name, risk_profile=user.risk_profile),
+        user=AuthUser(
+            id=user.id,
+            full_name=user.full_name,
+            risk_profile=user.risk_profile,
+            risk_survey_score=user.risk_survey_score,
+        ),
+    )
+
+
+@router.post("/register", response_model=RegisterResponse, status_code=201)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> RegisterResponse:
+    """Hesap açar: kullanıcı + portföy + açılış bakiyesi, tek işlemde.
+
+    ANKET BURADA ZORUNLU DEĞİL. 18 soruluk anket kayıt akışından çıkarılıp
+    ilk girişe taşındı: yarıda bırakıldığında hesabın hiç açılmaması, en
+    pahalı adımı (hesap açma) en kırılgan adıma (uzun form) bağlamaktı.
+    Artık hesap açılıyor, `risk_survey_score` `NULL` kalıyor ve kullanıcı
+    girişte anket ekranıyla karşılaşıyor.
+
+    Cevaplar YİNE DE gönderilebilir (eski akış, testler) ve o durumda
+    SUNUCUDA yeniden skorlanır. İstemcinin gönderdiği puana güvenilseydi
+    herkes kendini "Agresif" ilan edip uygunluk kontrolünü atlayabilirdi.
+
+    Durdurucu bir tutarlılık kuralı tetiklendiyse (çelişkili beyan) HESAP
+    AÇILMAZ: yanlış bir profille kaydetmektense hiç kaydetmemek doğru.
+
+    Başarıda token da döner — kullanıcı kayıttan sonra bir de giriş
+    ekranından geçmez.
+
+    400 → eksik/geçersiz anket cevabı ya da çelişkili beyan.
+    409 → bu T.C. kimlik numarası veya e-posta zaten kayıtlı.
+    """
+    sonuc = None
+    if payload.survey_answers:
+        try:
+            sonuc = survey_service.skorla(payload.survey_answers)
+        except survey_service.SurveyAnswerError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        if not sonuc["sonuc_uretildi"] or sonuc["profil_seviyesi"] is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cevaplarınız arasında çelişen noktalar var; profil "
+                    "üretilemedi. Anketi gözden geçirip tekrar deneyin."
+                ),
+            )
+
+    try:
+        user = auth_service.register(
+            db,
+            full_name=payload.full_name,
+            national_id=payload.national_id,
+            email=payload.email,
+            password=payload.password,
+            survey_score=sonuc["profil_seviyesi"] if sonuc else None,
+            initial_deposit_try=payload.initial_deposit_try,
+        )
+    except ValidationAppError as exc:
+        raise HTTPException(status_code=409, detail=exc.message) from exc
+
+    db.commit()
+
+    token, expires_in = create_access_token(user.id)
+    return RegisterResponse(
+        access_token=token,
+        expires_in=expires_in,
+        user=AuthUser(
+            id=user.id,
+            full_name=user.full_name,
+            risk_profile=user.risk_profile,
+            risk_survey_score=user.risk_survey_score,
+        ),
+        risk_survey_score=sonuc["profil_seviyesi"] if sonuc else None,
+        profil_adi=sonuc["profil_adi"] if sonuc else None,
     )
 
 
@@ -71,6 +145,7 @@ def read_current_user(current_user: User = Depends(require_current_user)) -> Aut
         id=current_user.id,
         full_name=current_user.full_name,
         risk_profile=current_user.risk_profile,
+        risk_survey_score=current_user.risk_survey_score,
     )
 
 

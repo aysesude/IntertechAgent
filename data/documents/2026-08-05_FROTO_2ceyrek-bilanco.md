@@ -40,6 +40,13 @@ azalışla 6,4 milyar TL oldu.
 kâr elde etti. Geçen yılın aynı döneminde bu rakam 17 milyar 157
 milyon 738 bin TL idi; ilk yarı net kârı yıllık bazda yüzde 40 geriledi.
 
+## Nakit akış tablosu
+
+İş Yatırım'ın 2. çeyrek sonuçları raporuna göre, Ford Otosan'ın serbest
+nakit akışı zayıf operasyonel performans ve olumsuz işletme sermayesi
+dinamiklerinin etkisiyle 2025 2. çeyreğindeki pozitif 30,2 milyar TL
+seviyesinden 2026 2. çeyreğinde negatif 4,3 milyar TL'ye geriledi.
+
 ## Değerlendirme
 
 Ford Otosan, düşen satış adetleri ve daralan gelire rağmen kârlılık

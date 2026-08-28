@@ -1,4 +1,4 @@
-export type ScreenId = "dashboard" | "portfolio" | "market" | "risk" | "chat";
+export type ScreenId = "dashboard" | "portfolio" | "market" | "risk" | "chat" | "trade";
 
 export interface User {
   name: string;
@@ -176,7 +176,8 @@ export interface AssetClassSummary {
   name: string;
   value: number;
   formattedValue: string;
-  returnPct: number;
+  /** `null`: sınıf bazlı getiri hesaplanamadı (holdings verisi yok). */
+  returnPct: number | null;
   weightPct: number;
   icon: AssetClassId;
 }
@@ -194,12 +195,26 @@ export interface HoldingLot {
 export interface Holding {
   id: string;
   name: string;
+  /** Görüntülenen Türkçe etiket, ör. "Hisse · Savunma". Filtre için DEĞİL — bkz. assetClassId. */
   assetClass: string;
+  /** Filtre/eşleme için kararlı kimlik — Türkçe etiketi ayrıştırmak kırılgan olurdu. */
+  assetClassId: AssetClassId;
   quantity: string;
   value: number;
   formattedValue: string;
-  returnPct: number;
-  risk: "Düşük" | "Orta" | "Yüksek";
+  /** `null`: fiyatı bulunamadı (`price_missing`), getiri hesaplanamıyor. */
+  returnPct: number | null;
+  /**
+   * 7 kademeli risk seviyesi Türkçe etiketi — Risk sayfasındaki
+   * `RiskAssetRow.riskLevelLabel` ile AYNI ölçek/kaynak. `/holdings` ucunda
+   * KARŞILIĞI YOK; `/api/risk/{user_id}` yanıtındaki `asset_metrics[]`den
+   * sembole göre eşlenir (bkz. adapters/portfolio.ts). Eşleşme yoksa (nakit
+   * kalemi, risk isteği düştü, ya da o varlığın kendi geçmişi yetersiz)
+   * `null` — ekran "—" gösterir, uydurmaz (AK 5.5).
+   */
+  risk: string | null;
+  /** `risk`'in SAYISAL karşılığı (1-7), rozet rengi için — bkz. RiskAssetRow.riskLevelOrdinal. */
+  riskOrdinal: number | null;
   currentUnitPrice: number;
   unitLabel: string;
   lots: HoldingLot[];
@@ -219,26 +234,41 @@ export interface MarketIndicator {
   id: string;
   label: string;
   value: string;
-  changePct: number;
+  /** Hesaplanamadıysa `null` — 0 YAZILMAZ, "değişmedi" ile "bilinmiyor" ayrı. */
+  changePct: number | null;
+  /** Fiyatın ait olduğu gün ("22.08.2026"). Bugün olmak zorunda değil. */
+  priceDate: string;
+  /** `stale` ise fiyat beklenenden eski; arayüz bunu söylemek zorunda. */
+  stale: boolean;
 }
 
-export interface NewsItem {
+export /**
+ * Haber kartı.
+ *
+ * `tag`, `aiSummary`, `impact`, `sourceCount` NULLABLE: canlı kaynak
+ * (BloombergHT son dakika) yalnızca başlık ve zaman veriyor. Bu alanları
+ * doldurmak için model çalıştırmak, başlık dışında veri olmadığı için
+ * detay uydurmak demekti (CLAUDE.md "Uydurmama"). Arayüz "—" gösterir.
+ */
+interface NewsItem {
   id: string;
-  tag: string;
+  tag: string | null;
   isPortfolioRelevant: boolean;
   source: string;
   time: string;
   title: string;
-  aiSummary: string;
-  impact: "Düşük" | "Orta" | "Yüksek";
-  sourceCount: number;
+  aiSummary: string | null;
+  impact: "Düşük" | "Orta" | "Yüksek" | null;
+  sourceCount: number | null;
 }
 
 export interface InfluenceRow {
   id: string;
   name: string;
-  changePct: number;
-  weightPct: number;
+  /** Günlük değişim; fiyat geçmişi yoksa `null`. */
+  changePct: number | null;
+  /** Portföy ağırlığı; fiyatı bulunamayan varlıkta `null`. */
+  weightPct: number | null;
 }
 
 export interface CalendarEvent {
@@ -247,42 +277,68 @@ export interface CalendarEvent {
   description: string;
 }
 
+/** `amount`/`formattedAmount` `null`/"—": yeterli fiyat geçmişi yoksa backend `null` döner. */
 export interface ValueAtRisk {
-  confidencePct: number;
-  amount: number;
+  amount: number | null;
   formattedAmount: string;
+  confidencePct: number;
+  /** `value_at_risk_horizon_days`'ten üretilir (ör. "1 günlük ufukta") — sabit metin DEĞİL, ölçüm gün sayısına göre değişir. */
   horizonLabel: string;
 }
 
+/**
+ * `rating`/"İyi-Kötü" gibi bir derecelendirme YOK: risksiz faiz oranı yüksek
+ * olduğu için düşük volatiliteli/muhafazakâr portföylerde Sharpe sistematik
+ * olarak negatif çıkar (bkz. docs/API.md — "bağlamsız gösterilmemeli").
+ * `note`, bu bağlamı taşıyan kısa bir açıklama metnidir, bir yargı değil.
+ */
 export interface SharpeRatio {
-  value: number;
-  rating: string;
-  description: string;
-}
-
-export interface RiskProfile {
-  score: number;
-  label: string;
-  targetRangeLow: number;
-  targetRangeHigh: number;
-  description: string;
-}
-
-export interface RiskFactor {
-  id: string;
-  label: string;
-  value: number;
-  target: number;
+  value: number | null;
   note: string;
-  color: string;
 }
 
-export interface StrategyRecommendation {
-  id: string;
-  priority: "Öncelikli" | "Orta vadeli" | "İzleme";
-  title: string;
-  description: string;
-  expectedImpact: string;
+/** Sayfanın üst şeridi: profil, ölçülen seviye ve tek cümlelik uyum yargısı. */
+export interface RiskOverview {
+  profileLabel: string;
+  /** `null`: risk_level hesaplanamadı (yeterli fiyat geçmişi yok). */
+  levelLabel: string | null;
+  /**
+   * `levelLabel`'ın SAYISAL karşılığı (1-7), `RiskLevelBar` için. Etiketten
+   * ayrı tutuluyor: gösterge sıra bilgisine ihtiyaç duyuyor, metni yeniden
+   * ayrıştırmak çeviri değişince sessizce kırılırdı (bkz. RiskSummary).
+   */
+  level: number | null;
+  isWithinProfile: boolean | null;
+  verdict: string;
+}
+
+/** Bir varlık sınıfının toplam portföy riskine katkısı. */
+export interface RiskCategoryContribution {
+  id: AssetClassId;
+  name: string;
+  weightPct: number;
+  volatilityPct: number | null;
+  riskContributionPct: number | null;
+  color: string;
+  highlightColor: string;
+}
+
+export interface RiskDiversification {
+  herfindahlIndex: number;
+  diversificationRatio: number | null;
+  maxClassWeightPct: number;
+  maxClassLabel: string | null;
+}
+
+/** Pozisyonlar tablosuyla aynı görsel dilde, varlık bazlı risk kırılımı. */
+export interface RiskAssetRow {
+  symbol: string;
+  assetClassLabel: string;
+  weightPct: number;
+  volatilityPct: number | null;
+  riskLevelLabel: string | null;
+  /** 1-7, rozet rengi için (`RiskLevelBar`'daki LEVEL_COLORS ile aynı ölçek). */
+  riskLevelOrdinal: number | null;
 }
 
 export interface ChatMessage {
@@ -339,18 +395,15 @@ export interface MarketPageData {
   calendar: CalendarEvent[];
 }
 
-export interface LimitedHistoryWarning {
-  assetName: string;
-  message: string;
-}
-
 export interface RiskPageData {
-  profile: RiskProfile;
-  factors: RiskFactor[];
-  recommendations: StrategyRecommendation[];
+  overview: RiskOverview;
+  contributions: RiskCategoryContribution[];
+  diversification: RiskDiversification;
+  assets: RiskAssetRow[];
   valueAtRisk: ValueAtRisk;
-  sharpeRatio: SharpeRatio;
-  limitedHistoryWarning?: LimitedHistoryWarning;
+  sharpe: SharpeRatio;
+  /** Backend serbest metin döndürüyor (`warnings: string[]`) — yapılandırılmış alan yok, düz liste. */
+  warnings: string[];
 }
 
 export interface ChatPageData {

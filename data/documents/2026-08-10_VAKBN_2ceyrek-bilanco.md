@@ -36,13 +36,23 @@ kıyasla yüzde 0,15 artışla 30,108 milyar TL'ye ulaştı.
 artış), net ücret ve komisyon gelirleri 22,4 milyar TL (yıllık bazda
 yüzde 28 artış) olarak gerçekleşti. Brüt faiz gelirleri 293,5 milyar
 TL'ye ulaşırken faiz giderleri 240,5 milyar TL oldu. Faaliyet giderleri
-çeyreklik bazda yüzde 12 artışla 43,8 milyar TL'ye yükseldi.
+çeyreklik bazda yüzde 12 artışla 43,8 milyar TL'ye yükseldi. Net
+faaliyet kârı, 2025 2. çeyrekteki 44,112 milyar TL'den yüzde 6 artışla
+46,672 milyar TL'ye yükseldi.
 
 ## Bilanço büyüklükleri
 
 Toplam varlıklar yıllık bazda yüzde 28 artışla 5,8 trilyon TL'ye,
 özkaynaklar yüzde 43 artışla 353 milyar TL'ye yükseldi. Toplam
 mevduatlar 3,6 trilyon TL olarak gerçekleşti.
+
+## Nakit akış tablosu
+
+2026 2. çeyrekte işletme faaliyetlerinden net nakit akışı 121,46 milyar
+TL negatif gerçekleşti; yatırım faaliyetlerinden net nakit akışı da
+36,31 milyar TL negatif oldu. Buna karşın finansman faaliyetlerinden
+137,35 milyar TL pozitif nakit akışı sağlandı; bu artış büyük ölçüde
+mevduat hesaplarındaki net artıştan kaynaklandı.
 
 ## Değerlendirme
 

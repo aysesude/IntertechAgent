@@ -1,6 +1,7 @@
 import type {
   AIRecommendation,
   AssetAllocationSlice,
+  AssetClassId,
   AssetClassSummary,
   AssetPerformer,
   CalendarEvent,
@@ -21,12 +22,13 @@ import type {
   PortfolioSummary,
   RangeKey,
   ReturnPeriodKey,
-  RiskFactor,
+  RiskAssetRow,
+  RiskCategoryContribution,
+  RiskDiversification,
+  RiskOverview,
   RiskPageData,
-  RiskProfile,
   RiskSummaryRow,
   SharpeRatio,
-  StrategyRecommendation,
   Transaction,
   User,
   ValueAtRisk,
@@ -301,7 +303,9 @@ function makeHolding(
   id: string,
   name: string,
   assetClass: string,
+  assetClassId: AssetClassId,
   risk: Holding["risk"],
+  riskOrdinal: Holding["riskOrdinal"],
   currentUnitPrice: number,
   unitLabel: string,
   lotInputs: { purchaseDate: string; quantity: number; unitCost: number }[]
@@ -312,7 +316,9 @@ function makeHolding(
     id,
     name,
     assetClass,
+    assetClassId,
     risk,
+    riskOrdinal,
     currentUnitPrice,
     unitLabel,
     lots,
@@ -324,37 +330,37 @@ function makeHolding(
 }
 
 export const mockHoldings: Holding[] = [
-  makeHolding("h1", "ASELS", "Hisse · Savunma", "Orta", 78.4, "adet", [
+  makeHolding("h1", "ASELS", "Hisse · Savunma", "stocks", "Orta", 4, 78.4, "adet", [
     { purchaseDate: "2025-10-12", quantity: 500, unitCost: 65.5 },
     { purchaseDate: "2026-01-19", quantity: 400, unitCost: 70.0 },
     { purchaseDate: "2026-03-05", quantity: 340, unitCost: 75.0 },
   ]),
-  makeHolding("h2", "GARAN", "Hisse · Bankacılık", "Düşük", 56.4, "adet", [
+  makeHolding("h2", "GARAN", "Hisse · Bankacılık", "stocks", "Düşük", 2, 56.4, "adet", [
     { purchaseDate: "2025-09-08", quantity: 1500, unitCost: 48.0 },
     { purchaseDate: "2025-12-02", quantity: 1300, unitCost: 52.5 },
     { purchaseDate: "2026-02-14", quantity: 1000, unitCost: 55.0 },
   ]),
-  makeHolding("h3", "THYAO", "Hisse · Ulaştırma", "Yüksek", 312.75, "adet", [
+  makeHolding("h3", "THYAO", "Hisse · Ulaştırma", "stocks", "Yüksek", 6, 312.75, "adet", [
     { purchaseDate: "2025-08-20", quantity: 200, unitCost: 330.0 },
     { purchaseDate: "2025-11-15", quantity: 200, unitCost: 315.0 },
     { purchaseDate: "2026-01-30", quantity: 140, unitCost: 300.0 },
   ]),
-  makeHolding("h4", "Gram Altın", "Emtia", "Düşük", 4312, "gr", [
+  makeHolding("h4", "Gram Altın", "Emtia", "precious", "Düşük", 2, 4312, "gr", [
     { purchaseDate: "2025-07-10", quantity: 60, unitCost: 3900 },
     { purchaseDate: "2025-11-02", quantity: 45, unitCost: 4050 },
     { purchaseDate: "2026-02-20", quantity: 40, unitCost: 4180 },
   ]),
-  makeHolding("h5", "USD Mevduat", "Döviz", "Orta", 41.86, "$", [
+  makeHolding("h5", "USD Mevduat", "Döviz", "fx", "Orta", 4, 41.86, "$", [
     { purchaseDate: "2025-09-01", quantity: 4000, unitCost: 39.5 },
     { purchaseDate: "2025-12-10", quantity: 2400, unitCost: 40.8 },
     { purchaseDate: "2026-02-25", quantity: 2000, unitCost: 42.5 },
   ]),
-  makeHolding("h6", "EUR Mevduat", "Döviz", "Orta", 48.75, "€", [
+  makeHolding("h6", "EUR Mevduat", "Döviz", "fx", "Orta", 4, 48.75, "€", [
     { purchaseDate: "2025-10-05", quantity: 1500, unitCost: 47.8 },
     { purchaseDate: "2026-01-08", quantity: 1200, unitCost: 48.9 },
     { purchaseDate: "2026-03-01", quantity: 600, unitCost: 49.2 },
   ]),
-  makeHolding("h7", "Eurobond 2029", "Tahvil", "Düşük", 1.0325, "₺", [
+  makeHolding("h7", "Eurobond 2029", "Tahvil", "bond", "Düşük", 2, 1.0325, "₺", [
     { purchaseDate: "2025-06-15", quantity: 100_000, unitCost: 0.995 },
     { purchaseDate: "2025-10-20", quantity: 60_000, unitCost: 1.01 },
     { purchaseDate: "2026-01-05", quantity: 40_000, unitCost: 1.02 },
@@ -396,17 +402,28 @@ export const mockDashboard: DashboardData = {
 
 export function computePerformanceStats(range: PerformanceRange): PerformanceStats {
   const portfolioValues = range.points.map((p) => p.portfolio);
+  // Boş seri (yeni/boş portföy) — Math.max/min(...[]) ±Infinity döner;
+  // high/low/profit'in nullable karşılığı yok (tip: number), 0 en doğrusu.
+  // returnPct nullable OLDUĞU için burada da "hesaplanamadı" (null) dönülür,
+  // 0 (uydurma "değişim yok" iddiası) değil — UI zaten null'ı "—" gösterir
+  // (bkz. PerformanceChart.tsx).
+  if (portfolioValues.length === 0) {
+    return { high: 0, low: 0, returnPct: null, profit: 0 };
+  }
   const high = Math.max(...portfolioValues);
   const low = Math.min(...portfolioValues);
   const son = range.points[range.points.length - 1];
+  const ilkDeger = portfolioValues[0];
   return {
     high,
     low,
     // Gerçek veride TWR backend'den gelir; tasarım verisinde ham değişimle
-    // taklit ediliyor (bu dosya yalnızca API tanımsızken devrede).
+    // taklit ediliyor (bu dosya yalnızca API tanımsızken devrede). İlk nokta
+    // 0 ise (henüz hiç para yatırılmamış yeni hesap) bölme 0/0 = NaN
+    // üretirdi ("NaN%" görünürdü) — bu durumda "hesaplanamadı" (null)
+    // dönülür, uydurma bir yüzde değil (AK 5.5).
     returnPct:
-      range.returnPct ??
-      ((portfolioValues[portfolioValues.length - 1] - portfolioValues[0]) / portfolioValues[0]) * 100,
+      range.returnPct ?? (ilkDeger === 0 ? null : ((portfolioValues[portfolioValues.length - 1] - ilkDeger) / ilkDeger) * 100),
     profit: son.portfolio - son.invested,
   };
 }
@@ -426,12 +443,16 @@ export const mockPortfolioPage: PortfolioPageData = {
   assetClassCount: ASSET_CLASS_COUNT,
 };
 
+// TASARIM VERİSİ. Yalnızca API yapılandırılmamışken gösterilir ve o durumda
+// ekranda "tasarım verisi" uyarısı çıkar (bkz. MarketPage).
+const MOCK_FIYAT_TARIHI = "22.08.2026";
+
 export const mockMarketIndicators: MarketIndicator[] = [
-  { id: "bist100", label: "BIST 100", value: "11.284", changePct: 1.24 },
-  { id: "usdtry", label: "USD/TRY", value: "41,86", changePct: -0.32 },
-  { id: "gold", label: "Gram Altın", value: "₺4.312", changePct: 0.87 },
-  { id: "bond2y", label: "2Y Tahvil", value: "%38,4", changePct: 0 },
-  { id: "brent", label: "Brent", value: "$71,20", changePct: -1.05 },
+  { id: "bist100", label: "BIST 100", value: "11.284", changePct: 1.24, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "usdtry", label: "USD/TRY", value: "41,86", changePct: -0.32, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "gold", label: "Gram Altın", value: "₺4.312", changePct: 0.87, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "bond2y", label: "2Y Tahvil", value: "%38,4", changePct: 0, priceDate: MOCK_FIYAT_TARIHI, stale: false },
+  { id: "brent", label: "Brent", value: "$71,20", changePct: -1.05, priceDate: MOCK_FIYAT_TARIHI, stale: false },
 ];
 
 export const mockNews: NewsItem[] = [
@@ -506,73 +527,66 @@ export const mockMarketPage: MarketPageData = {
   calendar: mockCalendar,
 };
 
-export const mockRiskProfile: RiskProfile = {
-  score: 62,
-  label: "Dengeli–Büyüme odaklı",
-  targetRangeLow: 55,
-  targetRangeHigh: 68,
-  description: "Profilin orta-üst risk bandında. Hedef aralık 55–68; şu an bandın içindesin.",
+export const mockRiskOverview: RiskOverview = {
+  profileLabel: "Dengeli",
+  levelLabel: "Orta-Yüksek",
+  level: 5,
+  isWithinProfile: false,
+  verdict: "Ölçülen risk seviyeniz (Orta-Yüksek), Dengeli profilinizin üzerinde.",
 };
 
-export const mockRiskFactors: RiskFactor[] = [
-  { id: "vol", label: "Volatilite", value: 58, target: 55, note: "Yıllıklandırılmış 14,2% — hedef bandın içinde.", color: BRAND },
-  { id: "conc", label: "Sektör yoğunlaşması", value: 79, target: 27, note: "Savunma ve teknoloji toplamı %31; üst sınır %27.", color: "#E63946" },
-  { id: "fxexp", label: "Kur açıklığı", value: 45, target: 40, note: "Döviz varlıkları %18; doğal koruma yeterli.", color: "#C7CBD4" },
-  { id: "liq", label: "Likidite", value: 22, target: 20, note: "Portföyün %88'i iki gün içinde nakde çevrilebilir.", color: BRAND },
-  { id: "horizon", label: "Yatırım ufku uyumu", value: 34, target: 30, note: "7 yıllık ufuk, mevcut risk seviyesini taşıyabilir.", color: BRAND },
+// Renkler bilinçli olarak mockAllocation'daki ile AYNI hex değerler —
+// gerçek adapter (adapters/shared.ts LIGHT_ASSET_CLASS_COLORS) da bu
+// paletten okuyor, mock/canlı arasında sapma olmasın diye.
+export const mockRiskContributions: RiskCategoryContribution[] = [
+  { id: "stocks", name: "Hisse Senedi", weightPct: 42, volatilityPct: 28.4, riskContributionPct: 54.1, color: "#1E3A8A", highlightColor: "#3B82F6" },
+  { id: "precious", name: "Kıymetli Madenler", weightPct: 22, volatilityPct: 14.2, riskContributionPct: 20.9, color: "#B45309", highlightColor: "#F59E0B" },
+  { id: "fx", name: "Döviz", weightPct: 18, volatilityPct: 8.9, riskContributionPct: 15.1, color: "#047857", highlightColor: "#10B981" },
+  { id: "bond", name: "Borçlanma Araçları", weightPct: 12, volatilityPct: 4.4, riskContributionPct: 9.7, color: "#5B21B6", highlightColor: "#8B5CF6" },
+  { id: "cash", name: "Nakit", weightPct: 6, volatilityPct: 0.3, riskContributionPct: 0.3, color: "#475569", highlightColor: "#94A3B8" },
 ];
 
-export const mockStrategyRecommendations: StrategyRecommendation[] = [
-  {
-    id: "s1",
-    priority: "Öncelikli",
-    title: "Savunma sektörü ağırlığını kademeli azalt",
-    description: "Tek sektörde %31 ağırlık, dengeli profil için önerilen üst sınırı 4 puan aşıyor. Üç ayda üç dilimde azaltım öneriliyor.",
-    expectedImpact: "Beklenen etki: risk skoru −5",
-  },
-  {
-    id: "s2",
-    priority: "Orta vadeli",
-    title: "Kısa vadeli tahvil kademesi kur",
-    description: "3–6–12 ay vadeli üç dilim, nakit fazlasını getiriye çevirirken likiditeyi korur.",
-    expectedImpact: "Beklenen etki: yıllık +₺48.000",
-  },
-  {
-    id: "s3",
-    priority: "İzleme",
-    title: "Altın pozisyonunu bandına çek",
-    description: "%22 ağırlık son ralliyle oluştu. Kâr realizasyonu, hedef %15 bandına dönüşü sağlar.",
-    expectedImpact: "Beklenen etki: volatilite −1,8 puan",
-  },
+export const mockRiskDiversification: RiskDiversification = {
+  herfindahlIndex: 0.28,
+  diversificationRatio: 1.15,
+  maxClassWeightPct: 42,
+  maxClassLabel: "Hisse Senedi",
+};
+
+export const mockRiskAssets: RiskAssetRow[] = [
+  { symbol: "ASELS", assetClassLabel: "Hisse Senedi", weightPct: 16.4, volatilityPct: 31.2, riskLevelLabel: "Yüksek", riskLevelOrdinal: 6 },
+  { symbol: "GARAN", assetClassLabel: "Hisse Senedi", weightPct: 13.9, volatilityPct: 26.8, riskLevelLabel: "Orta-Yüksek", riskLevelOrdinal: 5 },
+  { symbol: "THYAO", assetClassLabel: "Hisse Senedi", weightPct: 11.7, volatilityPct: 33.5, riskLevelLabel: "Yüksek", riskLevelOrdinal: 6 },
+  { symbol: "ALTIN", assetClassLabel: "Kıymetli Madenler", weightPct: 22.0, volatilityPct: 14.2, riskLevelLabel: "Düşük-Orta", riskLevelOrdinal: 3 },
+  { symbol: "USD", assetClassLabel: "Döviz", weightPct: 9.6, volatilityPct: 9.4, riskLevelLabel: "Düşük", riskLevelOrdinal: 2 },
+  { symbol: "EUR", assetClassLabel: "Döviz", weightPct: 8.4, volatilityPct: 8.3, riskLevelLabel: "Düşük", riskLevelOrdinal: 2 },
+  { symbol: "EUROBOND", assetClassLabel: "Borçlanma Araçları", weightPct: 12.0, volatilityPct: 4.4, riskLevelLabel: "Çok Düşük", riskLevelOrdinal: 1 },
 ];
 
 export const mockValueAtRisk: ValueAtRisk = {
-  confidencePct: 95,
   amount: 227_800,
   formattedAmount: "₺227.800",
-  horizonLabel: "1 aylık ufukta",
+  confidencePct: 95,
+  horizonLabel: "1 günlük ufukta",
 };
 
 export const mockSharpeRatio: SharpeRatio = {
   value: 1.34,
-  rating: "İyi",
-  description: "Alınan risk başına elde edilen getiri sağlıklı seviyede; 1'in üzeri genellikle olumlu kabul edilir.",
+  note: "Risksiz faiz oranı şu an %37,0 — bu düzey, düşük volatiliteli portföylerde Sharpe oranını sistematik olarak negatife çekebilir. Bu, portföyün kötü performans gösterdiği anlamına gelmez.",
 };
 
-// Bir varlığın geçmiş fiyat verisi yetersiz olduğunda tetiklenen senaryo
-// (AK-2.7) — VaR/Sharpe kartlarının üstünde uyarı banner'ı olarak gösterilir.
-export const mockLimitedHistoryWarning = {
-  assetName: "ASELS",
-  message: "Kısmi geçmiş veri nedeniyle tahmini risk hesaplanmıştır.",
-};
+export const mockRiskWarnings: string[] = [
+  "CEYREK için sınırlı fiyat geçmişi nedeniyle volatilite tahmini kısıtlı.",
+];
 
 export const mockRiskPage: RiskPageData = {
-  profile: mockRiskProfile,
-  factors: mockRiskFactors,
-  recommendations: mockStrategyRecommendations,
+  overview: mockRiskOverview,
+  contributions: mockRiskContributions,
+  diversification: mockRiskDiversification,
+  assets: mockRiskAssets,
   valueAtRisk: mockValueAtRisk,
-  sharpeRatio: mockSharpeRatio,
-  limitedHistoryWarning: mockLimitedHistoryWarning,
+  sharpe: mockSharpeRatio,
+  warnings: mockRiskWarnings,
 };
 
 export const mockChatThreads: ChatThread[] = [

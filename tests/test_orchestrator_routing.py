@@ -54,6 +54,9 @@ def _state(intent: str) -> dict:
         ("portfolio+risk", ["portfolio_agent", "risk_agent"]),
         ("market+risk", ["market_agent", "risk_agent"]),
         ("portfolio+market", ["portfolio_agent", "market_agent"]),
+        ("web_research", ["web_research_agent"]),
+        # Kavram sorusu portföy sorusuyla birlikte gelebilir.
+        ("portfolio+web_research", ["portfolio_agent", "web_research_agent"]),
         # Eski tek kelimelik etiket geriye dönük tanınmalı.
         ("both", ["portfolio_agent", "market_agent"]),
     ],
@@ -101,6 +104,10 @@ def test_ambiguous_message_mentions_risk_as_an_example():
         ("PORTFOLIO, RISK", "portfolio+risk"),
         ("MARKET, RISK", "market+risk"),
         ("PORTFOLIO, MARKET", "portfolio+market"),
+        ("WEB_RESEARCH", "web_research"),
+        ("PORTFOLIO, WEB_RESEARCH", "portfolio+web_research"),
+        # WEB_RESEARCH içinde MARKET/RISK geçmiyor: etiket eşleşmesi alt dize
+        # araması olduğu için yeni etiket eskileri tetiklememeli.
         # Eski prompt'un çıktıları geriye dönük tanınmalı.
         ("BOTH", "portfolio+market"),
         ("RAG", "market"),
@@ -229,8 +236,12 @@ async def test_duplicate_error_messages_are_not_repeated():
 # --------------------------------------------------------------------------
 
 
-def test_graph_contains_all_three_agents():
-    """Risk düğümü grafa gerçekten bağlanmış olmalı."""
+def test_graph_contains_every_registered_agent():
+    """Etiketi olan her ajanın grafta bir düğümü olmalı.
+
+    Adı eskiden `..._all_three_agents` idi; ajan sayısı arttıkça adın
+    güncellenmesi unutuluyor, oysa test zaten AGENT_NODES üzerinden geziyor.
+    """
     nodes = set(_build_graph().nodes)
     for node in AGENT_NODES.values():
         assert node in nodes, f"{node} grafta yok"

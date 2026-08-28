@@ -133,12 +133,43 @@ function Mark({
 export interface PaperBoatLogoProps extends Omit<SVGProps<SVGSVGElement>, MarkOwnKeys | 'title'> {
   size?: number;
   title?: string;
+  /**
+   * Set to keep the mark riding the swell instead of standing still.
+   *
+   * The logo is static by default: a brand mark that never settles is
+   * distracting next to body text. Turn it on where the boat is the focal
+   * point of an otherwise still screen — the sign-in card, for instance.
+   */
+  sailing?: boolean;
+  /** Motion tempo, 1 = the loader's default. Lower is calmer. */
+  speed?: number;
+  /** Motion scale, 1 = default, 0 = still. */
+  amplitude?: number;
+  className?: string;
+  // `MarkOwnKeys` strips `style` from the inherited SVG props so the loader
+  // and thinking marks can re-declare it; the logo needs it back for the same
+  // reason they do — callers set `color` on it, and the artwork inherits.
+  style?: CSSProperties;
 }
 
-export function PaperBoatLogo({ size = 44, title, ...rest }: PaperBoatLogoProps) {
+export function PaperBoatLogo({
+  size = 44,
+  title,
+  sailing = false,
+  speed,
+  amplitude,
+  className,
+  style,
+  ...rest
+}: PaperBoatLogoProps) {
   return (
     <Mark
       size={size}
+      sailing={sailing}
+      speed={speed}
+      amplitude={amplitude}
+      className={className}
+      style={style}
       role={title ? 'img' : undefined}
       aria-hidden={title ? undefined : true}
       {...rest}

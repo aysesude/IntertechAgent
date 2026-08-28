@@ -836,3 +836,53 @@ def test_kap_ve_gelisme_kelimeleri_jenerik_sayilir():
         Retriever(store=store).retrieve("KAP'a gore deniz bank hakkinda guncel bir gelisme var mi")
         == []
     )
+
+
+def test_nakit_akis_tablosu_kelimeleri_jenerik_sayilir():
+    """ "Nakit akış tablosu" başlığı 2026-08-26'da 23 bilanço dokümanına
+    eklendi — "temettü"/"halka arz" ile aynı sınıfta jenerikleşti. Ölçümle
+    doğrulandı: "BİM'in nakit akış tablosu nasıl?" (BIMAS için bu içerik
+    hiç eklenmedi) sorgusu "nakit"/"akış"/"tablosu" üzerinden tamamen
+    alakasız şirketleri "bulundu" saydırıp "Kaynaklar" listesine sokuyordu."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "## Nakit akış tablosu\n\nVakıfBank'ın işletme faaliyetlerinden "
+                "nakit akışı negatif gerçekleşti.",
+                sirket="VAKBN",
+                baslik="VakıfBank 2026 2. Çeyrek",
+                tur="bilanco",
+                distance=0.397,
+            )
+        ]
+    )
+
+    assert Retriever(store=store).retrieve("BİM'in nakit akış tablosu nasıl?") == []
+
+
+def test_referans_dokumani_kelime_ortusme_kapisindan_muaf():
+    """ "tur: referans" dokümanları (TFRS/finansal oran/kurumsal olay
+    terimleri sözlüğü) jenerik kelime kapısından muaf: bir kavramı
+    TANIMLAYAN doküman, tanımladığı kelimeleri sıkça kullanır ama bu
+    kelimeler bilanço dokümanlarının boilerplate açılışında da geçtiği
+    için jenerik sayılmak zorunda kalıyor (bkz. "nakit"/"tablosu"/"kap").
+    İkisi çakışınca kavramı tanımlayan TEK doğru kaynak da elenip sorgu
+    tamamen boş dönüyordu (ölçümle doğrulandı, 2026-08-26): "Konsolide
+    finansal tablo ne demek?" sorgusu. Şirket dokümanlarının aksine burada
+    "yanlış şirket" riski yok, muafiyet güvenli."""
+    store = _FakeVectorStore(
+        [
+            _doc(
+                "TFRS 10, bir ana ortaklığın kontrol ettiği bağlı ortaklıklarla "
+                "birlikte konsolide finansal tablo sunmasını düzenler.",
+                baslik="TFRS Temel Standartlar Sözlüğü",
+                tur="referans",
+                distance=0.335,
+            )
+        ]
+    )
+
+    sonuclar = Retriever(store=store).retrieve("Konsolide finansal tablo ne demek?")
+
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["metadata"]["tur"] == "referans"

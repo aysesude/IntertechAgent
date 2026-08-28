@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/context/ThemeContext';
-import gunbatimi from '@/assets/backgrounds/gunbatimi.jpg';
+import gunbatimi from '@/assets/backgrounds/dark-tema-yeni.jpg';
 
 type BackgroundVariant = 'prominent' | 'subtle';
 
@@ -20,9 +20,9 @@ interface BackgroundLayerProps {
    * değer, arka planın kartların arasından ve altından net bir renk
    * katmanı olarak sızmasını sağlıyor.
    *
-   * Koyu modda variant ayrımı yok — tüm sayfalarda aynı üst-bant tablo
-   * (gün batımı manzarası) ve aynı gradient eritme kullanılıyor; header/nav
-   * ortak olduğu ve varlık sınıfı
+   * Koyu modda variant ayrımı yok — tüm sayfalarda aynı tam ekran tablo
+   * (fırtınalı gün batımı manzarası, hiç kırpılmadan/eritilmeden viewport'u
+   * dolduruyor) kullanılıyor; header/nav ortak olduğu ve varlık sınıfı
    * renkleri sayfalar arasında paylaşıldığı için tutarlılık token/asset
    * katmanında (bkz. src/index.css .dark, src/data/assetColors.ts) sağlanıyor.
    */
@@ -34,12 +34,6 @@ const OPACITY_MAP: Record<BackgroundVariant, string> = {
   prominent: 'opacity-[0.65]',
   subtle: 'opacity-[0.65]',
 };
-
-// Koyu temada tablo sayfanın üst bandına (yaklaşık 55vh) yerleşiyor ve
-// aşağı doğru sayfa zeminine (--color-surface) yumuşak bir gradientle
-// eriyor — tüm ekranı kaplayan eski silik doku mantığından kasıtlı olarak
-// farklı, burada tablo yüksek görünürlükte.
-const DARK_BAND_HEIGHT = '55vh';
 
 /**
  * Sayfa arka planına sabit (fixed) şekilde yerleşen, saydam görsel katmanı.
@@ -72,8 +66,10 @@ const DARK_BAND_HEIGHT = '55vh';
  * bg-surface'in üstünde kalmasını sağlıyor — eskiden "ilk child olmak"
  * bunu DOM sırasıyla garanti ediyordu, portal sonrası bunu z-index üstleniyor.
  *
- * Görsel 1918 tarihli bir tablo (kamu malı); ~410KB'a optimize edilmiş
- * hali kullanılıyor, orijinal yüksek çözünürlüklü kopya ayrıca mevcut.
+ * Görsel: fırtınalı bir gün batımı denizcilik tablosu (`dark-tema-yeni.jpg`).
+ * KAYNAĞI/LİSANSI DOĞRULANMADI ve dosya OPTİMİZE EDİLMEDİ (~1,8MB) — önceki
+ * görsel (`gunbatimi.jpg`, kamu malı, ~410KB'a optimize edilmişti) bilerek
+ * yerinde bırakıldı, kullanılmıyor.
  */
 export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
   variant = 'subtle',
@@ -91,36 +87,25 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
   // yaratmadan kırpıyor.
   const content = isDark ? (
     <>
+      {/* Tablo artık tüm ekranı (fixed inset-0) kaplıyor — eskiden yalnızca
+          üst ~55vh'lik bir bantta durup sayfa zeminine eriyordu, bilerek
+          kırptık: artık kırpma/eritme YOK, görsel scroll boyunca aynı
+          şekilde viewport'u dolduruyor (light temanın deseniyle aynı). */}
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-x-0 top-0 z-0 w-full origin-center scale-105 bg-cover bg-no-repeat ${className}`}
+        className={`pointer-events-none fixed inset-0 z-0 h-full w-full origin-center scale-105 bg-cover bg-no-repeat ${className}`}
         style={{
-          height: DARK_BAND_HEIGHT,
           backgroundImage: `url(${gunbatimi})`,
-          backgroundPosition: 'center 74%',
+          backgroundPosition: 'center 68%',
         }}
       />
+      {/* Soldan sağa karartma — SADECE sol taraftaki kicker/başlık metninin
+          okunabilirliği için. Tüm yükseklik boyunca sabit (görsel artık tam
+          ekran olduğu için), sağ/orta hep şeffaf kalıyor. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-0 w-full"
+        className="pointer-events-none fixed inset-0 z-0 h-full w-full"
         style={{
-          height: DARK_BAND_HEIGHT,
-          // İlk %78 tamamen şeffaf (tablo tam görünür, ay/yansıma kapanmıyor);
-          // son %22'de sayfa zeminine (--color-surface) yumuşakça eriyor.
-          background:
-            'linear-gradient(to bottom, rgba(10,19,29,0) 0%, rgba(10,19,29,0) 78%, var(--color-surface) 100%)',
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-0 w-full"
-        style={{
-          height: DARK_BAND_HEIGHT,
-          // Soldan sağa karartma — dikey erime gradientinin ÜSTÜNE eklenir
-          // (yerine geçmez). Bu tablo öncekinden daha parlak turuncu; sol
-          // taraftaki kicker/başlık metni bu karartma olmadan güneşin
-          // üstünde okunmuyordu. %62'den itibaren tamamen şeffaf kalıyor,
-          // güneş ve bulutlar (ekranın ortası) karartılmıyor.
           background:
             'linear-gradient(to right, rgba(10,15,25,0.88) 0%, rgba(10,15,25,0.80) 28%, rgba(10,15,25,0.20) 48%, rgba(10,15,25,0) 62%)',
         }}
@@ -129,8 +114,11 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
   ) : (
     <div
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 z-0 h-full w-full origin-center scale-105 bg-cover bg-center transition-opacity duration-300 ${OPACITY_MAP[variant]} ${className}`}
-      style={{ backgroundImage: 'url(/backgrounds/vira-background-ship.jpg)' }}
+      className={`pointer-events-none fixed inset-0 z-0 h-full w-full origin-center scale-105 bg-cover transition-opacity duration-300 ${OPACITY_MAP[variant]} ${className}`}
+      style={{
+        backgroundImage: 'url(/backgrounds/vira-background-ship.jpg)',
+        backgroundPosition: 'center 40%',
+      }}
     />
   );
 

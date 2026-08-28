@@ -39,6 +39,13 @@ Konsolide satış hacmi yıllık bazda yüzde 9,8 artışla 519 milyon ünite
 kasaya yükseldi; büyümeye özellikle Pakistan ve Orta Asya
 operasyonlarının katkısı belirleyici oldu.
 
+## Nakit akış tablosu
+
+Şirketin ikinci çeyrek nakit akış tablosuna göre işletme
+faaliyetlerinden 8.446,15 milyon TL net nakit girişi sağlandı. Yatırım
+faaliyetlerinde 4.345,64 milyon TL, finansman faaliyetlerinde ise
+1.993,07 milyon TL net nakit çıkışı gerçekleşti.
+
 ## Değerlendirme
 
 Hem yurt içi hem uluslararası operasyonlardaki büyüme, şirketin

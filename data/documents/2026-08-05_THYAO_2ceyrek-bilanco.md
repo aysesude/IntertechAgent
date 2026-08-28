@@ -45,6 +45,22 @@ dolara ulaştı. Kârdaki düşüşün başlıca nedeni olarak artan yakıt
 maliyetleri gösterildi; şirket açıklamalarına göre yakıt giderleri
 geçen yılın aynı çeyreğine kıyasla yüzde 93 arttı.
 
+## Nakit akış tablosu
+
+2026 yılı ilk yarısına (Ocak-Haziran) ait konsolide nakit akış
+tablosu kalemleri şöyle:
+
+| Kalem | 2026 İlk Yarı |
+|---|---|
+| İşletme faaliyetlerinden net nakit girişi | 74,326 milyar TL |
+| Yatırım faaliyetlerinden net nakit çıkışı | 60,439 milyar TL |
+| Finansman faaliyetlerinden net nakit çıkışı | 13,437 milyar TL |
+| Dönem sonu nakit ve nakit benzerleri | 78,118 milyar TL |
+
+İkinci çeyreğe özel ayrıştırılmış (yalnızca Nisan-Haziran) nakit akış
+rakamları kaynak haberlerde yer almamaktadır; yukarıdaki tablo 6 aylık
+kümülatif döneme aittir.
+
 ## Not
 
 Bu belge, KAP'a yapılan bildirimin haber sitelerine yansıyan

@@ -23,11 +23,27 @@ Aydınlatma Platformu'na (KAP) bildirdi.
 | Net kâr | 8,549 milyar TL | 1,306 milyar TL |
 | Hasılat | 64,882 milyar TL | 41,412 milyar TL |
 
+İkinci çeyrek FAVÖK'ü, yıllık bazda yüzde 59,2 artışla 6,582 milyar
+TL'ye ulaştı; FAVÖK marjı yüzde 10,1 oldu.
+
 ## İlk 6 aylık dönem (2026 Ocak-Haziran)
 
 İlk yarı net kârı 8,933 milyar TL olarak açıklandı; 2025 yılının aynı
 döneminde bu rakam 1,733 milyar TL idi — yaklaşık yüzde 415 artışa denk
 geliyor. İlk yarı toplam hasılat 124,567 milyar TL olarak gerçekleşti.
+İlk yarı brüt kârı, 2025 yılının aynı dönemine göre yüzde 39 artışla
+10,684 milyar TL'ye çıktı; ilk yarı FAVÖK'ü ise 8,261 milyar TL'den
+12,402 milyar TL'ye yükseldi.
+
+## Nakit akış tablosu
+
+Şirketin serbest nakit akışı, birinci çeyrekte gerçekleşen olağanüstü
+işletme sermayesi salımının ikinci çeyrekte tekrarlanmaması nedeniyle
+belirgin şekilde geriledi: birinci çeyrekte yaklaşık 275 milyon dolar
+olan serbest nakit akışı, ikinci çeyrekte yaklaşık 2 milyon dolara
+düştü. Nakit akış tablosunun işletme/yatırım/finansman faaliyetleri
+kırılımına ilişkin güvenilir, tutarlı bir kaynak bulunamadığından bu
+belgeye eklenmemiştir.
 
 ## Not
 

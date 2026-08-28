@@ -10,7 +10,9 @@ import {
 import {
   fetchCurrentUser,
   login as loginRequest,
+  register as registerRequest,
   type AuthUser,
+  type RegisterRequest,
 } from "@/api/auth";
 import { isApiConfigured, setAccessToken, setUnauthorizedHandler } from "@/api/client";
 import type { User } from "@/types/finance";
@@ -46,6 +48,21 @@ interface AuthContextValue {
   user: User;
   /** Başarılıysa çözülür; başarısızsa kullanıcıya gösterilebilir bir hata fırlatır. */
   login: (nationalId: string, password: string) => Promise<void>;
+  /**
+   * Hesap açar ve DOĞRUDAN oturum açar.
+   *
+   * Kayıt yanıtı token taşıyor; ayrıca `login` çağırmak kullanıcıyı yeni
+   * belirlediği şifreyi hemen yeniden yazmaya zorlardı.
+   */
+  register: (payload: RegisterRequest) => Promise<void>;
+  /**
+   * Kullanıcı kaydını sunucudan tazeler.
+   *
+   * Anket tamamlandığında gerekiyor: `risk_survey_score` sunucuda değişiyor
+   * ama oturumdaki kopya eski kalıyor ve anket ekranı kalkmıyordu. Sayfayı
+   * yeniden yüklemek yerine tek bir istek.
+   */
+  refreshAccount: () => Promise<void>;
   logout: () => void;
 }
 
@@ -162,6 +179,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  const register = useCallback(async (payload: RegisterRequest) => {
+    const yanit = await registerRequest(payload);
+    setNotice(null);
+    writeStoredToken(yanit.access_token);
+    setAccessToken(yanit.access_token);
+    setAccount(yanit.user);
+    setStatus("authenticated");
+  }, []);
+
+  const refreshAccount = useCallback(async () => {
+    // Hata YUTULUYOR: bu bir tazeleme, kritik yol değil. Başarısız olursa
+    // eldeki (eski ama geçerli) kayıtla devam edilir; token gerçekten
+    // düşmüşse zaten global 401 işleyicisi oturumu kapatır.
+    try {
+      setAccount(await fetchCurrentUser());
+    } catch {
+      /* yukarıdaki gerekçe */
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -175,9 +212,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: "Bireysel Yatırımcı",
       },
       login,
+      register,
+      refreshAccount,
       logout,
     }),
-    [status, notice, account, login, logout],
+    [status, notice, account, login, register, refreshAccount, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

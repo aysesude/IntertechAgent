@@ -174,6 +174,18 @@ def _keywords(text: str) -> set[str]:
 # yarısından FAZLASININ eşleşmesi gerekir (tam yarısı yetmez — bkz. altta).
 _MIN_KEYWORD_OVERLAP_RATIO = 0.5
 
+# `tur: referans` muafiyeti (bkz. retrieve()) için AYRI, GENEL 0.95 eşiğinden
+# ÇOK DAHA SIKI bir mesafe sınırı. Muafiyet ilk eklendiğinde (kelime-örtüşme
+# kapısını tamamen atlıyordu) genel 0.95 eşiğiyle çalışıyordu — ama bu, "Altın
+# piyasasında ne oluyor?"/"DenizBank hakkında gelişme var mı?"/"Sahte Sanayi
+# A.Ş.'nin ortaklık yapısı nedir?" gibi TAMAMEN ALAKASIZ sorularda bile
+# referans dokümanlarını (0.51–0.71 mesafe aralığında) "bulundu" saydırıp
+# yanlış kaynak listesine sokuyordu (ölçümle doğrulandı, 2026-08-27). Ölçülen
+# meşru eşleşmeler ("Konsolide...", "F/K oranı...", "Bedelsiz sermaye
+# artırımı...", "TFRS 16 nedir?") hep ≤0.43 mesafede, alakasız sızıntılar hep
+# ≥0.51 mesafede kalıyor — aradaki net boşluğa göre eşik seçildi.
+_REFERANS_MUAFIYET_MESAFE_ESIGI = 0.47
+
 # "hisse", "fiyat", "şirket" gibi kelimeler neredeyse HER bilanço/analiz
 # dokümanında birlikte geçiyor (bkz. _shares_a_keyword). Korpus büyüdükçe,
 # uydurma bir şirket adı içeren ama tesadüfen bu jenerik kelimelerin
@@ -330,6 +342,16 @@ _GENERIC_FINANCE_TERMS = {
     # artırımı ne zaman oldu" gibi sorgularda sermaye/artırımı jenerikleştikten
     # SONRA tek kalan ayırt edici kelime oluyordu.
     "oldu",
+    # "Nakit akış tablosu" başlığı ve boilerplate cümlesi 2026-08-26'da 23
+    # bilanço dokümanına eklendi — "temettü"/"halka arz" ile aynı sınıfta
+    # jenerikleşti. Ölçümle doğrulandı: "BİM'in nakit akış tablosu nasıl?"
+    # (BIMAS için bu içerik hiç eklenmedi) sorgusu "nakit"/"akış"/"tablosu"
+    # üzerinden YKBNK/GARAN/PGSUS/EKGYO gibi tamamen alakasız şirketleri VE
+    # TFRS referans dokümanını "bulundu" saydırıp "Kaynaklar" listesine
+    # sokuyordu — cevabın kendisi doğru şekilde "bulunamadı" dese bile.
+    "nakit",
+    "akis",
+    "tablosu",
     # "KAP" (Kamuyu Aydınlatma Platformu) hemen her dokümanın kaynak alanında
     # veya metninde geçiyor — 31 profilin/bilançonun neredeyse tamamı KAP'a
     # atıf yapıyor. "gelişme" de aynı sınıfta genel bir haber/olay kelimesi.
@@ -340,6 +362,14 @@ _GENERIC_FINANCE_TERMS = {
     # listesine soktu (asıl soru "bilgi yok" dese bile).
     "kap",
     "gelisme",
+    # DENENDİ, GERİ ALINDI (2026-08-26): "konsolide"/"finansal" da
+    # "Konsolide finansal tablo ne demek?" sorgusunda GARAN/ASELS/BIMAS gibi
+    # alakasız şirketleri "bulundu" saydırıp gereksiz kaynak ekliyordu — ama
+    # ikisini birden jenerikleştirmek, sorunun asıl doğru cevabını veren
+    # TFRS referans dokümanının TEK ayırt edici kelimesini de silip sorguyu
+    # tamamen BOŞ sonuca düşürdü (ölçümle doğrulandı). Birkaç fazladan
+    # kaynak göstermek, doğru cevabı hiç vermemekten iyidir — bu ikisi
+    # BİLEREK jenerik listede DEĞİL.
 }
 
 
@@ -654,6 +684,21 @@ class Retriever:
         # Muafiyet DAR: yalnızca kendi `sirket` alanı sorguyla eşleşen sonucu
         # kapsıyor. Başka şirketin dokümanı, alakasız sorgu ve mesafe eşiği
         # aynen eskisi gibi eleniyor.
+        # `tur: referans` dokümanları (TFRS/finansal oran/SPK-BDDK/kurumsal
+        # olay terimleri sözlüğü — küçük, 4 dokümanlık, şirketten bağımsız
+        # bir küme) kelime-örtüşme kapısından DAR bir şekilde muaf: bir
+        # kavramı TANIMLAYAN doküman, tanımladığı kelimeleri (ör. "konsolide",
+        # "finansal", "tablo") sıkça kullanır — ama bu kelimeler bilanço
+        # dokümanlarının boilerplate açılış cümlesinde de geçtiği için jenerik
+        # sayılmak zorunda kalıyor (bkz. _GENERIC_FINANCE_TERMS). İkisi
+        # çakışınca kavramı tanımlayan TEK doğru kaynak da elenip sorgu
+        # tamamen boş dönüyordu (ölçümle doğrulandı: "Konsolide finansal
+        # tablo ne demek?" sorgusu). Muafiyet genel 0.95 eşiği yerine ÇOK DAHA
+        # SIKI `_REFERANS_MUAFIYET_MESAFE_ESIGI`'ye bağlı: gevşek eşikle
+        # tamamen alakasız sorularda bile referans dokümanları "bulundu"
+        # saydırıyordu (bkz. o sabitin yorumu). Şirket dokümanlarının aksine
+        # burada "yanlış şirket" riski yok, yalnızca "alakasızlık" riski var —
+        # sıkı mesafe eşiği onu da kapatıyor.
         filtered = [
             r
             for r in results
@@ -661,6 +706,10 @@ class Retriever:
             and (
                 _shares_a_keyword(query_keywords, _result_keywords(r))
                 or _sirket_matches_query(r, query_keywords)
+                or (
+                    (r.get("metadata") or {}).get("tur") == "referans"
+                    and r.get("distance", 1.0) <= _REFERANS_MUAFIYET_MESAFE_ESIGI
+                )
             )
             and _matches_filters(r, sirket, donem, donem_listesi, tur)
         ]

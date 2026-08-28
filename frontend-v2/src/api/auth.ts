@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPostNoContent } from "./client";
+import type { SurveyAnswers } from "./survey";
 
 /**
  * Giriş uçları. Şekiller backend/app/schemas/auth.py ile birebir eşleşir.
@@ -11,6 +12,14 @@ export interface AuthUser {
   id: string;
   full_name: string;
   risk_profile: "conservative" | "balanced" | "growth" | "aggressive";
+  /**
+   * `null` = anket hiç doldurulmamış.
+   *
+   * Uygulamanın anket ekranını açıp açmayacağına karar verdiği TEK alan
+   * (bkz. App.tsx). Oturum yanıtının içinde geliyor ki arayüz her açılışta
+   * ayrı bir istek atmasın.
+   */
+  risk_survey_score: number | null;
 }
 
 export interface TokenResponse {
@@ -28,6 +37,41 @@ export function login(nationalId: string, password: string): Promise<TokenRespon
     // kapatma akışını tetiklememeli.
     { skipUnauthorizedHandler: true },
   );
+}
+
+export interface RegisterRequest {
+  full_name: string;
+  national_id: string;
+  email: string;
+  password: string;
+  /**
+   * OPSİYONEL: anket kayıttan çıkarılıp ilk girişe taşındı. Gönderilirse
+   * sunucuda skorlanır ve puan hesapla birlikte yazılır.
+   */
+  survey_answers?: SurveyAnswers;
+  /** "Başka bankadan getirilen" açılış tutarı. Metin gönderiliyor: `number`
+   *  büyük tutarlarda kayan nokta hatası taşır, sunucu tarafı `Decimal`. */
+  initial_deposit_try: string;
+}
+
+export interface RegisterResponse extends TokenResponse {
+  /** Anket doldurulmadıysa `null`. */
+  risk_survey_score: number | null;
+  profil_adi: string | null;
+}
+
+/**
+ * Hesap açar. Anket gönderilirse SUNUCUDA yeniden skorlanır; buradan
+ * gönderilen bir puan olsa bile yok sayılır.
+ *
+ * Token da döner — kullanıcı kayıttan sonra bir de giriş ekranından geçmez.
+ */
+export function register(payload: RegisterRequest): Promise<RegisterResponse> {
+  return apiPost<RegisterResponse>("/api/auth/register", payload, {
+    // Kayıt akışı giriş yapmamış kullanıcı içindir; buradan dönen bir hata
+    // "oturum düştü" demek değildir.
+    skipUnauthorizedHandler: true,
+  });
 }
 
 /** Elimizdeki token hâlâ geçerli mi ve kime ait? Sayfa yenilendiğinde çağrılır. */

@@ -243,3 +243,70 @@ def test_coklu_sirketli_sorguda_yapi_kredi_kredi_etiketiyle_cakissa_bile_gecer()
         )
         == "pass_to_llm"
     )
+
+
+# --------------------------------------------------------------------------
+# Kavram sorusu emir değildir (fiil kapısı × soru kalıbı)
+# --------------------------------------------------------------------------
+#
+# Fiil listesindeki "al", "sat", "alım", "satım", "emir" kelimeleri emir kipi
+# için yazıldı ama soruların içinde de geçiyor. `web_research_agent` gelene
+# kadar bu reddin bedeli yoktu — soru zaten cevapsız kalacaktı. Artık cevabı
+# olan bir soruyu reddetmek yanlış cevap vermek demek, o yüzden fiil kapısı
+# `kavram_kapsami.soru_kaliplari` ile açılıyor.
+#
+# Tablo bilerek İKİ YÖNLÜ: soru kalıbı taşıyan sorgular geçmeli, emir kipindeki
+# sorgular reddedilmeye devam etmeli. Kapının gevşemediği ancak ikinci grup
+# yeşil kaldığı sürece söylenebilir.
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # Fiil listesindeki kelimeleri taşıyan gerçek kavram soruları.
+        "fon alım satımı kaç günde gerçekleşir",
+        "fon alım satım saatleri nedir",
+        "alım satım komisyonu nasıl hesaplanır",
+        # Fiil taşımayan kavram soruları da elbette geçmeli.
+        "takas kaç gün sürer",
+        "lot ne demek",
+        "borsa saat kaçta kapanır",
+        "temettü ne zaman hesaba geçer",
+    ],
+)
+def test_kavram_sorusu_islem_talebi_sayilmaz(query):
+    assert _intent(query) == "pass_to_llm", f"kavram sorusu reddedildi: {query}"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # Emir kipi: soru kalıbı yok, kapı açılmamalı.
+        "10 lot THYAO al",
+        "portföyümdeki altını sat",
+        "Hesabıma 10.000 TL yatır",
+        "THYAO için emir ver",
+        "altın alım emri gir",
+        "yarın açılışta al",
+        "1000 dolar transfer et",
+        "hesap aç",
+    ],
+)
+def test_emir_kipi_kavram_kapisindan_sizmaz(query):
+    assert _intent(query) == "UNAUTHORIZED_ACTION", f"işlem talebi sızdı: {query}"
+
+
+def test_soru_kaliplari_scope_yamldan_okunur():
+    """Kalıplar kodda değil `scope.yaml`'da durur (NFR: kapsam kuralları koda
+    gömülmez). Bölüm boşsa kapı hiç açılmaz — yapılandırma kaybı davranışı eski
+    hâline döndürmeli, kimseyi sessizce içeri almamalı."""
+    from agents import scope_checker
+
+    assert scope_checker._kavram_sorusu_mu("fon alım satımı kaç günde gerçekleşir")
+
+    orijinal = scope_checker.scope_config
+    try:
+        scope_checker.scope_config = {}
+        assert not scope_checker._kavram_sorusu_mu("fon alım satımı kaç günde gerçekleşir")
+    finally:
+        scope_checker.scope_config = orijinal
