@@ -127,7 +127,59 @@ tetiklenmesi"ydi; burada tetiklenen Sinyal 5 değil, ayrı bir bildirim yolu.
   `src/types/` altındaki TypeScript tipleri bu şemayla eşleşmelidir" diyor.
   `mismatched_holdings` alanı eklendi; TS tarafına yansıtılması ayrı bir iş
   (alan eklemek geriye dönük uyumlu olduğu için acil değil).
-- **Merge adımı bazı uyarıları düşürebiliyor.** `merge_responses`'ın
-  "elenemez" listesinde sinyal bloğu yok; ikinci LLM turu onu kısaltabilir
-  ya da düşürebilir. Aynı sınırlama web_research için de kayıtlı (bkz.
-  `analiste-kapsam-sapmalari.md` → "Ek — iş kalemi"). Bu iş de oraya bağlı.
+- ~~**Merge adımı bazı uyarıları düşürebiliyor.**~~ 2026-08-31'de (aynı gün,
+  ikinci tur) çözüldü — bkz. "İkinci tur" bölümü aşağıda.
+
+## İkinci tur (2026-08-31, aynı gün) — merge adımı iki bloğu da bozuyordu
+
+PR merge edilip deploy olduktan sonra canlıda üç soru yeniden soruldu
+(`virasohbet202608311540.txt`, 15:35–15:39). Git geçmişi doğrulandı: fix
+commit'i (`Risk ajani sinyal blogu: ...`) 14:26'da `risk-agent-sinyal-
+gorunur-yagiz`'a girdi, 14:27'de `test`'e merge edildi, 14:58'de `main`
+güncellendi — yani aşağıdaki iki bulgu YENİ koddan geldi, eski koddan değil.
+
+**Bulgu 1 — 'Varlık bazlı gözlemler' bloğu hâlâ düşüyordu.** Bir önceki
+turda eklenen "VARLIK BAZLI GÖZLEMLERİ KORU" talimatına rağmen: soru 1'in
+yanıtında yalnızca düşük-güven kapanış cümlesi ("Bu gözlemler sınırlı
+sayıda kaynağa dayanıyor...") vardı — başlık ve madde listesi yoktu. Bu
+cümlenin varlığı bile kanıt: `_sinyal_blogu` bu cümleyi yalnızca tam blokla
+(başlık + maddeler) birlikte üretiyor (`risk_agent.py` satır ~533-535); LLM
+maddeleri düşürüp yalnızca kapanışı bırakmış.
+
+**Bulgu 2 — 'Risk profili uyumu' bloğu SINIF düzeyine geri yorumlanıyordu.**
+Bu blok hiç korunmuyordu. Soru 2 ve 3'ün yanıtı ikisi de "Borçlanma Araçları
+sınıfı güncel profilinize göre artık tavsiye kapsamında değil" dedi — tam
+olarak bu dosyanın "Bulgu: iş zaten yazılmıştı" bölümünde ve
+`portfolio_agent.py` docstring'inde anlatılan, 2026-08-31'in ilk turunda
+asset-level'e taşınarak düzeltilmiş olan hatanın AYNISI. Deterministik
+veri doğruydu (sembol + kendi seviyesi); merge LLM'i onu kendi cümlesine
+çevirirken sınıf diline geri döndü.
+
+**Kök neden.** İki blok da yalnızca sistem promptunda "AYNEN koru" talimatı
+ile korunuyordu (biri var, biri hiç yoktu). Talimat kanıtlanabilir şekilde
+yeterli değil — LLM'e ayrıntı gösterip "değiştirme" demek, göstermemekten
+daha zayıf bir garanti.
+
+**Çözüm (talimattan koda).** `agents/orchestrator.py`'de yeni
+`_ayikla_korunan_bloklar` fonksiyonu: her iki blok da merge LLM'ine
+gönderilen metinden ÇIKARILIYOR (yerine "ayrıntı burada değil, kısaca
+değin, ayrıca eklenecek" diyen kısa bir not bırakılıyor), LLM çalıştıktan
+SONRA ham blok kod tarafından yanıtın sonuna AYNEN ekleniyor. LLM artık
+ayrıntıyı hiç görmediği için ne düşürebilir ne yanlış yorumlayabilir. LLM
+tamamen sessiz kalırsa (nadir düşüş yolu) ham metin kullanılır — blok zaten
+doğal yerinde olduğundan ayrıca eklenmez (tekrar önlenir).
+
+Değişen tek dosya `agents/orchestrator.py`; `risk_agent.py` ve
+`portfolio_agent.py`'ye dokunulmadı (üretilen bloklar zaten doğruydu, sorun
+yalnızca merge adımındaydı). 9 yeni/güncellenen test:
+`tests/test_orchestrator_routing.py` (7 yeni test, `_ayikla_korunan_bloklar`
+ve `merge_responses` için) ve `tests/test_risk_agent.py` (eski, artık
+geçersiz `test_merge_prompt_sinyal_blogunu_koruyor` kaldırıldı, yerine
+pointer bırakıldı).
+
+Soru 3'ün ("elimdeki varlıklarla ilgili son gelişmeler riskimi nasıl
+etkiliyor") yanıtında ne sinyal bloğu ne başlığı vardı — bu, risk_agent'ın
+hiç çalışmadığının mı yoksa çalışıp hiçbir `risky_assets` bulgusu
+üretmediğinin mi kanıtı, bu tek dökümden ayırt edilemiyor
+(`_sinyal_blogu` bulgu yoksa zaten boş döner, bu normal bir durum
+olabilir). Yeniden deploy sonrası tekrar test edilmeli.
