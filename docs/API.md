@@ -335,22 +335,28 @@ Portföy getirisi ↔ endeksler (bar grafiği).
 }
 ```
 
-Metrik — pencere başındaki (`t0`) miktarlar **sabit tutulur**, yalnızca fiyat
-değişimi ölçülür:
+İki farklı ölçü bilerek yan yana:
 
-```
-C = Σ qᵢ(t0) × pᵢ(t0)      V = Σ qᵢ(t0) × pᵢ(t1)      getiri% = 100 × (V / C − 1)
-```
+- `portfolio_return_percent` = **TWR**, `/performance` ucundaki
+  `summary.change_percent` ile **birebir aynı sayı** (aynı fonksiyon, aynı
+  pencere). Nakit dahil, dış para giriş-çıkışından arındırılmış gerçek getiri.
+- `benchmarks[].return_percent` = endeksin **saf fiyat getirisi**,
+  `100 × (p(t1)/p(t0) − 1)`.
 
-- Pencere içindeki alım/satım, temettü ve komisyon hesaba **katılmaz**; endeksin
-  saf fiyat getirisiyle aynı ölçekte olması için. Aksi halde "portföyüm endeksi
-  yendi" cümlesi, aslında sadece yeni para yatırıldığı anlamına gelirdi.
-- Bu yüzden bu uçtaki getiri, `/performance`'taki TWR ile **kasıtlı olarak
-  farklıdır**. TWR nakit yükünü ve dönem içi işlemleri içerir, bu metrik içermez.
-- `t0` fiyatı bulunmayan varlık dışlanır ve `excluded_symbols` ile bildirilir.
-- Endeksler: `XU100`, `XAUTRY`, `USDTRY`. **`XU100` varlık evreninde henüz
-  tanımlı değil** (`app/providers/universe.py`), o yüzden listede görünmüyor;
-  eklendiği gün (`provider_symbol: "XU100.IS"`) kod değişmeden listeye girer.
+Ölçek farkı kasıtlıdır: hesapta bekleyen para getiri üretmez, endeks ise
+tamamen yatırımdadır. Arayüz bunu kartın altında yazar.
+
+> **31 Ağustos 2026'ya kadar** bu uç t0 miktarlarını dondurup yalnızca fiyat
+> değişimini ölçüyordu. Nakit hesaba girmediği ve dönem içi alım/satım yok
+> sayıldığı için aynı sayfadaki iki kart farklı sayı gösteriyordu — ölçüldü
+> (seed'li 12 kullanıcı, 12 ay): nakdi %79 olan kullanıcıda çubuk +%44,54,
+> performans kartı +%4,46; iki kullanıcıda işaret ters dönüyordu.
+
+- `by_asset_class` **üçüncü bir ölçüdür**: donmuş t0 sepetinin sınıf bazlı
+  fiyat getirisi. Toplamı `portfolio_return_percent`e eşit değildir.
+- `excluded_symbols`: dönem sonunda fiyatı bulunamayan, portföy değerine hiç
+  girmemiş varlıklar (AK 5.5).
+- Endeksler: `XU100`, `USDTRY`, `EURTRY`, `XAUTRY`.
 
 #### `GET /api/prices/history?symbols=TUPRS&symbols=XAUTRY&window=3m`
 
@@ -599,8 +605,8 @@ bağlanması ayrı bir iştir — risk ajanına bu turda dokunulmadı.
 ### `GET /api/portfolio/{user_id}/benchmark?window=`
 
 Arayüzdeki **"Varlıklar Arası Karşılaştırmalı Getiri"** kartının kaynağı.
-Portföyün ve dört kıyas enstrümanının seçili dönemdeki toplam **fiyat**
-getirisi.
+Portföyün seçili dönemdeki gerçek getirisi (TWR) ile dört kıyas
+enstrümanının aynı dönemdeki fiyat getirisi.
 
 ```json
 {
@@ -619,19 +625,17 @@ getirisi.
 
 - `window`: **`1m | 3m | 6m | 12m | ytd`**. `ytd` diğerlerinin aksine sabit
   uzunlukta değildir — 1 Ocak'tan bugüne.
-- **Miktarlar dönem başında dondurulur**; dönem içindeki alım/satım, temettü
-  ve komisyon hesaba katılmaz. Endeks de saf fiyat getirisi olduğu için ancak
-  böyle aynı ölçekte olurlar — yoksa "portföyüm endeksi yendi" cümlesi
-  aslında sadece yeni para yatırıldığı anlamına gelirdi.
-- **Başlangıç, ilk VARLIK ALIMIDIR**, ilk işlem değil. Portföyler önce
-  nakitle fonlanıp varlık günler sonra alınabiliyor; `min(transaction_date)`
-  alındığında o gün hiç pozisyon olmadığı için uç `InsufficientDataError`
-  veriyordu (ölçülen: 12 aylık pencerede seed'li 50 kullanıcının 50'si).
+- **Portföy çubuğu = Performans kartının getirisi** (TWR, nakit dahil);
+  endeksler saf fiyat getirisi. Ayrıntı ve gerekçe için yukarıdaki uç
+  tanımına bakın.
+- **Başlangıç, ilk İŞLEMDİR** (nakit yatırma dahil) ve `/performance` ile
+  aynıdır. TWR nakit üzerinde de tanımlı olduğu için "o gün hiç pozisyon
+  yoktu" sorunu yok.
 - `truncated_to_inception: true` → portföy pencereden genç, başlangıç ilk
-  alıma çekildi. **Arayüz bunu söylemeli**; "Yıllık" yazıp dört aylık getiri
+  işleme çekildi. **Arayüz bunu söylemeli**; "Yıllık" yazıp dört aylık getiri
   göstermek kıyası olduğundan iyi ya da kötü gösterir.
-- `excluded_symbols`: dönem başında fiyatı olmayan varlıklar hesaba
-  katılmaz — eksik maliyetle bölmek yanlış getiri üretirdi.
+- `excluded_symbols`: dönem sonunda fiyatı bulunamayan varlıklar; portföy
+  değerine hiç girmedikleri için getiri eksik hesaplanmıştır (AK 5.5).
 - Getiriler hesaplanamıyorsa **`null`**, `0` değil (AK 5.5).
 
 ### `GET /api/risk/{user_id}?profile_override=`
