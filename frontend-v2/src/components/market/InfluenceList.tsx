@@ -38,7 +38,9 @@ export function InfluenceList({ rows }: InfluenceListProps) {
               onMouseEnter={() => setHovered(row.id)}
               onMouseLeave={() => setHovered(null)}
             >
-              <span className="font-display w-[58px] text-[13px] font-bold">{row.name}</span>
+              <span className="font-display w-[58px] truncate text-[13px] font-bold" title={row.name}>
+                {row.name}
+              </span>
               <div className="h-[5px] flex-1 cursor-pointer overflow-hidden rounded-full" style={{ backgroundColor: LINE2 }}>
                 <div className="h-full" style={{ width: `${widthPct}%`, background: yonRengi }} />
               </div>
