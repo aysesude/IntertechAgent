@@ -153,7 +153,19 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
         "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
         "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
-        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
+        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n"
+        # 2026-08-31: "son gelişmeler riskimi nasıl etkiliyor" yalnızca MARKET
+        # etiketi alıyordu; risk ajanının haber tabanlı sinyal yolu (portföyde
+        # tutulan varlıkların haberlerini okuyup yorumlayan olumsuz_haber
+        # sinyali) hiç çalışmıyor, kullanıcı da "doğrulanmış bilgi bulunamadı"
+        # cevabı alıyordu (arayüz testinde ölçüldü). Haberin PORTFÖYE ETKİSİ
+        # sorulduğunda soru ikisine birden aittir.
+        "  Haberin/gelişmenin PORTFÖYE ya da RİSKE etkisi soruluyorsa RISK "
+        "etiketi de eklenir (MARKET ile birlikte): 'elimdeki varlıklarla "
+        "ilgili son gelişmeler riskimi nasıl etkiliyor', 'haberler portföyümü "
+        "nasıl etkiler', 'son gelişmeler portföyüm için ne anlama geliyor', "
+        "'enflasyon haberi portföyümü nasıl etkiler'. Burada MARKET haberi "
+        "getirir, RISK onu portföydeki varlıklarla ilişkilendirir.\n\n"
         "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
         "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
         "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
@@ -445,6 +457,19 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "çeliştiğinde hangisinin doğru olduğu belirsiz kalır.\n"
         "Bu bloklardaki bir maddeyi 'belgelerde yer alan' diye de sunma: o "
         "bilgi arşiv dokümanlarından değil, canlı kaynaktan geldi.\n"
+        "\n"
+        # 2026-08-31: bu blok eklendiğinde merge başlığı atıp maddeleri kendi
+        # cümlelerine karıştırdı; bir bulgunun ağırlığı ana metindeki sınıf
+        # ağırlığıyla yan yana düşünce de kullanıcıya "veriler tutarsız" diye
+        # rapor edildi (arayüz testinde ölçüldü). Blok, kaynak/canlı bloklar
+        # gibi korunmalı.
+        "VARLIK BAZLI GÖZLEMLERİ KORU: Verilerde 'Varlık bazlı gözlemler' "
+        "başlıklı bir liste varsa başlığıyla ve madde madde AYNEN kalır. "
+        "Maddeleri düzyazıya çevirme, birleştirme, özetleme; bu bloktaki bir "
+        "varlığı ayrıca kendi cümlende TEKRAR anlatma. Bloktaki yüzdeler o "
+        "bulguya aittir; metnin başka yerindeki sınıf/portföy yüzdeleriyle "
+        "KARŞILAŞTIRMA, aralarında çelişki kurma, 'veriler tutarsız' gibi bir "
+        "yorum yapma — farklı şeyleri ölçüyorlar.\n"
         "\n"
         "Verilerin hangi ajandan veya kaynaktan geldiğini söyleme. "
         "'Merhaba', 'Cevap:' gibi etiketler ekleme, sadece içeriği ver.\n"
