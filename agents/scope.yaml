@@ -46,7 +46,8 @@ varlik_siniflari:
     # target_price_ingest.py) — analist hedef fiyatı/tavsiyesi artık
     # gerçekten desteklenen bir veri, kapsam dışı sayılmamalı.
     - id: hedef_fiyat
-      etiketler: [hedef fiyat, hedef kapanış, analist tavsiyesi, analist hedef]
+      etiketler: [hedef fiyat, hedef kapanış, analist tavsiyesi, analist hedef,
+                  analist tahmini]
 
     - id: doviz
       etiketler: [dolar, usd, "$", euro, eur, "€", kur, döviz, parite,
