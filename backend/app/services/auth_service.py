@@ -16,7 +16,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import risk_profile_for_survey_score, settings
@@ -34,6 +35,36 @@ _DUMMY_HASH = hash_password("zamanlama-sizintisina-karsi-kukla-deger")
 
 # Kimlik ya da şifre hatalı — ikisi için de AYNI metin (bkz. AuthenticationError).
 _INVALID_CREDENTIALS = "T.C. kimlik numarası veya şifre hatalı."
+
+
+# Hangi alanın çakıştığı SÖYLENMEZ: "bu T.C. kimlik numarası kayıtlı" demek,
+# numaraları tek tek deneyerek kimin müşteri olduğunu öğrenmeye açık bir araç
+# yaratırdı (giriş ucundaki aynı gerekçe).
+_CAKISMA_MESAJI = "Bu bilgilerle bir hesap zaten var."
+
+
+def _cakisan_kullanici(db: Session, national_id: str, email: str) -> User | None:
+    """T.C. numarası ya da e-postası çakışan İLK kullanıcı.
+
+    `.first()`, `.scalar_one_or_none()` DEĞİL: numara bir kullanıcıya,
+    e-posta başka bir kullanıcıya aitse sorgu İKİ satır döner ve
+    `scalar_one_or_none` `MultipleResultsFound` fırlatırdı — kullanıcı 409
+    yerine 500 görürdü. Kaç tanesinin çakıştığı zaten önemli değil; biri bile
+    varsa kayıt olmaz.
+
+    E-posta KÜÇÜK HARFE İNDİRİLEREK karşılaştırılır. `String` sütununda UNIQUE
+    kısıt harf duyarlıdır, yani "Ayse@x.com" ile "ayse@x.com" veritabanı için
+    iki farklı değerdir ve aynı kişi iki hesap açabilirdi.
+    """
+    return (
+        db.execute(
+            select(User).where(
+                (User.national_id == national_id) | (func.lower(User.email) == email.lower())
+            )
+        )
+        .scalars()
+        .first()
+    )
 
 
 def register(
@@ -70,14 +101,8 @@ def register(
     Puan verildiğinde `risk_profile` ondan TÜRETİLİR, ayrıca sorulmaz — iki
     ölçeğin ayrışmaması için tek kaynak `risk_survey_score`.
     """
-    mevcut = db.execute(
-        select(User).where((User.national_id == national_id) | (User.email == email))
-    ).scalar_one_or_none()
-    if mevcut is not None:
-        # Hangi alanın çakıştığı SÖYLENMEZ: "bu T.C. kimlik numarası kayıtlı"
-        # demek, numaraları tek tek deneyerek kimin müşteri olduğunu
-        # öğrenmeye açık bir araç yaratırdı (giriş ucundaki aynı gerekçe).
-        raise ValidationAppError("Bu bilgilerle bir hesap zaten var.")
+    if _cakisan_kullanici(db, national_id, email) is not None:
+        raise ValidationAppError(_CAKISMA_MESAJI)
 
     if initial_deposit_try < 0:
         raise ValidationAppError("Aktarılacak tutar negatif olamaz.")
@@ -92,7 +117,19 @@ def register(
     if survey_score is not None:
         user.risk_profile = risk_profile_for_survey_score(survey_score)
     db.add(user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        # SON SÖZÜ VERİTABANI SÖYLER. Yukarıdaki kontrol sorgusu ile bu yazma
+        # arasında başka bir istek aynı T.C. numarasını ya da e-postayı almış
+        # olabilir; iki istek de kontrolü geçer, biri yazar, diğeri buraya
+        # düşer. Yakalanmasaydı kullanıcı 409 yerine 500 görürdü — üstelik
+        # "kayıt olamadım, sistem bozuk" diye tekrar tekrar denerdi.
+        #
+        # Tek koruma olarak kontrol sorgusuna güvenilemez; `users.national_id`
+        # ve `users.email` üzerindeki UNIQUE kısıtlar asıl güvencedir.
+        db.rollback()
+        raise ValidationAppError(_CAKISMA_MESAJI) from exc
 
     portfolio = Portfolio(user_id=user.id)
     db.add(portfolio)

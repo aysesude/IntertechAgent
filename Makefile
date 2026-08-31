@@ -20,6 +20,12 @@ credentials:
 demo-users:
 	docker compose exec -w / api python -m scripts.demo_users $(ARGS)
 
+# Anket ozelliginden ONCE seed edilmis bir ortamda demo kullanicilarinin
+# `risk_survey_score` alani bos kalir ve HEPSI ilk giriste anket ekranina
+# takilir. Bu betik yalnizca o alani doldurur, veriyi silmez.
+survey-scores:
+	docker compose exec -w / api python -m scripts.backfill_survey_scores $(ARGS)
+
 backfill:
 	docker compose exec -w / api python -m data.backfill --days 365
 
