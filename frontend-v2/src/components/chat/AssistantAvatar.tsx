@@ -1,7 +1,7 @@
 import { Compass } from "lucide-react";
 
 /**
- * Tek amblem, tek kaynak: AI Chat ekranındaki her yerde ("AI Asistan" mesaj
+ * Tek amblem, tek kaynak: AI Chat ekranındaki her yerde ("Vira Chat" mesaj
  * balonu, sohbet paneli başlığı, "VİRA düşünüyor" göstergesi, üst menü
  * sekmesi) aynı ikonun kullanıldığından emin olmak için buradan içe aktar.
  * İkonu değiştirmek gerekirse tek değişiklik noktası burasıdır.

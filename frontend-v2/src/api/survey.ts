@@ -84,6 +84,12 @@ export interface SurveyResult {
   sinir_bolgesinde: boolean;
   kurallar: SurveyRule[];
   sonuc_uretildi: boolean;
+  /**
+   * Sonucu kullanıcının KENDİ cevaplarına bağlayan olgular; sunucuda
+   * deterministik üretilir. `yorum` bunları cümleye döker — ama LLM
+   * düşerse bu liste yine gelir, o yüzden ekranda ikisi de gösterilir.
+   */
+  gerekceler: string[];
   /** Sonucu açıklayan kişiselleştirilmiş metin. Hiçbir zaman boş gelmez. */
   yorum: string;
 }
@@ -108,4 +114,15 @@ export function fetchSurveyQuestions(): Promise<SurveyQuestions> {
  */
 export function scoreSurvey(answers: SurveyAnswers): Promise<SurveyResult> {
   return apiPost<SurveyResult>("/api/survey/score", { answers }, { skipUnauthorizedHandler: true });
+}
+
+/**
+ * Anketi skorlar VE sonucu kullanıcıya KAYDEDER. Oturum ister.
+ *
+ * `sonuc_uretildi: false` döndüğünde (çelişkili beyan) hiçbir şey
+ * kaydedilmemiştir; sonuç yine de gelir ki arayüz kullanıcıya hangi
+ * çelişkiyi düzeltmesi gerektiğini gösterebilsin.
+ */
+export function submitSurvey(userId: string, answers: SurveyAnswers): Promise<SurveyResult> {
+  return apiPost<SurveyResult>(`/api/survey/submit/${userId}`, { answers });
 }

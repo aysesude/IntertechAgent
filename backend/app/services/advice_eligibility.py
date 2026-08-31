@@ -30,6 +30,7 @@ metodolojisi değiştiğinde (ki şartnamede o bölüm gözden geçiriliyor) bu
 kural da gereksiz yere etkilenirdi.
 """
 
+from collections.abc import Iterable
 from functools import lru_cache
 
 from app.core.config import (
@@ -79,15 +80,37 @@ def blocked_asset_classes(survey_score: int) -> set[AssetClass]:
     return set(AssetClass) - allowed_asset_classes(survey_score)
 
 
+def mismatched_asset_classes(held_classes: set[AssetClass], survey_score: int) -> set[AssetClass]:
+    """Kullanıcının GÜNCEL elinde olan ama anket puanının artık izin
+    vermediği varlık sınıfları — modülün başındaki KAPSAM notundaki "sahipse
+    profil UYUMSUZLUĞU sayılır" kuralının tek bir çağrıda hesaplanmış hâli.
+
+    2026-08-28 eki: bu fonksiyon, aynı hesabı daha önce üç ayrı yerde (Sinyal
+    5 Yol A'nın `user_service.get_and_consume_risk_survey_event`'i,
+    `agents/risk_agent.py`'nin Yol B'si, ve şimdi `agents/portfolio_agent.py`)
+    kendi başına tekrarlamak yerine merkezi bir yerde tutmak için eklendi —
+    `advice_eligibility` zaten bu kuralın TEK sahibi olduğu için burası
+    doğru yer.
+
+    Zorla satış YAPILMAZ/YAPILAMAZ (modülün başındaki KAPSAM notu); bu
+    fonksiyon yalnızca BİLDİRİLMESİ gereken listeyi hesaplar, hiçbir yan
+    etkisi yoktur."""
+    validate_survey_score(survey_score)
+    return held_classes - allowed_asset_classes(survey_score)
+
+
 # --- Varlık düzeyi ---------------------------------------------------------
 #
 # Sınıf tablosu TİPİK varlığı tarif eder; tek tek varlıklar ondan ayrılabilir
 # ve ayrılıyorlar da (`providers/universe.AssetSpec.risk_level`):
 #
 #   IOO  para piyasası fonu   sınıfı BOND=2, kendisi 1
-#   AKE  eurobond fonu        sınıfı BOND=2, kendisi 3
-#   AFT  yabancı hisse fonu   sınıfı STOCK=5, kendisi 6
-#   AAPL ABD hissesi          sınıfı STOCK=5, kendisi 6
+#   AKE  eurobond fonu        sınıfı BOND=2, kendisi 4
+#   BHE  serbest fon          sınıfı STOCK=5, kendisi 7
+#
+# AFT (yabancı hisse fonu) ve ABD hisseleri (AAPL vb.) ARTIK bu listede
+# değil — 2026-08-28 kararıyla yabancı hisse sınıf varsayılanından (STOCK=5)
+# ayrılmıyor, bkz. `providers/universe._foreign_stock`.
 #
 # Bu yüzden bir varlığın uygunluğuna karar verirken sınıf fonksiyonları
 # (`is_advice_allowed`) DEĞİL, buradakiler kullanılmalıdır. Sınıf
@@ -128,3 +151,31 @@ def is_asset_advice_allowed(symbol: str, asset_class: AssetClass, survey_score: 
     """
     validate_survey_score(survey_score)
     return asset_risk_level(symbol, asset_class) <= survey_score
+
+
+def mismatched_holdings(
+    held: Iterable[tuple[str, AssetClass]], survey_score: int
+) -> list[tuple[str, AssetClass, int]]:
+    """Elde olan ama anket puanının artık izin vermediği VARLIKLAR.
+
+    `mismatched_asset_classes`'ın varlık düzeyi karşılığı. İkisi de duruyor
+    çünkü sınıf sürümü şartname metnine bire bir karşılık geliyor; ama bir
+    portföyü denetlerken sınıf YETMEZ — yukarıdaki "Varlık düzeyi" notundaki
+    istisnalar (IOO 1, AKE 4, BHE 7) sınıflarından ayrılıyor. Somut örnek:
+    puanı 5 olan bir kullanıcının elindeki BHE (serbest fon, seviye 7) sınıf
+    sürümüne göre (STOCK=5) UYUMLU görünür, oysa değildir.
+
+    Dönen üçlü `(sembol, sınıf, varlığın uygunluk seviyesi)`: çağıran taraf
+    "uyumsuz" demekle kalmayıp gerekçeyi somut verebilsin diye seviye de
+    taşınıyor (modül başındaki KAPSAM notu: sessizce gizlemek yanlış olur).
+
+    Sıra girdinin sırasını korur — çağıran taraf kendi ölçütüne göre
+    sıralasın diye burada bilerek sıralanmıyor. Zorla satış YAPILMAZ; bu
+    fonksiyonun hiçbir yan etkisi yoktur, yalnızca bildirilecek listeyi
+    hesaplar."""
+    validate_survey_score(survey_score)
+    return [
+        (symbol, asset_class, seviye)
+        for symbol, asset_class in held
+        if (seviye := asset_risk_level(symbol, asset_class)) > survey_score
+    ]

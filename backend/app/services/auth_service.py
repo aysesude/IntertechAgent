@@ -43,7 +43,7 @@ def register(
     national_id: str,
     email: str,
     password: str,
-    survey_score: int,
+    survey_score: int | None,
     initial_deposit_try: Decimal,
 ) -> User:
     """Yeni kullanıcı, portföyü ve açılış bakiyesiyle birlikte oluşturur.
@@ -61,8 +61,14 @@ def register(
     (docs/DATA.md altın kural). Tutar 0 ise işlem HİÇ yazılmaz: sıfırlık bir
     yatırım kaydı defteri kirletir.
 
-    `risk_profile` anket puanından TÜRETİLİR, ayrıca sorulmaz — iki ölçeğin
-    ayrışmaması için tek kaynak `risk_survey_score`.
+    `survey_score` `None` OLABİLİR: anket kayıt akışından çıkarılıp ilk
+    girişe taşındı. O durumda `risk_survey_score` boş kalır ve `risk_profile`
+    modelin varsayılanında (Dengeli) durur — uygunluk kontrolü puanın
+    yokluğunu zaten görüyor ve tavsiye katmanını kapatıyor. Varsayılan
+    profili "ölçülmüş" gibi sunmuyoruz; arayüz kullanıcıyı ankete alıyor.
+
+    Puan verildiğinde `risk_profile` ondan TÜRETİLİR, ayrıca sorulmaz — iki
+    ölçeğin ayrışmaması için tek kaynak `risk_survey_score`.
     """
     mevcut = db.execute(
         select(User).where((User.national_id == national_id) | (User.email == email))
@@ -82,8 +88,9 @@ def register(
         national_id=national_id,
         password_hash=hash_password(password),
         risk_survey_score=survey_score,
-        risk_profile=risk_profile_for_survey_score(survey_score),
     )
+    if survey_score is not None:
+        user.risk_profile = risk_profile_for_survey_score(survey_score)
     db.add(user)
     db.flush()
 

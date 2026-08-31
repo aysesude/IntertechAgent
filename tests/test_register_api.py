@@ -197,3 +197,60 @@ def test_sifre_alti_haneli_rakam_olmali(db_session, anonim):
     üretirse kullanıcı giriş yapamayacağı bir şifre belirler."""
     assert anonim.post("/api/auth/register", json=_govde(password="abcdef")).status_code == 422
     assert anonim.post("/api/auth/register", json=_govde(password="12345")).status_code == 422
+
+
+def test_anketsiz_kayit_hesap_acar_puan_bos_kalir(db_session, anonim):
+    """Anket kayıt akışından çıkarıldı: cevap gönderilmese de hesap açılır.
+
+    18 soruluk anket kayıtta zorunluyken, kullanıcı yarıda bıraktığında hesap
+    HİÇ açılmıyordu — en pahalı adım (hesap açma) en kırılgan adıma (uzun
+    form) bağlıydı. Artık puan `NULL` kalıyor ve arayüz kullanıcıyı ilk
+    girişte ankete alıyor.
+    """
+    govde = _govde(national_id="12345678906", email="anketsiz@example.com")
+    govde.pop("survey_answers")
+
+    response = anonim.post("/api/auth/register", json=govde)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["risk_survey_score"] is None
+    assert response.json()["profil_adi"] is None
+
+    user = db_session.execute(select(User).where(User.national_id == "12345678906")).scalar_one()
+    assert user.risk_survey_score is None
+
+
+def test_anketsiz_kayitta_da_acilis_bakiyesi_yazilir(db_session, anonim):
+    """Para aktarımı ankete bağlı değil: ikisi ayrı adımlar."""
+    govde = _govde(national_id="12345678907", email="anketsiz-para@example.com")
+    govde.pop("survey_answers")
+
+    assert anonim.post("/api/auth/register", json=govde).status_code == 201
+
+    user = db_session.execute(select(User).where(User.national_id == "12345678907")).scalar_one()
+    portfolio = db_session.execute(
+        select(Portfolio).where(Portfolio.user_id == user.id)
+    ).scalar_one()
+    islemler = (
+        db_session.execute(select(Transaction).where(Transaction.portfolio_id == portfolio.id))
+        .scalars()
+        .all()
+    )
+    assert len(islemler) == 1
+    assert islemler[0].cash_amount_try == Decimal("50000")
+
+
+def test_oturum_yanitinda_anket_puani_doner(db_session, anonim):
+    """Arayüz anket ekranını açıp açmayacağına BU alana bakarak karar veriyor;
+    oturum yanıtında gelmezse her açılışta ayrı bir istek gerekirdi."""
+    govde = _govde(national_id="12345678908", email="oturum@example.com")
+    govde.pop("survey_answers")
+    anonim.post("/api/auth/register", json=govde)
+
+    giris = anonim.post(
+        "/api/auth/login", json={"national_id": "12345678908", "password": "123456"}
+    )
+
+    assert giris.status_code == 200
+    assert "risk_survey_score" in giris.json()["user"]
+    assert giris.json()["user"]["risk_survey_score"] is None

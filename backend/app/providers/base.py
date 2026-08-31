@@ -35,6 +35,24 @@ class PricePoint:
 
 
 @dataclass(frozen=True)
+class TargetPricePoint:
+    """Tek bir kurumun tek bir hisse için hedef fiyat/tavsiyesi (bkz.
+    providers/sekeryatirim_p.py, app/services/target_price_ingest.py).
+
+    `report_date` kaynağın kendi sayfa/tablo seviyesindeki tarihidir — hisse
+    başına ayrı bir rapor tarihi değil (kaynak bunu vermiyor)."""
+
+    symbol: str
+    institution: str
+    recommendation: str
+    target_price: Decimal
+    currency: str
+    price_at_report: Decimal | None
+    report_date: date
+    source_url: str
+
+
+@dataclass(frozen=True)
 class NewsItem:
     """Tek bir canlı piyasa haberi başlığı (bkz. providers/yfinance_p.py
     YFinanceProvider.fetch_news, app/services/macro_news_ingest.py).

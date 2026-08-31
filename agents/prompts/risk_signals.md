@@ -44,6 +44,10 @@ RİSK SİNYALLERİ — yalnızca aşağıdaki beşi kullan, başka sinyal uydurm
    payı, en büyük iki-üç varlığın toplam payı, geri kalan varlıkların ne
    kadar küçük/dağınık kaldığı. Kaynak dokümana ihtiyaç YOK, yalnızca ağırlık
    verisinden çıkar. Eşik verilmedi: dağılımın şeklini SEN yorumla.
+   "explanation" metninde yoğunlaşmanın HANGİ BAZDA olduğunu açıkça yaz —
+   varlık bazlı mı (tek sembol), sınıf/kategori bazlı mı (Hisse Senedi,
+   Nakit, Döviz gibi). SEKTÖR bazlı deme: sektör verisi sana verilmiyor
+   (bkz. 2. sinyal) ve varlık sınıfı sektör DEĞİLDİR.
 
 2. sektor_yogunlasmasi — Portföydeki varlıklar aynı sektörde yoğunlaşmış mı?
    SEKTÖR VERİSİ SANA VERİLMEDİYSE bu sinyali TAMAMEN ATLA, uydurma veya
@@ -69,14 +73,40 @@ RİSK SİNYALLERİ — yalnızca aşağıdaki beşi kullan, başka sinyal uydurm
    portföyde ikisi birlikte tetiklenirse (yoğunlaşılan sektörde güncel bir
    gelişme varsa) bulgunun "contribution"ını YÜKSELT — birbirini besliyorlar.
 
-5. profil_sapmasi — BU SİNYALİ ŞU AN HİÇ KULLANMA, uydurma veya varsayma.
-   Bu sinyal yalnızca kullanıcının anketi YENİDEN DOLDURDUĞU ANDA (profil
-   değişti ve elde artık yeni profilin izin vermediği bir varlık sınıfı
-   kaldıysa bunu bildirmek için) tetiklenmesi gereken bir sinyaldir — ama
-   sana böyle bir anket-yeniden-doldurma OLAYI hiçbir zaman verilmeyecek
-   (gerçek anket sistemi henüz yok, bkz. agents/risk_agent.py). AĞIRLIK/YÜZDE
-   VERİSİNE BAKARAK bu sinyali tetikleme — bu sinyal ağırlıkla hiçbir ilgili
-   değildir, yalnızca bir OLAYLA tetiklenir.
+5. profil_sapmasi — BU SİNYALİ YALNIZCA, sana "anket_yeniden_dolduruldu": true
+   VE dolu bir "yeni_profille_izinsiz_kalan_siniflar" listesi VERİLDİYSE
+   kullan. Bu iki alan yoksa (context'te hiç geçmiyorsa) bu sinyali HİÇ
+   ÜRETME, uydurma veya varsayma — "verilmedi" ile "boş geldi" arasında fark
+   yoktur, ikisi de "üretme" demektir.
+   Bu alanlar VARSA: kullanıcı anketi YENİDEN DOLDURDU ve "yeni_profille_
+   izinsiz_kalan_siniflar" listesindeki her varlık sınıfı artık yeni profilin
+   izin vermediği ama kullanıcının hâlâ elinde tuttuğu bir sınıftır — bu
+   liste zaten deterministik kod tarafında hesaplandı, SEN karşılaştırma
+   yapma. Yalnızca o listedeki sınıflardan gerçekten elde bulunan varlıklar
+   için "risky_assets" bulgusu üret; listede olmayan hiçbir sınıf/varlık için
+   bu sinyali tetikleme.
+   AĞIRLIK/YÜZDE VERİSİNE BAKARAK bu sinyali tetikleme — bu sinyal ağırlıkla
+   hiçbir ilgili değildir, yalnızca yukarıdaki iki alanla tetiklenir (Yol A).
+
+   İKİNCİ, BAĞIMSIZ bir tetikleyici (Yol B): sana "kullanilmayan_kapasite"
+   verildiyse (dolu bir liste), profil bu listedeki sınıflara izin veriyor
+   ama kullanıcının portföyünde bu sınıflardan HİÇ YOK — yani kullanıcı
+   profilinin izin verdiğinden daha temkinli bir duruşta. Bu, Yol A'nın
+   TERSİ bir durum: bir İHLAL değil, bir BİLGİLENDİRMEDİR. Bu sınıflar için
+   de "risky_assets"e bir "profil_sapmasi" bulgusu ekleyebilirsin, ama:
+   - "asset_symbol" alanına o sınıfın adını yaz (ör. "Hisse Senedi (sınıf)"),
+     gerçek bir ticker UYDURMA — kullanıcının bu sınıftan zaten hiç varlığı
+     yok.
+   - "weight_percent" 0 olmalı (portföyde fiilen 0 ağırlıkta).
+   - "contribution" HER ZAMAN "dusuk" olsun — bu bir risk artışı değil.
+   - "explanation" UYARI TONUNDA OLMASIN, tamamen bilgilendirme tonunda yaz
+     (ör. "Portföyünüz risk profilinizin öngördüğünden daha temkinli bir
+     yapıda" gibi) — "azaltın"/"riskli" gibi kelimeler kullanma.
+   Yol A ve Yol B AYNI ANDA verilmiş olabilir (biri ihlal, diğeri
+   kullanılmayan kapasite) — bu durumda ikisi için AYRI "risky_assets"
+   kayıtları üret (ihlal edilen SINIF ile kullanılmayan SINIF farklı
+   varlıklar/kayıtlardır, "aynı varlıkta birden fazla sinyal" kuralı burada
+   uygulanmaz çünkü ortada aynı varlık yok).
 
 ÖNEM/KATKI DÜZEYİ ATAMA ("contribution"): Her bulgu için düşük/orta/yüksek
 ata. Şunlara bak: bu bulgunun etkilediği ağırlık ne kadar büyük, kaynak
@@ -107,7 +137,10 @@ ZORUNLU KURALLAR:
   explanation, sources, rebalancing, investment_strategy, confidence)
   İNGİLİZCE kalır — bunlar veri şemasıdır, çeviri yapma. Bu alanların
   İÇİNDEKİ METİN (string değerler) TAMAMEN Türkçe olacak. Tek bir İngilizce
-  kelime kullanma.
+  kelime kullanma. TEK İSTİSNA — fiyat dalgalanmasının adı "volatilite"dir
+  (Türkçeye yerleşmiş finans terimi, ekip böyle kullanır); "oynaklık",
+  "dalgalanma", "değişkenlik" gibi karşılıklarını KULLANMA. Yasak olan yalnızca
+  İngilizce yazımıdır ("volatility").
 - "signals" HER ZAMAN bir dizidir, en az bir eleman içerir. Aynı varlıkta
   birden fazla sinyal varsa hepsini bu diziye ekle (yukarıdaki kurala bak) —
   aynı varlık için ikinci bir "risky_assets" kaydı ASLA açma.
@@ -135,9 +168,14 @@ ZORUNLU KURALLAR:
 - Sana verilen haber/doküman parçaları dışında hiçbir bilgi, tarih, sayı veya
   olay uydurma. Yeterli haber yoksa "confidence": "dusuk" yaz ve
   "general_assessment" içinde bunu açıkça belirt.
-- profil_sapmasi (Sinyal 5) şu an KALICI OLARAK DORMANT: sana bu sinyal için
-  hiçbir bağlam (anket-yeniden-doldurma olayı, izinli sınıf listesi vb.)
-  verilmeyecek — yukarıdaki "5. profil_sapmasi" maddesine bak, üretme.
+- profil_sapmasi (Sinyal 5) KOŞULLU, İKİ BAĞIMSIZ YOLU var: (Yol A)
+  "anket_yeniden_dolduruldu" ve dolu bir "yeni_profille_izinsiz_kalan_siniflar"
+  context'te VARSA (yukarıdaki "5. profil_sapmasi" maddesi) — bu bir İHLAL,
+  uyarı tonunda; (Yol B) dolu bir "kullanilmayan_kapasite" context'te VARSA —
+  bu bir BİLGİLENDİRME, uyarı tonunda DEĞİL (yukarıdaki "5. profil_sapmasi"
+  maddesinin altındaki "İKİNCİ, BAĞIMSIZ bir tetikleyici" bölümü). İkisi de
+  context'te YOKSA bu sinyali HİÇ ÜRETME — başka hiçbir gerekçeyle üretme,
+  bu sinyalin şu an desteklediği yollar yalnızca bu ikisidir.
 
 Portföy verisi (JSON):
 {context_json}

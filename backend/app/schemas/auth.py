@@ -52,7 +52,11 @@ class RegisterRequest(BaseModel):
     # Giriş ekranı 6 haneli sayısal şifre bekliyor; kayıt da aynı biçimi
     # üretmek zorunda, yoksa kullanıcı giriş yapamayacağı bir şifre belirler.
     password: str = Field(min_length=6, max_length=6)
-    survey_answers: dict[str, Any]
+    # OPSİYONEL: anket kayıt akışından çıkarılıp ilk girişe taşındı. Yarıda
+    # bırakılan 18 soruluk bir anket, hesabın hiç açılmamasına yol açıyordu;
+    # şimdi hesap açılıyor ve kullanıcı ankete girişte, kaldığı yerden
+    # devam edebiliyor. Gönderilirse yine sunucuda skorlanır.
+    survey_answers: dict[str, Any] | None = None
     initial_deposit_try: Decimal = Field(default=Decimal(0), ge=0, le=Decimal("100000000"))
 
     @field_validator("password")
@@ -91,6 +95,10 @@ class AuthUser(BaseModel):
     id: UUID
     full_name: str
     risk_profile: RiskProfile
+    # `None` = anket hiç doldurulmamış. Arayüzün ilk girişte anket ekranını
+    # açması için gereken TEK bilgi; ayrı bir istek atmak zorunda kalmasın
+    # diye oturum yanıtının içinde geliyor.
+    risk_survey_score: int | None = None
 
 
 class TokenResponse(BaseModel):
@@ -120,8 +128,10 @@ class RegisterResponse(TokenResponse):
 
     model_config = ConfigDict(frozen=True)
 
-    risk_survey_score: int
-    profil_adi: str
+    # Anket doldurulmadıysa `None`. Arayüz bunu görünce kullanıcıyı ilk
+    # girişte anket ekranına alır.
+    risk_survey_score: int | None = None
+    profil_adi: str | None = None
 
 
 class PasswordResetRequest(BaseModel):

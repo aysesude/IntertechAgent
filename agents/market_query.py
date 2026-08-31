@@ -159,6 +159,33 @@ def sirket_gecer_mi(query: str) -> bool:
     return bool(_tum_sirketleri_tespit_et(query))
 
 
+# Kullanıcının KENDİ portföyüne işaret eden ifadeler ("portföyüm",
+# "portföyümdeki", "portföyümde", "portföyümü"...) — kelime kökü aynı
+# ("portfoy", katlamadan sonra) olduğu için tek bir gövde deseni yeterli.
+_PORTFOY_RE = re.compile(r"\bportfoy\w*\b")
+
+
+def portfoy_referansi_var_mi(query: str) -> bool:
+    """Sorgu kullanıcının KENDİ portföyüne mi işaret ediyor?
+
+    `orchestrator.detect_intent`'teki LLM niyet sınıflandırıcısı için
+    deterministik bir GÜVENCE katmanıdır — `sirket_gecer_mi`'nin
+    scope_checker'daki rolüyle aynı desen: LLM'in kaçırdığı durumda kural
+    motoru devreye girer.
+
+    NEDEN GEREKLİ (2026-08-27, analist test turu, ölçüldü): "Portföyümdeki
+    X şirketinin son çeyrek gelir tablosunda dikkat çeken bir şey var mı"
+    sorusu LLM sınıflandırıcı tarafından yalnızca MARKET etiketlenmiş,
+    PORTFOLIO etiketi kaçmış. Sonuç: `portfolio_agent` hiç çalışmadı,
+    kullanıcının GERÇEK holdings'i hiçbir ajana ulaşmadı; `market_agent`
+    portföy kavramı taşımadığı için (bkz. agents/market_agent.py modül
+    docstring'i) sorguyu serbest metin olarak işleyip portföyde OLMAYAN
+    şirketler hakkında cevap üretti. "Portföyüm" gibi açık bir ifade
+    geçtiğinde PORTFOLIO etiketi asla LLM'in takdirine bırakılmamalı.
+    """
+    return bool(_PORTFOY_RE.search(_normalize(query)))
+
+
 def donem_tespit_et(query: str) -> str | None:
     """Sorgudan "2026-Q2" biçiminde dönem üretir; üretemezse None.
 

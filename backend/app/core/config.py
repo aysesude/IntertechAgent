@@ -231,7 +231,9 @@ ASSET_CLASS_BASE_RISK_SCORE: dict[AssetClass, Decimal] = {
 # `providers/universe.AssetSpec.risk_level` ve
 # `services/advice_eligibility.asset_risk_level`. Bir varlık sınıfının
 # altında da (IOO para piyasası fonu: sınıfı BOND=2, kendisi 1) üstünde de
-# (AAPL: sınıfı STOCK=5, kendisi 6) olabilir.
+# (BHE serbest fon: sınıfı STOCK=5, kendisi 7) olabilir. AAPL örneği
+# 2026-08-28'e kadar geçerliydi — yabancı hisseyi ayrı kademeden çıkaran
+# kararla artık sınıf varsayılanında (5).
 # Varlık sınıfına göre miktar hassasiyeti (kaç ondalık basamak alınabilir).
 #
 # Hisse ve döviz TAM SAYI: yarım hisse ya da yarım dolar alınmaz. Maden ve
@@ -258,10 +260,31 @@ if set(ASSET_QUANTITY_PRECISION) != set(AssetClass):
 ASSET_CLASS_ADVICE_RISK_LEVEL: dict[AssetClass, int] = {
     AssetClass.CASH: 1,
     AssetClass.BOND: 2,
-    AssetClass.CURRENCY: 3,
-    AssetClass.PRECIOUS_METAL: 4,
+    AssetClass.PRECIOUS_METAL: 3,
+    AssetClass.CURRENCY: 4,
     AssetClass.STOCK: 5,
 }
+
+# 2026-08-28 kararı (Yağız): DÖVİZ ve KIYMETLİ MADEN yer değiştirdi (3<->4).
+#
+# 26 Ağustos'ta bu iki sınıf KENDİ ölçümümüzle sıralanmıştı (maden dövizin
+# üstünde, çünkü gram altın TL'de %28,6 volatilite ölçtü, USDTRY yalnızca
+# ~%1) — ama bu, `gerek.md`'nin kendi sıralamasıyla (döviz "Orta-Yüksek",
+# maden "Orta"; yani döviz madenin ÜSTÜNDE) çelişiyordu. Karar: kendi
+# ölçümümüz belirleyici değil, `gerek.md` esas alınır. Aynı kararla:
+#
+#   - Gümüş/platin ARTIK kıymetli madenden ayrı bir kademede değil (bkz.
+#     `providers/universe._gram_metal` — ölçülen oynaklık ne olursa olsun
+#     kategori bütünlüğü korunur, `AssetSpec.risk_level` override'ı kaldırıldı).
+#   - Yabancı hisse ARTIK yerli hisseden bir kademe üstte değil (bkz.
+#     `providers/universe._foreign_stock`) — bu, "risk" tablosunun konusu
+#     değil; kullanıcının erişebildiği varlıklar anket puanından türeyen
+#     profille belirlenir, ayrı bir erişim kısıtı DEĞİL.
+#
+# Sonuç: puan 5 ve puan 6'nın açtığı varlık kümesi artık AYNI (yabancı
+# hisse zaten puan 5'te STOCK sınıfıyla birlikte açılıyor) — yedi puanın
+# yedisinin de farklı bir sonuç vermesi kuralı yalnızca 6 farklı kümede
+# tutuluyor artık (bkz. tests/test_advice_eligibility.py).
 
 # Anket puanının alabileceği aralık (dahil). Tabloyla karşılaştırma bu
 # aralıkta anlamlıdır; dışında bir değer gelirse çağıran taraf hata verir.
@@ -281,13 +304,16 @@ RISK_SURVEY_SCORE_MAX = 7
 # her profil, kendi bandının açtığı varlık kümesiyle anlamlı şekilde örtüşür:
 #
 #   1-2  Muhafazakâr  nakit/para piyasası + TL borçlanma fonları
-#   3-4  Dengeli      + döviz, kıymetli maden
-#   5    Büyüme       + yerli hisse
-#   6-7  Agresif      + yabancı hisse, serbest fon
+#   3-4  Dengeli      + kıymetli maden, döviz
+#   5    Büyüme       + hisse (yerli VE yabancı — 2026-08-28'den beri ayrı
+#                        kademede değiller, bkz. yukarıdaki karar notu)
+#   6-7  Agresif      + serbest fon (yalnızca 7'de; 6 artık 5'le AYNI kümeyi
+#                        açar, kendine özgü bir varlığı yok)
 #
-# BÜYÜME tek puanlıktır. Yapay değil: yerli hisseye erişim tek bir kademede
+# BÜYÜME tek puanlıktır. Yapay değil: hisseye erişim tek bir kademede
 # açılıyor ve o kademe iki profil arasındaki gerçek eşiği işaretliyor. Bandı
-# genişletmek için 5 ile 6 arasına bir varlık kategorisi girmesi gerekir.
+# genişletmek için 5 ile 6 arasına bir varlık kategorisi girmesi gerekir —
+# bugün öyle bir kategori yok, 6 fiilen 5'in tekrarı.
 RISK_SURVEY_SCORE_TO_PROFILE: dict[int, RiskProfile] = {
     1: RiskProfile.CONSERVATIVE,
     2: RiskProfile.CONSERVATIVE,
@@ -546,6 +572,12 @@ class AssetSubType(str, Enum):
     DEMAND_DEPOSIT = "demand_deposit"
     GOLD_COIN = "gold_coin"
     HEDGE_FUND = "hedge_fund"  # SPK "serbest fon" — bkz. universe._FUND_ASSET_CLASS
+    # Aşağıdaki ikisi TUTULAMAZ varlıklar (`AssetSpec.tradable=False`): yalnızca
+    # fiyatlanıp saklanırlar, kullanıcı portföyüne giremezler. `asset_class`
+    # onlar için şemanın zorunlu kıldığı bir kutu (ikisi de STOCK'ta duruyor);
+    # ne olduklarını söyleyen alan burasıdır.
+    INDEX = "index"  # BIST 100, S&P 500
+    COMMODITY = "commodity"  # Brent
 
 
 class IngestStatus(str, Enum):

@@ -327,6 +327,31 @@ def main() -> int:
         if not bos and not ayrisan:
             print("  temiz")
 
+        # --- 8. tradable: DB ile kod ayrismis mi -----------------------------
+        # `assets.tradable` de TUREV kopya (bkz. 7). Ayrisma buradaki ile ayni
+        # yollardan olur ama sonucu daha gurultulu: tutulamayan bir varlik
+        # (endeks, emtia) Al/Sat listesine dusup satin alinabilir gorunur.
+        _baslik("8. Tutulabilirlik bayragi (DB <-> kod)")
+        from app.providers.universe import SPEC_BY_SYMBOL
+
+        tradable_ayrisan: list[str] = []
+        for asset in db.execute(select(Asset).where(Asset.is_active)).scalars():
+            spec = SPEC_BY_SYMBOL.get(asset.symbol)
+            if spec is not None and asset.tradable != spec.tradable:
+                tradable_ayrisan.append(
+                    f"{asset.symbol}: DB {asset.tradable} != kod {spec.tradable}"
+                )
+        for satir in tradable_ayrisan[:8]:
+            print(f"  {satir}")
+        if tradable_ayrisan:
+            bulgular.append(
+                f"{len(tradable_ayrisan)} varligin tutulabilirlik bayragi DB ile kod "
+                "arasinda ayrismis"
+            )
+            sira_hatasi = True
+        else:
+            print("  temiz")
+
         # --- Karar -------------------------------------------------------------
         _baslik("KARAR")
         print(

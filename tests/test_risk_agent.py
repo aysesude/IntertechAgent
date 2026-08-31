@@ -23,7 +23,21 @@ Sinyal 5 artık profil/ağırlık tabanlı değil, yalnızca anket-yeniden-doldu
 OLAYIYLA tetiklenmeli (bkz. agents/risk_agent.py modül docstring'i "2026-08-26
 eki"); böyle bir olay mekanizması henüz yok, sinyal kalıcı dormant. Bu
 dosyadaki ilgili testler kaldırıldı; `_build_signal_context` artık yalnızca
-holdings/haber/makro verisini birleştirdiğini doğrulayan testler kaldı."""
+holdings/haber/makro verisini birleştirdiğini doğrulayan testler kaldı.
+
+2026-08-28 eki (kod): Yol A'nın olay mekanizması yazıldı (bkz.
+agents/risk_agent.py modül docstring'i "2026-08-28 eki (kod)",
+docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md §4.5). `_build_signal_
+context` artık opsiyonel `yeni_profille_izinsiz_kalan_siniflar` parametresini
+kabul ediyor; `test_sinyal_baglami_anket_alanlari_hicbir_zaman_eklenmez` bu
+yüzden `test_sinyal_baglami_anket_alanlari_yalnizca_olay_varsa_eklenir` olarak
+güncellendi — artık "hiçbir zaman" değil "yalnızca olay/ihlal varsa". Eski
+dummy alanlarının (2026-08-26 eki) KALICI olarak eklenmeyeceği ayrı, hâlâ
+geçerli bir testte kaldı (`test_sinyal_baglami_eski_dummy_alanlari_
+hicbir_zaman_eklenmez`). `_assess_signals`'ın üçüncü tool çağrısı
+(`get_risk_survey_event`) burada TEST EDİLMİYOR — modülün başındaki ilkeyle
+aynı sebep: gerçek bir MCP çağrısı içeriyor, deterministik pytest yerine
+manuel/entegrasyon doğrulaması kullanılıyor."""
 
 import json
 
@@ -34,11 +48,14 @@ from agents.risk_agent import (
     _build_signal_context,
     _compact,
     _extract_json_object,
+    _kullanilmayan_kapasite,
     _live_macro_symbols_for_holdings,
     _macro_queries_for_holdings,
     _render_signal_prompt,
+    _sinyal_blogu,
     _wants_scenarios,
 )
+from app.schemas.risk_signals import RiskSignalAssessment
 
 
 def test_senaryo_yalnizca_aksiyon_sorularinda_istenir():
@@ -344,17 +361,120 @@ def test_sinyal_baglami_haberleri_sembole_gore_grupluyor():
     ]
 
 
-def test_sinyal_baglami_anket_alanlari_hicbir_zaman_eklenmez():
+def test_sinyal_baglami_eski_dummy_alanlari_hicbir_zaman_eklenmez():
     """2026-08-26 eki: Sinyal 5 artık profil/dummy puana bakmıyor (bkz.
     agents/risk_agent.py modül docstring'i) — `_build_signal_context`
     "survey_puani_dummy"/"survey_puani_dummy_uyarisi"/
-    "bu_puanla_izinli_siniflar" alanlarını ARTIK HİÇ üretmemeli; bu, önceki
-    "dummy puan varsa/yoksa" ayrımının yerini alan tek testtir."""
+    "bu_puanla_izinli_siniflar" alanlarını ARTIK HİÇ üretmemeli; bu KALICI
+    bir kısıt, Yol A'nın (2026-08-28) yeni alanlarıyla ilgisi yok."""
     context = _build_signal_context({"holdings": []}, {"assets": []})
 
     assert "survey_puani_dummy" not in context
     assert "survey_puani_dummy_uyarisi" not in context
     assert "bu_puanla_izinli_siniflar" not in context
+
+
+def test_sinyal_baglami_anket_alanlari_yalnizca_olay_varsa_eklenir():
+    """2026-08-28 eki (kod): Sinyal 5 Yol A'nın girdisi artık koşullu —
+    `yeni_profille_izinsiz_kalan_siniflar` verilmezse (ya da boş liste
+    geçilirse) `_build_signal_context` "anket_yeniden_dolduruldu"/
+    "yeni_profille_izinsiz_kalan_siniflar" alanlarını HİÇ eklememeli (bu,
+    önceki "hiçbir zaman eklenmez" testinin yerini alan güncellenmiş
+    versiyondur — artık kalıcı değil, koşullu bir dormant hâli)."""
+    context_olaysiz = _build_signal_context({"holdings": []}, {"assets": []})
+    assert "anket_yeniden_dolduruldu" not in context_olaysiz
+    assert "yeni_profille_izinsiz_kalan_siniflar" not in context_olaysiz
+
+    context_bos_liste = _build_signal_context(
+        {"holdings": []}, {"assets": []}, yeni_profille_izinsiz_kalan_siniflar=[]
+    )
+    assert "anket_yeniden_dolduruldu" not in context_bos_liste
+    assert "yeni_profille_izinsiz_kalan_siniflar" not in context_bos_liste
+
+
+def test_sinyal_baglami_anket_alanlari_ihlal_varsa_eklenir():
+    """Gerçek bir ihlal listesi verildiğinde `_build_signal_context` bunu
+    olduğu gibi taşımalı — burada da hiçbir sınıflandırma/karşılaştırma
+    YAPILMAZ, liste zaten deterministik olarak `user_service.
+    get_and_consume_risk_survey_event` tarafından hesaplanmış gelir."""
+    context = _build_signal_context(
+        {"holdings": []}, {"assets": []}, yeni_profille_izinsiz_kalan_siniflar=["stock"]
+    )
+
+    assert context["anket_yeniden_dolduruldu"] is True
+    assert context["yeni_profille_izinsiz_kalan_siniflar"] == ["stock"]
+
+
+# --- Sinyal 5, Yol B: _kullanilmayan_kapasite --------------------------------
+#
+# 2026-08-28 eki (Yol B kod): analist "hangi kapasite" sorusunu netleştirdi
+# ("risk seviyesi yüksek çıktı ama daha az riskli varlıkları var" -> (a)
+# advice_eligibility). bkz. docs/notes/sinyal5-olay-tabanli-aktivasyon-
+# tasarimi.md §4.8/§4.10: kullanılmayan sınıf var / yok / anket boş (None) /
+# tüm izinli sınıflar zaten elde — dört senaryo.
+
+
+def test_kullanilmayan_kapasite_anket_bossa_uretilmez():
+    """`risk_survey_score=None` (anket hiç doldurulmamış) — "izin verilen
+    sınıf" kavramı anketsiz tanımsızdır, uydurma yok."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "cash", "weight_percent": 100.0}]
+    }
+
+    assert _kullanilmayan_kapasite(holdings_data, None) == []
+
+
+def test_kullanilmayan_kapasite_var():
+    """CONSERVATIVE bandının alt ucu (puan=1) yalnızca NAKIT'e (seviye 1)
+    izin verir; kullanıcının elinde hiç NAKİT yoksa (yalnızca bond elinde)
+    NAKİT "kullanılmayan kapasite" olarak dönmeli."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "bond", "weight_percent": 100.0}]
+    }
+
+    # puan=2 -> NAKIT (1) ve TAHVIL (2) izinli; TAHVIL elde var, NAKİT yok.
+    assert _kullanilmayan_kapasite(holdings_data, 2) == ["cash"]
+
+
+def test_kullanilmayan_kapasite_tum_izinli_siniflar_elde_ise_bos():
+    """Puanın izin verdiği TEK sınıf (NAKİT, puan=1) zaten elde varsa
+    kullanılmayan bir kapasite kalmaz."""
+    holdings_data = {
+        "holdings": [{"symbol": "TST", "asset_class": "cash", "weight_percent": 100.0}]
+    }
+
+    assert _kullanilmayan_kapasite(holdings_data, 1) == []
+
+
+def test_kullanilmayan_kapasite_fiyati_eksik_varligi_disliyor():
+    """Fiyatı bulunamayan bir varlık "elde tutulan sınıf" sayılmamalı —
+    diğer sinyal bağlamı fonksiyonlarıyla aynı ilke (bkz.
+    test_sinyal_baglami_fiyati_eksik_varligi_disliyor)."""
+    holdings_data = {
+        "holdings": [
+            {"symbol": "TST", "asset_class": "cash", "weight_percent": None, "price_missing": True}
+        ]
+    }
+
+    # puan=1 -> yalnızca NAKIT izinli; fiyatı eksik olduğu için "elde" sayılmaz.
+    assert _kullanilmayan_kapasite(holdings_data, 1) == ["cash"]
+
+
+def test_sinyal_baglami_kullanilmayan_kapasite_bossa_eklenmez():
+    """`kullanilmayan_kapasite` verilmezse/boşsa `_build_signal_context`
+    "kullanilmayan_kapasite" anahtarını HİÇ eklememeli — Yol A'nın
+    alanlarıyla aynı ilke."""
+    context = _build_signal_context({"holdings": []}, {"assets": []}, kullanilmayan_kapasite=[])
+
+    assert "kullanilmayan_kapasite" not in context
+
+
+def test_sinyal_baglami_kullanilmayan_kapasite_doluysa_eklenir():
+    context = _build_signal_context(
+        {"holdings": []}, {"assets": []}, kullanilmayan_kapasite=["stock"]
+    )
+
+    assert context["kullanilmayan_kapasite"] == ["stock"]
 
 
 def test_sinyal_prompt_semadaki_literal_suslu_parantezlerle_kirilmiyor():
@@ -541,3 +661,273 @@ def test_sinyal_baglami_makro_gelismeler_tasinir():
     context = _build_signal_context({"holdings": []}, {"assets": []}, macro)
 
     assert context["makro_gelismeler"] == macro
+
+
+# ---------------------------------------------------------------------------
+# Profil uyumsuzlugu ve sinyal blogu (2026-08-31)
+# ---------------------------------------------------------------------------
+
+
+def test_compact_profil_uyumsuz_varliklari_puanla_birlikte_tasir():
+    """Uyumsuzluk bildirimi ancak anket puaniyla YAN YANA anlamli: "seviye 7"
+    tek basina kullaniciya bir sey soylemez, "puaniniz 5" ile birlikte soyler.
+    """
+    assessment = {
+        "metrics": {},
+        "causes": None,
+        "scenarios": [],
+        "risk_survey_score": 5,
+        "mismatched_holdings": [
+            {"symbol": "BHE", "asset_class": "stock", "advice_risk_level": 7},
+        ],
+    }
+
+    compact = _compact(assessment)
+
+    assert compact["profil_uyumsuz_varliklar"] == [
+        {"sembol": "BHE", "sinif": "stock", "varlik_uygunluk_seviyesi": 7}
+    ]
+    assert compact["anket_puani"] == 5
+
+
+def test_compact_uyumsuzluk_yoksa_alan_hic_eklenmez():
+    """ "Uyumsuzluk yok" da bir iddiadir; bos alan LLM'e onu yazdirabilir.
+    Diger bos alanlarla ayni ilke: uretilemiyorsa hic bahsetme."""
+    assessment = {
+        "metrics": {},
+        "causes": None,
+        "scenarios": [],
+        "risk_survey_score": 7,
+        "mismatched_holdings": [],
+    }
+
+    compact = _compact(assessment)
+
+    assert "profil_uyumsuz_varliklar" not in compact
+    assert "anket_puani" not in compact
+
+
+def _sinyal_degerlendirmesi(risky_assets, confidence="normal"):
+    return RiskSignalAssessment(
+        risk_level="orta_riskli",
+        general_assessment="genel",
+        profile_fit="uyum",
+        risky_assets=risky_assets,
+        rebalancing="dengeleme",
+        investment_strategy="strateji",
+        confidence=confidence,
+        survey_score_is_dummy=True,
+    )
+
+
+def test_sinyal_blogu_bulgulari_metne_ceviriyor():
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "THYAO",
+                    "weight_percent": 42.5,
+                    "signals": ["konsantrasyon", "olumsuz_haber"],
+                    "contribution": "yuksek",
+                    "explanation": "Portfoyun buyuk bolumu bu varlikta.",
+                    "sources": ["2026-08-05 THYAO bilanco"],
+                }
+            ]
+        )
+    )
+
+    assert "THYAO" in blok
+    assert "%42,50" in blok  # Turkce ondalik ayraci (prompt kural 4)
+    assert "yoğunlaşma" in blok and "olumsuz haber" in blok
+    assert "Portfoyun buyuk bolumu bu varlikta." in blok
+    assert "2026-08-05 THYAO bilanco" in blok
+    # Ic alan adlari kullaniciya yazilmaz (prompt kural 0).
+    assert "konsantrasyon" not in blok
+    assert "asset_symbol" not in blok
+
+
+def test_sinyal_blogu_celisen_ikinci_risk_seviyesini_GOSTERMEZ():
+    """Sinyal semasindaki `risk_level` LLM'in kendi yargisi; ana yanittaki
+    deterministik seviyeden bagimsiz uretiliyor. Ikisini ayni mesajda
+    gostermek kullaniciya celisen iki risk seviyesi sunmak olurdu."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "TST",
+                    "weight_percent": 10.0,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "dusuk",
+                    "explanation": "aciklama",
+                }
+            ]
+        )
+    )
+
+    assert "orta_riskli" not in blok
+    # Urun Sahibi karari: "ne yapilmali" onerisi kapsam disi.
+    assert "dengeleme" not in blok
+    assert "strateji" not in blok
+
+
+def test_sinyal_blogu_bulgu_yoksa_BOS():
+    """Bos bir baslik kullaniciya "kontrol edildi, bir sey bulunamadi" der;
+    bu da bir iddiadir."""
+    assert _sinyal_blogu(_sinyal_degerlendirmesi([])) == ""
+
+
+def test_sinyal_blogu_dusuk_guvende_kapsam_uyarisi_ekler():
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "TST",
+                    "weight_percent": 10.0,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "dusuk",
+                    "explanation": "aciklama",
+                }
+            ],
+            confidence="dusuk",
+        )
+    )
+
+    assert "sınırlı sayıda kaynağa" in blok
+
+
+# ---------------------------------------------------------------------------
+# Yogunlasma bazi prompt'a tasiniyor (2026-08-31)
+# ---------------------------------------------------------------------------
+
+
+def _yogunlasma(**bayraklar):
+    varsayilan = {
+        "triggered": True,
+        "asset_triggered": False,
+        "category_triggered": False,
+        "hhi_triggered": False,
+        "max_asset_symbol": "THYAO",
+        "max_asset_weight_percent": 42.5,
+        "max_category": "stock",
+        "max_category_weight_percent": 86.24,
+    }
+    varsayilan.update(bayraklar)
+    return {
+        "metrics": {"holdings_count": 3},
+        "causes": {"concentration": varsayilan},
+        "scenarios": [],
+    }
+
+
+def test_compact_varlik_bazli_yogunlasmayi_ayirt_eder():
+    compact = _compact(_yogunlasma(asset_triggered=True))
+
+    assert compact["yogunlasma_detayi"] == {
+        "varlik_bazli": {"sembol": "THYAO", "agirlik_yuzde": 42.5}
+    }
+
+
+def test_compact_kategori_bazli_yogunlasmayi_ayirt_eder():
+    compact = _compact(_yogunlasma(category_triggered=True))
+
+    assert compact["yogunlasma_detayi"] == {
+        "kategori_bazli": {"sinif": "stock", "agirlik_yuzde": 86.24}
+    }
+
+
+def test_compact_ikisi_birden_tetiklendiyse_ikisini_de_tasir():
+    compact = _compact(_yogunlasma(asset_triggered=True, category_triggered=True))
+
+    assert set(compact["yogunlasma_detayi"]) == {"varlik_bazli", "kategori_bazli"}
+
+
+def test_compact_yalnizca_HHI_tetiklendiyse_sembol_vermez():
+    """Tek bir varlik ya da sinif one cikmiyor; gosterilecek bir isim yok,
+    yalnizca dagilimin dar oldugu soylenebilir."""
+    compact = _compact(_yogunlasma(hhi_triggered=True))
+
+    assert compact["yogunlasma_detayi"] == {"dagilim_geneli": {"varlik_sayisi": 3}}
+
+
+def test_compact_HHI_varlik_veya_kategoriyle_birlikte_ayrica_soylenmez():
+    """Ayni durumu ikinci kez, daha soyut bicimde anlatmak olurdu."""
+    compact = _compact(_yogunlasma(asset_triggered=True, hhi_triggered=True))
+
+    assert "dagilim_geneli" not in compact["yogunlasma_detayi"]
+
+
+def test_compact_yogunlasma_tetiklenmediyse_detay_eklenmez():
+    compact = _compact(_yogunlasma(triggered=False))
+
+    assert "yogunlasma_detayi" not in compact
+
+
+def test_prompt_sektor_bazli_yogunlasmayi_yasakliyor():
+    """Sistemde sektor verisi yok; model kategoriyi sektor sanip
+    "ayni sektorde toplanmis" diyemez."""
+    from agents.risk_agent import _PROMPT_TEMPLATE
+
+    assert "Sektör bazlı yoğunlaşmadan ASLA söz etme" in _PROMPT_TEMPLATE
+    # Bazi mutlaka soylensin kurali da yerinde olmali.
+    assert "hangi bazda" in _PROMPT_TEMPLATE
+
+
+def test_sinyal_blogu_anlamsiz_sifir_agirligi_YAZMAZ():
+    """Sinyal 5 Yol B bulgulari gercek bir varliga degil bir SINIFA ait ve
+    agirliklari 0 gelir (risk_signals.md: "asset_symbol alanina o sinifin
+    adini yaz... kullanicinin bu siniftan zaten hic varligi yok").
+
+    Bunu "%0,00" diye basmak canlida gercek zarar verdi: ana metin
+    "portfoyunuzun %62,40'i Nakit" derken blok "Nakit (%0,00 ...)" diyordu,
+    merge iki sayiyi gorup kullaniciya "veriler tutarsiz" diye rapor etti
+    (2026-08-31 arayuz testi)."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "Nakit (sınıf)",
+                    "weight_percent": 0.0,
+                    "signals": ["profil_sapmasi"],
+                    "contribution": "dusuk",
+                    "explanation": "Bu sinif profilinizin izin verdigi olcude kullanilmiyor.",
+                }
+            ]
+        )
+    )
+
+    assert "Nakit (sınıf)" in blok
+    assert "%0,00" not in blok
+    assert "profil sapması" in blok
+    assert "Bu sinif profilinizin izin verdigi olcude kullanilmiyor." in blok
+
+
+def test_sinyal_blogu_gercek_agirligi_yazmaya_devam_eder():
+    """Sifir olmayan agirlik bilgi tasiyor, elenmemeli."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "IOO",
+                    "weight_percent": 37.6,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "orta",
+                    "explanation": "aciklama",
+                }
+            ]
+        )
+    )
+
+    assert "%37,60" in blok
+
+
+def test_merge_prompt_sinyal_blogunu_koruyor():
+    """Merge son LLM turu: blogu basligiyla korumazsa maddeleri kendi
+    cumlelerine karistiriyor ve bloktaki yuzdeleri metnin baska yerindeki
+    siniftaki yuzdelerle karsilastirip "tutarsiz" diyor (canlida olculdu)."""
+    import inspect
+
+    from agents.orchestrator import merge_responses
+
+    kaynak = inspect.getsource(merge_responses)
+    assert "VARLIK BAZLI GÖZLEMLERİ KORU" in kaynak
+    assert "çelişki kurma" in kaynak

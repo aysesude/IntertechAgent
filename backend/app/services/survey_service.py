@@ -124,6 +124,14 @@ def _kurallar(
 
     Metin JSON'da, KOŞUL burada: metinler çevrilebilir ve gözden geçirilebilir
     olmalı, koşullar test edilebilir olmalı (kılavuzun bilinçli ayrımı).
+
+    TK1 REFERANS MOTORDAKİ HÂLİYLE DURUYOR: matrisin HERHANGİ bir satırındaki
+    hacim ≥2, düşük risk beyanıyla çelişik sayılır. Bir ara yalnızca yüksek
+    riskli satırlara daraltılmıştı; karar, TSPB şablonundan gelen kuralı
+    kendi yorumumuzla değiştirmemek yönünde geri alındı. Bunun bilinen bedeli,
+    yalnızca repo/tahvil işlemi olan muhafazakâr kullanıcının da reddedilmesi;
+    telafisi, reddin gerekçesinin kullanıcıya CEVAPLARINA ATIFLA açıklanması
+    (`_gerekceler`).
     """
     kural_metni = {k["kod"]: k for k in config()["kurallar"]}
     e1 = cevaplar.get("E1") or {}
@@ -147,6 +155,101 @@ def _kurallar(
         for kod, tetiklendi in tetik.items()
         if tetiklendi
     ]
+
+
+def _secenek_metni(kod: str, secim: str | None) -> str | None:
+    """Kullanıcının seçtiği şıkkın METNİ. Ekranda gördüğü cümlenin aynısı."""
+    soru = config()["sorular"].get(kod)
+    if soru is None or secim is None:
+        return None
+    for secenek in soru["o"]:
+        if secenek[0] == secim:
+            return str(secenek[1])
+    return None
+
+
+def _azami_puan(kod: str) -> int:
+    secenekler = config()["sorular"][kod]["o"]
+    return max((s[2] if len(s) > 2 else 0) for s in secenekler)
+
+
+def _hacim_beyanlari(e1: dict[str, Any]) -> list[tuple[str, str]]:
+    """Hacim beyanı ≥2 olan matris satırları: `(satır adı, hacim etiketi)`.
+
+    TK1'i tetikleyen tam olarak budur; kullanıcıya "hangi satır" diyebilmek
+    için kuralın baktığı veriyi aynı yerden okuyoruz.
+    """
+    matris = config()["urun_matrisi"]
+    hacim_etiketi = {o[0]: str(o[1]) for o in matris["sutunlar"][2]["o"]}
+    bulunan: list[tuple[str, str]] = []
+    for satir in matris["satirlar"]:
+        secim = str((e1.get(satir["k"]) or {}).get("hacim", "0") or "0")
+        if int(secim) >= 2:
+            bulunan.append((str(satir["n"]), hacim_etiketi.get(secim, secim)))
+    return bulunan
+
+
+def _gerekceler(cevaplar: dict[str, Any], sonuc: dict[str, Any]) -> list[str]:
+    """Sonucu kullanıcının KENDİ CEVAPLARINA bağlayan olgular.
+
+    NEDEN LLM'E BIRAKILMIYOR: modele ham cevapları verip "neden böyle çıktı"
+    diye sorsak, hangi cevabın belirleyici olduğunu TAHMİN ederdi. Anket
+    sonucu bir uygunluk beyanıdır; gerekçesi de ölçülmüş olmak zorunda
+    (CLAUDE.md "uydurmama"). Bu yüzden hangi cevabın neyi belirlediğini kod
+    hesaplıyor, LLM yalnızca bu olguları cümleye döküyor.
+
+    Metinler kullanıcının ekranda gördüğü şık cümleleriyle birebir aynı —
+    "B3'te 15 puan aldınız" demek kimseye bir şey anlatmaz.
+    """
+    gerekceler: list[str] = []
+
+    if not sonuc["sonuc_uretildi"]:
+        c3 = _secenek_metni("C3", cevaplar.get("C3"))
+        satirlar = _hacim_beyanlari(cevaplar.get("E1") or {})
+        if c3:
+            gerekceler.append(f"Risk tercihi olarak şunu seçtiniz: “{c3}”")
+        for ad, hacim in satirlar:
+            gerekceler.append(f"Ürün deneyiminde “{ad}” satırında {hacim} işlem hacmi bildirdiniz")
+        gerekceler.append("Bu iki beyan bir arada tutarlı sayılmadığı için test sonuç üretmedi")
+        return gerekceler
+
+    # Hangi boyut bağlayıcı oldu? `nihai = min(kapasite, tolerans)`.
+    if sonuc["kapasite"] <= sonuc["tolerans"]:
+        baglayici, sorular = "mali kapasiteniz", _KAPASITE_SORULARI
+    else:
+        baglayici, sorular = "risk toleransınız", _TOLERANS_SORULARI
+    gerekceler.append(
+        f"Profilinizi {baglayici} belirledi; sonuç ikisinden düşük olana göre hesaplanır"
+    )
+
+    # O boyutta puanı en çok sınırlayan iki cevap.
+    kayiplar = []
+    for kod in sorular:
+        secim = cevaplar.get(kod)
+        if not isinstance(secim, str):
+            continue
+        kayip = _azami_puan(kod) - _puan(kod, secim)
+        metin = _secenek_metni(kod, secim)
+        if kayip > 0 and metin:
+            kayiplar.append((kayip, config()["sorular"][kod]["t"], metin))
+    for _, soru, secilen in sorted(kayiplar, reverse=True)[:2]:
+        gerekceler.append(f"“{soru}” sorusunda “{secilen}” dediniz")
+
+    if sonuc["likidite_tavani_uygulandi"]:
+        b6 = _secenek_metni("B6", cevaplar.get("B6"))
+        if b6:
+            gerekceler.append(
+                f"Parayı 12 ay içinde çekme ihtimaliniz için “{b6}” dediniz; "
+                "bu, kapasitenize tavan uyguluyor"
+            )
+
+    if sonuc["bilgi_nedeniyle_kisitlandi"]:
+        gerekceler.append(
+            f"Ürün bilgi ve deneyim puanınız {sonuc['bilgi']}/100; "
+            "profil bunun izin verdiği seviyeye çekildi"
+        )
+
+    return gerekceler
 
 
 def skorla(cevaplar: dict[str, Any]) -> dict[str, Any]:
@@ -192,7 +295,7 @@ def skorla(cevaplar: dict[str, Any]) -> dict[str, Any]:
     kurallar = _kurallar(cevaplar, kapasite, tolerans, bilgi, profil["lv"])
     durduruldu = any(k["durdurucu"] for k in kurallar)
 
-    return {
+    sonuc = {
         "kapasite": kapasite,
         "tolerans": tolerans,
         "bilgi": bilgi,
@@ -208,6 +311,11 @@ def skorla(cevaplar: dict[str, Any]) -> dict[str, Any]:
         "kurallar": kurallar,
         "sonuc_uretildi": not durduruldu,
     }
+    # Gerekçe skorun TÜREVİ, girdisi değil: önce sonuç hesaplanır, sonra
+    # hangi cevabın onu belirlediği okunur. Ters sırada yazılsaydı gerekçe
+    # skoru etkileyebilir hâle gelirdi.
+    sonuc["gerekceler"] = _gerekceler(cevaplar, sonuc)
+    return sonuc
 
 
 _YORUM_SISTEM_PROMPT = (
@@ -217,10 +325,16 @@ _YORUM_SISTEM_PROMPT = (
     "\n"
     "SAYI ÜRETME: yalnızca sana verilen skorları kullan. Yeni bir oran, tutar "
     "veya yüzde uydurma.\n"
+    "GEREKÇE UYDURMA: sonucun hangi cevaplardan çıktığını SANA VERİLEN "
+    "'Belirleyici cevaplar' listesinden al. Listede olmayan bir cevabı "
+    "belirleyici gibi gösterme, listedekini de değiştirme.\n"
     "TAVSİYE VERME: 'şunu al', 'şuna geç' deme. Ne ölçüldüğünü ve bunun ne "
     "anlama geldiğini anlat.\n"
     "KISITLARI SÖYLE: bilgi tavanı ya da likidite tavanı uygulandıysa bunu "
     "açıkça ama suçlayıcı olmayan bir dille aktar.\n"
+    "SONUÇ ÜRETİLMEDİYSE: kullanıcıyı suçlama, hangi iki beyanın bir arada "
+    "tutarlı sayılmadığını somut olarak söyle ve hangisini gözden "
+    "geçirebileceğini belirt.\n"
     "En fazla 4 cümle. Madde işareti kullanma, düz paragraf yaz.\n"
     "Kullanıcıya 'siz' diye hitap et."
 )
@@ -232,13 +346,21 @@ def _yedek_yorum(sonuc: dict[str, Any]) -> str:
     Sonuç ekranı boş kalamaz; kullanıcı anketi doldurdu ve bir karşılık
     bekliyor. Bu metin yalnızca ölçülmüş değerleri tekrar eder, yorum
     katmadan.
+
+    Gerekçeler burada da kullanılıyor: LLM düştüğünde kullanıcının elinde
+    "çelişki var" demekten fazlası kalsın. Gerekçeler deterministik üretildiği
+    için sağlayıcıya bağlı değiller.
     """
+    gerekceler = sonuc.get("gerekceler") or []
+
     if not sonuc["sonuc_uretildi"]:
-        return (
+        metin = (
             "Cevaplarınız arasında birbiriyle çelişen noktalar var, bu yüzden "
-            "güvenilir bir profil üretemedik. Cevaplarınızı gözden geçirip "
-            "anketi tekrar doldurabilirsiniz."
+            "güvenilir bir profil üretemedik."
         )
+        if gerekceler:
+            metin += " " + ". ".join(gerekceler) + "."
+        return metin + " Cevaplarınızı gözden geçirip anketi tekrar doldurabilirsiniz."
 
     metin = (
         f"Ölçülen yatırımcı profiliniz: {sonuc['profil_adi']}. "
@@ -277,7 +399,9 @@ async def yorum_uret(sonuc: dict[str, Any]) -> str:
         f"Bilgi tavanı uygulandı: {'evet' if sonuc['bilgi_nedeniyle_kisitlandi'] else 'hayır'}\n"
         f"Likidite tavanı uygulandı: {'evet' if sonuc['likidite_tavani_uygulandi'] else 'hayır'}\n"
         f"Bant sınırında: {'evet' if sonuc['sinir_bolgesinde'] else 'hayır'}\n"
-        f"Sonuç üretildi: {'evet' if sonuc['sonuc_uretildi'] else 'hayır'}"
+        f"Sonuç üretildi: {'evet' if sonuc['sonuc_uretildi'] else 'hayır'}\n"
+        "Belirleyici cevaplar (ÖLÇÜLDÜ, değiştirme):\n"
+        + "\n".join(f"- {g}" for g in sonuc.get("gerekceler") or ["(yok)"])
     )
 
     try:

@@ -10,6 +10,7 @@ from app.models.macro_news_snapshot import MacroNewsSnapshot
 from app.models.message import Message, MessageRole, MessageStatus
 from app.models.portfolio import Portfolio
 from app.models.price_history import PriceHistory
+from app.models.target_price import TargetPrice
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 
@@ -25,6 +26,7 @@ __all__ = [
     "MessageStatus",
     "Portfolio",
     "PriceHistory",
+    "TargetPrice",
     "Transaction",
     "TransactionType",
     "User",

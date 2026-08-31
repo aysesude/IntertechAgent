@@ -70,12 +70,23 @@ export default {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        // Piyasa şeridi. Liste iki kez basıldığı için -%50'de ilk kopyanın
+        // sonu, ikincinin başıyla aynı yere denk gelir; sıfıra dönüş
+        // görünmez.
+        tickerScroll: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
       },
       animation: {
         fadeUp: "fadeUp .3s ease-out both",
         pulseDot: "pulseDot 2s infinite",
         slideUpPanel: "slideUpPanel .2s cubic-bezier(0.4,0,0.2,1)",
         tipIn: "tipIn .15s ease-out both",
+        // Sabit süre, sabit mesafe: gösterge sayısı arttıkça şerit hızlanır.
+        // İçerik uzunluğuna göre süre hesaplamak ölçüm gerektirirdi (JS),
+        // 40 saniye 8-10 gösterge için okunabilir bir hız.
+        tickerScroll: "tickerScroll 40s linear infinite",
       },
     },
   },

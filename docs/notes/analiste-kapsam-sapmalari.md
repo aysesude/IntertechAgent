@@ -8,9 +8,12 @@
 Yedi madde var. Dördü veri/kapsam kararı, ikisi **çelişki bildirimi**, biri
 **ertelenmiş bir istek** (6. madde).
 
+**Durum (2026-08-28):** 1, 2, 3, 3b ve 4 kararlaştı (Yağız); kod ve testler
+buna göre güncellendi. 6 hâlâ ertelenmiş, 7 zaten karar gerektirmiyordu.
+
 ---
 
-## 1. Mevduat varlık olarak kaldırıldı
+## 1. Mevduat varlık olarak kaldırıldı — ✅ KARARLAŞTI (2026-08-28)
 
 **Ne yapıldı:** `MEVDUAT-V` (vadeli) ve `MEVDUAT-VS` (vadesiz) varlıkları
 evrenden çıkarıldı. `AssetClass.CASH` altında artık **hiç varlık yok**; nakit
@@ -32,12 +35,14 @@ düz çizgi kalıyordu ve çekilecek gerçek bir piyasa fiyatları yoktu — evr
 
 **Kazanç:** evren tamamen gerçek kaynaklı hâle geldi (**AK 5.1**).
 
-**Karar gerekiyor:** mevduat kapsam dışı mı, yoksa faiz mekanizmasıyla
-birlikte geri mi gelmeli?
+**Karar (2026-08-28, analist onayı):** Mevduat kapsam dışı kalıyor. Faiz
+işletme mekanizması eklenmeyecek, `MEVDUAT-V`/`MEVDUAT-VS` geri gelmeyecek.
+Kod tarafında ek bir değişiklik gerekmiyor — mevcut hâl zaten bu kararla
+uyumlu.
 
 ---
 
-## 2. Uygunluk risk tablosu yeniden kalibre edildi
+## 2. Uygunluk risk tablosu yeniden kalibre edildi — ✅ KARARLAŞTI (2026-08-28)
 
 **Şartnamedeki tablo** (koda birebir alınmıştı):
 
@@ -83,11 +88,16 @@ kaldıraçlı değil — **spot gümüş zaten %63,1**; `THV` %137 ölçtü ama 
 +%67/+%90 sıçraması var (veri kusuru); on istatistiksel arbitraj fonu
 %2,1-4,7 — yapıca en karmaşık ürünler ama piyasa nötr.
 
-**Karar gerekiyor:** kademelerin yayılması onaylanıyor mu?
+**Karar (2026-08-28, Yağız):** Kademelerin yayılması onaylandı — eski tablo
+artık kullanılmıyor. Gerekçe genişletildi: kullanıcının risk profili artık
+anketten gelen bir puan olarak profilde duruyor (`users.risk_survey_score`);
+tek tek varlıkların "ne kadar riskli" olduğunun ince ayarı bu sabit tabloda
+DEĞİL, ilgili yerlerde LLM'in yorumuna bırakılıyor — bkz. madde 3 ve 4'teki
+kararlar, ikisi de aynı ilkeyle bu tabloyu SADELEŞTİRME yönünde.
 
 ---
 
-## 3. Kıymetli maden ↔ döviz sıralaması — `gerek.md` ile ÇELİŞKİ
+## 3. Kıymetli maden ↔ döviz sıralaması — `gerek.md` ile ÇELİŞKİ — ✅ KARARLAŞTI (2026-08-28)
 
 **`gerek.md` §2:** Kıymetli maden → *"Orta"*, Döviz → *"Orta-Yüksek"*.
 Yani **döviz madenin üstünde** olmalı.
@@ -117,9 +127,12 @@ dövizi en alta koymadık; TL tahvil fonlarının **üstünde** (3), madenin
 **altında** tuttuk. `gerek.md`'nin "döviz tahvilden riskli" sezgisi bu yönüyle
 korunuyor, yalnızca madenle olan sırası ters.
 
-**Karar gerekiyor:** hangisi geçerli — `gerek.md` mi, ölçüm mü?
+**Karar (2026-08-28, Yağız):** `gerek.md` esas alınır, kendi ölçümümüz
+belirleyici değil ("bizim ölçümümüz önemli değil"). Döviz maden'in üstüne
+çekildi: tabloda MADEN 3, DÖVİZ 4 (yer değiştirdi — kod: `backend/app/core/
+config.py` → `ASSET_CLASS_ADVICE_RISK_LEVEL`).
 
-### 3b. Gümüş ve platin madenden ayrıldı (4 → 5)
+### 3b. Gümüş ve platin madenden ayrıldı (4 → 5) — ✅ KARARLAŞTI (2026-08-28): AYRIM KALDIRILDI
 
 Sınıf içi dağılım ölçüldüğünde kıymetli madenin tek kademeye sığmadığı
 görüldü (365 gün, TL cinsinden):
@@ -134,11 +147,14 @@ Gümüş ve platin, **yerli hissenin (%38,6, seviye 5) üstünde** oynuyor;
 ondan düşük bir kademede duramazlar. İkisi varlık düzeyinde **5**'e çekildi,
 gram altın ve sikkeler 4'te kaldı.
 
-**Karar gerekiyor:** kategori bütünlüğü mü (hepsi 4), ölçüm mü (gümüş/platin 5)?
+**Karar (2026-08-28, Yağız):** Kategori bütünlüğü — "ikisi de kıymetli
+maden, ayırma". Gümüş/platin artık maden sınıfından (yeni seviyesi 3) ayrı
+bir kademede değil; `AssetSpec.risk_level` override'ı kaldırıldı (kod:
+`backend/app/providers/universe.py` → `_gram_metal` çağrıları).
 
 ---
 
-## 4. Yabancı hisse yerlinin bir üstünde (6 / 5)
+## 4. Yabancı hisse yerlinin bir üstünde (6 / 5) — ✅ KARARLAŞTI (2026-08-28): AYRIM KALDIRILDI
 
 Evrene **21 ABD hissesi** eklendi (`scope.yaml` NASDAQ / S&P 500 / Dow
 Jones'u zaten kapsam içi sayıyordu ama evrende hiç yoktu).
@@ -157,8 +173,14 @@ yatırımcı korumasının bulunmaması, farklı vergi rejimi. Kodda ve
 `docs/DATA.md`'de böyle yazıldı; "daha oynak" denseydi rakamlara bakan ilk
 kişi yakalardı.
 
-**Karar gerekiyor:** erişim temelli bu gerekçe kabul mü, yoksa yabancı hisse
-yerliyle aynı kademeye mi (5) çekilsin?
+**Karar (2026-08-28, Yağız):** Erişim temelli gerekçe reddedildi — "risk ile
+alakalı değil". Yabancı hisse yerliyle aynı kademeye (5) çekildi;
+`_foreign_stock`'taki `risk_level=6` ve `AFT`'teki aynı override kaldırıldı.
+**Yan etki (bilinçli kabul edildi):** puan 5 ve puan 6 artık aynı varlık
+kümesini açıyor — 6'yı 5'ten ayıran tek şey yabancı hisseydi. "Yedi puanın
+yedisi de farklı sonuç verir" ölçütü altı farklı kümede tutuluyor artık
+(bkz. `tests/test_advice_eligibility.py::test_her_puan_bir_oncekinden_
+farkli_kume_acar`).
 
 ---
 
@@ -208,6 +230,31 @@ sorusunun cevabıdır, oynaklık ölçüsü değil.
 
 **Karar gerekmiyor**, ama analiz dokümanında bu ayrımın adlandırmayla
 belirginleştirilmesi öneriliyor (ör. "uygunluk seviyesi" / "risk seviyesi").
+
+---
+
+## Ek — iş kalemi (sapma değil, bilinen sınır): merge bazı web_research uyarılarını düşürebiliyor
+
+**Not eklendi: 2026-08-28.** Bu madde bir kapsam sapması değil; analist onayı
+beklemiyor, sadece iz bırakılıyor ki unutulmasın.
+
+**Nereden çıktı:** `docs/AGENTS.md` → "Web Araştırma Ajanı" bölümünün kendi
+"Bilinen sınır" notu (satır ~278-283). Ajanın metni kullanıcıya doğrudan
+gitmiyor, `orchestrator.py`'nin `merge` adımında ikinci bir LLM turundan
+geçiyor. `merge_responses`'ın "elenemez" listesinde (ALINAMAYAN BİLGİLER,
+`Kaynaklar:`, canlı bloklar) web_research'ün **vergi konusu yönlendirmesi**
+(`scope.yaml` → `kisitli_konular`'dan gelen mali müşavire yönlendirme) ve
+**kapanış uyarısı** yok — yani merge bunları elemesi mümkün, ikinci LLM turu
+bunları "gereksiz tekrar" sayıp düşürebiliyor.
+
+**Neden hemen düzeltilmedi:** düzeltme `merge_responses`'ı değiştirmeyi
+gerektiriyor; bu fonksiyon dört ajanı (portfolio/market/risk/web_research)
+birden etkiliyor, tek bir ajanın notuyla izole edilecek bir değişiklik değil.
+Bugünkü kalibrasyon/uygunluk işinden bağımsız, kendi başına bir iş.
+
+**Durum:** yapılmadı, bekliyor. Kod: `agents/orchestrator.py` → `merge`
+(→ `merge_responses`). Referans: `docs/AGENTS.md` "Web Araştırma Ajanı" →
+"Bilinen sınır".
 
 ---
 

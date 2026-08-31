@@ -2,9 +2,10 @@ import { useState } from "react";
 import { AssistantIcon } from "@/components/chat/AssistantAvatar";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatWidgetTitle } from "@/components/chat/ChatWidgetTitle";
-import { BotIcon, SendIcon, SparkleIcon, XIcon } from "@/components/icons";
+import { SendIcon, SparkleIcon, XIcon } from "@/components/icons";
 import { INVESTMENT_DISCLAIMER, mockWidgetStarterPrompts } from "@/data/mockData";
 import { useChat } from "@/chat/ChatProvider";
+import { useScrollNewUserMessageToTop } from "@/chat/useScrollNewUserMessageToTop";
 import { useTheme } from "@/context/ThemeContext";
 
 export function ChatWidget() {
@@ -17,6 +18,7 @@ export function ChatWidget() {
   // panel kapanıyor.
   const { messages, sending, sendMessage } = useChat();
   const [draft, setDraft] = useState("");
+  const getBubbleRef = useScrollNewUserMessageToTop(messages);
 
   // Üç nokta göstergesi yalnızca ilk token gelene kadar; sonrasında metin
   // zaten yazılıyor ve iki ayrı "bekle" sinyali göstermek gerekmiyor.
@@ -33,10 +35,10 @@ export function ChatWidget() {
   return (
     <>
       {open && (
-        <div className="animate-slideUpPanel fixed inset-x-4 top-4 bottom-4 z-[60] flex flex-col overflow-hidden rounded-[14px] border border-line bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:border-transparent dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-[104px] sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
-          <div className="flex shrink-0 items-center gap-[11px] bg-[#234FA2] px-[18px] py-4 dark:bg-[#7A2B39]">
-            <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-white/18 text-white">
-              <BotIcon size={16} />
+        <div className="animate-slideUpPanel fixed inset-x-4 top-[250px] bottom-4 z-[150] flex flex-col overflow-hidden rounded-[14px] border border-transparent bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-16 sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
+          <div className="flex shrink-0 items-center gap-[11px] bg-[#234FA2] px-4 py-2.5 dark:bg-[#7A2B39] sm:px-[18px] sm:py-4">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/18 text-white sm:h-8 sm:w-8 sm:rounded-[9px]">
+              <AssistantIcon size={16} strokeWidth={2.2} />
             </span>
             <div className="flex-1 text-white">
               <ChatWidgetTitle />
@@ -75,7 +77,7 @@ export function ChatWidget() {
                 </div>
               </div>
             ) : (
-              messages.map((m) => <ChatBubble key={m.id} message={m} />)
+              messages.map((m) => <ChatBubble key={m.id} message={m} ref={getBubbleRef(m)} />)
             )}
             {cevapBekleniyor && (
               <div className="flex">
@@ -123,7 +125,11 @@ export function ChatWidget() {
         </div>
       )}
 
-      <div className={`fixed bottom-6 right-4 z-[61] w-[76px] flex-col items-center gap-1.5 sm:bottom-8 sm:right-8 ${open ? "hidden sm:flex" : "flex"}`}>
+      {/* Panel açıkken yüzen buton BİLEREK tamamen gizleniyor (masaüstünde
+          de) — önceden `sm:flex` ile masaüstünde açıkken de görünüyordu ve
+          X ikonuna dönüşüyordu; panelin kendi başlığındaki kapat düğmesiyle
+          (yukarıda) birlikte sağ üstte İKİ ayrı "çarpı" oluşuyordu. */}
+      <div className={`fixed bottom-6 right-4 z-[150] w-[76px] flex-col items-center gap-1.5 sm:bottom-8 sm:right-8 ${open ? "hidden" : "flex"}`}>
         <button
           onClick={() => setOpen((v) => !v)}
           // Sayfanın camsı kart yüzeyiyle (bkz. Card.tsx CARD_SURFACE_CLASS)

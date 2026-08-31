@@ -26,6 +26,7 @@ from langgraph.types import StreamWriter
 
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
+from agents.market_query import portfoy_referansi_var_mi
 from agents.portfolio_agent import PortfolioAgent
 from agents.risk_agent import RiskAgent
 from agents.scope_checker import check_scope
@@ -152,7 +153,19 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
         "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
         "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
-        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
+        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n"
+        # 2026-08-31: "son gelişmeler riskimi nasıl etkiliyor" yalnızca MARKET
+        # etiketi alıyordu; risk ajanının haber tabanlı sinyal yolu (portföyde
+        # tutulan varlıkların haberlerini okuyup yorumlayan olumsuz_haber
+        # sinyali) hiç çalışmıyor, kullanıcı da "doğrulanmış bilgi bulunamadı"
+        # cevabı alıyordu (arayüz testinde ölçüldü). Haberin PORTFÖYE ETKİSİ
+        # sorulduğunda soru ikisine birden aittir.
+        "  Haberin/gelişmenin PORTFÖYE ya da RİSKE etkisi soruluyorsa RISK "
+        "etiketi de eklenir (MARKET ile birlikte): 'elimdeki varlıklarla "
+        "ilgili son gelişmeler riskimi nasıl etkiliyor', 'haberler portföyümü "
+        "nasıl etkiler', 'son gelişmeler portföyüm için ne anlama geliyor', "
+        "'enflasyon haberi portföyümü nasıl etkiler'. Burada MARKET haberi "
+        "getirir, RISK onu portföydeki varlıklarla ilişkilendirir.\n\n"
         "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
         "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
         "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
@@ -269,6 +282,15 @@ async def detect_intent(state: OrchestratorState) -> dict:
             labels = ["portfolio", "market"]
         elif not labels and "RAG" in response_text:
             labels = ["market"]
+
+        # Deterministik güvence (2026-08-27, bkz.
+        # market_query.portfoy_referansi_var_mi docstring'i): sorgu
+        # "portföyüm" gibi açık bir ifade taşıyorsa PORTFOLIO etiketi LLM
+        # kaçırmış olsa bile eklenir — aksi hâlde kullanıcının gerçek
+        # holdings'i hiçbir ajana ulaşmaz ve market_agent portföyde olmayan
+        # şirketler hakkında cevap üretebilir (ölçüldü, analist test turu).
+        if "portfolio" not in labels and portfoy_referansi_var_mi(query):
+            labels.append("portfolio")
 
         intent = "+".join(labels) if labels else "AMBIGUOUS"
 
@@ -436,10 +458,31 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Bu bloklardaki bir maddeyi 'belgelerde yer alan' diye de sunma: o "
         "bilgi arşiv dokümanlarından değil, canlı kaynaktan geldi.\n"
         "\n"
+        # 2026-08-31: bu blok eklendiğinde merge başlığı atıp maddeleri kendi
+        # cümlelerine karıştırdı; bir bulgunun ağırlığı ana metindeki sınıf
+        # ağırlığıyla yan yana düşünce de kullanıcıya "veriler tutarsız" diye
+        # rapor edildi (arayüz testinde ölçüldü). Blok, kaynak/canlı bloklar
+        # gibi korunmalı.
+        "VARLIK BAZLI GÖZLEMLERİ KORU: Verilerde 'Varlık bazlı gözlemler' "
+        "başlıklı bir liste varsa başlığıyla ve madde madde AYNEN kalır. "
+        "Maddeleri düzyazıya çevirme, birleştirme, özetleme; bu bloktaki bir "
+        "varlığı ayrıca kendi cümlende TEKRAR anlatma. Bloktaki yüzdeler o "
+        "bulguya aittir; metnin başka yerindeki sınıf/portföy yüzdeleriyle "
+        "KARŞILAŞTIRMA, aralarında çelişki kurma, 'veriler tutarsız' gibi bir "
+        "yorum yapma — farklı şeyleri ölçüyorlar.\n"
+        "\n"
         "Verilerin hangi ajandan veya kaynaktan geldiğini söyleme. "
         "'Merhaba', 'Cevap:' gibi etiketler ekleme, sadece içeriği ver.\n"
         "Para ve oranlarda Türkçe biçim kullan: 1.234,56 TL ve +%8,41 "
         "(yüzde işareti sayıdan ÖNCE, artı/eksi en başta).\n"
+        # Bu adım son LLM turu: ajan metnini yeniden yazarken terimi de
+        # değiştirebiliyor. Ajan prompt'larında "volatilite" zorunlu kılındı
+        # (bkz. prompts/risk_agent.md kural 1), burada da korunmazsa merge
+        # onu "oynaklık"a çevirip kuralı etkisiz bırakır.
+        "TERİM: Fiyat dalgalanmasından söz ederken 'volatilite' de. "
+        "'Oynaklık', 'dalgalanma', 'değişkenlik' gibi karşılıklarını kullanma; "
+        "gelen veride bu kelimelerden biri geçiyorsa 'volatilite' olarak "
+        "aktar.\n"
         "\n"
         "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme "
         "senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', "

@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { MessageMarkdown } from "@/components/chat/MessageMarkdown";
 import { PaperBoatThinking } from "@/components/paper-boat/PaperBoat";
 import { useWordReveal } from "@/chat/useWordReveal";
@@ -49,7 +50,14 @@ function DusunuyorIsareti() {
  */
 export const AI_BALON_SINIFLARI = "rounded-bl-[4px] bg-line2 text-ink";
 
-export function ChatBubble({ message }: { message: ChatMessage }) {
+// `forwardRef`: gönderilen mesajı sekmenin başına kaydırabilmek için
+// (bkz. ChatPage/ChatWidget'taki scroll efekti) çağıran tarafın dış
+// `<div>`'e doğrudan erişmesi gerekiyor — ekstra bir sarmalayıcı `<div>`
+// eklemek yerine (flex/gap düzenini bozardı) ref burada iletiliyor.
+export const ChatBubble = forwardRef<HTMLDivElement, { message: ChatMessage }>(function ChatBubble(
+  { message },
+  ref,
+) {
   const isUser = message.role === "user";
 
   // Ekranda görünen metin ağdan AYRI ilerler: token'lar düzensiz gelir,
@@ -63,7 +71,7 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
   const isAiBubble = !isUser && !message.error;
 
   return (
-    <div className={`flex animate-fadeUp flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+    <div ref={ref} className={`flex animate-fadeUp flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
       {/* GENİŞLİK SINIRI BURADA, balonda değil.
           `max-w-[84%]` balonun kendisindeydi ve balonun kapsayan bloğu bu
           sarmalayıcı — genişliği ise içeriğe göre (shrink-to-fit) belirlenen
@@ -119,4 +127,4 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
       </div>
     </div>
   );
-}
+});

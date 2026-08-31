@@ -31,6 +31,27 @@ destekliyormuş gibi görünüyordu (ölçüldü, 24 Ağustos).
 
 İki canlı yol birbirini dışlar: şirket sorulduğunda genel gündem alakasız
 gürültüdür, şirket sorulmadığında KAP'a hangi şirketi soracağımız belirsizdir.
+
+2026-08-28 eki — Profil-uygunluk bilgilendirmesi: bu "risk analizi" DEĞİLDİR
+(o `agents/risk_agent.py`'nin işi) — kullanıcının sorduğu şirketin, GÜNCEL
+anket puanıyla tavsiye kapsamında olup olmadığının basit bir bildirimi (bkz.
+`agents/portfolio_agent.py`'deki aynı gerekçe, aynı tarihli not). ANKET
+DOLU OLDUĞU her şirket sorusunda çalışır — yalnızca kullanıcının o an ELİNDE
+olan bir varlıkla sınırlı değil, çünkü burada soru "ne yapmalıyım" değil
+sırf bir şirket hakkında bilgi; kullanıcı henüz sahip olmadığı ama tavsiye
+kapsamı dışında kalan bir şirketi sorduğunda da bunu bilmesi gerekir (analist
+onayı, `advice_eligibility` yorumu — bkz. tasarım notundaki "hangi kapasite"
+sorusunun cevabı). Sınıf düzeyinde değil VARLIK düzeyinde kontrol edilir
+(`advice_eligibility.is_asset_advice_allowed`) — `advice_eligibility.py`'nin
+kendi notu, tek tek varlıkların (ör. fonlar) sınıf ortalamasından
+ayrılabildiğini, bu yüzden varlık düzeyi fonksiyonlarının tercih edilmesi
+gerektiğini söylüyor. `market_query.filtre_cikar`'ın döndürdüğü `sirket` alanı
+gerçek bir şirket adı değil TICKER'dır (ör. "ASELS"); `SPEC_BY_SYMBOL`'de
+karşılığı olmayan tickerlar için (yabancı hisse adı uyuşmazlığı vb., bkz.
+evren eşleme notu) sınıf bilinmiyor demektir, uydurma yok, kontrol sessizce
+atlanır. Bu davranış "her şirket sorusunda daha mantıklı" (kullanıcı kararı,
+2026-08-28) gerekçesiyle bilinçli olarak geniş tutuldu; beğenilmezse
+daraltılabilir.
 """
 
 from collections.abc import Callable
@@ -39,6 +60,7 @@ from pathlib import Path
 from typing import Any
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
+from agents.formatting import ASSET_CLASS_TR as _ASSET_CLASS_TR
 from agents.formatting import tr_amount as _tr_amount
 from agents.market_query import (
     filtre_cikar,
@@ -46,8 +68,10 @@ from agents.market_query import (
     guncellik_istegi_var_mi,
     sirket_sayisi,
 )
-from agents.price_query import fiyat_niyeti
+from agents.price_query import fiyat_niyeti, hedef_fiyat_niyeti
 from app.core.llm_client import get_llm_client
+from app.providers.universe import SPEC_BY_SYMBOL
+from app.services.advice_eligibility import is_asset_advice_allowed
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_text(
     encoding="utf-8"
@@ -56,6 +80,7 @@ _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_
 _KAYNAK_BASLIGI = "\n\nKaynaklar:\n"
 _KAP_BASLIGI = "\n\nGüncel KAP Bildirimleri:\n"
 _GUNDEM_BASLIGI = "\n\nGüncel Piyasa Başlıkları:\n"
+_UYGUNLUK_BASLIGI = "\n\nRisk profili uyumu\n"
 
 
 def _tarih_bicimle(ham: Any) -> str:
@@ -142,6 +167,71 @@ def _gundem_blogu(headlines: list[dict[str, Any]], kaynak_url: str | None) -> st
     return blok
 
 
+def _sirket_varlik_sinifi_uygunluk_disi_mi(
+    sirket: str, risk_survey_score: int | None
+) -> str | None:
+    """Sorulan `sirket` (bkz. modül docstring'i — bu bir TICKER'dır, şirket adı
+    değil), kullanıcının GÜNCEL anket puanıyla tavsiye kapsamı dışındaysa
+    Türkçe sınıf adını döner; kapsamdaysa ya da bilinmiyorsa `None`.
+
+    VARLIK düzeyinde kontrol edilir (`is_asset_advice_allowed`), SINIF
+    düzeyinde değil — bkz. `advice_eligibility.py`'nin kendi notu: tek tek
+    varlıklar (özellikle fonlar) sınıflarının tipik seviyesinden ayrılabilir,
+    bu yüzden sınıf fonksiyonları yerine varlık fonksiyonları tercih
+    edilmeli.
+
+    `risk_survey_score=None` (anket hiç doldurulmamış) ya da `sirket`
+    `SPEC_BY_SYMBOL`'de bulunamıyorsa (bkz. evren eşleme notu, ~14/126
+    ticker'ın karşılığı yok) uydurma yok — kontrol sessizce atlanır.
+    """
+    if risk_survey_score is None:
+        return None
+    spec = SPEC_BY_SYMBOL.get(sirket)
+    if spec is None:
+        return None
+    if is_asset_advice_allowed(sirket, spec.asset_class, risk_survey_score):
+        return None
+    return _ASSET_CLASS_TR.get(spec.asset_class.value, spec.asset_class.value)
+
+
+def _uygunluk_blogu(sinif_adi: str) -> str:
+    """`sinif_adi` doluysa bilgilendirme metni döner — LLM'den geçmez,
+    doğrudan eklenir (aynı ilke: `_kap_blogu`/`_gundem_blogu`).
+
+    Uyarı dili KULLANILMAZ (bkz. agents/risk_agent.py Yol B ile aynı ilke):
+    bu bir satış zorunluluğu ya da öneri değil, salt bilgilendirmedir.
+    """
+    return (
+        _UYGUNLUK_BASLIGI + f"{sinif_adi} sınıfı, güncel risk profilinize göre şu anda tavsiye "
+        "kapsamında değil. Bu bir öneri ya da uyarı değildir, yalnızca "
+        "bilgilendirmedir."
+    )
+
+
+def _yanlis_sirket_sonuclarini_ele(
+    results: list[dict[str, Any]], istenen_sirket: str
+) -> list[dict[str, Any]]:
+    """`execute()`'daki filtresiz yedek aramanın (bkz. orada) sonuçlarından,
+    sorguda AÇIKÇA tanınan `istenen_sirket`ten FARKLI bir şirkete ait
+    parçaları eler. `sirket` alanı boş (genel/makro) parçalar dokunulmadan
+    kalır.
+
+    NEDEN GEREKLİ (2026-08-27, analist test turu, ölçüldü): sorguda geçen
+    bir şirket için filtreli arama boş dönerse (ör. RAG'de o şirkete ait
+    yeterli doküman yok), `execute()` bir kez de FİLTRESİZ dener — dar bir
+    filtre yüzünden geçerli bir cevabın kaybolmaması için bilinçli eklenmiş
+    bir mekanizma. Ama filtre düşünce arama TÜM korpusa açılıyor ve
+    `rag/retriever.py`'deki mesafe+kelime-örtüşme eşiği ŞİRKET KİMLİĞİNE
+    değil LEKSİK örtüşmeye bakıyor: "İş Bankası'nın kurucusu kimdir" sorusu
+    "kurucu" kelimesini paylaştığı için ASELSAN'ın kuruluş belgesini
+    "ilgili" sayıp yanlış şirketi cevap diye sunmuştu. Sorgu belirli bir
+    şirketi AÇIKÇA sorduysa, filtresiz sonuçtaki BAŞKA bir şirkete ait
+    parçalar ASLA kullanılmaz: o şirket için kayıt yoktur denmesi, yanlış
+    şirketin bilgisini güvenle sunmaktan iyidir (AK 5.5, "uydurmama").
+    """
+    return [r for r in results if (r.get("metadata") or {}).get("sirket") in (None, istenen_sirket)]
+
+
 def _render_guncel_fiyat(data: dict[str, Any]) -> str:
     """Güncel fiyatları etiketli satırlara döker.
 
@@ -170,6 +260,47 @@ def _render_guncel_fiyat(data: dict[str, Any]) -> str:
     if not satirlar:
         return "Güncel fiyat: istenen varlık için kayıt yok."
     return "Güncel fiyatlar\n" + "\n".join(satirlar)
+
+
+_HEDEF_FIYAT_YON_METNI = {
+    "yukseltme": "yükseltildi",
+    "dusurme": "düşürüldü",
+    "koruma": "korundu",
+}
+
+
+def _render_hedef_fiyat(data: dict[str, Any]) -> str:
+    """Hedef fiyat/analist tavsiyesi kayıtlarını LLM'den geçirmeden ham
+    satırlar olarak döker — `_kap_blogu` ile aynı gerekçe: bu GEÇMİŞTE
+    raporlanmış bir rakam, LLM'in yeniden yazması uydurma riski taşır
+    (bkz. app/services/target_price_ingest.py docstring'i)."""
+    satirlar: list[str] = []
+    for k in data.get("records") or []:
+        para = k.get("currency") or "TRY"
+        satir = (
+            f"{k.get('symbol')}: {k.get('institution')} — {k.get('recommendation')}, "
+            f"hedef fiyat {_tr_amount(k.get('target_price'))} {para} "
+            f"({_tarih_bicimle(k.get('report_date'))} tarihli rapor"
+        )
+        if k.get("price_at_report") is not None:
+            satir += f", rapor anındaki fiyat {_tr_amount(k['price_at_report'])} {para}"
+        satir += ")"
+        yon = k.get("revision_direction")
+        onceki = k.get("previous_target_price")
+        if yon and onceki is not None:
+            satir += (
+                f" — önceki hedef {_tr_amount(onceki)} {para}'den "
+                f"{_HEDEF_FIYAT_YON_METNI.get(yon, yon)}"
+            )
+        satirlar.append("- " + satir)
+
+    eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
+    if eksik:
+        satirlar.append("Hedef fiyatı bulunamayan: " + ", ".join(eksik))
+
+    if not satirlar:
+        return "Hedef fiyat: istenen varlık için kayıt yok."
+    return "Hedef fiyat / analist tavsiyesi\n" + "\n".join(satirlar)
 
 
 def _render_fiyat_gecmisi(data: dict[str, Any]) -> str:
@@ -223,6 +354,17 @@ class MarketAgent(BaseAgent):
         if fiyat is not None:
             return await self._fiyat_yaniti(fiyat)
 
+        # HEDEF FİYAT SORUSU RAG'E GİTMEZ, GÜNCEL FİYAT YOLUNA DA DÜŞMEZ.
+        #
+        # fiyat_niyeti() bu sorguları zaten kendi kapsamı dışında bırakıyor
+        # (bkz. price_query.py _ICERIK_KELIMELERI_RE'deki "hedef fiyat"
+        # bloğu) — burada AYRICA kontrol edilir çünkü bu, RAG dokümanlarında
+        # DEĞİL, target_prices tablosunda yaşayan üçüncü bir veri sınıfı
+        # (bkz. app/services/target_price_ingest.py docstring'i: neden RAG
+        # değil).
+        if (hedef_sirket := hedef_fiyat_niyeti(request.query)) is not None:
+            return await self._hedef_fiyat_yaniti(hedef_sirket)
+
         filtreler = filtre_cikar(request.query)
 
         # SAF GÜNDEM SORUSU RAG'E GİTMEZ.
@@ -267,10 +409,27 @@ class MarketAgent(BaseAgent):
         # şirket adı belgelerde farklı kodla etiketlenmiştir). Filtreli arama
         # boş dönerse bir kez de filtresiz denenir — filtre bir hızlandırma ve
         # doğruluk aracıdır, cevabı büsbütün engellememeli.
+        istenen_sirket = filtreler.get("sirket")
         if not tool_result.get("success") and filtreler:
             tool_result = await self.call_mcp_tool(
                 "search_market_news", {"query": request.query, **ek_args}
             )
+
+            # GÜVENLİK AĞI: filtresiz yedek deneme başka bir şirketin
+            # dokümanını "ilgili" diye sunmasın (bkz. _yanlis_sirket_sonuclarini_ele).
+            if istenen_sirket and tool_result.get("success"):
+                ham_sonuclar = tool_result["data"].get("results") or []
+                elenmis = _yanlis_sirket_sonuclarini_ele(ham_sonuclar, istenen_sirket)
+                if not elenmis:
+                    tool_result = {
+                        "success": False,
+                        "error": {"message": f"{istenen_sirket} için kayıt bulunamadı."},
+                    }
+                elif len(elenmis) != len(ham_sonuclar):
+                    tool_result = {
+                        **tool_result,
+                        "data": {**tool_result["data"], "results": elenmis},
+                    }
 
         if not tool_result.get("success"):
             error = tool_result.get("error", {})
@@ -279,6 +438,21 @@ class MarketAgent(BaseAgent):
         data = tool_result["data"]
         results = data.get("results") or []
         summary_text = await self._summarize(request.query, results, on_token=on_token)
+
+        # Profil-uygunluk bilgilendirmesi: ANKET DOLU OLDUĞU HER şirket
+        # sorusunda çalışır (bkz. modül docstring'i "2026-08-28 eki") —
+        # güncellik şartına bağlı değildir, KAP bloğundan bağımsız bir kontrol.
+        uygunsuz_sinif: str | None = None
+        if istenen_sirket:
+            risk_survey_score = await self._fetch_risk_survey_score(request.user_id)
+            uygunsuz_sinif = _sirket_varlik_sinifi_uygunluk_disi_mi(
+                istenen_sirket, risk_survey_score
+            )
+            if uygunsuz_sinif is not None:
+                uygunluk_blok = _uygunluk_blogu(uygunsuz_sinif)
+                summary_text += uygunluk_blok
+                if on_token is not None:
+                    on_token(uygunluk_blok)
 
         # Güncellik istenen, şirketi belirlenmiş sorularda RAG'a ek olarak
         # canlı KAP bildirimleri de eklenir. Şirket tespit edilemediyse
@@ -291,6 +465,8 @@ class MarketAgent(BaseAgent):
 
         if canli_bildirimler:
             data = {**data, "canli_kap_bildirimleri": canli_bildirimler}
+        if uygunsuz_sinif is not None:
+            data = {**data, "uygunluk_disi_sinif": uygunsuz_sinif}
 
         return AgentResponse(
             agent_name=self.agent_name,
@@ -298,6 +474,23 @@ class MarketAgent(BaseAgent):
             summary_text=summary_text,
             data=data,
         )
+
+    async def _fetch_risk_survey_score(self, user_id: str) -> int | None:
+        """Profil-uygunluk kontrolü için anket puanını okur.
+
+        `get_user_risk_survey` YAN ETKİSİZDİR (bkz. mcp_server/tools/
+        risk_tools.py) — tekrar tekrar çağrılabilir, tüketen bir "olay" değil.
+        Herhangi bir hata (tool başarısızlığı, bağlantı) ana akışı ASLA
+        düşürmemeli: sessizce `None` döner, kontrol atlanır (bkz.
+        agents/portfolio_agent.py::_fetch_risk_survey_score, aynı ilke).
+        """
+        try:
+            sonuc = await self.call_mcp_tool("get_user_risk_survey", {"user_id": user_id})
+        except Exception:
+            return None
+        if not sonuc.get("success"):
+            return None
+        return (sonuc.get("data") or {}).get("risk_survey_score")
 
     async def _fiyat_yaniti(self, niyet: dict) -> AgentResponse:
         """Güncel fiyat veya fiyat geçmişi yanıtı — LLM DEVREDE DEĞİL.
@@ -326,6 +519,23 @@ class MarketAgent(BaseAgent):
             agent_name=self.agent_name,
             success=True,
             summary_text=metin,
+            data=data,
+        )
+
+    async def _hedef_fiyat_yaniti(self, sirket: str) -> AgentResponse:
+        """Hedef fiyat/analist tavsiyesi yanıtı — LLM DEVREDE DEĞİL (bkz.
+        _fiyat_yaniti ile aynı gerekçe: ara bir LLM çağrısı rakamı yeniden
+        yazma riski taşır)."""
+        tool_result = await self.call_mcp_tool("get_target_prices", {"symbols": [sirket]})
+        if not tool_result.get("success"):
+            error = tool_result.get("error", {})
+            return self.error_response(error.get("message", "Hedef fiyat verisi alınamadı"))
+
+        data = tool_result["data"]
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=_render_hedef_fiyat(data),
             data=data,
         )
 

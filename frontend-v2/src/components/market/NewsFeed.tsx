@@ -39,7 +39,12 @@ export function NewsFeed({ news }: NewsFeedProps) {
             <span className="text-xs" style={{ color: INK_FAINT }}>·</span>
             <span className="text-xs text-ink-faint">{item.time}</span>
           </div>
-          <h3 className="font-display m-0 mb-2.5 text-[19px] font-semibold leading-[1.35] tracking-[-0.3px]">
+          {/* Kaynak (BloombergHT) başlıkları TAMAMEN BÜYÜK HARF veriyor
+              (canlı doğrulandı) — içerik değişmiyor, sadece görünüm:
+              lowercase + first-letter:uppercase ile normal cümle
+              biçimine çeviriyoruz. `lang="tr"` (index.html) sayesinde
+              tarayıcı Türkçe İ/ı harflerini doğru dönüştürüyor. */}
+          <h3 className="font-display m-0 mb-2.5 text-[19px] font-semibold leading-[1.35] tracking-[-0.3px] lowercase first-letter:uppercase">
             {item.title}
           </h3>
           {/* AI özeti YALNIZCA gerçekten üretilmişse gösterilir. Canlı

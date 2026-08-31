@@ -270,6 +270,31 @@ describe("toTransactions", () => {
     expect(islemler[1].detail).toBe("");
   });
 
+  it("TRY DIŞI işlemin birim fiyatını işlem anındaki kurla TL'ye çevirir", () => {
+    // Çevrilmezse 230 dolarlık bir hisse "₺230" görünür ve varlık kırk kat
+    // ucuz sanılır. Kur işlemin KENDİ satırından okunuyor, bugünkünden
+    // değil: geçmiş bir alımın TL maliyeti sonradan oynamamalı.
+    const usd: ApiTransactionList = {
+      ...liste,
+      transactions: [
+        {
+          transaction_date: "2026-08-27T10:00:00Z",
+          type: "buy",
+          symbol: "AAPL",
+          quantity: 3,
+          price: 230,
+          currency: "USD",
+          fx_rate_to_try: 41,
+          fee_try: 0,
+          cash_amount_try: -28_290,
+          position_after: 3,
+        },
+      ],
+    };
+
+    expect(toTransactions(usd)[0].detail).toContain("9.430");
+  });
+
   it("limitten fazlasını kesip en yenileri bırakır", () => {
     expect(toTransactions(liste, 1)).toHaveLength(1);
     expect(toTransactions(liste, 1)[0].title).toContain("TUPRS");

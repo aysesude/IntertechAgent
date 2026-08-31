@@ -12,6 +12,14 @@ export interface AuthUser {
   id: string;
   full_name: string;
   risk_profile: "conservative" | "balanced" | "growth" | "aggressive";
+  /**
+   * `null` = anket hiç doldurulmamış.
+   *
+   * Uygulamanın anket ekranını açıp açmayacağına karar verdiği TEK alan
+   * (bkz. App.tsx). Oturum yanıtının içinde geliyor ki arayüz her açılışta
+   * ayrı bir istek atmasın.
+   */
+  risk_survey_score: number | null;
 }
 
 export interface TokenResponse {
@@ -36,20 +44,25 @@ export interface RegisterRequest {
   national_id: string;
   email: string;
   password: string;
-  survey_answers: SurveyAnswers;
+  /**
+   * OPSİYONEL: anket kayıttan çıkarılıp ilk girişe taşındı. Gönderilirse
+   * sunucuda skorlanır ve puan hesapla birlikte yazılır.
+   */
+  survey_answers?: SurveyAnswers;
   /** "Başka bankadan getirilen" açılış tutarı. Metin gönderiliyor: `number`
    *  büyük tutarlarda kayan nokta hatası taşır, sunucu tarafı `Decimal`. */
   initial_deposit_try: string;
 }
 
 export interface RegisterResponse extends TokenResponse {
-  risk_survey_score: number;
-  profil_adi: string;
+  /** Anket doldurulmadıysa `null`. */
+  risk_survey_score: number | null;
+  profil_adi: string | null;
 }
 
 /**
- * Hesap açar. Anket cevapları SUNUCUDA yeniden skorlanır; buradan gönderilen
- * bir puan olsa bile yok sayılır.
+ * Hesap açar. Anket gönderilirse SUNUCUDA yeniden skorlanır; buradan
+ * gönderilen bir puan olsa bile yok sayılır.
  *
  * Token da döner — kullanıcı kayıttan sonra bir de giriş ekranından geçmez.
  */

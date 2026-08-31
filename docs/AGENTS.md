@@ -179,6 +179,54 @@ VaR, Sharpe ve senaryoların tamamı `app/services/risk_service.py` hesabıdır.
   `None` alanlar **korunur** — risk hesaplanamadığında model bunu görüp
   "hesaplanamadı" demeli (CLAUDE.md §4 uydurmama).
 
+### Sinyal değerlendirmesi artık her risk sorusunda ve GÖRÜNÜR (2026-08-31)
+
+Ajanın ikinci, sinyal tabanlı yolu (`_assess_signals` → `prompts/
+risk_signals.md`) yazılmıştı ama kullanıcıya hiç ulaşmıyordu. İki ayrı
+tıkanma vardı:
+
+1. **Soru filtresi.** `_assess_signals` da `_wants_scenarios`'ın arkasındaydı;
+   "portföyümün risk seviyesi nedir" gibi bir soruda hiç çalışmıyordu.
+2. **Çıktı okunmuyordu.** Sonuç yalnızca `response_data
+   ["risk_signal_assessment"]`'a yazılıyordu — o alanı repoda hiçbir yer
+   okumuyor, `orchestrator.merge_responses` ise yalnızca `summary_text`
+   topluyor. Üretilen değerlendirme fiilen atılıyordu.
+
+Artık sinyal değerlendirmesi her risk sorusunda üretilip `_sinyal_blogu` ile
+metne ekleniyor. `_wants_scenarios` yalnızca tool'un `include_scenarios`
+parametresi için kullanılmaya devam ediyor. Bedeli bilinerek kabul edildi
+(Yağız, 2026-08-31): tur başına ek `get_holdings` + `get_portfolio_news` +
+`get_macro_news` çağrısı ve bir ek LLM turu.
+
+**Blokta yalnızca `risky_assets` gösteriliyor.** Şemanın diğer alanları
+bilinçli dışarıda: `risk_level` LLM'in kendi kategorik yargısı ve ana
+yanıttaki deterministik seviyeyle çelişen ikinci bir risk seviyesi olurdu;
+`rebalancing`/`investment_strategy` Ürün Sahibi kararıyla kapsam dışı (risk
+yalnızca tespit/bildirim); `profile_fit` ise aşağıdaki deterministik yolla
+zaten anlatılıyor.
+
+### Profil uyumsuzluğu — deterministik, LLM takdirine bağlı değil
+
+"Elimde profilimin üstünde varlık var mı" sorusu artık `RiskAssessment
+.mismatched_holdings` alanından geliyor: `risk_service` bunu hesaplıyor
+(portföy ve anket puanı orada zaten yüklü, ek sorgu yok), `_compact` prompt'a
+geçiriyor, kural 10 anlattırıyor.
+
+Kontrol **varlık düzeyinde** (`advice_eligibility.mismatched_holdings`), sınıf
+düzeyinde değil: puanı 5 olan kullanıcının elindeki BHE sınıf karşılaştırması
+(STOCK=5) ile uyumlu görünür, oysa varlığın kendi seviyesi 7'dir.
+
+Bu, Sinyal 5'in (`profil_sapmasi`) yerine geçmez ve onu değiştirmez —
+2026-08-26 analist kararı (sinyal yalnızca anket yeniden doldurulunca
+tetiklensin) aynen geçerli. Bu yol bir OLAYA değil MEVCUT DURUMA bakar,
+dolayısıyla olay mekanizmasından bağımsızdır.
+
+Ayrıca kök neden teşhisi (`causes`) artık profil bandı aşılmasa da
+hesaplanıyor; eşikler değişmedi. Öncesinde bandın içindeki bir portföyde
+yoğunlaşma hiç görünmüyordu — prompt kuralı 7 motor tespit etmeden ajanın
+yoğunlaşmadan söz etmesini yasakladığı için, %86'sı nakit olan bir portföy
+"Çok Düşük risk" cevabı alıp yoğunlaşmaya hiç değinmiyordu.
+
 ### `profil_konumu` — bandın altında kalmak da bir uyumsuzluktur
 
 `risk_service` yalnızca **üst** sınırı kontrol ediyor:

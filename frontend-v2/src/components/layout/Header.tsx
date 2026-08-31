@@ -121,43 +121,43 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
           </div>
         </nav>
 
-        <div className="relative ml-auto lg:hidden" ref={mobileNavRef}>
-          <button
-            onClick={() => setMobileNavOpen((v) => !v)}
-            aria-label={mobileNavOpen ? "Menüyü kapat" : "Menüyü aç"}
-            aria-expanded={mobileNavOpen}
-            className="grid h-11 w-11 place-items-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-brand hover:bg-brand-tint dark:border-transparent dark:bg-surface-elevated"
-          >
-            {mobileNavOpen ? <XIcon size={20} /> : <MenuIcon size={20} />}
-          </button>
-
-          {mobileNavOpen && (
-            <div className="animate-tipIn absolute right-0 top-[calc(100%+10px)] w-[230px] overflow-hidden rounded-xl border border-line bg-white p-1.5 shadow-pop dark:border-transparent dark:bg-surface-elevated">
-              {NAV_ITEMS.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onNavigate(item.id);
-                    setMobileNavOpen(false);
-                  }}
-                  className={
-                    "flex min-h-[44px] w-full items-center rounded-lg px-3 py-2.5 text-left text-sm transition-colors " +
-                    (item.id === activeScreen
-                      ? "bg-brand-tint font-semibold text-brand"
-                      : "font-medium text-ink-muted hover:bg-brand-tint hover:text-brand")
-                  }
-                >
-                  <span className="mr-1.5 inline-flex align-middle">
-                    <MaterialIcon name={item.icon} size={16} />
-                  </span>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div className="ml-auto flex items-center gap-2.5 sm:gap-3.5">
+          <div className="relative lg:hidden" ref={mobileNavRef}>
+            <button
+              onClick={() => setMobileNavOpen((v) => !v)}
+              aria-label={mobileNavOpen ? "Menüyü kapat" : "Menüyü aç"}
+              aria-expanded={mobileNavOpen}
+              className="grid h-11 w-11 place-items-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-brand hover:bg-brand-tint dark:border-transparent dark:bg-surface-elevated"
+            >
+              {mobileNavOpen ? <XIcon size={20} /> : <MenuIcon size={20} />}
+            </button>
+
+            {mobileNavOpen && (
+              <div className="animate-tipIn absolute right-0 top-[calc(100%+10px)] w-[230px] overflow-hidden rounded-xl border border-line bg-white p-1.5 shadow-pop dark:border-transparent dark:bg-surface-elevated">
+                {NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onNavigate(item.id);
+                      setMobileNavOpen(false);
+                    }}
+                    className={
+                      "flex min-h-[44px] w-full items-center rounded-lg px-3 py-2.5 text-left text-sm transition-colors " +
+                      (item.id === activeScreen
+                        ? "bg-brand-tint font-semibold text-brand"
+                        : "font-medium text-ink-muted hover:bg-brand-tint hover:text-brand")
+                    }
+                  >
+                    <span className="mr-1.5 inline-flex align-middle">
+                      <MaterialIcon name={item.icon} size={16} />
+                    </span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => setTheme(isDark ? "light" : "dark")}
             aria-label={isDark ? "Açık temaya geç" : "Koyu temaya geç"}

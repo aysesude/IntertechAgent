@@ -32,6 +32,7 @@ volatilite tablosu gerekir."""
 import logging
 import math
 import statistics
+from collections.abc import Sequence
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from itertools import combinations, pairwise
@@ -62,6 +63,7 @@ from app.schemas.risk import (
     ConcentrationCause,
     CorrelationCause,
     HighVolatilityAssetCause,
+    MismatchedHolding,
     RebalanceScenario,
     RiskAssessment,
     RiskCauseDiagnosis,
@@ -70,6 +72,7 @@ from app.schemas.risk import (
     ScenarioAssetWeight,
     ScenarioCategoryWeight,
 )
+from app.services.advice_eligibility import mismatched_holdings as _mismatched_holdings
 from app.services.ledger_service import cash_balance_as_of
 from app.services.valuation_service import FX_SYMBOL_BY_CURRENCY, PriceBook
 
@@ -445,8 +448,12 @@ def _diagnose_causes(
     correlations: dict[tuple[AssetClass, AssetClass], float],
     diversification_ratio: float | None,
 ) -> RiskCauseDiagnosis:
-    """Yalnızca portföy volatilitesi kullanıcının profili için beklenen
-    bandın üzerindeyken çağrılır (bkz. get_risk_assessment).
+    """Volatilite hesaplanabildiği HER portföy için çağrılır (bkz.
+    get_risk_assessment). 2026-08-31'e kadar yalnızca profil bandı aşıldığında
+    çağrılıyordu; bandın içindeki portföylerde yoğunlaşmanın hiç
+    görünmemesine yol açtığı için bu koşul kaldırıldı. Eşikler DEĞİŞMEDİ —
+    teşhis üretilir, ama tetiklenip tetiklenmediği yine `triggered`
+    bayraklarında.
 
     Rüveyda'nın onayladığı doğru eşleşme (formüller doğru, yalnızca alt
     başlık atamaları yanlıştı — bu session'da netleştirildi):
@@ -463,13 +470,18 @@ def _diagnose_causes(
     max_category_weight = category_weights[top_class]
 
     # --- Neden A: Yoğunlaşma ---
-    concentration_triggered = (
-        float(max_asset_weight) > settings.risk_cause_max_asset_weight
-        or float(max_category_weight) > settings.risk_cause_max_category_weight
-        or float(herfindahl) > settings.risk_cause_hhi_threshold
-    )
+    # Üç koşul AYRI AYRI tutuluyor (2026-08-31): `triggered` bunların OR'u
+    # olduğu için tek başına "neye göre yoğunlaşmış" sorusuna cevap vermiyordu
+    # ve kullanıcıya yalnızca belirsiz bir "yoğunlaşma var" denebiliyordu.
+    # Eşikler ve OR sonucu DEĞİŞMEDİ, yalnızca kırılım görünür oldu.
+    asset_triggered = float(max_asset_weight) > settings.risk_cause_max_asset_weight
+    category_triggered = float(max_category_weight) > settings.risk_cause_max_category_weight
+    hhi_triggered = float(herfindahl) > settings.risk_cause_hhi_threshold
     concentration = ConcentrationCause(
-        triggered=concentration_triggered,
+        triggered=asset_triggered or category_triggered or hhi_triggered,
+        asset_triggered=asset_triggered,
+        category_triggered=category_triggered,
+        hhi_triggered=hhi_triggered,
         max_asset_weight_percent=_round2(max_asset_weight * 100),
         max_asset_symbol=max_asset_symbol,
         max_category_weight_percent=_round2(max_category_weight * 100),
@@ -1021,6 +1033,35 @@ def _generate_rebalance_scenarios(
 # --------------------------------------------------------------------------
 
 
+def _mismatched_holding_rows(
+    holdings: Sequence[Holding], survey_score: int | None
+) -> list[MismatchedHolding]:
+    """Elde olan ama anket puanının izin vermediği varlıklar (VARLIK düzeyi).
+
+    Kuralın sahibi `advice_eligibility`; burada yalnızca DB satırlarından
+    girdi hazırlanıp sonuç şemaya çevriliyor. Bu hesabın risk servisinde
+    yapılmasının sebebi metodolojik değil pratik: portföy ve anket puanı
+    burada zaten yüklü, ikinci bir sorgu ya da tool çağrısı gerekmiyor.
+
+    `survey_score` None ise (anket hiç doldurulmamış, ya da `profile_override`
+    ile hesaplanıyor) BOŞ liste döner — puan yoksa uyumsuzluk hesaplanamaz,
+    uydurulmaz (CLAUDE.md §4).
+
+    Sonuç sembole göre sıralanır: aynı portföy için yanıt turdan tura
+    değişmesin (holdings sırası sorgu planına göre oynayabilir)."""
+    if survey_score is None:
+        return []
+    return sorted(
+        (
+            MismatchedHolding(symbol=symbol, asset_class=asset_class, advice_risk_level=seviye)
+            for symbol, asset_class, seviye in _mismatched_holdings(
+                ((h.asset.symbol, h.asset.asset_class) for h in holdings), survey_score
+            )
+        ),
+        key=lambda m: m.symbol,
+    )
+
+
 def _empty_assessment(
     user_id: UUID,
     profile: RiskProfile,
@@ -1040,6 +1081,8 @@ def _empty_assessment(
         total_value=_ZERO,
         risk_level=None,
         is_within_profile=None,
+        # Portföy boş — elde varlık yoksa uyumsuzluk da olamaz.
+        mismatched_holdings=[],
         metrics=RiskMetrics(
             annualized_volatility_percent=None,
             max_drawdown_percent=None,
@@ -1327,18 +1370,33 @@ def get_risk_assessment(
                 for aid in asset_ids
             ]
 
+            # 2026-08-31 kararı (Yağız): kök neden teşhisi ARTIK HER DURUMDA
+            # hesaplanıyor. Önceden yalnızca `not is_within_profile` dalında
+            # çağrılıyordu ve bu, bandın İÇİNDEKİ portföylerde yoğunlaşmanın
+            # hiç görünmemesine yol açıyordu: %86'sı nakit olan bir portföy
+            # "risk seviyeniz Çok Düşük" cevabı alıyor, yoğunlaşmadan tek
+            # kelime edilmiyordu — çünkü prompt kuralı 7, motor tespit
+            # etmeden ajanın yoğunlaşmadan söz etmesini (haklı olarak)
+            # yasaklıyor. Girdilerin tamamı bu noktada zaten hesaplanmış
+            # durumda; ek sorgu ya da ölçüm maliyeti yok.
+            #
+            # "Hesaplanıyor" TETİKLENİYOR demek DEĞİLDİR: her nedenin kendi
+            # `triggered` bayrağı var ve eşikler değişmedi. Bandın içindeki
+            # sakin bir portföyde teşhis nesnesi döner ama bayrakların hepsi
+            # False olabilir — kural 7'nin dayandığı ayrım korunuyor.
+            causes = _diagnose_causes(
+                max_asset_weight=max_asset_weight,
+                max_asset_symbol=symbol_by_asset_id[top_asset_id],
+                category_weights=category_weights,
+                herfindahl=herfindahl,
+                asset_vols=asset_vols,
+                asset_weights=weights,
+                risk_contributions=risk_contributions,
+                correlations=correlations,
+                diversification_ratio=diversification_ratio_value,
+            )
+
             if not is_within_profile:
-                causes = _diagnose_causes(
-                    max_asset_weight=max_asset_weight,
-                    max_asset_symbol=symbol_by_asset_id[top_asset_id],
-                    category_weights=category_weights,
-                    herfindahl=herfindahl,
-                    asset_vols=asset_vols,
-                    asset_weights=weights,
-                    risk_contributions=risk_contributions,
-                    correlations=correlations,
-                    diversification_ratio=diversification_ratio_value,
-                )
                 # ÜRÜN SAHİBİ KARARI (2026-08): senaryo önerisi ürün
                 # kapsamından çıkarıldı (bkz. Settings.risk_scenarios_enabled
                 # yanındaki not). Motor kod olarak duruyor ama bu bayrak
@@ -1383,6 +1441,10 @@ def get_risk_assessment(
         total_value=_round2(total_value),
         risk_level=risk_level,
         is_within_profile=is_within_profile,
+        # Fiyat geçmişinden BAĞIMSIZ hesaplanır: volatilite ölçülemese de
+        # (yetersiz fiyat günü) uyumsuzluk bilgisi verilebilir, çünkü girdisi
+        # yalnızca elde tutulan varlık ve anket puanıdır.
+        mismatched_holdings=_mismatched_holding_rows(holdings, survey_score),
         metrics=RiskMetrics(
             annualized_volatility_percent=(
                 _round2(Decimal(str(volatility * 100))) if volatility is not None else None

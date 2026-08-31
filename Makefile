@@ -1,4 +1,4 @@
-.PHONY: up down seed credentials demo-users backfill daily-update data-doctor test lint
+.PHONY: up down seed credentials demo-users backfill daily-update hedef-fiyat-guncelle data-doctor test lint
 
 up:
 	docker compose up --build
@@ -25,6 +25,11 @@ backfill:
 
 daily-update:
 	docker compose exec -w / api python -m data.daily_update
+
+# Hedef fiyat/analist tavsiyesi (Seker Yatirim) — snapshot, siklikla
+# calistirilmaz (bkz. data/target_price_backfill.py docstring'i).
+hedef-fiyat-guncelle:
+	docker compose exec -w / api python -m data.target_price_backfill
 
 # Maliyet ile degerleme ayni evrenden mi geliyor? Backfill seed'den SONRA
 # calistiysa islem fiyatlari artik var olmayan fiyatlari gosterir ve K/Z

@@ -252,19 +252,28 @@ export function useDashboardData(range: RangeKey): DashboardState {
     // Döndüğünde ekran bir an "stok hali"ni gösteriyordu ve o anda uyarı
     // bandı da bastırılmış oluyordu, yani uydurma rakamlar uyarısız
     // görünüyordu. Sayfa bu durumda iskelet çiziyor (bkz. DashboardPage).
-    if (!temel || !aktifPerformans) return canli ? BOS_DASHBOARD : mockDashboard;
+    //
+    // ÖZET YETER, SERİ ŞART DEĞİL. Eskiden ikisi birden aranıyordu ve
+    // performans ucu düştüğünde ekran sonsuza kadar iskelet kalıyordu —
+    // bugün açılan bir hesap ilk alımını yapar yapmaz tam olarak bunu
+    // yaşıyordu (uç `InsufficientDataError` fırlatıyordu; asıl sebep
+    // sunucuda düzeltildi). Tek bir ucun düşmesi tüm ekranı karartmamalı
+    // (CLAUDE.md §4 zarif düşüş).
+    if (!temel) return canli ? BOS_DASHBOARD : mockDashboard;
     return toDashboardData({
       summary: temel.ozet,
-      performance: aktifPerformans.sonuc,
-      range: aktifPerformans.range,
+      performance: aktifPerformans?.sonuc ?? null,
+      range: aktifPerformans?.range ?? range,
       holdings: temel.varliklar,
       transactions: temel.islemler,
       risk: temel.risk,
       darkTheme: resolvedTheme === "dark",
     });
-  }, [temel, aktifPerformans, resolvedTheme, canli]);
+  }, [temel, aktifPerformans, range, resolvedTheme, canli]);
 
-  const canliVeri = temel !== null && aktifPerformans !== null;
+  // Gerçek veri var mı: ÖZET belirleyici. Seri olmadan da ekran gerçek
+  // rakamları gösteriyor, dolayısıyla "tasarım verisi" uyarısı yanlış olurdu.
+  const canliVeri = temel !== null;
 
   const refetch = useCallback(() => {
     // Elle yenilemede önbellek DE temizlenir: kullanıcı "güncel veriyi getir"

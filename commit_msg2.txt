@@ -1,0 +1,9 @@
+Risk ajani sinyal blogu: sifir agirlik duzeltmesi, merge korumasi, varlik bazli uyumsuzluk ve haber+risk yonlendirmesi
+
+- risk_agent.py: _sinyal_blogu artik anlamsiz %0,00 agirligi yazmiyor (yalnizca gercek weight_percent varsa gosteriliyor)
+- orchestrator.py: merge_responses sistem promptuna VARLIK BAZLI GOZLEMLERI KORU kurali eklendi, Varlik bazli gozlemler blogu artik ozetlenip celiskili yorumlanmiyor
+- orchestrator.py: intent siniflandirici, elimdeki varliklarla ilgili haberler riskimi nasil etkiler tarzi sorularda hem MARKET hem RISK etiketini veriyor
+- portfolio_agent.py: profil uyumsuzlugu kontrolu SINIF duzeyinden VARLIK duzeyine tasindi (IOO gibi sinifindan ayrisan varliklarda yanlis uyumsuzluk bildirimi duzeltildi)
+- 12 yeni test eklendi (test_risk_agent.py genisletildi, test_portfolio_agent_profil_uyumu.py yeniden yazildi)
+
+Canli sohbet testinde (virasohbet202608311358.txt) tespit edilen 4 sorunun duzeltmesi.
