@@ -5,9 +5,9 @@ import type { ApiTradableAsset, ApiTradableList } from "@/api/trade";
 /**
  * Al/Sat ekranı.
  *
- * Buradaki değişmezlerin çoğu "yanlış şeyi gizlememe" üzerine: kilitli
- * varlığın sebebi görünmeli, satış tarafında kilit UYGULANMAMALI, işlemden
- * sonra portföy önbellekleri boşalmalı.
+ * Değişmezler: Al sekmesinde alınamayan varlık LİSTELENMEZ ama kaç tanesinin
+ * düştüğü söylenir, satış tarafında kilit UYGULANMAZ, TRY dışı fiyat TL'ye
+ * çevrilmeden gösterilmez, işlemden sonra portföy önbellekleri boşalır.
  */
 
 const fetchTradableAssets = vi.fn();
@@ -50,6 +50,8 @@ function varlik(ustuneYaz: Partial<ApiTradableAsset> = {}): ApiTradableAsset {
     currency: "TRY",
     risk_level: 5,
     price: 305.5,
+    price_try: 305.5,
+    fx_rate_to_try: 1,
     price_date: "2026-08-27",
     price_source: "yfinance",
     price_stale: false,
@@ -75,11 +77,12 @@ describe("TradePage", () => {
     dashboardSifirla.mockReset();
   });
 
-  it("kilitli varlığın SEBEBİNİ gösterir", async () => {
-    // Sessizce elemek ya da sebepsiz kilitlemek, kullanıcıyı hatayı kendinde
-    // aramaya iter.
+  it("AL sekmesinde alınamayan varlık listelenmez", async () => {
+    // Kullanıcı tıklayamayacağı satırla uğraşmasın; liste yapabildiği işi
+    // göstersin.
     fetchTradableAssets.mockResolvedValue(
       liste([
+        varlik({ symbol: "THYAO", name: "Türk Hava Yolları" }),
         varlik({
           symbol: "AAPL",
           name: "Apple",
@@ -91,8 +94,46 @@ describe("TradePage", () => {
     );
 
     render(<TradePage />);
+    await screen.findByRole("button", { name: /Türk Hava/ });
 
-    expect(await screen.findByText(/risk seviyesi 6/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Apple/ })).not.toBeInTheDocument();
+  });
+
+  it("gizlenen varlıkların SAYISINI söyler", async () => {
+    // Aradığını bulamayan kullanıcı, listenin neden kısa olduğunu bilmezse
+    // hatayı sistemde ya da kendinde arar.
+    fetchTradableAssets.mockResolvedValue(
+      liste([
+        varlik({ symbol: "THYAO", name: "Türk Hava Yolları" }),
+        varlik({ symbol: "AAPL", name: "Apple", can_buy: false, block_reason: "uymuyor" }),
+      ]),
+    );
+
+    render(<TradePage />);
+
+    expect(await screen.findByText(/1 varlık listelenmiyor/)).toBeInTheDocument();
+  });
+
+  it("TRY DIŞI varlığın fiyatını TL olarak gösterir", async () => {
+    // ₺ işaretiyle dolar rakamı basmak varlığı kırk kat ucuz gösteriyordu.
+    fetchTradableAssets.mockResolvedValue(
+      liste([
+        varlik({
+          symbol: "AAPL",
+          name: "Apple",
+          currency: "USD",
+          price: 230,
+          price_try: 9430,
+          fx_rate_to_try: 41,
+        }),
+      ]),
+    );
+
+    render(<TradePage />);
+
+    expect(await screen.findByText(/9\.430,00/)).toBeInTheDocument();
+    // Kendi para birimindeki fiyat da duruyor, ama birimiyle birlikte.
+    expect(screen.getByText(/230,00 USD/)).toBeInTheDocument();
   });
 
   it("SAT sekmesinde kilit uygulanmaz", async () => {

@@ -12,6 +12,20 @@ gerektirmez, yalnızca TOOLS listesine adını eklemek yeterlidir.
 
 Sorumluluk sınırı (Portfolio Agent tasarım dokümanı): analiz eder ama risk
 analizi onun işi değildir; haber ve RAG piyasa ajanının.
+
+2026-08-28 eki — Profil-uygunluk bilgilendirmesi: bu, "risk analizi" (volatilite/
+VaR modelleme, yalnızca `agents/risk_agent.py`'nin işi) DEĞİLDİR — kullanıcının
+GÜNCEL elindeki varlık sınıflarının, GÜNCEL anket puanının izin verdiği
+sınıflarla basit bir küme farkıdır (`advice_eligibility.mismatched_asset_
+classes`), tıpkı K/Z yüzdesi gibi zaten `get_holdings`'ten gelen veriden
+deterministik olarak türetilen bir gerçek. `orchestrator.py`'nin RISK
+sorulmadıkça `risk_agent`'ı hiç çağırmaması yüzünden bu bilgi başka türlü
+yalnızca "ne yapmalıyım" tarzı bir soruda görünürdü — kullanıcı sadece
+"portföyümü göster" dediğinde bile GÜNCEL bir profil uyumsuzluğu varsa
+görmesi gerekir (bkz. `advice_eligibility.py`'nin KAPSAM notu, "sahipse
+profil UYUMSUZLUĞU sayılır"). Yalnızca `get_holdings` plandaysa çalışır (bkz.
+`_profil_uyum_disi_siniflar`) — `get_portfolio_summary`'nin özet dağılımı bu
+kontrol için KULLANILMIYOR, tutarlı tek kaynak `get_holdings` kalsın diye.
 """
 
 import asyncio
@@ -25,11 +39,13 @@ from typing import Any
 from fastmcp import Client
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
+from agents.formatting import ASSET_CLASS_TR as _ASSET_CLASS_TR
 from agents.formatting import tr_amount as _tr_amount
 from agents.formatting import tr_date as _tr_date
 from agents.formatting import tr_percent as _tr_percent
-from app.core.config import turkey_today
+from app.core.config import AssetClass, turkey_today
 from app.core.llm_client import get_llm_client
+from app.services.advice_eligibility import mismatched_asset_classes
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +135,13 @@ class PortfolioAgent(BaseAgent):
             plan = await self._plan(request, catalog)
             results = await self._run_plan(client, plan, request.user_id)
 
+            # Profil-uygunluk bilgilendirmesi (bkz. modül docstring'i
+            # "2026-08-28 eki") yalnızca `get_holdings` plandaysa anlamlı —
+            # ucuz tool'u başka her plan için gereksiz yere ÇAĞIRMIYORUZ.
+            risk_survey_score: int | None = None
+            if any(name == "get_holdings" for name, _ in plan):
+                risk_survey_score = await self._fetch_risk_survey_score(client, request.user_id)
+
         data: dict[str, Any] = {"selected_tools": [name for name, _ in plan]}
         failed: list[str] = []
 
@@ -129,6 +152,14 @@ class PortfolioAgent(BaseAgent):
                 failed.append(name)
                 continue
             data[_RESULT_KEY[name]] = payload
+
+        # Uydurma yok: anket hiç doldurulmamışsa (`risk_survey_score is None`)
+        # ya da `get_holdings` başarısız olup "holdings" hiç eklenmediyse bu
+        # kontrol sessizce ATLANIR — mevcut hacimli akış hiç etkilenmez.
+        if "holdings" in data and risk_survey_score is not None:
+            mismatch = _profil_uyum_disi_siniflar(data["holdings"], risk_survey_score)
+            if mismatch:
+                data["profil_uyum_disi_siniflar"] = mismatch
 
         # Hiçbiri gelmediyse söylenecek bir şey yok. `base.error_response()`
         # yerine AgentResponse doğrudan kuruluyor: hangi tool'un seçilip hangi
@@ -279,6 +310,29 @@ class PortfolioAgent(BaseAgent):
         pairs = await asyncio.gather(*(_one(name, args) for name, args in plan))
         return dict(pairs)
 
+    async def _fetch_risk_survey_score(self, client: Client, user_id: str) -> int | None:
+        """Profil-uygunluk kontrolü için GÜNCEL anket puanını ucuz bir MCP
+        çağrısıyla okur (bkz. modül docstring'i "2026-08-28 eki") —
+        `get_risk_assessment`'in aksine tam bir volatilite/VaR hesaplaması
+        TETİKLEMEZ, tek satırlık bir okuma. `TOOLS`/`_USER_SCOPED_TOOLS`'a
+        eklenmedi: bu, planlayıcının seçtiği bir tool değil, `get_holdings`
+        seçildiğinde ajanın kendi kararıyla deterministik olarak çağırdığı
+        yardımcı bir okuma.
+
+        Hata durumunda (tool başarısız, bağlantı sorunu, anket hiç
+        doldurulmamış) sessizce `None` döner — çağıran taraf bu durumda
+        kontrolü ATLAR, hiçbir şey uydurmaz."""
+        try:
+            result = await client.call_tool("get_user_risk_survey", {"user_id": user_id})
+        except Exception:  # noqa: BLE001 - bu çağrının hatası ana akışı düşürmesin
+            logger.exception("[AJAN] portfolio: anket puani okunamadi")
+            return None
+
+        structured = result.structured_content or {}
+        if not structured.get("success"):
+            return None
+        return structured.get("data", {}).get("risk_survey_score")
+
     @staticmethod
     def _unwrap(result: dict[str, Any] | None) -> tuple[dict[str, Any] | None, str | None]:
         """Tool zarfını (veri, hata_mesajı) ikilisine ayırır."""
@@ -341,16 +395,35 @@ def _format_history(history: list[dict[str, str]]) -> str:
     )
 
 
-_ASSET_CLASS_TR = {
-    "stock": "Hisse Senedi",
-    "precious_metal": "Kıymetli Maden",
-    "currency": "Döviz",
-    # "Tahvil" DEĞİL: bu sınıfta doğrudan devlet tahvili yok, hepsi TEFAS
-    # borçlanma araçları fonu. "Tahvil" demek olmayan bir enstrümanı ima
-    # ediyordu; üstelik scope.yaml "tahvil"i kapsam dışı sayıyor.
-    "bond": "Borçlanma Araçları",
-    "cash": "Nakit",
-}
+def _profil_uyum_disi_siniflar(
+    holdings_data: dict[str, Any], risk_survey_score: int | None
+) -> list[str]:
+    """Kullanıcının GÜNCEL elinde olan ama anket puanının artık izin
+    vermediği varlık sınıflarının listesi — bkz. modül docstring'i
+    "2026-08-28 eki", `advice_eligibility.mismatched_asset_classes`.
+
+    Saf bir fonksiyondur: tüm sınıflandırma `mismatched_asset_classes`'ta
+    (`app/services/advice_eligibility.py`) yapılır, burada yalnızca
+    `get_holdings` sonucunun şeklini o fonksiyonun beklediği kümeye çevirir.
+    `risk_survey_score` `None` ise (anket hiç doldurulmamış) boş liste
+    döner — uydurma yok."""
+    if risk_survey_score is None:
+        return []
+
+    held_classes = {
+        h.get("asset_class")
+        for h in holdings_data.get("holdings", [])
+        if not h.get("price_missing")
+    }
+    try:
+        held = {AssetClass(c) for c in held_classes if c is not None}
+    except ValueError:
+        # Tanınmayan bir sınıf değeri (beklenmez, ama sessizce çökmektense
+        # kontrolü atlamak zarif düşüştür).
+        return []
+
+    return sorted(ac.value for ac in mismatched_asset_classes(held, risk_survey_score))
+
 
 # Nakit hareketleri de listeye giriyor (sembol süzgeci verilmediğinde), bu
 # yüzden hepsinin Türkçe karşılığı burada olmalı — yoksa metne ham enum düşer.
@@ -433,6 +506,19 @@ def _render(data: dict[str, Any]) -> str:
                     f"{_tr_percent(item.get('unrealized_pnl_percent'), signed=True)}"
                 )
         blocks.append("\n".join(lines))
+
+    # bkz. modül docstring'i "2026-08-28 eki" — yalnızca GERÇEK bir uyumsuzluk
+    # varsa eklenir (uydurulmuş bir "her şey uyumlu" bloğu YOK, boşsa hiç
+    # bahsedilmez).
+    mismatch = data.get("profil_uyum_disi_siniflar")
+    if mismatch:
+        isimler = [_ASSET_CLASS_TR.get(c, c) for c in mismatch]
+        blocks.append(
+            "Risk profili uyumu\n"
+            "Elinizde, güncel risk profilinize göre artık tavsiye kapsamında "
+            "olmayan şu varlık sınıfları var: " + ", ".join(isimler) + ". "
+            "Bu bir satış zorunluluğu değildir, yalnızca bilgilendirmedir."
+        )
 
     performance = (data.get("performance") or {}).get("summary")
     if performance:

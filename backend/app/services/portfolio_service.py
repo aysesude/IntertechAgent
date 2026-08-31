@@ -307,6 +307,45 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
 # ---------------------------------------------------------------------------
 
 
+def get_held_asset_classes(db: Session, user_id: UUID) -> set[AssetClass]:
+    """Kullanıcının GÜNCEL olarak (miktar > 0) elinde tuttuğu varlık
+    sınıflarının kümesi.
+
+    `get_holdings_valuation`'ın küçük bir alt kümesi gibi görünebilir ama
+    BİLEREK ayrı ve daha ucuz: fiyat/değer hesabına hiç girmez, yalnızca
+    "hangi SINIFLARDAN var" sorusuna cevap verir — Sinyal 5'in (profil_sapmasi,
+    bkz. docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md) ve
+    `advice_eligibility`'nin girdisi SINIF SAHİPLİĞİDİR, değer değil.
+
+    Tamamen satılmış (miktar 0) pozisyonlar sayılmaz. Fiyatı bulunamayan
+    (`price_missing`) varlıklar İSE burada DIŞLANMAZ — sınıf sahipliği
+    fiyatlanabilirlikten bağımsızdır (`get_holdings_valuation`'da
+    `price_missing` yalnızca DEĞER alanlarını etkiler, bkz. o fonksiyonun
+    docstring'i); fiyatı geçici olarak bulunamayan bir hisse hâlâ elde bir
+    hissedir.
+
+    Portföyü olmayan bir kullanıcı için boş küme döner, `NotFoundError`
+    FIRLATMAZ — tek çağıranı (anket-olayı okuma) "elde hiçbir şey yok"
+    durumunu geçerli, hata olmayan bir girdi olarak ele alıyor.
+    """
+    portfolio = db.execute(
+        select(Portfolio).where(Portfolio.user_id == user_id)
+    ).scalar_one_or_none()
+    if portfolio is None:
+        return set()
+
+    holdings = (
+        db.execute(
+            select(Holding)
+            .where(Holding.portfolio_id == portfolio.id, Holding.quantity > 0)
+            .options(joinedload(Holding.asset))
+        )
+        .scalars()
+        .all()
+    )
+    return {h.asset.asset_class for h in holdings}
+
+
 def get_holdings_valuation(db: Session, user_id: UUID) -> HoldingsValuation:
     """Portföydeki varlıkları tek tek değerler.
 
@@ -530,6 +569,20 @@ def get_portfolio_performance(db: Session, user_id: UUID, window: TimeWindow) ->
         )
     ).scalar()
     as_of = last_price_date or date.today()
+    # Seri portföyün DOĞUMUNDAN önce bitemez.
+    #
+    # Fiyat hattı günlük iş akşam koştuğu için gün içinde bir gün geride
+    # olabiliyor. Bugün açılan bir hesap bugün alım yaptığında `inception`
+    # bugün, `last_price_date` dün oluyordu; `start = max(inception, ...)`
+    # bugüne, `as_of` düne düşüyor ve aşağıdaki `start > as_of` kontrolü
+    # `InsufficientDataError` fırlatıyordu. Sonuç: yeni kullanıcı ilk alımını
+    # yapar yapmaz Dashboard'u kaybediyordu (ölçüldü, 28 Ağustos 2026).
+    #
+    # `as_of`ı bugüne kadar UZATMIYORUZ — o, son bilinen fiyatı tekrar tekrar
+    # çizip "değer değişmedi" yanılsaması üretirdi (yukarıdaki not). Yalnızca
+    # `inception`a çekiliyor: portföyün var olduğu ilk gün seride yer almak
+    # zorunda ve o gün, özet ekranıyla aynı biçimde son kapanışla değerlenir.
+    as_of = max(as_of, inception)
 
     window_start = window_start_date(window, as_of)
     start = max(inception, window_start)

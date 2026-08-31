@@ -30,8 +30,12 @@ from app.services.trade_service import (
 def kullanici(db_session):
     """Puanı 5 (Büyüme) olan, 100.000 TL nakdi bulunan kullanıcı.
 
-    Puan 5 bilerek: yerli hisseyi açar ama ABD hissesini (6) ve serbest fonu
+    Puan 5 bilerek: hisse sınıfını (yerli VE yabancı) açar ama serbest fonu
     (7) açmaz — uygunluk kuralının iki yönü de aynı kullanıcıyla sınanabilir.
+
+    2026-08-28 kararı: yabancı hisse artık yerliyle AYNI kademede (5), bu
+    yüzden "puanın üstündeki varlık" örneği ABD hissesi (AAPL) DEĞİL, BHE
+    (serbest fon, seviye 7) — evrende kalan tek asset-düzeyi istisna.
     """
     user = User(
         email="trader@test.local",
@@ -49,9 +53,15 @@ def kullanici(db_session):
 
     seed_assets(db_session)
 
-    # Fiyatlar: yerli hisse, ABD hissesi ve kur. Elle hesaplanabilir değerler.
+    # Fiyatlar: yerli hisse, ABD hissesi, kur ve serbest fon (BHE, tek
+    # asset-düzeyi istisna). Elle hesaplanabilir değerler.
     bugun = datetime.now(timezone.utc).date()
-    for sembol, fiyat in [("THYAO", "100"), ("AAPL", "200"), ("USDTRY", "40")]:
+    for sembol, fiyat in [
+        ("THYAO", "100"),
+        ("AAPL", "200"),
+        ("USDTRY", "40"),
+        ("BHE", "1.5"),
+    ]:
         asset = db_session.execute(select(Asset).where(Asset.symbol == sembol)).scalar_one()
         db_session.add(
             PriceHistory(
@@ -79,13 +89,13 @@ def _varlik(db_session, sembol: str) -> Asset:
 
 class TestUygunluk:
     def test_puanin_ustundeki_varlik_ALINAMAZ(self, db_session, kullanici):
-        # AAPL seviye 6, kullanıcının puanı 5.
+        # BHE seviye 7, kullanıcının puanı 5.
         with pytest.raises(ValidationAppError) as hata:
-            preview_trade(db_session, kullanici.id, "AAPL", TradeSide.BUY, Decimal(1))
+            preview_trade(db_session, kullanici.id, "BHE", TradeSide.BUY, Decimal(1))
 
         # Sebep kullanıcıya SÖYLENMELİ; "işlem yapılamaz" tek başına
         # kullanıcıyı hatayı kendinde aramaya iter.
-        assert "6" in str(hata.value) and "5" in str(hata.value)
+        assert "7" in str(hata.value) and "5" in str(hata.value)
 
     def test_puana_uyan_varlik_ALINIR(self, db_session, kullanici):
         onizleme = preview_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(10))
@@ -100,22 +110,20 @@ class TestUygunluk:
         portfolio = db_session.execute(
             select(Portfolio).where(Portfolio.user_id == kullanici.id)
         ).scalar_one()
-        aapl = _varlik(db_session, "AAPL")
-        # Puanı yetmese de elinde AAPL var (ör. puanını sonradan düşürmüş).
+        bhe = _varlik(db_session, "BHE")
+        # Puanı yetmese de elinde BHE var (ör. puanını sonradan düşürmüş).
         record_transaction(
             db_session,
             portfolio.id,
             TransactionType.BUY,
             transaction_date=datetime.now(timezone.utc),
-            asset_id=aapl.id,
+            asset_id=bhe.id,
             quantity=Decimal(2),
-            price=Decimal("200"),
-            currency="USD",
-            fx_rate_to_try=Decimal("40"),
+            price=Decimal("1.5"),
         )
         db_session.commit()
 
-        onizleme = preview_trade(db_session, kullanici.id, "AAPL", TradeSide.SELL, Decimal(1))
+        onizleme = preview_trade(db_session, kullanici.id, "BHE", TradeSide.SELL, Decimal(1))
         assert onizleme.quantity == Decimal(1)
 
     def test_anketi_doldurmamis_kullanici_alim_yapamaz(self, db_session, kullanici):
@@ -246,11 +254,11 @@ class TestListe:
         """Sessizce elemek, kullanıcının o varlığın var olduğunu bile
         görmemesi demek olurdu."""
         liste = get_tradable_assets(db_session, kullanici.id)
-        aapl = next(a for a in liste.assets if a.symbol == "AAPL")
+        bhe = next(a for a in liste.assets if a.symbol == "BHE")
 
-        assert aapl.can_buy is False
-        assert aapl.block_reason is not None
-        assert "6" in aapl.block_reason
+        assert bhe.can_buy is False
+        assert bhe.block_reason is not None
+        assert "7" in bhe.block_reason
 
     def test_fiyat_TARIHIYLE_birlikte_doner(self, db_session, kullanici):
         # Arayüz tarihi göstermek zorunda, yoksa kullanıcı canlı fiyat sanır.
@@ -260,6 +268,42 @@ class TestListe:
         assert thyao.price == Decimal("100.0000")
         assert thyao.price_date == datetime.now(timezone.utc).date()
         assert thyao.price_stale is False
+
+    def test_ENDEKS_ve_EMTIA_listede_YER_ALMAZ(self, db_session, kullanici):
+        """Fiyatlanan her varlık satın alınabilir değildir.
+
+        XU100/SPX endeks, BRENT emtia: kıyaslama ve piyasa şeridi onların
+        fiyatına dayanıyor ama portföye giremezler. `tradable` bayrağı DB'ye
+        yazılmadan önce BIST 100 endeksi Al/Sat listesinde sıradan bir hisse
+        gibi görünüyordu (sınıfı hisse, seviye 5).
+        """
+        semboller = {a.symbol for a in get_tradable_assets(db_session, kullanici.id).assets}
+
+        assert "XU100" not in semboller
+        assert "BRENT" not in semboller
+        assert "SPX" not in semboller
+        assert "THYAO" in semboller, "tutulabilir varlıklar süzgeçten etkilenmemeli"
+
+    def test_TRY_disi_varligin_TL_karsiligi_doner(self, db_session, kullanici):
+        """Arayüz ₺ ile dolar rakamı göstermesin diye çevrim SUNUCUDA.
+
+        AAPL 200 USD, kur 40 → 8.000 TL. Tarayıcıda çarpılsaydı ön izlemedeki
+        sunucu hesabıyla ayrışabilecek ikinci bir hesap doğardı.
+        """
+        liste = get_tradable_assets(db_session, kullanici.id)
+        aapl = next(a for a in liste.assets if a.symbol == "AAPL")
+
+        assert aapl.currency == "USD"
+        assert aapl.price == Decimal("200.0000")
+        assert aapl.fx_rate_to_try == Decimal("40.0000")
+        assert aapl.price_try == Decimal("8000.0000")
+
+    def test_TRY_varlikta_kur_1_ve_iki_fiyat_esit(self, db_session, kullanici):
+        liste = get_tradable_assets(db_session, kullanici.id)
+        thyao = next(a for a in liste.assets if a.symbol == "THYAO")
+
+        assert thyao.fx_rate_to_try == Decimal(1)
+        assert thyao.price_try == thyao.price
 
     def test_eldeki_miktar_listede(self, db_session, kullanici):
         execute_trade(db_session, kullanici.id, "THYAO", TradeSide.BUY, Decimal(7))

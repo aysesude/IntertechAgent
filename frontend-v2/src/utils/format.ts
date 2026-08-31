@@ -17,6 +17,21 @@ export function formatSignedTRY(value: number): string {
   return `${sign}${formatTRY(Math.abs(value))}`;
 }
 
+/**
+ * Para birimine göre 2 ondalıklı biçim. `null` = BİRİMSİZ (endeks puanı,
+ * parite) — başına simge konmaz, çünkü "₺11.284" BIST 100 için olmayan bir
+ * büyüklük iddiasıdır. Bilinmeyen bir para birimi kodu, uydurma bir simge
+ * yerine kodun kendisiyle yazılır ("88,04 GBP").
+ */
+export function formatMoney2(value: number, currency: string | null): string {
+  if (currency === null) return formatNumberTR(value, 2);
+  if (currency === "TRY") return formatTRY2(value);
+  const sayi = formatNumberTR(value, 2);
+  if (currency === "USD") return `$${sayi}`;
+  if (currency === "EUR") return `€${sayi}`;
+  return `${sayi} ${currency}`;
+}
+
 /** Türkçe binlik ("."), ondalık (",") ayıraçlı düz sayı — para birimi yok. */
 export function formatNumberTR(value: number, digits = 0): string {
   return value.toLocaleString("tr-TR", { minimumFractionDigits: digits, maximumFractionDigits: digits });

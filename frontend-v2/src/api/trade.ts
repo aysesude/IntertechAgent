@@ -17,8 +17,14 @@ export interface ApiTradableAsset {
   asset_class: "stock" | "bond" | "currency" | "precious_metal" | "cash";
   currency: string;
   risk_level: number;
-  /** Listedeki fiyat KAYITLI kapanış; canlı fiyat ön izlemede çekilir. */
+  /** Listedeki fiyat KAYITLI kapanış; canlı fiyat ön izlemede çekilir.
+   *  VARLIĞIN KENDİ PARA BİRİMİNDE — ABD hisselerinde ve AKE fonunda USD. */
   price: number | null;
+  /** Aynı fiyatın TL karşılığı. Ekranda gösterilen rakam BUDUR; `price`
+   *  yalnızca parantez içinde ikinci bilgi olarak yazılır. */
+  price_try: number | null;
+  /** Çevrimde kullanılan kur (TRY varlıkta 1, kur bulunamazsa null). */
+  fx_rate_to_try: number | null;
   price_date: string | null;
   price_source: string | null;
   price_stale: boolean;

@@ -276,3 +276,24 @@ describe("başka sayfadan dönüş", () => {
     expect(screen.getByTestId("yukleniyor-ilk")).toHaveTextContent("true");
   });
 });
+
+
+describe("performans ucu düştüğünde", () => {
+  it("ekran İSKELETTE KALMAZ, özet gerçek rakamlarla çizilir", async () => {
+    // GERİLEME TESTİ: bugün açılan bir hesap ilk alımını yaptığında
+    // `/performance` `InsufficientDataError` fırlatıyordu (asıl sebep
+    // sunucuda düzeltildi) ve `loading` sonsuza kadar true kalıyordu —
+    // kullanıcı için Dashboard hiç açılmıyordu. Tek bir ucun düşmesi tüm
+    // ekranı karartmamalı (CLAUDE.md §4 zarif düşüş).
+    fetchPerformance.mockRejectedValue(new Error("Bu pencerede veri yok"));
+
+    render(<Panel />);
+
+    await waitFor(() => expect(screen.getByTestId("yukleniyor-ilk")).toHaveTextContent("false"));
+    expect(screen.getByTestId("toplam")).toHaveTextContent("1569468.64");
+    // Seri yok: grafik kartı "veri yok" gösterir, uydurma nokta üretilmez.
+    expect(screen.getByTestId("kart-var")).toHaveTextContent("YOK");
+    // Rakamlar gerçek; "tasarım verisi" uyarısı çıkmamalı.
+    expect(screen.getByTestId("demo")).toHaveTextContent("false");
+  });
+});

@@ -33,6 +33,7 @@ const GOSTERGELER: ApiMarketIndicatorList = {
       price_date: "2026-08-22",
       source: "yfinance",
       stale: false,
+      currency: null,
     },
     {
       symbol: "USDTRY",
@@ -43,6 +44,7 @@ const GOSTERGELER: ApiMarketIndicatorList = {
       price_date: "2026-08-22",
       source: "tcmb",
       stale: true,
+      currency: "TRY",
     },
   ],
   missing_symbols: [],
@@ -55,6 +57,29 @@ describe("toMarketIndicators", () => {
     expect(endeks.label).toBe("BIST 100");
     expect(endeks.value).not.toContain("₺");
     expect(kur.value).toContain("₺");
+  });
+
+  it("TRY DIŞI göstergeyi kendi birimiyle biçimler", () => {
+    // Brent doları ₺ ile basmak, aynı hatanın Al/Sat ekranındaki hâliydi.
+    const [brent] = toMarketIndicators({
+      ...GOSTERGELER,
+      indicators: [
+        {
+          symbol: "BRENT",
+          name: "Brent Petrol",
+          asset_class: "stock",
+          price: 88.04,
+          change_percent: -1.05,
+          price_date: "2026-08-28",
+          source: "yfinance",
+          stale: false,
+          currency: "USD",
+        },
+      ],
+    });
+
+    expect(brent.label).toBe("Brent");
+    expect(brent.value).toBe("$88,04");
   });
 
   it("hesaplanamayan değişimi null olarak TAŞIR, sıfıra çevirmez", () => {

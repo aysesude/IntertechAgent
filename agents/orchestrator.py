@@ -26,6 +26,7 @@ from langgraph.types import StreamWriter
 
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
+from agents.market_query import portfoy_referansi_var_mi
 from agents.portfolio_agent import PortfolioAgent
 from agents.risk_agent import RiskAgent
 from agents.scope_checker import check_scope
@@ -144,7 +145,9 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'gram altın kaç TL', 'gümüş fiyatı nedir', 'platin ne kadar', "
         "'THYAO'nun F/K oranı kaç', 'Tüpraş 2. çeyrek bilançosu nasıl', "
         "'Akbank'ın 2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam "
-        "soruluyor, TAHMIN değil)\n"
+        "soruluyor, TAHMIN değil), 'GARAN'ın hedef fiyatı ne' (analist "
+        "tarafından GEÇMİŞTE raporlanmış bir hedef, kullanıcıdan bir "
+        "TAHMIN istenmiyor)\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -269,6 +272,15 @@ async def detect_intent(state: OrchestratorState) -> dict:
             labels = ["portfolio", "market"]
         elif not labels and "RAG" in response_text:
             labels = ["market"]
+
+        # Deterministik güvence (2026-08-27, bkz.
+        # market_query.portfoy_referansi_var_mi docstring'i): sorgu
+        # "portföyüm" gibi açık bir ifade taşıyorsa PORTFOLIO etiketi LLM
+        # kaçırmış olsa bile eklenir — aksi hâlde kullanıcının gerçek
+        # holdings'i hiçbir ajana ulaşmaz ve market_agent portföyde olmayan
+        # şirketler hakkında cevap üretebilir (ölçüldü, analist test turu).
+        if "portfolio" not in labels and portfoy_referansi_var_mi(query):
+            labels.append("portfolio")
 
         intent = "+".join(labels) if labels else "AMBIGUOUS"
 

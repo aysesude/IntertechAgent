@@ -202,8 +202,14 @@ export function toTransactions(liste: ApiTransactionList, limit = 6): Transactio
           ? `${TRANSACTION_LABELS[islem.type]} · ${islem.symbol}`
           : TRANSACTION_LABELS[islem.type],
         date: formatDateDMY(islem.transaction_date),
+        // Birim fiyat varlığın KENDİ para biriminde tutuluyor (ABD
+        // hisselerinde USD); TL karşılığı için işlemin DONDURULMUŞ kuruyla
+        // çarpılır. Bugünkü kurla çarpmak, geçmiş bir alımın TL maliyetini
+        // her gün değiştirirdi.
         detail: miktarVar
-          ? `${islem.quantity} adet${islem.price !== null ? ` · ${formatTRY(islem.price)}` : ""}`
+          ? `${islem.quantity} adet${
+              islem.price !== null ? ` · ${formatTRY(islem.price * islem.fx_rate_to_try)}` : ""
+            }`
           : "",
         amount: tutar,
         formattedAmount: formatSignedTRY(tutar),
@@ -238,7 +244,9 @@ export function toRiskSummary(risk: ApiRiskAssessment): RiskSummary {
 
 export interface DashboardSources {
   summary: ApiPortfolioSummary;
-  performance: ApiPerformanceResult;
+  /** Performans ucu düşerse `null`; grafik kartı "veri yok" gösterir ama
+   *  ekranın geri kalanı (özet, dağılım, işlemler) çizilir. */
+  performance: ApiPerformanceResult | null;
   range: RangeKey;
   /** Kısmi başarısızlıkta `null` gelebilir; dağılım alt kırılımsız çizilir. */
   holdings: ApiHoldingsValuation | null;
@@ -258,13 +266,16 @@ export function toDashboardData(kaynak: DashboardSources): DashboardData {
   const { summary: ozet, performance: performans, holdings, transactions } = kaynak;
 
   return {
-    summary: toSummary(ozet, performans),
+    summary: toSummary(ozet, performans ?? undefined),
     // Yalnızca SEÇİLİ dönem yükleniyor: dördünü birden çekmek dört ek istek
     // demek ve kullanıcı çoğu zaman tek döneme bakıyor.
-    performance: { [kaynak.range]: toPerformanceRange(performans, kaynak.range) } as Record<
-      RangeKey,
-      PerformanceRange
-    >,
+    //
+    // Seri YOKSA boş kalır — uydurma bir nokta üretilmez. Grafik kartı
+    // "gösterilecek veri yok" der, özet kartları ve dağılım gerçek
+    // rakamlarını göstermeye devam eder.
+    performance: (performans
+      ? { [kaynak.range]: toPerformanceRange(performans, kaynak.range) }
+      : {}) as Record<RangeKey, PerformanceRange>,
     allocation: toAllocation(ozet, holdings, kaynak.darkTheme),
     transactions: transactions ? toTransactions(transactions) : [],
     // Öneriler risk ajanının senaryolarından gelecek (Faz 5). Kaynağı yokken

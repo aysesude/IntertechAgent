@@ -16,9 +16,15 @@ hesaplanmaz/sınıflandırılmaz, girdi yalnızca portföy ağırlıkları ve
 `get_portfolio_news`'ten gelen haber/bilanço/yorum parçalarıdır; risk
 seviyesini ve tüm metni LLM üretir (bkz. agents/prompts/risk_signals.md).
 
-Dummy anket puanı (KALDIRILDI, bkz. 2026-08-26 eki): 1-7 arası gerçek anket
-henüz yok (kapsamı ayrı, PO onayı bekleniyor — bu dosyaya dokunmadan önce
-mutlaka hatırlat). Önceki sürümde `_DUMMY_SURVEY_SCORE_BY_PROFILE` mevcut
+Dummy anket puanı (KALDIRILDI, bkz. 2026-08-26 eki): bu paragraf yazıldığında
+1-7 arası gerçek anket henüz yoktu. ARTIK VAR — bkz. 2026-08-26 eki, alt
+paragraf: `users.risk_survey_score` gerçek, migrate edilmiş, test edilmiş bir
+alan (`set_user_risk_survey`, `RISK_SURVEY_SCORE_TO_PROFILE`); "anket yok"
+DEĞİL, eksik olan yalnızca anketin YENİDEN DOLDURULDUĞU ANI (event) yakalayan
+bir mekanizma — bkz. docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md.
+Bu paragraf yalnızca o zamanki `_DUMMY_SURVEY_SCORE_BY_PROFILE` kaldırma
+kararının tarihsel gerekçesi olarak duruyor. Önceki sürümde
+`_DUMMY_SURVEY_SCORE_BY_PROFILE` mevcut
 4'lü `RiskProfile`'dan GEÇİCİ bir 1-7 değeri türetiyor, Sinyal 5 bunu
 "elindeki varlık sınıfı ŞU ANKİ dummy puanla izinli mi" şeklinde her sohbet
 turunda pasifçe kontrol ediyordu. Bu yaklaşım analistin son netlemesiyle
@@ -72,7 +78,47 @@ YENİDEN DOLDURMA olayını (event) yakalayan bir mekanizma — ör.
 `user_service.set_user_risk_profile`'ın ne zaman, hangi eski değerden hangi
 yeni değere çağrıldığını bilen bir yapı — projede henüz YOK; eklenene kadar
 Sinyal 5 kalıcı olarak DORMANT'tır (LLM'e hiç kullanmaması söyleniyor, bkz.
-agents/prompts/risk_signals.md)."""
+agents/prompts/risk_signals.md).
+
+2026-08-28 eki — Sinyal 5 kapsamı GENİŞLETİLDİ, 2026-08-26'daki karar
+DARALTILMADI. Analist netleşti: sinyal "yeniden doldurulduğunda VE risk
+kapasitesi kullanılmadığında" tetiklensin — yani iki BAĞIMSIZ yol var, Yol A
+(2026-08-26'daki olay tabanlı yol, hâlâ geçerli, hâlâ dormant çünkü olay
+mekanizması yok) ve Yol B (yeni: portföy profile göre gereğinden temkinliyse
+bilgilendirme tonunda bir bulgu — bu yolun OLAY beklemesi gerekmiyor, şu anki
+`risk_survey_score` + holdings yeterli, dolayısıyla Yol A'nın altyapısını
+beklemeden uygulanabilir). Tasarımın tamamı, açık kalan tek belirsizlik
+(Yol B'nin "kapasite" tanımı `advice_eligibility` mi yoksa
+`RISK_MAX_CATEGORY_WEIGHT` mi olduğu) dahil:
+docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md. Kod tarafı HENÜZ
+YAZILMADI — bu ek yalnızca tasarım/kapsam kararını yansıtıyor.
+
+2026-08-28 eki (kod) — Yol A'nın kod tarafı yazıldı (tasarım belgesi §4.1-4.7):
+`users.risk_survey_updated_at`/`risk_survey_event_consumed_at` kolonları
+(migration `e2a7c9f14d68`), `user_service.get_and_consume_risk_survey_event`
+ve onu saran MCP tool'u `get_risk_survey_event` eklendi.
+`_assess_signals` artık `get_holdings`/`get_portfolio_news`'in yanına ÜÇÜNCÜ
+bir çağrı olarak bu tool'u da çağırıyor; yalnızca `olay_var: true` VE
+`izin_verilmeyen_ve_elde_olan_siniflar` BOŞ DEĞİLSE `_build_signal_context`'e
+`anket_yeniden_dolduruldu`/`yeni_profille_izinsiz_kalan_siniflar` alanları
+geçiriliyor — aksi hâlde (olay yok, ya da olay var ama ihlal yok) context bu
+alanları hiç TAŞIMIYOR, önceki "üretilemiyorsa hiç bahsetme" ilkesiyle
+tutarlı. Tool başarısız olursa (herhangi bir nedenle) mevcut davranış aynen
+sürer — bu üçüncü çağrı da diğer ikisi gibi ana yanıtı BLOKE ETMEZ.
+
+2026-08-28 eki (Yol B kod) — Analist "hangi kapasite" sorusunu netleştirdi:
+"risk seviyesi yüksek çıktı ama daha az riskli varlıkları var" — yani (a)
+yorumu, `advice_eligibility.allowed_asset_classes`. Yol B'nin kod tarafı
+(tasarım belgesi §4.8-4.10) yazıldı: yeni saf fonksiyon
+`_kullanilmayan_kapasite(holdings_data, risk_survey_score)` — hiçbir OLAYA
+ihtiyaç duymaz, `_assess_signals`'a zaten giden `assessment_data`'daki
+(FR-4/volatilite yanıtı) `risk_survey_score` ile mevcut holdings'in farkını
+alır. `risk_survey_score` `None` ise (anket hiç doldurulmamış) boş liste
+döner. Sonuç doluysa `_build_signal_context`'e `kullanilmayan_kapasite`
+alanı geçiriliyor; boşsa/None ise context'e hiç eklenmiyor — Yol A'yla aynı
+"üretilemiyorsa hiç bahsetme" ilkesi. Yol A'nın "azaltıcı" (ihlal) yönüyle bu
+yolun "artırıcı/bilgilendirici" yönü aynı sinyal kodu (`profil_sapmasi`)
+altında ama prompt'ta FARKLI TONDA ele alınıyor (bkz. risk_signals.md)."""
 
 import json
 import logging
@@ -93,6 +139,7 @@ from app.core.config import (
 from app.core.llm_client import get_llm_client
 from app.providers.universe import SPEC_BY_SYMBOL, macro_news_key
 from app.schemas.risk_signals import RiskSignalAssessment
+from app.services.advice_eligibility import allowed_asset_classes
 
 logger = logging.getLogger(__name__)
 
@@ -345,10 +392,43 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return json.loads(stripped)
 
 
+def _kullanilmayan_kapasite(
+    holdings_data: dict[str, Any], risk_survey_score: int | None
+) -> list[str]:
+    """Sinyal 5 (profil_sapmasi) Yol B'nin girdisi — bkz. modül docstring'i
+    "2026-08-28 eki (Yol B kod)", docs/notes/
+    sinyal5-olay-tabanli-aktivasyon-tasarimi.md §3/§4.8.
+
+    Yol A'nın aksine hiçbir OLAYA ihtiyaç duymaz: saf bir fonksiyondur, şu an
+    geçerli anket puanı ile şu an elde olan holdings'in farkını alır —
+    `allowed_asset_classes(risk_survey_score)` (izinli sınıflar) EKSİ elde
+    tutulan sınıflar. Analistin 2026-08-28 teyidiyle "hangi kapasite"
+    belirsizliği (a) lehine çözüldü: "risk seviyesi yüksek çıktı ama daha az
+    riskli varlıkları var" — yani `advice_eligibility`, `RISK_MAX_CATEGORY_
+    WEIGHT`/bandın altında kalma DEĞİL (o zaten ana akışta `_profile_position`
+    ile ayrıca gösteriliyor, burada TEKRARLANMIYOR).
+
+    `risk_survey_score` `None` ise (anket hiç doldurulmamış) boş liste döner
+    — "izin verilen sınıf" kavramı anketsiz tanımsızdır, uydurma yok."""
+    if risk_survey_score is None:
+        return []
+
+    izinli = allowed_asset_classes(risk_survey_score)
+    elde_tutulan = {
+        h.get("asset_class")
+        for h in holdings_data.get("holdings", [])
+        if not h.get("price_missing")
+    }
+    return sorted(ac.value for ac in izinli if ac.value not in elde_tutulan)
+
+
 def _build_signal_context(
     holdings_data: dict[str, Any],
     news_data: dict[str, Any],
     macro_context: list[dict[str, Any]] | None = None,
+    *,
+    yeni_profille_izinsiz_kalan_siniflar: list[str] | None = None,
+    kullanilmayan_kapasite: list[str] | None = None,
 ) -> dict[str, Any]:
     """LLM'e verilecek ham veriyi toplar. HİÇBİR SINIFLANDIRMA/HESAPLAMA
     yapmaz — yalnızca üç kaynaktan (holdings ağırlıkları, portföy haberleri,
@@ -361,6 +441,20 @@ def _build_signal_context(
     KALDIRILDI — bkz. modül docstring'i "2026-08-26 eki". `context` artık
     hiçbir "survey_puani_dummy"/"bu_puanla_izinli_siniflar" alanı taşımıyor;
     risk_signals.md Sinyal 5'i şu an için kalıcı dormant kabul ediyor.
+
+    2026-08-28 eki (kod): `yeni_profille_izinsiz_kalan_siniflar` — Sinyal 5
+    Yol A'nın girdisi (bkz. modül docstring'i "2026-08-28 eki (kod)"). YALNIZCA
+    çağıran taraf (`_assess_signals`) gerçek bir olay TESPİT ETTİĞİNDE (olay
+    var VE liste boş değil) verilir; `None`/boş liste geçilirse
+    `anket_yeniden_dolduruldu`/`yeni_profille_izinsiz_kalan_siniflar`
+    anahtarları context'e HİÇ EKLENMEZ — "üretilemiyorsa hiç bahsetme"
+    ilkesiyle tutarlı, sahte bir "olay yok" işareti (ör. boş liste) LLM'e
+    "bir şey kontrol edildi ama bulunamadı" izlenimi vermesin diye.
+
+    2026-08-28 eki (Yol B kod): `kullanilmayan_kapasite` — Sinyal 5 Yol B'nin
+    girdisi (bkz. modül docstring'i "2026-08-28 eki (Yol B kod)",
+    `_kullanilmayan_kapasite`). Yol A'nın alanlarıyla AYNI ilkeyle:
+    `None`/boş liste geçilirse context'e hiç eklenmez.
 
     `macro_context` opsiyonel: `None`/boş liste geçilirse "makro_gelismeler"
     anahtarı boş liste olarak eklenir (prompt bunu görüp o bölümü boş
@@ -398,6 +492,13 @@ def _build_signal_context(
     # investment_strategy için kullanır, sinyal kaynağı SAYMAZ (bkz.
     # risk_signals.md).
     context["makro_gelismeler"] = macro_context or []
+
+    if yeni_profille_izinsiz_kalan_siniflar:
+        context["anket_yeniden_dolduruldu"] = True
+        context["yeni_profille_izinsiz_kalan_siniflar"] = yeni_profille_izinsiz_kalan_siniflar
+
+    if kullanilmayan_kapasite:
+        context["kullanilmayan_kapasite"] = kullanilmayan_kapasite
 
     return context
 
@@ -455,7 +556,7 @@ class RiskAgent(BaseAgent):
         )
 
     async def _assess_signals(
-        self, user_id: str, _assessment_data: dict[str, Any]
+        self, user_id: str, assessment_data: dict[str, Any]
     ) -> RiskSignalAssessment | None:
         """Sinyal tabanlı risk değerlendirmesini üretir (bkz. modül docstring'i
         ve agents/prompts/risk_signals.md). Bu akış `execute()`'un ana
@@ -464,11 +565,14 @@ class RiskAgent(BaseAgent):
         uymuyorsa None döner — çağıran taraf mevcut volatilite tabanlı yanıtı
         olduğu gibi kullanıcıya döndürmeye devam eder.
 
-        `_assessment_data` (FR-4/volatilite yanıtı) 2026-08-26'dan beri
-        BURADA KULLANILMIYOR — önceden yalnızca profil→dummy puan türetmek
-        için okunuyordu, o yol kaldırıldı (bkz. modül docstring'i). Çağıran
-        taraftaki (`execute`) imzayla uyumlu kalması için parametre duruyor;
-        kullanılmadığını belirtmek için alt çizgiyle işaretlendi."""
+        `assessment_data` (FR-4/volatilite yanıtı, `execute()`'ta zaten
+        alınmış `get_risk_assessment` sonucu) 2026-08-26'dan 2026-08-28'e
+        kadar burada KULLANILMIYORDU — önceki profil→dummy puan türetme yolu
+        kaldırılmıştı (bkz. modül docstring'i). Yol B ile (2026-08-28 eki)
+        yeniden kullanılmaya başladı: yalnızca `risk_survey_score`'u okumak
+        için — `get_risk_assessment` bu alanı zaten taşıyor (bkz.
+        tests/test_risk_survey_score.py::TestRiskDegerlendirmesindeTasinmasi),
+        ayrı bir tool çağrısı GEREKMİYOR."""
         holdings_result = await self.call_mcp_tool("get_holdings", {"user_id": user_id})
         if not holdings_result.get("success"):
             logger.warning(
@@ -491,10 +595,40 @@ class RiskAgent(BaseAgent):
         # olur — bu bir hata değil, bkz. _fetch_macro_context.
         macro_context = await self._fetch_macro_context(holdings_result["data"])
 
+        # Sinyal 5 (profil_sapmasi) Yol A'nın girdisi (bkz. modül docstring'i
+        # "2026-08-28 eki (kod)"): bekleyen bir anket-yeniden-doldurma olayı
+        # var mı. Bu üçüncü çağrı da diğer ikisi gibi ana akışı BLOKE ETMEZ —
+        # başarısız olursa ya da olay yoksa/ihlal yoksa context'e ilgili
+        # alanlar HİÇ EKLENMEZ (bkz. _build_signal_context).
+        yeni_profille_izinsiz_kalan_siniflar: list[str] | None = None
+        survey_event_result = await self.call_mcp_tool(
+            "get_risk_survey_event", {"user_id": user_id}
+        )
+        if survey_event_result.get("success"):
+            event_data = survey_event_result["data"]
+            if event_data.get("olay_var"):
+                yeni_profille_izinsiz_kalan_siniflar = (
+                    event_data.get("izin_verilmeyen_ve_elde_olan_siniflar") or None
+                )
+        else:
+            logger.info(
+                "[AJAN] risk: anket olayi sorgusu basarisiz, Sinyal 5 Yol A bu turda atlaniyor — %s",
+                survey_event_result.get("error"),
+            )
+
+        # Sinyal 5 Yol B'nin girdisi (bkz. modül docstring'i "2026-08-28 eki
+        # (Yol B kod)"): hiçbir OLAYA/tool çağrısına ihtiyaç duymaz, saf bir
+        # fonksiyon — `assessment_data` zaten elde (bkz. yukarıdaki docstring).
+        kullanilmayan_kapasite = _kullanilmayan_kapasite(
+            holdings_result["data"], assessment_data.get("risk_survey_score")
+        )
+
         context = _build_signal_context(
             holdings_result["data"],
             news_result["data"],
             macro_context,
+            yeni_profille_izinsiz_kalan_siniflar=yeni_profille_izinsiz_kalan_siniflar,
+            kullanilmayan_kapasite=kullanilmayan_kapasite,
         )
         prompt = _render_signal_prompt(context)
 

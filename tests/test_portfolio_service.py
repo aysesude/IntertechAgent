@@ -411,3 +411,64 @@ def test_period_change_returns_none_when_history_is_shorter_than_window(db_sessi
     # 3 günlük geçmişte haftalık/aylık hesaplanamaz.
     assert sonuc.summary.changes.weekly is None
     assert sonuc.summary.changes.monthly is None
+
+
+def test_BUGUN_acilan_hesap_BUGUN_alim_yapinca_seri_uretilir(db_session):
+    """Fiyat hattı bir gün geride olsa bile yeni hesap Dashboard'u kaybetmez.
+
+    Günlük toplama işi akşam koşuyor, dolayısıyla gün içinde `price_history`
+    dünde duruyor. Bugün açılan hesap bugün alım yapınca portföyün doğum günü
+    (`inception`) fiyat hattının SONUNDAN sonra kalıyordu: pencere bugünde
+    başlayıp dünde bitiyor ve uç `InsufficientDataError` fırlatıyordu.
+    Arayüzde bunun karşılığı, ilk alımdan sonra hiç açılmayan bir Dashboard'du
+    (28 Ağustos 2026'da ölçüldü).
+
+    Alım ÖNCESİ hâli de aynı testte duruyor: sorun alımla ortaya çıkıyor,
+    çünkü portföyün varlığı olmadan `as_of` bugüne düşüyordu.
+    """
+    bugun = date.today()
+    dun = bugun - timedelta(days=1)
+
+    user = User(email="yeni-hesap@example.com", full_name="Yeni Hesap")
+    stock = Asset(symbol="YNI", name="Yeni Test", asset_class=AssetClass.STOCK, currency="TRY")
+    db_session.add_all([user, stock])
+    db_session.flush()
+    portfolio = Portfolio(user_id=user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    # Fiyat hattı DÜNDE duruyor; bugünün kapanışı henüz yazılmadı.
+    db_session.add(PriceHistory(asset_id=stock.id, price_date=dun, close_price=Decimal(100)))
+
+    simdi = datetime.now(timezone.utc)
+    record_transaction(
+        db_session,
+        portfolio.id,
+        TransactionType.DEPOSIT,
+        transaction_date=simdi,
+        cash_amount_try=Decimal(10_000),
+    )
+    # Alımdan önce: nakit portföy zaten çalışıyordu, bozulmamalı.
+    assert get_portfolio_performance(db_session, user.id, TimeWindow.M1).series
+
+    record_transaction(
+        db_session,
+        portfolio.id,
+        TransactionType.BUY,
+        transaction_date=simdi,
+        asset_id=stock.id,
+        quantity=Decimal(10),
+        price=Decimal(100),
+    )
+    rebuild_holdings(db_session, portfolio.id)
+    db_session.commit()
+
+    sonuc = get_portfolio_performance(db_session, user.id, TimeWindow.M1)
+
+    assert sonuc.series, "ilk alımdan sonra seri boş kalmamalı"
+    # Tek nokta: portföyün ilk günü. Değer dünkü kapanışla hesaplanır —
+    # 10 x 100 TL hisse + 9.000 TL kalan nakit.
+    assert sonuc.series[-1].date == bugun
+    assert sonuc.series[-1].value_try == Decimal(10_000)
+    # Tek noktadan değişim çıkmaz; sıfır YAZILMAZ.
+    assert sonuc.summary.changes.daily is None

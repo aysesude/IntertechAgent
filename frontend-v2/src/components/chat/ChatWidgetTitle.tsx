@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-const FULL_LETTERS = ["V", "İ", "R", "A"];
-const MORPHED_LETTERS = ["A", "İ"];
+const FULL_LETTERS = ["V", "i", "r", "a"];
+const MORPHED_LETTERS = ["A", "i"];
 const MORPH_DELAY_MS = 900;
 
 // Harfler arasında ~60ms kademeli gecikme — hepsi aynı anda değil, sırayla
@@ -17,12 +17,21 @@ const LAYOUT_TRANSITION = { type: "spring" as const, stiffness: 140, damping: 24
 const FADE_TRANSITION = { duration: 0.6, ease: EASE };
 
 /**
- * Widget her açıldığında "VİRA Chat" olarak başlar, kısa bir bekleme sonrası
- * V ve R harfleri fade-out olur; kalan A ve İ harfleri "Aİ Chat" biçiminde
+ * Widget her açıldığında "Vira Chat" olarak başlar, kısa bir bekleme sonrası
+ * V ve r harfleri fade-out olur; kalan A ve i harfleri "Ai Chat" biçiminde
  * yeniden konumlanır. Panel her açılışta yeniden mount edildiği için bu
  * bileşen de sıfırdan başlar — animasyon her açılışta bir kez oynar.
+ *
+ * `memo` BİLEREK var, props ALMASA BİLE: bu bileşen ChatWidget'ın (soru
+ * gönderme/yanıt bekleme gibi) her state güncellemesinde de yeniden
+ * render ediliyordu — kendi state'i (`morphed`) değişmese de framer-
+ * motion'ın `layout` prop'u her render'da yeniden ölçüm yapıp, soru
+ * sorulunca metnin gereksiz yere zıplamasına yol açıyordu. `memo` (props
+ * her zaman `{}` olduğu için) bu bileşeni parent'tan TAMAMEN izole eder —
+ * yalnızca kendi mount'unda bir kez animasyon oynar, başka hiçbir şey
+ * onu yeniden render ettiremez.
  */
-export function ChatWidgetTitle() {
+export const ChatWidgetTitle = memo(function ChatWidgetTitle() {
   const [morphed, setMorphed] = useState(false);
 
   useEffect(() => {
@@ -39,7 +48,7 @@ export function ChatWidgetTitle() {
           const delay = index * STAGGER_S;
           return (
             <motion.span
-              key={char}
+              key={char.toLowerCase()}
               layout
               initial={false}
               exit={{ opacity: 0, y: -4 }}
@@ -58,4 +67,4 @@ export function ChatWidgetTitle() {
       <span>&nbsp;Chat</span>
     </div>
   );
-}
+});

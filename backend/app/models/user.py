@@ -68,5 +68,33 @@ class User(UUIDMixin, CreatedAtMixin, Base):
     # kullanıcılarının hepsini doldurur.
     risk_survey_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # --- Anket olayı zaman damgaları (Sinyal 5, Yol A) ---
+    #
+    # `risk_survey_score`'un KENDİSİ statik bir durumdur — anketin NE ZAMAN
+    # dolduğunu taşımaz. Sinyal 5 (profil_sapmasi) yalnızca anketin YENİDEN
+    # doldurulduğu ANDA tetiklenmeli (bkz. agents/risk_agent.py modül
+    # docstring'i, docs/notes/sinyal5-olay-tabanli-aktivasyon-tasarimi.md);
+    # bu iki kolon o "olay"ı yakalar.
+    #
+    # NEDEN İKİ AYRI KOLON (tek bir boolean değil). "Ne zaman oldu" ile "ne
+    # zaman görüldü" bilgisi ayrı ayrı taşınmalı: `risk_survey_updated_at`
+    # anketin en son ne zaman güncellendiğini, `risk_survey_event_consumed_at`
+    # bu güncellemenin en son ne zaman bir risk değerlendirmesine
+    # yansıtıldığını (tüketildiğini) tutar. "Bekleyen olay var" tanımı:
+    # `risk_survey_updated_at IS NOT NULL AND (risk_survey_event_consumed_at
+    # IS NULL OR risk_survey_event_consumed_at < risk_survey_updated_at)`.
+    #
+    # NEDEN NULLABLE. Mevcut satırlara bir anket-güncelleme/tüketim anı
+    # uydurulamaz. `NULL` "bu kullanıcı için hiç anket-olayı yaşanmadı/
+    # tüketilmedi" demektir. `set_user_risk_survey` yazar,
+    # `set_user_risk_profile` (elle profil değiştirme) DOKUNMAZ — o bir anket
+    # olayı değildir.
+    risk_survey_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    risk_survey_event_consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     portfolio: Mapped["Portfolio"] = relationship(back_populates="user", uselist=False)
     chat_sessions: Mapped[list["ChatSession"]] = relationship(back_populates="user")
