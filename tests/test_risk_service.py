@@ -248,12 +248,17 @@ def test_get_risk_assessment_asset_metrics_populated_when_within_profile(db_sess
     db_session.commit()
 
     # Ayni portfoy (~%28 volatilite), ama Buyume profilinin hedef bandi
-    # (%20-%30) bunu kapsiyor -> is_within_profile=True, kok neden teshisi
-    # TETIKLENMEZ — eski kodda tam da bu dalda asset_metrics bos kalirdi.
+    # (%20-%30) bunu kapsiyor -> is_within_profile=True — eski kodda tam da
+    # bu dalda asset_metrics bos kalirdi.
     assessment = get_risk_assessment(db_session, user.id, profile_override=RiskProfile.GROWTH)
 
     assert assessment.is_within_profile is True
-    assert assessment.causes is None
+    # 2026-08-31: kok neden teshisi artik bandin ICINDE de hesaplaniyor
+    # (bkz. _diagnose_causes docstring'i). Eskiden burada None bekleniyordu;
+    # bandin icindeki portfoyde yogunlasmanin hic gorunmemesi sorunu bu
+    # yuzden vardi. Tetiklenip tetiklenmedigi ayri bir testin konusu
+    # (test_bant_icinde_de_yogunlasma_teshisi_hesaplanir).
+    assert assessment.causes is not None
 
     assert len(assessment.metrics.asset_metrics) == 2
     by_symbol = {m.asset_symbol: m for m in assessment.metrics.asset_metrics}
@@ -468,3 +473,161 @@ def test_get_risk_assessment_generates_scenarios_when_flag_enabled(db_session, m
     # dedup sonrasi tek bir sonucta birlesebilir; bu yuzden ozellikle EN
     # yuksek skorlu senaryoyu degil, en az bir senaryoyu kontrol ediyoruz.
     assert any("A" in s.actions_applied for s in assessment.scenarios)
+
+
+# ---------------------------------------------------------------------------
+# Profil uyumsuzlugu ve bant ici yogunlasma teshisi (2026-08-31)
+#
+# Ikisi de ayni sorunun iki yuzu: risk ajani "portfoyumun risk seviyesi
+# nedir" sorusuna yalnizca volatilite anlatiyordu. Uyumsuzluk hic
+# hesaplanmiyordu, yogunlasma ise SADECE profil bandi asildiginda
+# hesaplaniyordu — bandin icindeki portfoyde ikisi de gorunmuyordu.
+# ---------------------------------------------------------------------------
+
+
+def _tek_varlikli_portfoy(db_session, symbol, asset_class, *, survey_score, profile):
+    """Tek varlikli, fiyat gecmisi yeterli bir portfoy kurar.
+
+    Uyumsuzluk hesabi fiyat serisinden BAGIMSIZ oldugu icin seri burada
+    yalnizca degerlendirmenin erken donmesini engellemek uzere var.
+    """
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=profile)
+    user.risk_survey_score = survey_score
+    asset = Asset(symbol=symbol, name=f"Test {symbol}", asset_class=asset_class, currency="TRY")
+    db_session.add(asset)
+    db_session.flush()
+
+    start = date(2026, 1, 1)
+    db_session.add_all(
+        [
+            PriceHistory(
+                asset_id=asset.id,
+                price_date=start + timedelta(days=i),
+                close_price=Decimal(100 + (i % 5) - 2),
+            )
+            for i in range(40)
+        ]
+    )
+    db_session.add(
+        Holding(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal(10),
+            avg_cost_price=Decimal(95),
+        )
+    )
+    db_session.commit()
+    return user
+
+
+def test_profil_uyumsuz_varlik_bant_icinde_de_bildirilir(db_session):
+    """Anket puani 3 olan kullanicinin elindeki hisse (sinif seviyesi 5)
+    uyumsuzdur ve bu, volatilite profil bandinin ICINDE olsa bile
+    bildirilmelidir.
+
+    Ikisi ayri olcektir (bkz. docs/notes/analiste-kapsam-sapmalari.md madde
+    7): `is_within_profile` oynakligi olcer, uyumsuzluk urun uygunlugunu.
+    """
+    user = _tek_varlikli_portfoy(
+        db_session, "TST", AssetClass.STOCK, survey_score=3, profile=RiskProfile.BALANCED
+    )
+
+    assessment = get_risk_assessment(db_session, user.id)
+
+    semboller = [m.symbol for m in assessment.mismatched_holdings]
+    assert semboller == ["TST"]
+    assert assessment.mismatched_holdings[0].advice_risk_level == 5
+    assert assessment.mismatched_holdings[0].asset_class == AssetClass.STOCK
+
+
+def test_uyumsuzluk_VARLIK_duzeyinde_hesaplanir(db_session):
+    """BHE (serbest fon) STOCK sinifindadir ama kendi uygunluk seviyesi 7'dir.
+
+    Puani 5 olan kullanici icin SINIF karsilastirmasi (STOCK=5 <= 5) "uyumlu"
+    derdi; varlik duzeyi karsilastirmasi (7 > 5) uyumsuz der. Dogru olan
+    ikincisidir (bkz. advice_eligibility "Varlik duzeyi" notu).
+    """
+    user = _tek_varlikli_portfoy(
+        db_session, "BHE", AssetClass.STOCK, survey_score=5, profile=RiskProfile.GROWTH
+    )
+
+    assessment = get_risk_assessment(db_session, user.id)
+
+    assert [m.symbol for m in assessment.mismatched_holdings] == ["BHE"]
+    assert assessment.mismatched_holdings[0].advice_risk_level == 7
+
+
+def test_uyumlu_varlik_uyumsuzluk_listesine_GIRMEZ(db_session):
+    """Seviyesi puana ESIT olan varlik serbesttir (`<=` kurali)."""
+    user = _tek_varlikli_portfoy(
+        db_session, "TST", AssetClass.STOCK, survey_score=5, profile=RiskProfile.GROWTH
+    )
+
+    assessment = get_risk_assessment(db_session, user.id)
+
+    assert assessment.mismatched_holdings == []
+
+
+def test_anket_puani_yoksa_uyumsuzluk_BOS(db_session):
+    """Anket hic doldurulmamissa uyumsuzluk hesaplanamaz — uydurulmaz."""
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=RiskProfile.CONSERVATIVE)
+    asset = Asset(symbol="TST", name="Test", asset_class=AssetClass.STOCK, currency="TRY")
+    db_session.add(asset)
+    db_session.flush()
+    start = date(2026, 1, 1)
+    db_session.add_all(
+        [
+            PriceHistory(
+                asset_id=asset.id,
+                price_date=start + timedelta(days=i),
+                close_price=Decimal(100 + (i % 5) - 2),
+            )
+            for i in range(40)
+        ]
+    )
+    db_session.add(
+        Holding(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal(10),
+            avg_cost_price=Decimal(95),
+        )
+    )
+    db_session.commit()
+
+    assessment = get_risk_assessment(db_session, user.id)
+
+    assert assessment.risk_survey_score is None
+    assert assessment.mismatched_holdings == []
+
+
+def test_profil_override_edilince_uyumsuzluk_da_BOS(db_session):
+    """`profile_override` kullanicinin beyani degildir; o senaryoda anket
+    puani tasinmaz (mevcut davranis), dolayisiyla uyumsuzluk da uretilmez."""
+    user = _tek_varlikli_portfoy(
+        db_session, "TST", AssetClass.STOCK, survey_score=3, profile=RiskProfile.BALANCED
+    )
+
+    assessment = get_risk_assessment(db_session, user.id, profile_override=RiskProfile.AGGRESSIVE)
+
+    assert assessment.risk_survey_score is None
+    assert assessment.mismatched_holdings == []
+
+
+def test_bant_icinde_de_yogunlasma_teshisi_hesaplanir(db_session):
+    """Tek varlikli (dolayisiyla asiri yogunlasmis) bir portfoyde, volatilite
+    profil bandinin icinde olsa bile yogunlasma teshisi hesaplanmali.
+
+    2026-08-31 oncesi `causes` yalnizca `not is_within_profile` dalinda
+    uretiliyordu; bandin icindeki portfoyde yogunlasma hic gorunmuyordu.
+    """
+    user = _tek_varlikli_portfoy(
+        db_session, "TST", AssetClass.STOCK, survey_score=5, profile=RiskProfile.GROWTH
+    )
+
+    assessment = get_risk_assessment(db_session, user.id)
+
+    assert assessment.causes is not None
+    # Tek varlik -> agirligi %100, HHI 1.0: yogunlasma esikleri kesin asilir.
+    assert assessment.causes.concentration.triggered is True
+    assert assessment.causes.concentration.max_asset_symbol == "TST"

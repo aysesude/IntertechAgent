@@ -52,8 +52,10 @@ from agents.risk_agent import (
     _live_macro_symbols_for_holdings,
     _macro_queries_for_holdings,
     _render_signal_prompt,
+    _sinyal_blogu,
     _wants_scenarios,
 )
+from app.schemas.risk_signals import RiskSignalAssessment
 
 
 def test_senaryo_yalnizca_aksiyon_sorularinda_istenir():
@@ -659,3 +661,135 @@ def test_sinyal_baglami_makro_gelismeler_tasinir():
     context = _build_signal_context({"holdings": []}, {"assets": []}, macro)
 
     assert context["makro_gelismeler"] == macro
+
+
+# ---------------------------------------------------------------------------
+# Profil uyumsuzlugu ve sinyal blogu (2026-08-31)
+# ---------------------------------------------------------------------------
+
+
+def test_compact_profil_uyumsuz_varliklari_puanla_birlikte_tasir():
+    """Uyumsuzluk bildirimi ancak anket puaniyla YAN YANA anlamli: "seviye 7"
+    tek basina kullaniciya bir sey soylemez, "puaniniz 5" ile birlikte soyler.
+    """
+    assessment = {
+        "metrics": {},
+        "causes": None,
+        "scenarios": [],
+        "risk_survey_score": 5,
+        "mismatched_holdings": [
+            {"symbol": "BHE", "asset_class": "stock", "advice_risk_level": 7},
+        ],
+    }
+
+    compact = _compact(assessment)
+
+    assert compact["profil_uyumsuz_varliklar"] == [
+        {"sembol": "BHE", "sinif": "stock", "varlik_uygunluk_seviyesi": 7}
+    ]
+    assert compact["anket_puani"] == 5
+
+
+def test_compact_uyumsuzluk_yoksa_alan_hic_eklenmez():
+    """ "Uyumsuzluk yok" da bir iddiadir; bos alan LLM'e onu yazdirabilir.
+    Diger bos alanlarla ayni ilke: uretilemiyorsa hic bahsetme."""
+    assessment = {
+        "metrics": {},
+        "causes": None,
+        "scenarios": [],
+        "risk_survey_score": 7,
+        "mismatched_holdings": [],
+    }
+
+    compact = _compact(assessment)
+
+    assert "profil_uyumsuz_varliklar" not in compact
+    assert "anket_puani" not in compact
+
+
+def _sinyal_degerlendirmesi(risky_assets, confidence="normal"):
+    return RiskSignalAssessment(
+        risk_level="orta_riskli",
+        general_assessment="genel",
+        profile_fit="uyum",
+        risky_assets=risky_assets,
+        rebalancing="dengeleme",
+        investment_strategy="strateji",
+        confidence=confidence,
+        survey_score_is_dummy=True,
+    )
+
+
+def test_sinyal_blogu_bulgulari_metne_ceviriyor():
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "THYAO",
+                    "weight_percent": 42.5,
+                    "signals": ["konsantrasyon", "olumsuz_haber"],
+                    "contribution": "yuksek",
+                    "explanation": "Portfoyun buyuk bolumu bu varlikta.",
+                    "sources": ["2026-08-05 THYAO bilanco"],
+                }
+            ]
+        )
+    )
+
+    assert "THYAO" in blok
+    assert "%42,50" in blok  # Turkce ondalik ayraci (prompt kural 4)
+    assert "yoğunlaşma" in blok and "olumsuz haber" in blok
+    assert "Portfoyun buyuk bolumu bu varlikta." in blok
+    assert "2026-08-05 THYAO bilanco" in blok
+    # Ic alan adlari kullaniciya yazilmaz (prompt kural 0).
+    assert "konsantrasyon" not in blok
+    assert "asset_symbol" not in blok
+
+
+def test_sinyal_blogu_celisen_ikinci_risk_seviyesini_GOSTERMEZ():
+    """Sinyal semasindaki `risk_level` LLM'in kendi yargisi; ana yanittaki
+    deterministik seviyeden bagimsiz uretiliyor. Ikisini ayni mesajda
+    gostermek kullaniciya celisen iki risk seviyesi sunmak olurdu."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "TST",
+                    "weight_percent": 10.0,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "dusuk",
+                    "explanation": "aciklama",
+                }
+            ]
+        )
+    )
+
+    assert "orta_riskli" not in blok
+    # Urun Sahibi karari: "ne yapilmali" onerisi kapsam disi.
+    assert "dengeleme" not in blok
+    assert "strateji" not in blok
+
+
+def test_sinyal_blogu_bulgu_yoksa_BOS():
+    """Bos bir baslik kullaniciya "kontrol edildi, bir sey bulunamadi" der;
+    bu da bir iddiadir."""
+    assert _sinyal_blogu(_sinyal_degerlendirmesi([])) == ""
+
+
+def test_sinyal_blogu_dusuk_guvende_kapsam_uyarisi_ekler():
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "TST",
+                    "weight_percent": 10.0,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "dusuk",
+                    "explanation": "aciklama",
+                }
+            ],
+            confidence="dusuk",
+        )
+    )
+
+    assert "sınırlı sayıda kaynağa" in blok
