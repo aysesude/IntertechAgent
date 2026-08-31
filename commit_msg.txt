@@ -1,29 +1,26 @@
-risk ajani: risk sorusunda yogunlasma, profil uyumsuzlugu ve haber yorumu da veriliyor
+yogunlasma artik hangi bazda oldugunu soyluyor, terim "volatilite" olarak sabitlendi
 
-Sorun: "portfoyumun risk seviyesi nedir" sorusuna yalnizca volatilite ozeti
-donuyordu. Sinyal degerlendirmesi (yogunlasma, haber yorumu) yazilmisti ama
-iki sebeple gorunmuyordu: (1) _wants_scenarios kapisinin arkasindaydi,
-(2) calistiginda bile ciktisi yalnizca response_data'ya yaziliyordu ve o
-alani hicbir yer okumuyor (merge_responses yalnizca summary_text topluyor).
-Yogunlasma teshisi ise yalnizca profil bandi asilinca hesaplaniyordu.
+Yogunlasma bazi:
+- ConcentrationCause uc kosulun OR'unu tek bir triggered olarak veriyordu;
+  hangisinin tetiklendigi kayboluyor, kullaniciya yalnizca belirsiz bir
+  "yogunlasma var" denebiliyordu. asset_triggered / category_triggered /
+  hhi_triggered eklendi. triggered yine bunlarin OR'u, esikler DEGISMEDI.
+- Karar serviste veriliyor; ajan esikleri yeniden hesaplamiyor (kodun kendi
+  "ust sinir karari servisten alinir, iki katman celismesin" ilkesi).
+- _compact bunu yogunlasma_detayi olarak tasiyor: varlik_bazli, kategori_bazli
+  ya da (yalnizca HHI tetiklendiyse) dagilim_geneli. HHI, varlik/kategori
+  zaten tetiklendiyse ayrica soylenmiyor - ayni durumu ikinci kez ve daha
+  soyut anlatmak olurdu.
+- prompt kural 7b bazi MUTLAKA soyletiyor. SEKTOR bazli yogunlasma
+  yasaklandi: sistemde sektor verisi yok (Asset'te alan yok, ajana hic
+  gitmiyor), ve varlik SINIFI sektor degildir. risk_signals.md'deki
+  konsantrasyon sinyali de aciklamasinda bazi yazmak zorunda.
 
-Degisiklikler:
-- advice_eligibility: yeni mismatched_holdings() - sinif duzeyi surumun
-  VARLIK duzeyi karsiligi (BHE sinifiyla uyumlu gorunur, kendi seviyesi 7).
-  Mevcut fonksiyonlara dokunulmadi.
-- risk_service: RiskAssessment.mismatched_holdings alani (portfoy ve anket
-  puani zaten yuklu, ek sorgu yok); _diagnose_causes artik bant asilmasa da
-  cagriliyor, esikler degismedi.
-- risk_agent: _assess_signals her risk sorusunda calisiyor ve ciktisi
-  _sinyal_blogu ile summary_text'e giriyor. Blokta yalnizca risky_assets
-  gosteriliyor; risk_level (celisen ikinci seviye), rebalancing ve
-  investment_strategy (PO karari: kapsam disi) bilincli olarak disarida.
-- prompts/risk_agent.md: kural 10 (uyumsuzluk bildirimi, oneri degil),
-  kural 7 genisletildi (bant icinde yogunlasma notr tonda anlatilir).
+Terim: "oynaklik" -> "volatilite". Prompt "volatility" kelimesini
+yasakliyor ama Turkce bir karsilik onermiyordu; model de bosugu "oynaklik"
+ile dolduruyordu. risk_agent.md ve risk_signals.md'ye acik istisna eklendi.
+orchestrator'daki merge prompt'una da eklendi: o son LLM turu ajan metnini
+yeniden yaziyor, kural olmasa terimi geri cevirip duzeltmeyi etkisiz
+birakabilirdi.
 
-2026-08-26 analist karari (Sinyal 5 yalnizca anket yeniden doldurulunca
-tetiklensin) DEGISMEDI; eklenen yol olaya degil mevcut duruma bakiyor.
-Kabul edilen bedel: tur basina ek tool cagrilari + bir ek LLM turu.
-
-Testler: 764 passed. Karar notu:
-docs/notes/risk-ajani-kapsamli-degerlendirme-2026-08-31.md
+Testler: 773 passed (9 yeni test).
