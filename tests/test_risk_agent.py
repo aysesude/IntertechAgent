@@ -870,3 +870,60 @@ def test_prompt_sektor_bazli_yogunlasmayi_yasakliyor():
     assert "Sektör bazlı yoğunlaşmadan ASLA söz etme" in _PROMPT_TEMPLATE
     # Bazi mutlaka soylensin kurali da yerinde olmali.
     assert "hangi bazda" in _PROMPT_TEMPLATE
+
+
+def test_sinyal_blogu_anlamsiz_sifir_agirligi_YAZMAZ():
+    """Sinyal 5 Yol B bulgulari gercek bir varliga degil bir SINIFA ait ve
+    agirliklari 0 gelir (risk_signals.md: "asset_symbol alanina o sinifin
+    adini yaz... kullanicinin bu siniftan zaten hic varligi yok").
+
+    Bunu "%0,00" diye basmak canlida gercek zarar verdi: ana metin
+    "portfoyunuzun %62,40'i Nakit" derken blok "Nakit (%0,00 ...)" diyordu,
+    merge iki sayiyi gorup kullaniciya "veriler tutarsiz" diye rapor etti
+    (2026-08-31 arayuz testi)."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "Nakit (sınıf)",
+                    "weight_percent": 0.0,
+                    "signals": ["profil_sapmasi"],
+                    "contribution": "dusuk",
+                    "explanation": "Bu sinif profilinizin izin verdigi olcude kullanilmiyor.",
+                }
+            ]
+        )
+    )
+
+    assert "Nakit (sınıf)" in blok
+    assert "%0,00" not in blok
+    assert "profil sapması" in blok
+    assert "Bu sinif profilinizin izin verdigi olcude kullanilmiyor." in blok
+
+
+def test_sinyal_blogu_gercek_agirligi_yazmaya_devam_eder():
+    """Sifir olmayan agirlik bilgi tasiyor, elenmemeli."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": "IOO",
+                    "weight_percent": 37.6,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "orta",
+                    "explanation": "aciklama",
+                }
+            ]
+        )
+    )
+
+    assert "%37,60" in blok
+
+
+# Bu blogun merge adiminda AYNEN korunup korunmadigi artik burada
+# test EDILMIYOR: canli arayuz testinde (2026-08-31) "AYNEN koru" prompt
+# talimati basligi ve maddeleri dusurdugu icin merge_responses koddan
+# cikarma+aynen ekleme yontemine tasindi (bkz. agents/orchestrator.py
+# `_ayikla_korunan_bloklar`). Fonksiyonel karsiligi:
+# tests/test_orchestrator_routing.py::
+#   test_merge_varlik_bazli_gozlemler_LLM_ne_yazarsa_yazsin_kaybolmaz

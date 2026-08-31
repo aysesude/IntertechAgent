@@ -510,8 +510,22 @@ def _sinyal_blogu(assessment: RiskSignalAssessment) -> str:
     satirlar = []
     for bulgu in assessment.risky_assets:
         adlar = ", ".join(_SINYAL_ADLARI.get(s.value, s.value) for s in bulgu.signals)
-        agirlik = f"{bulgu.weight_percent:.2f}".replace(".", ",")
-        satir = f"- {bulgu.asset_symbol} (%{agirlik}, {adlar}): {bulgu.explanation}"
+        # 2026-08-31 düzeltmesi: ağırlık YALNIZCA anlamlıysa yazılır.
+        #
+        # Sinyal 5 Yol B bulguları gerçek bir varlığa değil bir SINIFA ait
+        # (risk_signals.md: "asset_symbol alanına o sınıfın adını yaz...
+        # kullanıcının bu sınıftan zaten hiç varlığı yok") ve doğal olarak
+        # ağırlıkları 0 gelir. Bunu "%0,00" diye basmak canlıda gerçek bir
+        # zarar verdi: ana metin "portföyünüzün %62,40'ı Nakit" derken blok
+        # "Nakit (%0,00 ...)" diyordu, merge iki sayıyı görüp kullanıcıya
+        # "veriler tutarsız" diye rapor etti (2026-08-31 arayüz testi).
+        # Sıfır ağırlık bir ÖLÇÜM değil, o bulgunun ağırlığı olmadığının
+        # işareti — gösterilmemeli.
+        if bulgu.weight_percent:
+            agirlik = f"{bulgu.weight_percent:.2f}".replace(".", ",")
+            satir = f"- {bulgu.asset_symbol} (%{agirlik}, {adlar}): {bulgu.explanation}"
+        else:
+            satir = f"- {bulgu.asset_symbol} ({adlar}): {bulgu.explanation}"
         if bulgu.sources:
             satir += f" Kaynaklar: {', '.join(bulgu.sources)}"
         satirlar.append(satir)

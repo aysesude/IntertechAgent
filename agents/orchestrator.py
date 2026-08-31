@@ -153,7 +153,19 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'nasıl dengelemeliyim', 'dağılımım dengeli mi', 'ne kadar güvendeyim', "
         "'çok mu riskli yatırım yapıyorum', 'volatilitem ne kadar', "
         "'oynaklığım iyi mi kötü mü', 'yeterince çeşitlendirilmiş miyim', "
-        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n\n"
+        "'bir günde en fazla ne kaybederim', 'en riskli varlıklarım hangileri'\n"
+        # 2026-08-31: "son gelişmeler riskimi nasıl etkiliyor" yalnızca MARKET
+        # etiketi alıyordu; risk ajanının haber tabanlı sinyal yolu (portföyde
+        # tutulan varlıkların haberlerini okuyup yorumlayan olumsuz_haber
+        # sinyali) hiç çalışmıyor, kullanıcı da "doğrulanmış bilgi bulunamadı"
+        # cevabı alıyordu (arayüz testinde ölçüldü). Haberin PORTFÖYE ETKİSİ
+        # sorulduğunda soru ikisine birden aittir.
+        "  Haberin/gelişmenin PORTFÖYE ya da RİSKE etkisi soruluyorsa RISK "
+        "etiketi de eklenir (MARKET ile birlikte): 'elimdeki varlıklarla "
+        "ilgili son gelişmeler riskimi nasıl etkiliyor', 'haberler portföyümü "
+        "nasıl etkiler', 'son gelişmeler portföyüm için ne anlama geliyor', "
+        "'enflasyon haberi portföyümü nasıl etkiler'. Burada MARKET haberi "
+        "getirir, RISK onu portföydeki varlıklarla ilişkilendirir.\n\n"
         "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
         "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
         "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
@@ -171,16 +183,9 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "GEÇMESE veya belirtilse bile ('2026 temettüsü ne kadar' gibi) "
         "soru zaten AÇIKLANMIŞ/RAPORLANMIŞ bir rakamı soruyorsa (gelecek "
         "zaman eki YOK) bu TAHMIN DEĞİL, MARKET'tir — yıl geçmesi tek "
-        "başına tahmin sayılmaz. 'TAHMİN' kelimesinin kendisi de tek "
-        "başına yeterli değil: 'hedef fiyat tahmini ne', 'analist tahmini "
-        "ne kadar' gibi sorularda 'tahmin' bir İSİM olarak analistin ZATEN "
-        "AÇIKLADIĞI bir rakamı ('hedef fiyat' ile eş anlamlı) ifade eder — "
-        "kullanıcı senden YENİ bir tahmin İSTEMİYOR, var olanı soruyor. Bu "
-        "da MARKET'tir.\n"
+        "başına tahmin sayılmaz.\n"
         "  Örnek: '2027de dolar kaç TL olur', 'altın yükselecek mi', "
-        "'bu hisse gelecek yıl ne kadar olur' (TAHMIN); 'GARAN'ın hedef "
-        "fiyat tahmini ne', 'ASELS için analist tahmini ne kadar' (MARKET "
-        "— raporlanmış bir rakam)\n"
+        "'bu hisse gelecek yıl ne kadar olur'\n"
         "KAPSAM_DISI — finansla ya da kullanıcının portföyüyle ilgisi olmayan "
         "her şey; ayrıca kripto, türev ve gayrimenkul gibi desteklenmeyen "
         "varlıklar.\n"
@@ -348,8 +353,89 @@ async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) ->
     return {}
 
 
+# Bu başlıkla başlayan blok, üretildiği ajanın `summary_text`'inin KESİN
+# SONUDUR: risk_agent execute()'ta `summary_text += sinyal_blok` en son
+# işlemdir, arkasından hiçbir şey eklenmez — bu yüzden metnin idx'ten SONUNA
+# kadarki tamamı güvenle blok sayılır (düşük güven notu gibi kendi İÇİNDEKİ
+# "\n\n" ayraçları da dahil, ayrı bir blok olarak yanlış bölünmez).
+_TAM_KUYRUK_BASLIGI = "Varlık bazlı gözlemler"
+
+# Bu başlıkla başlayan blok ise portfolio_agent `_render`'daki `blocks`
+# listesinin ORTASINDA olabilir (Performans, işlemler, kıyaslama gibi bloklar
+# ardından gelebilir) — kendi İÇİNDE "\n\n" yoktur (tek bir cümle), o yüzden
+# idx'ten SONRAKİ İLK "\n\n" bir sonraki bloğun başlangıcıdır ve orada kesilir.
+_SINIRLI_KUYRUK_BASLIGI = "Risk profili uyumu"
+
+
+def _not_ekle(text: str, idx: int, end: int | None, baslik: str) -> tuple[str, str]:
+    """`text[idx:end]` (end=None ise metnin sonu) aralığındaki bloğu keser,
+    yerine LLM'e yönelik kısa bir NOT bırakır. Kesilen ham blok ve güncellenmiş
+    metni döner."""
+    blok = text[idx:end].strip() if end is not None else text[idx:].strip()
+    kalan = text[end:] if end is not None else ""
+    not_metni = (
+        f"\n\n[NOT — kullanıcıya gösterme: '{baslik}' ile ilgili bir bulgu "
+        "var; ayrıntılar (sembol/seviye/yüzde gibi) yanıtın SONUNA ayrıca "
+        "ve AYNEN eklenecek. Bu ayrıntıları tahmin edip yazma ya da kendi "
+        "cümlenle özetleme; yalnızca konuya değiniyorsan TEK kısa cümleyle "
+        "işaret et, bu notun kendisini tekrar etme.]"
+    )
+    return text[:idx].rstrip("\n") + not_metni + kalan, blok
+
+
+def _ayikla_korunan_bloklar(text: str) -> tuple[str, list[str]]:
+    """`_TAM_KUYRUK_BASLIGI` / `_SINIRLI_KUYRUK_BASLIGI` ile başlayan kuyruk
+    blokları varsa METİNDEN ÇIKARIR, yerlerine LLM'e yönelik kısa bir NOT
+    bırakır; çıkarılan ham blok(lar) ayrı döner.
+
+    NEDEN (2026-08-31, canlı arayüz testi). İki blok da yalnızca sistem
+    promptunda "AYNEN koru" talimatıyla merge LLM'ine gösteriliyordu:
+
+    - 'Varlık bazlı gözlemler' (risk_agent sinyal bloğu): talimata rağmen
+      LLM başlığı ve madde listesini düşürdü, yalnızca kapanış cümlesi
+      ('Bu gözlemler sınırlı sayıda kaynağa dayanıyor...') hayatta kaldı.
+    - 'Risk profili uyumu' (portfolio_agent varlık bazlı uyumsuzluk bloğu):
+      hiç korunmuyordu; LLM onu SINIF düzeyine geri yorumladı ('Borçlanma
+      Araçları sınıfı ... artık tavsiye kapsamında değil') — tam olarak
+      2026-08-31'de asset-level'e taşınarak düzeltilmiş olan hatayı, merge
+      adımı tekrar üretti.
+
+    Çözüm: ayrıntıları (sembol, seviye, yüzde) LLM'e hiç göstermiyoruz —
+    yanlış yorumlayamaz veya düşüremez — yerine ham blok merge'den SONRA kod
+    tarafından yanıtın sonuna AYNEN ekleniyor (bkz. `merge_responses`)."""
+    bloklar: list[str] = []
+
+    idx = text.find(f"{_TAM_KUYRUK_BASLIGI}\n")
+    if idx != -1:
+        text, blok = _not_ekle(text, idx, None, _TAM_KUYRUK_BASLIGI)
+        bloklar.append(blok)
+
+    idx = text.find(f"{_SINIRLI_KUYRUK_BASLIGI}\n")
+    if idx != -1:
+        end = text.find("\n\n", idx)
+        text, blok = _not_ekle(text, idx, None if end == -1 else end, _SINIRLI_KUYRUK_BASLIGI)
+        bloklar.append(blok)
+
+    return text, bloklar
+
+
 async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dict:
-    successful = [r.summary_text for r in state["agent_responses"] if r.success]
+    # `successful_raw`: ajanın ürettiği METNİN TAMAMI, hiç dokunulmamış — yalnızca
+    # LLM tamamen sessiz kalırsa (aşağıdaki `final_answer.strip()` boşsa) ham
+    # dökümü kullanıcıya göstermek için tutulur; o yolda korunan bloklar zaten
+    # doğal yerinde bulunduğundan AYRICA eklenmez (tekrar önlenir).
+    #
+    # `successful`: merge LLM'ine giden, korunan kuyruk bloklarının ÇIKARILIP
+    # yerine kısa bir yönlendirme notu bırakıldığı hâli (bkz.
+    # `_ayikla_korunan_bloklar`). `korunan_bloklar`: aynı çağrılardan çıkan ham
+    # bloklar — merge LLM'i çalıştıktan SONRA yanıta AYNEN eklenir.
+    successful_raw = [r.summary_text for r in state["agent_responses"] if r.success]
+    successful: list[str] = []
+    korunan_bloklar: list[str] = []
+    for text in successful_raw:
+        temiz, bloklar = _ayikla_korunan_bloklar(text)
+        successful.append(temiz)
+        korunan_bloklar.extend(bloklar)
     errors = [r.error for r in state["agent_responses"] if r.error]
 
     # Hiçbir ajan başarılı olmadı. Ajanların KENDİ hata mesajları gösterilir:
@@ -453,6 +539,21 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Bu bloklardaki bir maddeyi 'belgelerde yer alan' diye de sunma: o "
         "bilgi arşiv dokümanlarından değil, canlı kaynaktan geldi.\n"
         "\n"
+        # 2026-08-31 (ilk deneme): 'Varlık bazlı gözlemler' bloğunu burada
+        # "AYNEN koru" talimatıyla bırakmıştık; merge yine de başlığı ve
+        # maddeleri düşürdü (arayüz testinde ölçüldü, yalnızca kapanış cümlesi
+        # hayatta kaldı) ve korunmayan 'Risk profili uyumu' bloğunu da SINIF
+        # düzeyine geri yorumladı. İkinci deneme: bu iki blok artık `merge_
+        # responses`'ta kod tarafından metinden ÇIKARILIP kısa bir NOT'a
+        # dönüştürülüyor (bkz. `_ayikla_korunan_bloklar`) ve ham hâlleriyle
+        # yanıtın sonuna AYRICA eklenecek — talimata değil koda güveniliyor.
+        "KÖŞELİ PARANTEZLİ NOTLAR: Verilerde '[NOT — kullanıcıya gösterme: ...]' "
+        "biçiminde bir not görürsen bu SANA yönelik bir sistem talimatıdır, "
+        "kullanıcıya asla gösterme veya alıntılama. Yalnızca notun istediği "
+        "kısa referans cümlesini (varsa) kendi cümlelerinle yaz; notta "
+        "geçmeyen hiçbir sembol, seviye veya yüzde uydurma — o ayrıntılar "
+        "ayrıca ve AYNEN eklenecek.\n"
+        "\n"
         "Verilerin hangi ajandan veya kaynaktan geldiğini söyleme. "
         "'Merhaba', 'Cevap:' gibi etiketler ekleme, sadece içeriği ver.\n"
         "Para ve oranlarda Türkçe biçim kullan: 1.234,56 TL ve +%8,41 "
@@ -490,9 +591,22 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
     # writer hiç çağrılmazdı: SSE'de ne token ne error olayı gider, arayüzde
     # boş balon durur. Yukarıdaki `except` yalnızca istisnayı yakalıyordu,
     # boş çıktıyı değil — iki durumu da aynı düşüş kapatıyor.
+    #
+    # Bu yolda `successful_raw` (HAM metin) kullanılır, `successful` (notlu,
+    # bloğu çıkarılmış hâli) DEĞİL: LLM hiç çalışmadıysa kullanıcıya
+    # gösterilecek en iyi şey ajanların kendi ham metnidir, içine gömülü
+    # '[NOT — kullanıcıya gösterme: ...]' talimatı değil. Korunan bloklar bu
+    # ham metinde zaten doğal yerinde bulunduğundan aşağıda AYRICA eklenmez.
     if not final_answer.strip():
-        final_answer = "\n\n".join(successful)
+        final_answer = "\n\n".join(successful_raw)
         writer({"delta": final_answer})
+    elif korunan_bloklar:
+        # Normal yol: LLM'e hiç gösterilmemiş ham bloklar burada, merge
+        # çıktısından SONRA, kod tarafından AYNEN eklenir (bkz.
+        # `_ayikla_korunan_bloklar` docstring'i — talimata değil koda güven).
+        ek = "\n\n" + "\n\n".join(dict.fromkeys(korunan_bloklar))
+        final_answer += ek
+        writer({"delta": ek})
 
     return {"final_answer": final_answer}
 
