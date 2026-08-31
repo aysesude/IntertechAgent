@@ -136,7 +136,7 @@ export function AssetComparisonChart({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bars} margin={{ top: 20, right: 8, left: -20, bottom: 0 }} barCategoryGap="26%">
+            <BarChart data={bars} margin={{ top: 20, right: 8, left: -4, bottom: 0 }} barCategoryGap="26%">
               <CartesianGrid stroke={LINE2} vertical={false} />
               <XAxis
                 dataKey="label"
