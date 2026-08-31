@@ -398,6 +398,37 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
     if tetiklenen:
         compact["riskin_nedenleri"] = tetiklenen
 
+    # 2026-08-31 eki: yoğunlaşma NEYE GÖRE. "Yoğunlaşma" etiketi tek başına
+    # kullanıcıya neyin yoğunlaştığını söylemiyordu; model de kural 7 gereği
+    # en büyük pozisyonu kendiliğinden yoğunlaşma diye niteleyemediği için
+    # bağlantıyı kuramıyordu. Hangi eşiğin aşıldığı kararı SERVİSTEN geliyor
+    # (bkz. ConcentrationCause), burada yalnızca taşınıyor.
+    #
+    # Sektör bazlı yoğunlaşma BİLEREK YOK: sektör verisi sistemde hiç yok
+    # (bkz. ConcentrationCause docstring'i). Prompt bu yüzden sektörden söz
+    # etmeyi ayrıca yasaklıyor.
+    yogunlasma = causes.get("concentration") if isinstance(causes, dict) else None
+    if isinstance(yogunlasma, dict) and yogunlasma.get("triggered"):
+        detay: dict[str, Any] = {}
+        if yogunlasma.get("asset_triggered"):
+            detay["varlik_bazli"] = {
+                "sembol": yogunlasma.get("max_asset_symbol"),
+                "agirlik_yuzde": yogunlasma.get("max_asset_weight_percent"),
+            }
+        if yogunlasma.get("category_triggered"):
+            detay["kategori_bazli"] = {
+                "sinif": yogunlasma.get("max_category"),
+                "agirlik_yuzde": yogunlasma.get("max_category_weight_percent"),
+            }
+        # HHI tek başına tetiklendiyse ortada gösterilecek TEK bir sembol ya
+        # da sınıf yok: portföy az sayıda kaleme dağılmış demektir. Varlık
+        # veya kategori zaten tetiklendiyse bu ayrıca söylenmez, aynı durumu
+        # ikinci kez ve daha soyut anlatmak olurdu.
+        if yogunlasma.get("hhi_triggered") and not detay:
+            detay["dagilim_geneli"] = {"varlik_sayisi": metrics.get("holdings_count")}
+        if detay:
+            compact["yogunlasma_detayi"] = detay
+
     # 2026-08-31 eki: profil uyumsuzluğu. Bu bir RİSK ÖLÇÜMÜ DEĞİL — anket
     # puanının izin verdiği seviyenin üstünde bir varlığın elde tutulması
     # (bkz. app/services/advice_eligibility.py, risk_service'te hesaplanıyor

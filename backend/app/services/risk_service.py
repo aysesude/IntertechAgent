@@ -470,13 +470,18 @@ def _diagnose_causes(
     max_category_weight = category_weights[top_class]
 
     # --- Neden A: Yoğunlaşma ---
-    concentration_triggered = (
-        float(max_asset_weight) > settings.risk_cause_max_asset_weight
-        or float(max_category_weight) > settings.risk_cause_max_category_weight
-        or float(herfindahl) > settings.risk_cause_hhi_threshold
-    )
+    # Üç koşul AYRI AYRI tutuluyor (2026-08-31): `triggered` bunların OR'u
+    # olduğu için tek başına "neye göre yoğunlaşmış" sorusuna cevap vermiyordu
+    # ve kullanıcıya yalnızca belirsiz bir "yoğunlaşma var" denebiliyordu.
+    # Eşikler ve OR sonucu DEĞİŞMEDİ, yalnızca kırılım görünür oldu.
+    asset_triggered = float(max_asset_weight) > settings.risk_cause_max_asset_weight
+    category_triggered = float(max_category_weight) > settings.risk_cause_max_category_weight
+    hhi_triggered = float(herfindahl) > settings.risk_cause_hhi_threshold
     concentration = ConcentrationCause(
-        triggered=concentration_triggered,
+        triggered=asset_triggered or category_triggered or hhi_triggered,
+        asset_triggered=asset_triggered,
+        category_triggered=category_triggered,
+        hhi_triggered=hhi_triggered,
         max_asset_weight_percent=_round2(max_asset_weight * 100),
         max_asset_symbol=max_asset_symbol,
         max_category_weight_percent=_round2(max_category_weight * 100),

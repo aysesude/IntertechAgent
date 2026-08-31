@@ -145,9 +145,7 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'gram altın kaç TL', 'gümüş fiyatı nedir', 'platin ne kadar', "
         "'THYAO'nun F/K oranı kaç', 'Tüpraş 2. çeyrek bilançosu nasıl', "
         "'Akbank'ın 2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam "
-        "soruluyor, TAHMIN değil), 'GARAN'ın hedef fiyatı ne' (analist "
-        "tarafından GEÇMİŞTE raporlanmış bir hedef, kullanıcıdan bir "
-        "TAHMIN istenmiyor)\n"
+        "soruluyor, TAHMIN değil)\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -452,6 +450,14 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "'Merhaba', 'Cevap:' gibi etiketler ekleme, sadece içeriği ver.\n"
         "Para ve oranlarda Türkçe biçim kullan: 1.234,56 TL ve +%8,41 "
         "(yüzde işareti sayıdan ÖNCE, artı/eksi en başta).\n"
+        # Bu adım son LLM turu: ajan metnini yeniden yazarken terimi de
+        # değiştirebiliyor. Ajan prompt'larında "volatilite" zorunlu kılındı
+        # (bkz. prompts/risk_agent.md kural 1), burada da korunmazsa merge
+        # onu "oynaklık"a çevirip kuralı etkisiz bırakır.
+        "TERİM: Fiyat dalgalanmasından söz ederken 'volatilite' de. "
+        "'Oynaklık', 'dalgalanma', 'değişkenlik' gibi karşılıklarını kullanma; "
+        "gelen veride bu kelimelerden biri geçiyorsa 'volatilite' olarak "
+        "aktar.\n"
         "\n"
         "UYUM KURALI: Gelen verilerde risk analizi veya yeniden dengeleme "
         "senaryoları varsa, HİÇBİR YORUM EKLEME. 'Şu varlığı alın', "

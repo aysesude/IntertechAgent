@@ -793,3 +793,80 @@ def test_sinyal_blogu_dusuk_guvende_kapsam_uyarisi_ekler():
     )
 
     assert "sınırlı sayıda kaynağa" in blok
+
+
+# ---------------------------------------------------------------------------
+# Yogunlasma bazi prompt'a tasiniyor (2026-08-31)
+# ---------------------------------------------------------------------------
+
+
+def _yogunlasma(**bayraklar):
+    varsayilan = {
+        "triggered": True,
+        "asset_triggered": False,
+        "category_triggered": False,
+        "hhi_triggered": False,
+        "max_asset_symbol": "THYAO",
+        "max_asset_weight_percent": 42.5,
+        "max_category": "stock",
+        "max_category_weight_percent": 86.24,
+    }
+    varsayilan.update(bayraklar)
+    return {
+        "metrics": {"holdings_count": 3},
+        "causes": {"concentration": varsayilan},
+        "scenarios": [],
+    }
+
+
+def test_compact_varlik_bazli_yogunlasmayi_ayirt_eder():
+    compact = _compact(_yogunlasma(asset_triggered=True))
+
+    assert compact["yogunlasma_detayi"] == {
+        "varlik_bazli": {"sembol": "THYAO", "agirlik_yuzde": 42.5}
+    }
+
+
+def test_compact_kategori_bazli_yogunlasmayi_ayirt_eder():
+    compact = _compact(_yogunlasma(category_triggered=True))
+
+    assert compact["yogunlasma_detayi"] == {
+        "kategori_bazli": {"sinif": "stock", "agirlik_yuzde": 86.24}
+    }
+
+
+def test_compact_ikisi_birden_tetiklendiyse_ikisini_de_tasir():
+    compact = _compact(_yogunlasma(asset_triggered=True, category_triggered=True))
+
+    assert set(compact["yogunlasma_detayi"]) == {"varlik_bazli", "kategori_bazli"}
+
+
+def test_compact_yalnizca_HHI_tetiklendiyse_sembol_vermez():
+    """Tek bir varlik ya da sinif one cikmiyor; gosterilecek bir isim yok,
+    yalnizca dagilimin dar oldugu soylenebilir."""
+    compact = _compact(_yogunlasma(hhi_triggered=True))
+
+    assert compact["yogunlasma_detayi"] == {"dagilim_geneli": {"varlik_sayisi": 3}}
+
+
+def test_compact_HHI_varlik_veya_kategoriyle_birlikte_ayrica_soylenmez():
+    """Ayni durumu ikinci kez, daha soyut bicimde anlatmak olurdu."""
+    compact = _compact(_yogunlasma(asset_triggered=True, hhi_triggered=True))
+
+    assert "dagilim_geneli" not in compact["yogunlasma_detayi"]
+
+
+def test_compact_yogunlasma_tetiklenmediyse_detay_eklenmez():
+    compact = _compact(_yogunlasma(triggered=False))
+
+    assert "yogunlasma_detayi" not in compact
+
+
+def test_prompt_sektor_bazli_yogunlasmayi_yasakliyor():
+    """Sistemde sektor verisi yok; model kategoriyi sektor sanip
+    "ayni sektorde toplanmis" diyemez."""
+    from agents.risk_agent import _PROMPT_TEMPLATE
+
+    assert "Sektör bazlı yoğunlaşmadan ASLA söz etme" in _PROMPT_TEMPLATE
+    # Bazi mutlaka soylensin kurali da yerinde olmali.
+    assert "hangi bazda" in _PROMPT_TEMPLATE

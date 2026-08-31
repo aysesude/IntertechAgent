@@ -631,3 +631,82 @@ def test_bant_icinde_de_yogunlasma_teshisi_hesaplanir(db_session):
     # Tek varlik -> agirligi %100, HHI 1.0: yogunlasma esikleri kesin asilir.
     assert assessment.causes.concentration.triggered is True
     assert assessment.causes.concentration.max_asset_symbol == "TST"
+
+
+# ---------------------------------------------------------------------------
+# Yogunlasma NEYE gore tetiklendi (2026-08-31)
+#
+# `triggered` uc kosulun OR'u; hangisinin tetiklendigi kayboluyordu ve
+# kullaniciya yalnizca belirsiz bir "yogunlasma var" denebiliyordu.
+# ---------------------------------------------------------------------------
+
+
+def test_tek_varlikli_portfoyde_hem_varlik_hem_kategori_tetiklenir(db_session):
+    """Tek varlik: agirligi %100 -> varlik esigi (%35) de sinif esigi (%60)
+    de asilir, HHI de 1.0 olur."""
+    user = _tek_varlikli_portfoy(
+        db_session, "TST", AssetClass.STOCK, survey_score=7, profile=RiskProfile.AGGRESSIVE
+    )
+
+    yogunlasma = get_risk_assessment(db_session, user.id).causes.concentration
+
+    assert yogunlasma.triggered is True
+    assert yogunlasma.asset_triggered is True
+    assert yogunlasma.category_triggered is True
+    assert yogunlasma.hhi_triggered is True
+    assert yogunlasma.max_asset_symbol == "TST"
+    assert yogunlasma.max_category is AssetClass.STOCK
+
+
+def test_esit_agirlikli_bes_hisse_yalnizca_KATEGORI_bazinda_yogunlasir(db_session):
+    """Bes esit varlik: her biri %20 (varlik esigi %35'in ALTINDA), hepsi ayni
+    sinifta (%100 > %60), HHI 0,20 (esik 0,25'in ALTINDA).
+
+    Yani yogunlasma VAR ama varlik bazli DEGIL — mesajin bunu "kategori
+    bazinda" diye anlatabilmesi icin bu ayrimin tasinmasi gerekiyor.
+    """
+    user, portfolio = _make_user_and_portfolio(db_session, risk_profile=RiskProfile.AGGRESSIVE)
+    user.risk_survey_score = 7
+    varliklar = []
+    for i in range(5):
+        varlik = Asset(
+            symbol=f"TS{i}", name=f"Test {i}", asset_class=AssetClass.STOCK, currency="TRY"
+        )
+        db_session.add(varlik)
+        varliklar.append(varlik)
+    db_session.flush()
+
+    start = date(2026, 1, 1)
+    rows = []
+    for varlik in varliklar:
+        for i in range(40):
+            rows.append(
+                PriceHistory(
+                    asset_id=varlik.id,
+                    price_date=start + timedelta(days=i),
+                    close_price=Decimal(100 + (i % 5) - 2),
+                )
+            )
+    db_session.add_all(rows)
+    # Ayni fiyat + ayni miktar -> esit agirlik (%20).
+    db_session.add_all(
+        [
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=varlik.id,
+                quantity=Decimal(10),
+                avg_cost_price=Decimal(95),
+            )
+            for varlik in varliklar
+        ]
+    )
+    db_session.commit()
+
+    yogunlasma = get_risk_assessment(db_session, user.id).causes.concentration
+
+    assert yogunlasma.asset_triggered is False
+    assert yogunlasma.category_triggered is True
+    assert yogunlasma.hhi_triggered is False
+    # OR sonucu degismedi.
+    assert yogunlasma.triggered is True
+    assert yogunlasma.max_category is AssetClass.STOCK

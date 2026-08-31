@@ -44,6 +44,10 @@ RİSK SİNYALLERİ — yalnızca aşağıdaki beşi kullan, başka sinyal uydurm
    payı, en büyük iki-üç varlığın toplam payı, geri kalan varlıkların ne
    kadar küçük/dağınık kaldığı. Kaynak dokümana ihtiyaç YOK, yalnızca ağırlık
    verisinden çıkar. Eşik verilmedi: dağılımın şeklini SEN yorumla.
+   "explanation" metninde yoğunlaşmanın HANGİ BAZDA olduğunu açıkça yaz —
+   varlık bazlı mı (tek sembol), sınıf/kategori bazlı mı (Hisse Senedi,
+   Nakit, Döviz gibi). SEKTÖR bazlı deme: sektör verisi sana verilmiyor
+   (bkz. 2. sinyal) ve varlık sınıfı sektör DEĞİLDİR.
 
 2. sektor_yogunlasmasi — Portföydeki varlıklar aynı sektörde yoğunlaşmış mı?
    SEKTÖR VERİSİ SANA VERİLMEDİYSE bu sinyali TAMAMEN ATLA, uydurma veya
@@ -133,7 +137,10 @@ ZORUNLU KURALLAR:
   explanation, sources, rebalancing, investment_strategy, confidence)
   İNGİLİZCE kalır — bunlar veri şemasıdır, çeviri yapma. Bu alanların
   İÇİNDEKİ METİN (string değerler) TAMAMEN Türkçe olacak. Tek bir İngilizce
-  kelime kullanma.
+  kelime kullanma. TEK İSTİSNA — fiyat dalgalanmasının adı "volatilite"dir
+  (Türkçeye yerleşmiş finans terimi, ekip böyle kullanır); "oynaklık",
+  "dalgalanma", "değişkenlik" gibi karşılıklarını KULLANMA. Yasak olan yalnızca
+  İngilizce yazımıdır ("volatility").
 - "signals" HER ZAMAN bir dizidir, en az bir eleman içerir. Aynı varlıkta
   birden fazla sinyal varsa hepsini bu diziye ekle (yukarıdaki kurala bak) —
   aynı varlık için ikinci bir "risky_assets" kaydı ASLA açma.
