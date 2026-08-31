@@ -15,17 +15,27 @@ analizi onun işi değildir; haber ve RAG piyasa ajanının.
 
 2026-08-28 eki — Profil-uygunluk bilgilendirmesi: bu, "risk analizi" (volatilite/
 VaR modelleme, yalnızca `agents/risk_agent.py`'nin işi) DEĞİLDİR — kullanıcının
-GÜNCEL elindeki varlık sınıflarının, GÜNCEL anket puanının izin verdiği
-sınıflarla basit bir küme farkıdır (`advice_eligibility.mismatched_asset_
-classes`), tıpkı K/Z yüzdesi gibi zaten `get_holdings`'ten gelen veriden
-deterministik olarak türetilen bir gerçek. `orchestrator.py`'nin RISK
-sorulmadıkça `risk_agent`'ı hiç çağırmaması yüzünden bu bilgi başka türlü
-yalnızca "ne yapmalıyım" tarzı bir soruda görünürdü — kullanıcı sadece
-"portföyümü göster" dediğinde bile GÜNCEL bir profil uyumsuzluğu varsa
-görmesi gerekir (bkz. `advice_eligibility.py`'nin KAPSAM notu, "sahipse
-profil UYUMSUZLUĞU sayılır"). Yalnızca `get_holdings` plandaysa çalışır (bkz.
-`_profil_uyum_disi_siniflar`) — `get_portfolio_summary`'nin özet dağılımı bu
-kontrol için KULLANILMIYOR, tutarlı tek kaynak `get_holdings` kalsın diye.
+GÜNCEL elindeki varlıkların, GÜNCEL anket puanının izin verdiği ölçüde
+tavsiye kapsamında olup olmadığının basit bir kontrolüdür
+(`advice_eligibility.mismatched_holdings`), tıpkı K/Z yüzdesi gibi zaten
+`get_holdings`'ten gelen veriden deterministik olarak türetilen bir gerçek.
+`orchestrator.py`'nin RISK sorulmadıkça `risk_agent`'ı hiç çağırmaması
+yüzünden bu bilgi başka türlü yalnızca "ne yapmalıyım" tarzı bir soruda
+görünürdü — kullanıcı sadece "portföyümü göster" dediğinde bile GÜNCEL bir
+profil uyumsuzluğu varsa görmesi gerekir (bkz. `advice_eligibility.py`'nin
+KAPSAM notu, "sahipse profil UYUMSUZLUĞU sayılır"). Yalnızca `get_holdings`
+plandaysa çalışır (bkz. `_profil_uyum_disi_varliklar`) — `get_portfolio_
+summary`'nin özet dağılımı bu kontrol için KULLANILMIYOR, tutarlı tek kaynak
+`get_holdings` kalsın diye.
+
+2026-08-31 eki — SINIF düzeyinden VARLIK düzeyine taşındı
+(`mismatched_asset_classes` → `mismatched_holdings`). Sınıf, tek tek
+varlıkların uygunluğuna karar vermek için fazla kabaydı ve canlıda yanlış
+bildiriyordu: Korumacı bir kullanıcının elindeki IOO (para piyasası fonu)
+için "Borçlanma Araçları artık tavsiye kapsamında değil" deniyordu, oysa
+sınıfı BOND (seviye 2) olsa da IOO'nun kendi uygunluk seviyesi 1'dir ve o
+kullanıcı için uyumludur. Bildirim artık sembol + varlığın kendi seviyesi +
+anket puanı ile veriliyor.
 """
 
 import asyncio
@@ -45,7 +55,7 @@ from agents.formatting import tr_date as _tr_date
 from agents.formatting import tr_percent as _tr_percent
 from app.core.config import AssetClass, turkey_today
 from app.core.llm_client import get_llm_client
-from app.services.advice_eligibility import mismatched_asset_classes
+from app.services.advice_eligibility import mismatched_holdings
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +167,10 @@ class PortfolioAgent(BaseAgent):
         # ya da `get_holdings` başarısız olup "holdings" hiç eklenmediyse bu
         # kontrol sessizce ATLANIR — mevcut hacimli akış hiç etkilenmez.
         if "holdings" in data and risk_survey_score is not None:
-            mismatch = _profil_uyum_disi_siniflar(data["holdings"], risk_survey_score)
+            mismatch = _profil_uyum_disi_varliklar(data["holdings"], risk_survey_score)
             if mismatch:
-                data["profil_uyum_disi_siniflar"] = mismatch
+                data["profil_uyum_disi_varliklar"] = mismatch
+                data["anket_puani"] = risk_survey_score
 
         # Hiçbiri gelmediyse söylenecek bir şey yok. `base.error_response()`
         # yerine AgentResponse doğrudan kuruluyor: hangi tool'un seçilip hangi
@@ -395,34 +406,50 @@ def _format_history(history: list[dict[str, str]]) -> str:
     )
 
 
-def _profil_uyum_disi_siniflar(
+def _profil_uyum_disi_varliklar(
     holdings_data: dict[str, Any], risk_survey_score: int | None
-) -> list[str]:
+) -> list[dict[str, Any]]:
     """Kullanıcının GÜNCEL elinde olan ama anket puanının artık izin
-    vermediği varlık sınıflarının listesi — bkz. modül docstring'i
-    "2026-08-28 eki", `advice_eligibility.mismatched_asset_classes`.
+    vermediği VARLIKLARIN listesi — bkz. modül docstring'i "2026-08-31 eki",
+    `advice_eligibility.mismatched_holdings`.
 
-    Saf bir fonksiyondur: tüm sınıflandırma `mismatched_asset_classes`'ta
-    (`app/services/advice_eligibility.py`) yapılır, burada yalnızca
-    `get_holdings` sonucunun şeklini o fonksiyonun beklediği kümeye çevirir.
-    `risk_survey_score` `None` ise (anket hiç doldurulmamış) boş liste
-    döner — uydurma yok."""
+    2026-08-31: SINIF düzeyinden (`_profil_uyum_disi_siniflar`,
+    `mismatched_asset_classes`) VARLIK düzeyine taşındı — sınıf, tek tek
+    varlıkların uygunluğuna karar vermek için fazla kaba ve sınıfından
+    ayrılan varlıklarda YANLIŞ bildiriyordu. Canlıda ölçüldü: Korumacı bir
+    kullanıcının elindeki IOO (para piyasası fonu) için "Borçlanma Araçları
+    artık tavsiye kapsamında değil" deniyordu — oysa sınıfı BOND (seviye 2)
+    olsa da IOO'nun kendi uygunluk seviyesi 1'dir ve o kullanıcı için
+    uyumludur.
+
+    Saf bir fonksiyondur: kural `advice_eligibility`'nin, burada yalnızca
+    `get_holdings` sonucunun şekli o fonksiyonun beklediği hâle çevriliyor.
+    `risk_survey_score` `None` ise (anket hiç doldurulmamış) boş liste döner
+    — uydurma yok.
+
+    Dönen her kayıt sembol, sınıf ve varlığın uygunluk seviyesini taşır;
+    bildirimin gerekçesi somut olabilsin diye (bkz. `_render`)."""
     if risk_survey_score is None:
         return []
 
-    held_classes = {
-        h.get("asset_class")
-        for h in holdings_data.get("holdings", [])
-        if not h.get("price_missing")
-    }
-    try:
-        held = {AssetClass(c) for c in held_classes if c is not None}
-    except ValueError:
-        # Tanınmayan bir sınıf değeri (beklenmez, ama sessizce çökmektense
-        # kontrolü atlamak zarif düşüştür).
-        return []
+    held: list[tuple[str, AssetClass]] = []
+    for h in holdings_data.get("holdings", []):
+        if h.get("price_missing"):
+            continue
+        symbol = h.get("symbol")
+        try:
+            asset_class = AssetClass(h.get("asset_class"))
+        except ValueError:
+            # Tanınmayan bir sınıf değeri (beklenmez, ama sessizce çökmektense
+            # yalnızca o varlığı atlamak zarif düşüştür).
+            continue
+        if symbol is not None:
+            held.append((symbol, asset_class))
 
-    return sorted(ac.value for ac in mismatched_asset_classes(held, risk_survey_score))
+    return [
+        {"sembol": sembol, "sinif": sinif.value, "seviye": seviye}
+        for sembol, sinif, seviye in sorted(mismatched_holdings(held, risk_survey_score))
+    ]
 
 
 # Nakit hareketleri de listeye giriyor (sembol süzgeci verilmediğinde), bu
@@ -510,14 +537,27 @@ def _render(data: dict[str, Any]) -> str:
     # bkz. modül docstring'i "2026-08-28 eki" — yalnızca GERÇEK bir uyumsuzluk
     # varsa eklenir (uydurulmuş bir "her şey uyumlu" bloğu YOK, boşsa hiç
     # bahsedilmez).
-    mismatch = data.get("profil_uyum_disi_siniflar")
+    mismatch = data.get("profil_uyum_disi_varliklar")
     if mismatch:
-        isimler = [_ASSET_CLASS_TR.get(c, c) for c in mismatch]
+        # 2026-08-31: sınıf adı yerine VARLIK adı + kendi uygunluk seviyesi.
+        # Sınıf düzeyi bildirim, sınıfından ayrılan varlıklarda yanlış
+        # oluyordu (bkz. `_profil_uyum_disi_varliklar` docstring'i).
+        puan = data.get("anket_puani")
+        satirlar = [
+            f"{kayit['sembol']} "
+            f"({_ASSET_CLASS_TR.get(kayit['sinif'], kayit['sinif'])}, "
+            f"uygunluk seviyesi {kayit['seviye']})"
+            for kayit in mismatch
+        ]
+        puan_ifadesi = f" Anket puanınız {puan}." if puan is not None else ""
         blocks.append(
             "Risk profili uyumu\n"
             "Elinizde, güncel risk profilinize göre artık tavsiye kapsamında "
-            "olmayan şu varlık sınıfları var: " + ", ".join(isimler) + ". "
-            "Bu bir satış zorunluluğu değildir, yalnızca bilgilendirmedir."
+            "olmayan şu varlıklar var: "
+            + ", ".join(satirlar)
+            + "."
+            + puan_ifadesi
+            + " Bu bir satış zorunluluğu değildir, yalnızca bilgilendirmedir."
         )
 
     performance = (data.get("performance") or {}).get("summary")
