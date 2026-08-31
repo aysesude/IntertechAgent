@@ -781,36 +781,52 @@ def get_transactions(
 def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> BenchmarkComparison:
     """Portföyün dönem getirisini endekslerle karşılaştırır.
 
-    METRİK — pencere başındaki (t0) miktarlar SABİT tutulur, yalnızca fiyat
-    değişimi ölçülür:
+    PORTFÖY ÇUBUĞU, PERFORMANS KARTIYLA AYNI SAYIYI VERİR. İkisi de
+    `valuation_service.twr` çağırır ve pencereyi birebir aynı kurar:
+    `inception` = ilk işlem (nakit yatırma dahil), `end_date` = portföyün
+    varlıklarındaki son fiyat günü, `start = max(inception, pencere başı)`.
+    Aynı girdi + aynı fonksiyon = aynı sayı; iki kartın birbirini tutması
+    için ayrı ayrı doğru olmalarına güvenmek gerekmiyor.
 
-        C = Σ qᵢ(t0) × pᵢ(t0)        V = Σ qᵢ(t0) × pᵢ(t1)
-        getiri% = 100 × (V / C − 1)
+    NEDEN DEĞİŞTİ (31 Ağustos 2026). Çubuk daha önce t0 miktarlarını
+    dondurup yalnızca fiyat değişimini ölçüyordu:
 
-    Pencere içindeki alım/satım, temettü ve komisyon hesaba KATILMAZ; endeksin
-    saf fiyat getirisiyle aynı ölçekte olması için. Miktarlar t0'da donduğu ve
-    fiyatlar pozitif olduğu için C > 0 garantidir — negatif payda sorunu yok.
+        C = Σ qᵢ(t0) × pᵢ(t0)   V = Σ qᵢ(t0) × pᵢ(t1)   getiri = V/C − 1
 
-    `qᵢ(t0)` için `ledger_service.position_as_of`, fiyatlar için
-    `valuation_service` kur çevirimi kullanılır (bugünkü kur değil, O GÜNÜN
-    kuru).
+    Ölçüldü (seed'li 12 kullanıcı, 12 aylık pencere): nakdi %79 olan
+    kullanıcıda çubuk +%44,54 derken performans kartı +%4,46 diyordu; iki
+    kullanıcıda İŞARET ters dönüyordu (çubuk −%5,95, kart +%0,92). Yani aynı
+    sayfada bir kart "kârdasın", diğeri "zarardasın" diyordu. İki sebebi
+    vardı:
 
-    Varlık sınıfı kırılımı aynı formülün o sınıfa kısıtlanmış hâlidir;
-    ağırlıklı ortalama almaya gerek yok, ΣV/ΣC zaten ağırlıklı ortalamadır.
+    1. **Nakit çubuğa hiç girmiyordu.** Nakit bir pozisyon değil, defter
+       bakiyesi; `position_as_of` onu döndürmez. Diğer bütün kartlar (özet,
+       performans) nakit dahil tüm portföyü değerliyor. En büyük iki sapma,
+       en nakit ağırlıklı iki portföydü — tesadüf değil.
+    2. **Dönem içi alım/satım yok sayılıyordu.** t0 sepeti donduğu için mart
+       ayında satılan zararlı varlık ağustosta hâlâ portföydeymiş gibi
+       ölçülüyordu.
 
-    `t0` fiyatı bulunmayan varlık dışlanır ve `excluded_symbols` ile bildirilir.
-    Benchmark'lar XU100, XAUTRY, USDTRY — aynı pencerede
-    100 × (p(t1)/p(t0) − 1).
+    Kartın cevapladığı soru "bu dönemde param mı, BIST mi daha çok
+    kazandırdı" olduğuna göre doğru portföy ölçüsü TWR'dir: dış para
+    giriş-çıkışından arındırılmış, nakit dahil gerçek getiri.
 
-    XU100 evrende (`app/providers/universe.py`) HENÜZ TANIMLI DEĞİL. Sembol
-    `BENCHMARK_SYMBOLS` içinde duruyor ama varlık bulunamazsa listeye hiç
-    girmiyor — boş bir "BIST100: —" satırı göstermek, veri varmış da
-    hesaplanamamış gibi okunurdu. Evrene eklendiği gün (provider_symbol
-    "XU100.IS") bu fonksiyon değişmeden çalışmaya başlar.
+    ÖLÇEK FARKI BİLİNÇLİDİR. Portföy çubuğu nakit dahil gerçek getiri,
+    endeksler saf fiyat getirisi: 100 × (p(t1)/p(t0) − 1). Hesapta duran para
+    getiri üretmez, endeks ise tamamen yatırımdadır — bu bir hesap hatası
+    değil, kullanıcının gerçekten yaşadığı fark. Arayüzde açıkça yazılıyor.
+
+    `by_asset_class` DONMUŞ t0 sepetinin sınıf bazlı FİYAT getirisidir;
+    headline ile aynı ölçü DEĞİLDİR ve toplamı ona eşit çıkmaz. "Hangi sınıf
+    ne kadar oynadı" sorusunu cevaplar. Arayüzde henüz gösterilmiyor.
+
+    `excluded_symbols` dönem sonunda fiyatı bulunamayan, bu yüzden portföy
+    değerine hiç girmeyen sembollerdir (AK 5.5: eksik veri tamamlanmaz,
+    bildirilir).
 
     Raises:
         NotFoundError: portföy yok.
-        InsufficientDataError: hiç işlem yok ya da t0'da hiç pozisyon yok.
+        InsufficientDataError: portföyde hiç işlem yok.
     """
     portfolio = db.execute(
         select(Portfolio).where(Portfolio.user_id == user_id)
@@ -818,26 +834,20 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
     if portfolio is None:
         raise NotFoundError(f"Portfolio not found for user_id {user_id}")
 
-    # BAŞLANGIÇ = İLK VARLIK ALIMI, ilk işlem değil.
+    # PENCERE `get_portfolio_performance` İLE AYNI KURULUR — aşağıdaki blok
+    # oradakinin aynısıdır. Ayrışırlarsa iki kart yine farklı sayı gösterir;
+    # `tests/test_portfolio_service_faz2.py` bunu kilitliyor.
     #
-    # Portföyler önce nakitle fonlanıyor (DEPOSIT), varlıklar günler sonra
-    # alınıyor. `min(transaction_date)` o nakit yatırma gününü veriyordu ve
-    # `position_as_of` orada boş dönüyordu — çünkü o gün gerçekten hiçbir
-    # varlık yoktu. Ölçüldü: 12 aylık pencerede 50 kullanıcının 50'si de
-    # `InsufficientDataError` alıyordu, diğer pencerelerde 2-7 kullanıcı.
-    #
-    # Bu kıyaslama saf FİYAT getirisini ölçüyor; hiçbir şeye sahip olmadığın
-    # bir günden fiyat getirisi ölçülemez. `asset_id IS NOT NULL` süzgeci
-    # nakit ayaklarını (DEPOSIT/WITHDRAWAL) eleyip ilk gerçek pozisyon gününü
-    # veriyor.
+    # `inception` ilk VARLIK ALIMI değil, İLK İŞLEMDİR (nakit yatırma dahil):
+    # TWR nakit üzerinde de tanımlıdır (getirisi sıfırdır), dolayısıyla fiyat
+    # getirisinin aksine "hiçbir şeye sahip olmadığın gün" sorunu yok.
     inception_dt = db.execute(
         select(func.min(Transaction.transaction_date)).where(
-            Transaction.portfolio_id == portfolio.id,
-            Transaction.asset_id.is_not(None),
+            Transaction.portfolio_id == portfolio.id
         )
     ).scalar()
     if inception_dt is None:
-        raise InsufficientDataError(f"No asset transactions for portfolio {portfolio.id}")
+        raise InsufficientDataError(f"No transactions for portfolio {portfolio.id}")
     inception = inception_dt.date()
 
     portfolio_asset_ids = (
@@ -857,24 +867,30 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
             PriceHistory.asset_id.in_(portfolio_asset_ids)
         )
     ).scalar()
-    end_date = last_price_date or date.today()
+    end_date = max(last_price_date or date.today(), inception)
 
     window_start = window_start_date(window, end_date)
     start_date = max(inception, window_start)
     truncated = inception > window_start
 
-    # t0'daki miktarlar DONDURULUR: pencere içindeki alım/satım, temettü ve
-    # komisyon hesaba katılmaz. Endeks de saf fiyat getirisi olduğu için ancak
-    # böyle aynı ölçekte olurlar (yoksa "portföyüm endeksi yendi" cümlesi,
-    # aslında sadece yeni para yatırıldığı anlamına gelirdi).
-    positions = position_as_of(db, portfolio.id, start_date)
-    if not positions:
-        raise InsufficientDataError(f"No positions at {start_date} for portfolio {portfolio.id}")
+    # Portföy çubuğu: performans kartındaki `summary.change_percent` ile AYNI
+    # çağrı. Hesaplanamıyorsa (pencerede hiç sermaye yoksa) None döner, hata
+    # fırlatılmaz — endeks çubukları hesaplanabiliyorken tüm kartı karartmak
+    # "veri yok" gibi okunurdu (zarif düşüş).
+    portfolio_return = twr(db, portfolio.id, start_date, end_date)
+
+    positions_start = position_as_of(db, portfolio.id, start_date)
+    positions_end = position_as_of(db, portfolio.id, end_date)
 
     benchmark_assets = (
         db.execute(select(Asset).where(Asset.symbol.in_(BENCHMARK_SYMBOLS))).scalars().all()
     )
-    position_assets = db.execute(select(Asset).where(Asset.id.in_(list(positions)))).scalars().all()
+    position_ids = set(positions_start) | set(positions_end)
+    position_assets = (
+        db.execute(select(Asset).where(Asset.id.in_(list(position_ids)))).scalars().all()
+        if position_ids
+        else []
+    )
 
     # Kur varlıkları da fiyat defterine girmeli: TRY dışı varlık O GÜNÜN
     # kuruyla çevrilir, bugünkü kurla değil.
@@ -894,13 +910,17 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
     }
 
     book_asset_ids = (
-        set(positions) | {a.id for a in benchmark_assets} | set(fx_id_by_currency.values())
+        position_ids | {a.id for a in benchmark_assets} | set(fx_id_by_currency.values())
     )
-    price_rows = db.execute(
-        select(PriceHistory.asset_id, PriceHistory.price_date, PriceHistory.close_price).where(
-            PriceHistory.asset_id.in_(list(book_asset_ids))
-        )
-    ).all()
+    price_rows = (
+        db.execute(
+            select(PriceHistory.asset_id, PriceHistory.price_date, PriceHistory.close_price).where(
+                PriceHistory.asset_id.in_(list(book_asset_ids))
+            )
+        ).all()
+        if book_asset_ids
+        else []
+    )
     book = PriceBook([(r.asset_id, r.price_date, r.close_price) for r in price_rows])
 
     currency_by_asset = {a.id: a.currency for a in position_assets}
@@ -921,29 +941,30 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
         return None if fx is None else price * fx
 
     asset_by_id = {a.id: a for a in position_assets}
-    total_cost = Decimal(0)
-    total_value = Decimal(0)
-    by_class: dict[AssetClass, list[Decimal]] = {}
-    excluded_symbols: list[str] = []
 
-    for asset_id, quantity in positions.items():
+    # Dönem SONUNDA elde olup fiyatlanamayan varlıklar: değer serisine 0
+    # katkı verirler, dolayısıyla portföy getirisi eksik hesaplanmıştır.
+    # Sessiz kalmak, olmayan bir tamlık iddiasıdır.
+    excluded_symbols = sorted(
+        asset_by_id[asset_id].symbol
+        for asset_id in positions_end
+        if asset_id in asset_by_id and _price_try(asset_id, end_date) is None
+    )
+
+    # Sınıf kırılımı: donmuş t0 sepetinin FİYAT getirisi (headline'dan farklı
+    # ölçü — bkz. docstring). ΣV/ΣC zaten ağırlıklı ortalamadır.
+    by_class: dict[AssetClass, list[Decimal]] = {}
+    for asset_id, quantity in positions_start.items():
         asset = asset_by_id.get(asset_id)
         if asset is None:
             continue
         price_start = _price_try(asset_id, start_date)
         price_end = _price_try(asset_id, end_date)
         if price_start is None or price_end is None or price_start <= 0:
-            # Pencere başında fiyatı olmayan varlık dışlanır: eksik maliyetle
-            # bölmek yanlış getiri üretir.
-            excluded_symbols.append(asset.symbol)
             continue
-        cost = quantity * price_start
-        value = quantity * price_end
-        total_cost += cost
-        total_value += value
         bucket = by_class.setdefault(asset.asset_class, [Decimal(0), Decimal(0)])
-        bucket[0] += cost
-        bucket[1] += value
+        bucket[0] += quantity * price_start
+        bucket[1] += quantity * price_end
 
     def _return_percent(cost: Decimal, value: Decimal) -> Decimal | None:
         return _round2((value / cost - 1) * 100) if cost > 0 else None
@@ -983,7 +1004,7 @@ def get_benchmark_comparison(db: Session, user_id: UUID, window: TimeWindow) -> 
         start_date=start_date,
         end_date=end_date,
         truncated_to_inception=truncated,
-        portfolio_return_percent=_return_percent(total_cost, total_value),
+        portfolio_return_percent=portfolio_return,
         by_asset_class=by_asset_class,
         benchmarks=benchmarks,
         excluded_symbols=excluded_symbols,

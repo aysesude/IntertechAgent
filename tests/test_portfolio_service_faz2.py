@@ -361,10 +361,10 @@ def test_performance_raises_when_portfolio_has_no_transactions(db_session):
         get_portfolio_performance(db_session, user.id, TimeWindow.M1)
 
 
-def test_benchmark_freezes_t0_quantities_and_compares_with_index(db_session, performance_fixture):
+def test_benchmark_portfoy_cubugu_endekslerle_ayni_pencerede(db_session, performance_fixture):
     result = get_benchmark_comparison(db_session, performance_fixture.id, TimeWindow.M1)
 
-    # t0 = 1 Ocak: 10 adet x 100 = 1.000 maliyet, t1 = 9 Ocak: 10 x 130 = 1.300
+    # 1.000 TL -> 1.300 TL, donem ici dis akis yok: TWR %30.
     assert result.portfolio_return_percent == Decimal("30.00")
     assert [c.asset_class for c in result.by_asset_class] == [AssetClass.STOCK]
     assert result.by_asset_class[0].return_percent == Decimal("30.00")
@@ -373,6 +373,66 @@ def test_benchmark_freezes_t0_quantities_and_compares_with_index(db_session, per
     # XAUTRY 1000 -> 1100 = %10. XU100 evrende yok, listeye hic girmez.
     assert endeksler == {"XAUTRY": Decimal("10.00")}
     assert result.excluded_symbols == []
+
+
+def test_ak_3_1_kiyas_cubugu_performans_kartiyla_AYNI_SAYIYI_verir(db_session):
+    """Ayni sayfada iki kart, ayni donem, ZIT isaret gosteremez.
+
+    Bulunan hata (31 Agustos 2026): kiyas cubugu t0 miktarlarini dondurup
+    yalnizca FIYAT degisimini olcuyordu; nakit hic girmiyor, donem ici
+    alim/satim yok sayiliyordu. Olculdu (seed'li 12 kullanici, 12 ay):
+    nakdi %79 olan kullanicida cubuk +%44,54 <-> performans karti +%4,46;
+    iki kullanicida isaret ters donuyordu.
+
+    Bu senaryo tam o durumu kuruyor: portfoyun YARISI nakitte duruyor.
+    Hisse %50 kazaniyor ama portfoyun yalnizca yarisi hissede, dolayisiyla
+    gercek getiri %25. Eski yontem %50 derdi.
+    """
+    user = User(email="yari-nakit@example.com", full_name="Yari Nakit")
+    stock = Asset(symbol="TST3", name="Test Hisse 3", asset_class=AssetClass.STOCK, currency="TRY")
+    db_session.add_all([user, stock])
+    db_session.flush()
+
+    portfolio = Portfolio(user_id=user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    db_session.add_all(
+        [
+            PriceHistory(
+                asset_id=stock.id, price_date=date(2026, 1, 1), close_price=Decimal("100")
+            ),
+            PriceHistory(
+                asset_id=stock.id, price_date=date(2026, 1, 20), close_price=Decimal("150")
+            ),
+            # 2.000 TL yatiriliyor, yalnizca 1.000 TL'si hisseye giriyor.
+            _tx(portfolio.id, TransactionType.DEPOSIT, date(2026, 1, 1), cash="2000"),
+            _tx(
+                portfolio.id,
+                TransactionType.BUY,
+                date(2026, 1, 1),
+                asset_id=stock.id,
+                quantity="10",
+                cash="-1000",
+                price="100",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    kiyas = get_benchmark_comparison(db_session, user.id, TimeWindow.M1)
+    performans = get_portfolio_performance(db_session, user.id, TimeWindow.M1)
+
+    # 2.000 -> 2.500 (1.000 nakit + 10 x 150): %25. Hissenin kendisi %50.
+    assert kiyas.portfolio_return_percent == Decimal("25.00")
+    # ASIL SART: iki kart ayni sayiyi soyluyor.
+    assert kiyas.portfolio_return_percent == performans.summary.change_percent
+    assert kiyas.end_date == performans.as_of
+    assert kiyas.start_date == performans.series[0].date
+
+    # Sinif kirilimi AYRI bir olcudur (donmus t0 sepetinin fiyat getirisi):
+    # nakit iceremez, dolayisiyla headline'a esit cikmaz. Karistirilmasin.
+    assert kiyas.by_asset_class[0].return_percent == Decimal("50.00")
 
 
 # ---------------------------------------------------------------------------
@@ -417,13 +477,15 @@ def test_window_start_date_ytd_yil_basini_verir():
 def test_benchmark_nakit_once_yatirilmissa_da_calisir(db_session):
     """Portfoy once nakitle fonlanip varlik GUNLER SONRA alinabilir.
 
-    Baslangic `min(transaction_date)` alindiginda o gun DEPOSIT gunu oluyordu
-    ve `position_as_of` orada bos donuyordu — hicbir varlik yoktu. Olculdu:
-    12 aylik pencerede seed'li 50 kullanicinin 50'si de InsufficientDataError
-    aliyordu, yani kartin "Yillik" dugmesi hicbir kullanicida calismiyordu.
+    Bir donem fiyat getirisi olcerken bu sorunluydu: `position_as_of` nakit
+    yatirma gununde bos donuyor, hicbir seye sahip olmadigin gunden fiyat
+    getirisi olculemiyordu (olculdu: 12 aylik pencerede seed'li 50
+    kullanicinin 50'si de InsufficientDataError aliyordu).
 
-    Dogrusu ILK VARLIK ALIMI: fiyat getirisi, hicbir seye sahip olmadigin bir
-    gunden olculemez.
+    Cubuk TWR'ye gectikten sonra sorun kendiliginden kalkti: TWR nakit
+    uzerinde de TANIMLI (getirisi sifir). Bu yuzden baslangic artik ilk
+    ISLEM gunu ve performans kartiyla ayni; nakitte beklenen gunler getiriyi
+    degistirmez, yalnizca donemi uzatir.
     """
     user = User(email="nakit-once@example.com", full_name="Nakit Once")
     stock = Asset(symbol="TST2", name="Test Hisse 2", asset_class=AssetClass.STOCK, currency="TRY")
@@ -459,8 +521,9 @@ def test_benchmark_nakit_once_yatirilmissa_da_calisir(db_session):
 
     result = get_benchmark_comparison(db_session, user.id, TimeWindow.M1)
 
-    # Baslangic ILK ALIM gunu, nakit yatirma gunu degil.
-    assert result.start_date == date(2026, 1, 10)
+    # Baslangic ILK ISLEM gunu (nakit yatirma), performans kartiyla ayni.
+    assert result.start_date == date(2026, 1, 1)
     assert result.truncated_to_inception is True
-    # 100 -> 150 = %50
+    # 1-9 Ocak nakitte bekliyor (getiri 0), 10 Ocak'ta 1.000 TL hisseye
+    # giriyor, 20 Ocak'ta 1.500 TL: %50. Beklenen gunler sonucu degistirmiyor.
     assert result.portfolio_return_percent == Decimal("50.00")

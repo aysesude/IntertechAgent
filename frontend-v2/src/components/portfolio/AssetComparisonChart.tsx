@@ -26,10 +26,17 @@ import { useBenchmarkData } from "@/hooks/useBenchmarkData";
  *
  * VERİ GERÇEK. Bu bileşen daha önce seed'li bir rastgele yürüyüşle SENTETİK
  * getiri üretiyordu (`generateReturns`); artık `/api/portfolio/{id}/benchmark`
- * ucundan geliyor. O uç pencere başındaki miktarları DONDURUYOR ve yalnızca
- * fiyat değişimini ölçüyor — endeks de saf fiyat getirisi olduğu için ancak
- * böyle aynı ölçekte oluyorlar. Yoksa "portföyüm endeksi yendi" cümlesi,
- * aslında sadece dönem içinde yeni para yatırıldığı anlamına gelirdi.
+ * ucundan geliyor.
+ *
+ * PORTFÖY ÇUBUĞU = PERFORMANS KARTININ SAYISI. İkisi de aynı pencerede aynı
+ * TWR hesabından geliyor. Çubuk eskiden dönem başındaki miktarları dondurup
+ * yalnızca fiyat değişimini ölçüyordu; nakit hesaba girmediği ve dönem içi
+ * alım/satım yok sayıldığı için aynı sayfadaki iki kart farklı — bazı
+ * kullanıcılarda ZIT İŞARETLİ — sayı gösteriyordu (ölçüldü, 31 Ağustos 2026).
+ *
+ * Endeksler saf fiyat getirisi olarak kalıyor; ölçek farkı bilinçli ve
+ * kartın altında yazılı: hesapta duran para getiri üretmez, endeks ise
+ * tamamen yatırımdadır.
  *
  * Dönem seçenekleri backend penceresine BİREBİR eşleniyor; arayüzde
  * hesaplanan bir tarih aritmetiği yok (eskiden vardı ve sentetik veriyi
@@ -120,9 +127,11 @@ export function AssetComparisonChart({
         </div>
       </div>
       <p className="m-0 mb-1 text-xs text-ink-faint">
-        Endeksleme yok — seçili dönemin başı ile bugün arasındaki toplam % getiri, her enstrüman
-        için tek bir çubukla doğrudan kıyaslanıyor. Dönem içindeki alım/satım hesaba katılmaz;
-        yalnızca fiyat değişimi ölçülür.
+        Seçili dönemin başı ile bugün arasındaki toplam % getiri, her enstrüman için tek bir
+        çubukla kıyaslanıyor. <strong className="font-semibold">Portföyüm</strong> çubuğu
+        Performans kartındaki getirinin aynısıdır: nakdiniz dahil, para giriş-çıkışından
+        arındırılmış gerçek getiri. Endeksler ise saf fiyat getirisidir — hesapta bekleyen para
+        getiri üretmediği için aradaki fark normaldir.
       </p>
       {uyari && <p className="m-0 mb-3 text-xs font-medium text-ink-soft">{uyari}</p>}
       {error && <p className="m-0 mb-3 text-xs font-semibold text-negative">{error}</p>}

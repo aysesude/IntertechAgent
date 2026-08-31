@@ -243,6 +243,23 @@ class AssetClassReturn(BaseModel):
 
 
 class BenchmarkComparison(BaseModel):
+    """Kıyaslama kartı.
+
+    İKİ FARKLI ÖLÇÜ bilerek yan yana duruyor:
+
+    - `portfolio_return_percent`: TWR — dış para giriş-çıkışından arındırılmış,
+      **nakit dahil** gerçek getiri. Performans kartındaki
+      `PerformanceSummary.change_percent` ile AYNI sayıdır (aynı fonksiyon,
+      aynı pencere).
+    - `benchmarks[].return_percent`: endeksin saf FİYAT getirisi.
+
+    Hesapta duran para getiri üretmez, endeks ise tamamen yatırımdadır; fark
+    kullanıcının gerçekten yaşadığı farktır ve arayüzde yazılıdır.
+
+    `by_asset_class` üçüncü bir ölçüdür (donmuş t0 sepetinin sınıf bazlı fiyat
+    getirisi) ve toplamı `portfolio_return_percent`e EŞİT DEĞİLDİR.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     user_id: UUID
@@ -253,8 +270,8 @@ class BenchmarkComparison(BaseModel):
     portfolio_return_percent: MoneyOpt = None
     by_asset_class: list[AssetClassReturn] = []
     benchmarks: list[BenchmarkEntry] = []
-    # Pencere başında fiyatı olmayan varlıklar hesaba katılmaz; eksik maliyetle
-    # bölmek yanlış getiri üretirdi.
+    # Dönem sonunda fiyatı bulunamayan varlıklar: portföy değerine hiç
+    # girmezler, dolayısıyla getiri eksik hesaplanmıştır (AK 5.5).
     excluded_symbols: list[str] = []
 
 

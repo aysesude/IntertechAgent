@@ -153,8 +153,8 @@ def read_benchmark(
 ) -> BenchmarkComparison:
     """Portföy getirisi ↔ endeksler (bar grafiği).
 
-    Pencere başındaki miktarlar dondurulur, yalnızca fiyat değişimi ölçülür —
-    endeksin saf fiyat getirisiyle aynı ölçekte olması için.
+    Portföy çubuğu `/performance` ucundaki `summary.change_percent` ile AYNI
+    sayıdır (TWR, nakit dahil); endeksler aynı pencerenin saf fiyat getirisi.
     """
     verify_user_access(user_id, current_user)
     try:
