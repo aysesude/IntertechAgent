@@ -1,0 +1,29 @@
+risk ajani: risk sorusunda yogunlasma, profil uyumsuzlugu ve haber yorumu da veriliyor
+
+Sorun: "portfoyumun risk seviyesi nedir" sorusuna yalnizca volatilite ozeti
+donuyordu. Sinyal degerlendirmesi (yogunlasma, haber yorumu) yazilmisti ama
+iki sebeple gorunmuyordu: (1) _wants_scenarios kapisinin arkasindaydi,
+(2) calistiginda bile ciktisi yalnizca response_data'ya yaziliyordu ve o
+alani hicbir yer okumuyor (merge_responses yalnizca summary_text topluyor).
+Yogunlasma teshisi ise yalnizca profil bandi asilinca hesaplaniyordu.
+
+Degisiklikler:
+- advice_eligibility: yeni mismatched_holdings() - sinif duzeyi surumun
+  VARLIK duzeyi karsiligi (BHE sinifiyla uyumlu gorunur, kendi seviyesi 7).
+  Mevcut fonksiyonlara dokunulmadi.
+- risk_service: RiskAssessment.mismatched_holdings alani (portfoy ve anket
+  puani zaten yuklu, ek sorgu yok); _diagnose_causes artik bant asilmasa da
+  cagriliyor, esikler degismedi.
+- risk_agent: _assess_signals her risk sorusunda calisiyor ve ciktisi
+  _sinyal_blogu ile summary_text'e giriyor. Blokta yalnizca risky_assets
+  gosteriliyor; risk_level (celisen ikinci seviye), rebalancing ve
+  investment_strategy (PO karari: kapsam disi) bilincli olarak disarida.
+- prompts/risk_agent.md: kural 10 (uyumsuzluk bildirimi, oneri degil),
+  kural 7 genisletildi (bant icinde yogunlasma notr tonda anlatilir).
+
+2026-08-26 analist karari (Sinyal 5 yalnizca anket yeniden doldurulunca
+tetiklensin) DEGISMEDI; eklenen yol olaya degil mevcut duruma bakiyor.
+Kabul edilen bedel: tur basina ek tool cagrilari + bir ek LLM turu.
+
+Testler: 764 passed. Karar notu:
+docs/notes/risk-ajani-kapsamli-degerlendirme-2026-08-31.md

@@ -30,6 +30,7 @@ metodolojisi değiştiğinde (ki şartnamede o bölüm gözden geçiriliyor) bu
 kural da gereksiz yere etkilenirdi.
 """
 
+from collections.abc import Iterable
 from functools import lru_cache
 
 from app.core.config import (
@@ -150,3 +151,31 @@ def is_asset_advice_allowed(symbol: str, asset_class: AssetClass, survey_score: 
     """
     validate_survey_score(survey_score)
     return asset_risk_level(symbol, asset_class) <= survey_score
+
+
+def mismatched_holdings(
+    held: Iterable[tuple[str, AssetClass]], survey_score: int
+) -> list[tuple[str, AssetClass, int]]:
+    """Elde olan ama anket puanının artık izin vermediği VARLIKLAR.
+
+    `mismatched_asset_classes`'ın varlık düzeyi karşılığı. İkisi de duruyor
+    çünkü sınıf sürümü şartname metnine bire bir karşılık geliyor; ama bir
+    portföyü denetlerken sınıf YETMEZ — yukarıdaki "Varlık düzeyi" notundaki
+    istisnalar (IOO 1, AKE 4, BHE 7) sınıflarından ayrılıyor. Somut örnek:
+    puanı 5 olan bir kullanıcının elindeki BHE (serbest fon, seviye 7) sınıf
+    sürümüne göre (STOCK=5) UYUMLU görünür, oysa değildir.
+
+    Dönen üçlü `(sembol, sınıf, varlığın uygunluk seviyesi)`: çağıran taraf
+    "uyumsuz" demekle kalmayıp gerekçeyi somut verebilsin diye seviye de
+    taşınıyor (modül başındaki KAPSAM notu: sessizce gizlemek yanlış olur).
+
+    Sıra girdinin sırasını korur — çağıran taraf kendi ölçütüne göre
+    sıralasın diye burada bilerek sıralanmıyor. Zorla satış YAPILMAZ; bu
+    fonksiyonun hiçbir yan etkisi yoktur, yalnızca bildirilecek listeyi
+    hesaplar."""
+    validate_survey_score(survey_score)
+    return [
+        (symbol, asset_class, seviye)
+        for symbol, asset_class in held
+        if (seviye := asset_risk_level(symbol, asset_class)) > survey_score
+    ]

@@ -240,6 +240,26 @@ class RiskMetrics(BaseModel):
     price_points_used: int
 
 
+class MismatchedHolding(BaseModel):
+    """Kullanıcının elinde olan ama anket puanının izin vermediği bir varlık.
+
+    Bu bir RİSK ÖLÇÜMÜ DEĞİLDİR — volatiliteyle hiçbir ilgisi yok. Kuralın
+    sahibi `advice_eligibility` (girdisi yalnızca anket puanı + varlığın
+    uygunluk seviyesi). Risk değerlendirmesinin İÇİNDE taşınmasının tek
+    sebebi, o serviste portföyün ve anket puanının zaten yüklü olması: aynı
+    bilgi için ikinci bir tool çağrısı ya da sorgu gerekmesin.
+
+    `advice_risk_level` VARLIK düzeyidir ve sınıf varsayılanından ayrılabilir
+    (bkz. advice_eligibility "Varlık düzeyi"): BHE serbest fonu STOCK
+    sınıfındadır ama kendi seviyesi 7'dir."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    asset_class: AssetClass
+    advice_risk_level: int
+
+
 class RiskAssessment(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -269,8 +289,25 @@ class RiskAssessment(BaseModel):
     # RISK_TARGET_VOLATILITY_BAND) üzerinde mi? Hesaplanamıyorsa None.
     is_within_profile: bool | None
 
+    # Elde olan ama anket puanının izin vermediği varlıklar (VARLIK düzeyi,
+    # bkz. MismatchedHolding). `is_within_profile`'dan BAĞIMSIZDIR: bandın
+    # içindeki bir portföyde de dolu olabilir — biri oynaklık ölçer, bu
+    # ürün uygunluğuna bakar (bkz. docs/notes/analiste-kapsam-sapmalari.md
+    # madde 7, "iki ayrı 1-7 ölçeği").
+    #
+    # Anket hiç doldurulmamışsa (`risk_survey_score is None`) ya da
+    # `profile_override` ile hesaplanmışsa BOŞ döner: puan yoksa uyumsuzluk
+    # da hesaplanamaz, uydurulmaz.
+    mismatched_holdings: list[MismatchedHolding]
+
     metrics: RiskMetrics
-    # Yalnızca is_within_profile=False iken dolu; aksi halde None.
+    # Volatilite hesaplanabildiği her portföyde dolu; hesaplanamıyorsa
+    # (boş portföy, yetersiz fiyat geçmişi) None.
+    #
+    # 2026-08-31'e kadar yalnızca is_within_profile=False iken doluydu.
+    # Bandın içindeki portföylerde yoğunlaşma hiç görünmüyordu; koşul
+    # kaldırıldı. DOLU OLMASI "risk var" demek değildir — her nedenin kendi
+    # `triggered` bayrağı var ve eşikler değişmedi.
     causes: RiskCauseDiagnosis | None
     # Yalnızca `include_scenarios=True` istenmişse VE is_within_profile=False
     # VE en az bir uygun senaryo bulunmuşsa dolu; aksi halde boş liste.

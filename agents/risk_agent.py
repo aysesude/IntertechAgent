@@ -118,7 +118,37 @@ döner. Sonuç doluysa `_build_signal_context`'e `kullanilmayan_kapasite`
 alanı geçiriliyor; boşsa/None ise context'e hiç eklenmiyor — Yol A'yla aynı
 "üretilemiyorsa hiç bahsetme" ilkesi. Yol A'nın "azaltıcı" (ihlal) yönüyle bu
 yolun "artırıcı/bilgilendirici" yönü aynı sinyal kodu (`profil_sapmasi`)
-altında ama prompt'ta FARKLI TONDA ele alınıyor (bkz. risk_signals.md)."""
+altında ama prompt'ta FARKLI TONDA ele alınıyor (bkz. risk_signals.md).
+
+2026-08-31 eki (Yağız) — "risk seviyem nedir" sorusu artık portföyün
+tamamını anlatıyor. Değişenler:
+
+(1) `_assess_signals` HER risk sorusunda çalışıyor. Önceden `_wants_scenarios`
+    kapısının arkasındaydı; soruda "dengele/azalt/öneri/strateji/ne yapmalı"
+    köklerinden biri geçmiyorsa hiç çağrılmıyordu — yani "portföyümün risk
+    seviyesi nedir" gibi en sıradan soruda yoğunlaşma da haber yorumu da
+    üretilmiyordu. `_wants_scenarios` yalnızca tool'un `include_scenarios`
+    parametresi için kullanılmaya devam ediyor.
+
+(2) Sonucu artık `summary_text`'e giriyor (`_sinyal_blogu`). Önceden yalnızca
+    `response_data["risk_signal_assessment"]`'a yazılıyordu; o alanı repoda
+    hiçbir yer okumuyor ve `orchestrator.merge_responses` yalnızca
+    `summary_text`'i topluyor — üretilen değerlendirme fiilen atılıyordu.
+    Blokta bilinçli olarak yalnızca `risky_assets` gösteriliyor; gerekçe
+    `_sinyal_blogu` docstring'inde.
+
+(3) Profil uyumsuzluğu (elde olan ama anket puanının izin vermediği varlık)
+    artık DETERMİNİSTİK olarak ana yanıtta: `risk_service` bunu
+    `RiskAssessment.mismatched_holdings` alanında taşıyor (portföy ve puan
+    orada zaten yüklü), `_compact` prompt'a geçiriyor. LLM'in takdirine
+    bağlı DEĞİL — Sinyal 5'in tersine her zaman görünür.
+
+BİLİNEN YAN ETKİ: `get_risk_survey_event` tüketen bir tool ve artık her risk
+sorusunda çağrılıyor, dolayısıyla anket olayı daha erken tüketiliyor. Sinyal
+5 Yol A bulgusu artık metne girdiği için tüketim ile gösterim aynı turda
+oluyor; yine de LLM o bulguyu üretmezse olay görünmeden harcanır. Bu risk
+(3)'teki deterministik yol sayesinde kullanıcı açısından telafi ediliyor:
+uyumsuzluk bilgisi olaydan bağımsız olarak her zaman veriliyor."""
 
 import json
 import logging
@@ -368,6 +398,27 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
     if tetiklenen:
         compact["riskin_nedenleri"] = tetiklenen
 
+    # 2026-08-31 eki: profil uyumsuzluğu. Bu bir RİSK ÖLÇÜMÜ DEĞİL — anket
+    # puanının izin verdiği seviyenin üstünde bir varlığın elde tutulması
+    # (bkz. app/services/advice_eligibility.py, risk_service'te hesaplanıyor
+    # çünkü portföy ve puan orada zaten yüklü). Volatilite bandıyla ilgisi
+    # yok: bandın İÇİNDEKİ bir portföyde de dolu olabilir.
+    #
+    # Anket puanı yalnızca uyumsuzluk VARSA gönderiliyor: prompt puanı tek
+    # başına anlatacak bir yer değil, yalnızca "seviye 7, puanınız 5" gibi
+    # bir karşılaştırma kurarken gerekiyor.
+    uyumsuz = data.get("mismatched_holdings") or []
+    if uyumsuz:
+        compact["profil_uyumsuz_varliklar"] = [
+            {
+                "sembol": m.get("symbol"),
+                "sinif": m.get("asset_class"),
+                "varlik_uygunluk_seviyesi": m.get("advice_risk_level"),
+            }
+            for m in uyumsuz
+        ]
+        compact["anket_puani"] = data.get("risk_survey_score")
+
     scenarios = data.get("scenarios") or []
     if scenarios:
         compact["yeniden_dengeleme_secenekleri"] = [
@@ -381,6 +432,63 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
         ]
 
     return compact
+
+
+_SINYAL_BASLIGI = "\n\nVarlık bazlı gözlemler\n"
+
+# Sinyal kodlarının kullanıcıya gösterilecek karşılıkları. Kod adları
+# (`konsantrasyon`, `sektor_yogunlasmasi`) iç alan adlarıdır; risk_agent.md
+# kural 0 bunların kullanıcıya yazılmasını yasaklıyor.
+_SINYAL_ADLARI = {
+    "konsantrasyon": "yoğunlaşma",
+    "sektor_yogunlasmasi": "sektör yoğunlaşması",
+    "olumsuz_haber": "olumsuz haber",
+    "sektor_gelismesi": "sektör gelişmesi",
+    "profil_sapmasi": "profil sapması",
+}
+
+
+def _sinyal_blogu(assessment: RiskSignalAssessment) -> str:
+    """Sinyal değerlendirmesinin kullanıcıya GÖSTERİLECEK kısmını metne çevirir.
+
+    NEDEN SADECE `risky_assets`. Şemadaki diğer alanlar bilinçli olarak
+    DIŞARIDA bırakılıyor:
+
+    - `risk_level`: LLM'in kendi kategorik yargısı ("orta_riskli"), ana
+      yanıttaki DETERMİNİSTİK risk seviyesinden (volatiliteden gelen "Çok
+      Düşük") bağımsız üretiliyor. İkisini aynı mesajda göstermek kullanıcıya
+      birbiriyle çelişen iki risk seviyesi sunmak olurdu — `_compact`'teki
+      `profil_bandinda_mi`/`profil_konumu` çelişkisinin aynısı.
+    - `rebalancing` ve `investment_strategy`: Ürün Sahibi kararıyla (2026-08,
+      bkz. `Settings.risk_scenarios_enabled` yanındaki not) "ne yapılmalı"
+      önerisi ürün kapsamı dışında; risk artık yalnızca tespit/bildirim.
+    - `profile_fit`: profil uyumu artık deterministik olarak ana yanıtta
+      anlatılıyor (bkz. `_compact` → `profil_uyumsuz_varliklar`); LLM'in
+      ikinci bir yorumunu eklemek aynı şeyi iki kez, muhtemelen farklı
+      söylemek olurdu.
+
+    Metin KOD TARAFINDA birleştiriliyor, üçüncü bir LLM çağrısı yapılmıyor;
+    bulguların kendi `explanation` metinleri zaten modelden geliyor.
+
+    Bulgu yoksa boş dize döner ve çağıran taraf hiçbir şey eklemez —
+    "kontrol edildi, bir şey bulunamadı" demek de bir iddiadır ve boş bir
+    başlık kullanıcıya bunu ima ederdi."""
+    if not assessment.risky_assets:
+        return ""
+
+    satirlar = []
+    for bulgu in assessment.risky_assets:
+        adlar = ", ".join(_SINYAL_ADLARI.get(s.value, s.value) for s in bulgu.signals)
+        agirlik = f"{bulgu.weight_percent:.2f}".replace(".", ",")
+        satir = f"- {bulgu.asset_symbol} (%{agirlik}, {adlar}): {bulgu.explanation}"
+        if bulgu.sources:
+            satir += f" Kaynaklar: {', '.join(bulgu.sources)}"
+        satirlar.append(satir)
+
+    blok = _SINYAL_BASLIGI + "\n".join(satirlar)
+    if assessment.confidence == "dusuk":
+        blok += "\n\nBu gözlemler sınırlı sayıda kaynağa dayanıyor; " "kapsamı dar olabilir."
+    return blok
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -536,20 +644,36 @@ class RiskAgent(BaseAgent):
         data = tool_result["data"]
         summary_text = await self._summarize(request.query, data, on_token=on_token)
 
+        # 2026-08-31 eki: sinyal değerlendirmesi ARTIK HER RİSK SORUSUNDA
+        # üretiliyor ve METNE giriyor. Öncesinde iki ayrı sebeple görünmezdi:
+        #
+        # (1) yalnızca `wants_scenarios` (soruda "dengele/azalt/ne yapmalı"
+        #     geçiyorsa) çağrılıyordu — "portföyümün risk seviyesi nedir"
+        #     gibi en sıradan soruda hiç çalışmıyordu;
+        # (2) çalıştığında bile sonucu yalnızca `response_data`'ya
+        #     yazılıyordu. `risk_signal_assessment` alanını repoda HİÇBİR
+        #     yer okumuyor ve `orchestrator.merge_responses` yalnızca
+        #     `summary_text`'i alıyor — yani çıktı üretilip atılıyordu.
+        #
+        # Bedeli bilinerek kabul edildi (Yağız, 2026-08-31): tur başına
+        # ek get_holdings + get_portfolio_news + get_macro_news çağrısı ve
+        # bir ek LLM turu. `wants_scenarios` yalnızca SENARYO istemek için
+        # kullanılmaya devam ediyor (tool'un include_scenarios parametresi).
+        #
+        # Ana yanıtı BOZMAZ: üretilemezse (bkz. _assess_signals) ya da hiç
+        # bulgu yoksa metne hiçbir şey eklenmez.
         response_data = data
-        if wants_scenarios:
-            # Sinyal tabanlı değerlendirme (bkz. modül docstring'i) yalnızca
-            # kullanıcı "ne yapmalıyım" tarzı bir soru sorduğunda üretilir —
-            # her sohbet turunda ek RAG (get_portfolio_news) + LLM çağrısı
-            # yapmamak için aynı `_wants_scenarios` tespiti yeniden kullanılır.
-            # Bu YARDIMCI bir veridir: üretilemezse (bkz. _assess_signals)
-            # mevcut hacimli/volatilite tabanlı yanıt HİÇ ETKİLENMEZ.
-            signal_assessment = await self._assess_signals(request.user_id, data)
-            if signal_assessment is not None:
-                response_data = {
-                    **data,
-                    "risk_signal_assessment": signal_assessment.model_dump(mode="json"),
-                }
+        signal_assessment = await self._assess_signals(request.user_id, data)
+        if signal_assessment is not None:
+            response_data = {
+                **data,
+                "risk_signal_assessment": signal_assessment.model_dump(mode="json"),
+            }
+            sinyal_blok = _sinyal_blogu(signal_assessment)
+            if sinyal_blok:
+                summary_text += sinyal_blok
+                if on_token is not None:
+                    on_token(sinyal_blok)
 
         return AgentResponse(
             agent_name=self.agent_name, success=True, summary_text=summary_text, data=response_data
