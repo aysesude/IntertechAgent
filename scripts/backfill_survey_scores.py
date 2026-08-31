@@ -2,12 +2,18 @@
 
     make survey-scores
 
-NEDEN GEREKLİ. `risk_survey_score` sütunu migration ile `NULL` olarak eklendi;
-anket özelliğinden ÖNCE seed edilmiş bir veritabanındaki kullanıcıların hiçbiri
-puan taşımıyor. Arayüz puanı olmayan kullanıcıyı ilk girişte kapatılamaz anket
-ekranına alıyor (bkz. `frontend-v2/src/components/survey/SurveyGate.tsx`), yani
-o ortamdaki HER demo hesabı 18 soruluk anketle karşılaşıyor. Demo sırasında
-"giriş yap, panele düş" akışı orada takılıyor.
+ESKİ VERİ İÇİN TEK SEFERLİK ONARIM. Bugünkü `seed_ledger` puanı zaten atıyor;
+sorun yalnızca anket özelliğinden ÖNCE seed edilmiş ve o günden beri
+yenilenmemiş ortamlarda. `risk_survey_score` sütununu migration `NULL` olarak
+ekledi ve `backfill_credentials` yalnızca giriş alanlarını doldurduğu için o
+kullanıcılar puansız kaldı. Arayüz puanı olmayan kullanıcıyı ilk girişte
+kapatılamaz anket ekranına alıyor (bkz.
+`frontend-v2/src/components/survey/SurveyGate.tsx`), yani o ortamdaki HER demo
+hesabı 18 soruluk anketle karşılaşıyor ve "giriş yap, panele düş" akışı orada
+takılıyor.
+
+Taze seed edilmiş bir ortamda bu betik "yapılacak bir şey yok" der; beklenen
+davranış budur.
 
 NEDEN `make seed` DEĞİL. Seed puanları doğru üretir ama önce `wipe_user_data`
 ile kullanıcıları, portföyleri, işlem defterini ve SOHBET GEÇMİŞİNİ siler.
