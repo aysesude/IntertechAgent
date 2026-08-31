@@ -253,7 +253,7 @@ _ICERIK_KELIMELERI_RE = re.compile(
     r"\b(net kar|brut kar|faaliyet kari|favok|ciro|hasilat|nakit akis|"
     r"temettu|marj|segment|ortaklik yapisi|sermaye artir|yonetim kurulu|"
     r"kurumsal olay|bilanco|gelir tablosu|hedef fiyat|hedef kapanis|"
-    r"analist tavsiye)\w*"
+    r"analist tavsiye|analist tahmin)\w*"
 )
 
 
@@ -285,7 +285,13 @@ def fiyat_niyeti(query: str) -> dict | None:
 # piyasa fiyatı DEĞİL (bkz. _ICERIK_KELIMELERI_RE'deki "hedef fiyat" bloğu:
 # fiyat_niyeti() bunları kendi kapsamına almıyor, market_agent bu fonksiyonu
 # fiyat_niyeti'nden ÖNCE kontrol eder).
-_HEDEF_FIYAT_KALIPLARI = ("hedef fiyat", "hedef kapanis", "analist tavsiye", "analist hedef")
+_HEDEF_FIYAT_KALIPLARI = (
+    "hedef fiyat",
+    "hedef kapanis",
+    "analist tavsiye",
+    "analist hedef",
+    "analist tahmin",
+)
 
 
 def hedef_fiyat_niyeti(query: str) -> str | None:
