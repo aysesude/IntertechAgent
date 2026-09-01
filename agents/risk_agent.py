@@ -322,6 +322,20 @@ def _profile_position(
     return "bandin_altinda" if volatility_percent < band_lower_percent else "band_icinde"
 
 
+def _sinif_varlik_sayilari(asset_metrics: list[dict[str, Any]]) -> dict[str, int]:
+    """Varlık sınıfı -> o sınıftaki pozisyon sayısı.
+
+    "Portföyümde çok fazla hisse mi var?" sorusu ancak SAYIYLA cevaplanabilir;
+    sınıf ağırlığı (%34,92) "kaç tane" sorusunu cevaplamıyor.
+    """
+    sayilar: dict[str, int] = {}
+    for kayit in asset_metrics:
+        sinif = kayit.get("asset_class")
+        if sinif:
+            sayilar[str(sinif)] = sayilar.get(str(sinif), 0) + 1
+    return sayilar
+
+
 def _compact(data: dict[str, Any]) -> dict[str, Any]:
     """Değerlendirmenin LLM'e gidecek küçültülmüş hâlini üretir.
 
@@ -360,6 +374,16 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
         "en_buyuk_sinif": metrics.get("max_class"),
         "en_buyuk_sinif_agirlik_yuzde": metrics.get("max_class_weight_percent"),
         "varlik_sayisi": metrics.get("holdings_count"),
+        # SINIF BAŞINA VARLIK SAYISI. Ölçüldü (1 Eylül 2026): aynı oturumda
+        # Portföy Ajanı "3 hisse senedi bulunuyor" derken Risk Ajanı dört soru
+        # sonra "portföyünüzde kaç farklı hisse bulunduğu belirtilmediği için
+        # kesin olarak söylenemez" diyordu. Bilgi elimizdeydi —
+        # `asset_metrics` her varlık için bir kayıt taşıyor — ama `_compact`
+        # yalnızca TOPLAM sayıyı geçiriyordu.
+        #
+        # Sayım KODDA yapılıyor: modelin listeyi sayması hesaplama sayılır ve
+        # bu ajanda yasak (bkz. modül docstring'i).
+        "sinif_varlik_sayilari": _sinif_varlik_sayilari(metrics.get("asset_metrics") or []),
         "uyarilar": data.get("warnings") or [],
     }
 

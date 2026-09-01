@@ -491,10 +491,16 @@ def _render(data: dict[str, Any]) -> str:
         # kâr/zarar artık ona göre hesaplanıyor ve `değer - yatırılan = kâr`
         # özdeşliği tutuyor. Maliyet gösterilseydi üç rakam birbirini tutmaz,
         # aradaki fark (serbest nakit) açıklamasız kalırdı.
-        lines = [
-            f"Portföy özeti ({summary.get('as_of', '—')})",
-            f"Toplam değer: {_tr_amount(summary.get('total_value'))} TL",
-        ]
+        # TARİH SAYININ YANINDA. Başlıkta da yazıyor ama merge adımı başlığı
+        # düşürüyor: "Portföyünüzün toplam değeri 1.583.703,56 TL." cümlesinde
+        # hiçbir tarih kalmıyordu (ölçüldü, 1 Eylül 2026, soru [1]) — oysa
+        # fiyat yollarında tarih her satırda yazılı. Tarihsiz bir değer,
+        # olmayan bir tazelik iddiasıdır.
+        as_of = summary.get("as_of")
+        toplam = f"Toplam değer: {_tr_amount(summary.get('total_value'))} TL"
+        if as_of:
+            toplam += f" ({_tr_date(as_of)} fiyatlarıyla)"
+        lines = [f"Portföy özeti ({as_of or '—'})", toplam]
         # Her varlık kendi son fiyatıyla değerlenir; tarihler ayrışıyorsa özet
         # `as_of` ile olduğundan taze görünür. Fark varsa kullanıcıya söylenir
         # (CLAUDE.md §4 uydurmama).

@@ -4,6 +4,7 @@ fonksiyonlar — render katmanı ve filtresiz-yedek-arama güvenlik ağı.
 
 from agents.market_agent import (
     MarketAgent,
+    _belge_bulunamadi_metni,
     _kaynak_kullanilmadi_mi,
     _render_hedef_fiyat,
     _render_temel_oranlar,
@@ -279,3 +280,26 @@ async def test_uygunluk_yaniti_anket_yoksa_PUAN_UYDURMAZ():
     yanit = await Sahte(mcp_server_url="x")._uygunluk_yaniti("BHE", "u")
 
     assert "anketiniz henüz doldurulmadığı" in yanit.summary_text
+
+
+def test_belge_bulunamadi_metni_NEYIN_bulunamadigini_soyler():
+    """Eski metin "USDTRY için kayıt bulunamadı." idi ve iki sorunu vardı.
+
+    (1) Neyin bulunamadığını söylemiyordu: "kayıt yok" cümlesi "bu varlığa
+    dair hiçbir verimiz yok" gibi okunuyordu. Oysa bulunamayan yalnızca ARŞİV
+    BELGESİ; fiyat `price_history`'de duruyor. Ölçüldü (1 Eylül 2026, [54]):
+    tek paragrafta hem "USD/TRY 45,93'ten 48,26'ya çıkmış" hem "USDTRY için
+    kayıt bulunamadığı belirtiliyor" yazıyordu.
+    (2) Ham sembol sızdırıyordu; kullanıcı "dolar" yazmıştı.
+    """
+    metin = _belge_bulunamadi_metni("USDTRY")
+
+    assert "Belgeler" in metin
+    assert "Amerikan Doları" in metin
+    assert "USDTRY" not in metin
+
+
+def test_belge_bulunamadi_metni_taninmayan_sembolde_COKMEZ():
+    """Evrende olmayan bir sembolde ad yerine sembolün kendisi kullanılır —
+    cevabı büsbütün kaybetmektense sembol göstermek iyidir."""
+    assert "BILINMEYEN" in _belge_bulunamadi_metni("BILINMEYEN")

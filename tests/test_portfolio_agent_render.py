@@ -318,3 +318,13 @@ def test_varlik_isleminde_adet_KORUNUR():
     )
 
     assert "866,00 adet" in metin
+
+
+def test_toplam_degerin_YANINDA_fiyat_tarihi_yazar():
+    """Tarih başlıkta da vardı ama merge adımı başlığı düşürüyordu:
+    "Portföyünüzün toplam değeri 1.583.703,56 TL." cümlesinde hiçbir tarih
+    kalmıyordu (ölçüldü, 1 Eylül 2026, [1]). Fiyat yollarında tarih her
+    satırda yazılı; tarihsiz bir değer olmayan bir tazelik iddiasıdır."""
+    metin = _render({"summary": {"as_of": "2026-08-31", "total_value": 1583703.56}})
+
+    assert "Toplam değer: 1.583.703,56 TL (31.08.2026 fiyatlarıyla)" in metin
