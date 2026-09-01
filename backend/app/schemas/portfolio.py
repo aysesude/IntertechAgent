@@ -79,6 +79,10 @@ class PortfolioSummary(BaseModel):
     total_cost_basis: Money
     net_invested: Money
     total_gain_loss: GainLoss
+    # Serbest nakit, TUTAR olarak. `allocation` bunu zaten bir yüzde dilimi
+    # olarak taşıyor ama "ne kadar param nakitte duruyor" sorusu tutar ister;
+    # yüzdeyi toplam değerle çarpmak ajanın yapmasi yasak olan bir hesaptır.
+    cash_try: Money
     allocation: list[AllocationItem]
     holdings_count: int
 
@@ -127,11 +131,25 @@ class PerformerRef(BaseModel):
 
 
 class HoldingsValuation(BaseModel):
+    """Varlık satırları + serbest nakit.
+
+    NAKİT SATIR DEĞİL, ALAN. Nakit satın alınmış bir varlık değil, defter
+    bakiyesidir: sembolü, maliyeti, birim fiyatı yoktur. Sahte bir satır
+    üretmek tabloyu ve K/Z sıralamasını bozardı. Ama `weight_percent`in
+    paydası nakit DAHİL toplam değer olduğu için satırlar 100'e değil
+    (100 − nakit%) değerine toplanır; nakit ayrı bir alan olarak verilmezse
+    aradaki fark açıklanamaz kalır ve ajan "nakit bilgisi yok" der (ölçüldü,
+    1 Eylül 2026 sohbet turu).
+    """
+
     model_config = ConfigDict(frozen=True)
 
     user_id: UUID
     as_of: date
     holdings: list[HoldingRow]
+    # Serbest nakit (TRY) ve toplam portföy değeri içindeki payı.
+    cash_try: Money
+    cash_weight_percent: MoneyOpt = None
     # Fiyatı eksik varlıklar sıralamaya girmez.
     best_performer: PerformerRef | None = None
     worst_performer: PerformerRef | None = None

@@ -71,6 +71,20 @@ _TAKMA_ADLAR: dict[str, str] = {
     "gumus": "XAGTRY",
     "gram platin": "XPTTRY",
     "platin": "XPTTRY",
+    # Endeksler. Fiyatları `price_history`'de duruyor ve Piyasa şeridinde
+    # gösteriliyor ama satın alınamıyorlar (`tradable=False`), dolayısıyla
+    # `_sembol_kumesi`nin varsayılan süzgecine takılıyorlardı. Ölçüldü
+    # (1 Eylül 2026): "BIST bugün nasıl?" ve "S&P 500 ne durumda?" belge
+    # aramasına düşüp "doğrulanmış bilgi bulunamadı" cevabı alıyordu —
+    # aynı oturumda Analist Ajanı XU100 serisini sorunsuz kullanırken.
+    "bist": "XU100",
+    "bist 100": "XU100",
+    "bist100": "XU100",
+    "borsa istanbul": "XU100",
+    "s&p": "SPX",
+    "s&p 500": "SPX",
+    "sp 500": "SPX",
+    "sp500": "SPX",
     # ABD hisseleri — şirket adıyla.
     "apple": "AAPL",
     "microsoft": "MSFT",
@@ -118,6 +132,14 @@ _FIYAT_KALIPLARI = (
     "kuru",
     "kur",
     "deger",
+    # Endekslerin doğal soru biçimi. "kac tl" endekse uymuyor (puan cinsinden
+    # kote edilir) ve kullanıcı "BIST bugün nasıl?" diye soruyor. İçerik
+    # soruları (bilanço, ciro, temettü...) `_ICERIK_KELIMELERI_RE` ile zaten
+    # bu yoldan önce eleniyor, dolayısıyla "X'in 2. çeyreği nasıl" buraya
+    # düşmüyor.
+    "ne durumda",
+    "kac puan",
+    "bugun nasil",
 )
 
 # Geçmişe/seyre dair soru: aynı varlık için farklı tool gerekir.
@@ -167,6 +189,18 @@ _BELIRSIZ_SEMBOLLER = {"CEYREK", "YARIM"}
 _BUYUK_HARF_SEMBOLLER = {"V", "META"}
 
 
+# Satın alınamayan ama FİYATI SORULABİLEN semboller. `tradable=False` bir
+# alım-satım kısıtıdır, fiyat sorgusu kısıtı değil: endeksin kaç puan olduğu
+# meşru bir sorudur ve verisi elimizde.
+#
+# BRENT bilerek DIŞARIDA: `agents/scope.yaml` petrolü `emtia_diger` altında
+# kapsam dışı sayıyor, oysa Piyasa şeridinde gösteriliyor. Bu bir tutarsızlık
+# ve çözümü bir ürün kararı — kapsam içiyse buraya eklenir, değilse şeritten
+# çıkarılır. Karar verilmeden tek taraflı açmak, kapsam kuralını koddan
+# sessizce ezmek olurdu.
+_FIYATLANAN_ALINAMAYAN = {"XU100", "SPX"}
+
+
 @lru_cache(maxsize=1)
 def _sembol_kumesi() -> set[str]:
     """Varlık evrenindeki tüm semboller (THYAO, USDTRY, ...).
@@ -182,7 +216,8 @@ def _sembol_kumesi() -> set[str]:
     return {
         a.symbol
         for a in ASSET_UNIVERSE
-        if (a.tradable or a.symbol == "XU100") and a.symbol not in _BELIRSIZ_SEMBOLLER
+        if (a.tradable or a.symbol in _FIYATLANAN_ALINAMAYAN)
+        and a.symbol not in _BELIRSIZ_SEMBOLLER
     }
 
 
@@ -292,6 +327,49 @@ _HEDEF_FIYAT_KALIPLARI = (
     "analist hedef",
     "analist tahmin",
 )
+
+
+# "Aselsan'ın F/K oranı kaç?", "Akbank'ın PD/DD'si nedir?" — bir şirketin
+# DEĞERLEME ÇARPANLARI. Hedef fiyat gibi bu da RAG dokümanlarında değil,
+# `get_fundamentals` tool'unda (yfinance) yaşayan ayrı bir veri sınıfı.
+#
+# Ölçüldü (1 Eylül 2026 sohbet turu): doğrudan sorulduğunda soru Piyasa
+# Ajanı'na düşüyor ve o ajanın böyle bir tool'u olmadığı için *"elimdeki
+# belgelerde yer almıyor"* deniyordu; iki soru sonra aynı oturumda Analist
+# Ajanı aynı şirketin F/K'sını veriyordu. Aynı soruya iki farklı cevap, tek
+# bir hatadan daha çok güven kaybettirir.
+_TEMEL_ORAN_KALIPLARI = (
+    "f/k",
+    "fk orani",
+    "fiyat kazanc",
+    "pd/dd",
+    "pddd",
+    "pd dd",
+    "piyasa degeri defter",
+    "favok marj",
+    "kar marji",
+    "temettu verimi",
+    "temel analiz",
+    "degerleme carpan",
+    "carpanlari",
+)
+
+
+def temel_oran_niyeti(query: str) -> str | None:
+    """Sorgu bir şirketin değerleme çarpanlarını soruyorsa o şirketin
+    ticker'ını döndürür, değilse None.
+
+    `hedef_fiyat_niyeti` ile aynı kalıp: kalıp geçse bile şirket tespit
+    edilemezse None döner ("F/K oranı nasıl hesaplanır" bir KAVRAM sorusudur,
+    Web Araştırma Ajanı'na aittir) — uydurma şirket varsayılmaz.
+    """
+    normalized = _normalize(query)
+    if not any(k in normalized for k in _TEMEL_ORAN_KALIPLARI):
+        return None
+
+    from agents.market_query import sirket_tespit_et
+
+    return sirket_tespit_et(query)
 
 
 def hedef_fiyat_niyeti(query: str) -> str | None:

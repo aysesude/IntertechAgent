@@ -164,6 +164,7 @@ from agents.base import AgentRequest, AgentResponse, BaseAgent
 from app.core.config import (
     RISK_MAX_CATEGORY_WEIGHT,
     RISK_TARGET_VOLATILITY_BAND,
+    AssetClass,
     RiskProfile,
 )
 from app.core.llm_client import get_llm_client
@@ -479,6 +480,9 @@ _SINYAL_ADLARI = {
 }
 
 
+_MAX_SINYAL_BULGUSU = 3
+
+
 def _sinyal_blogu(assessment: RiskSignalAssessment) -> str:
     """Sinyal değerlendirmesinin kullanıcıya GÖSTERİLECEK kısmını metne çevirir.
 
@@ -507,8 +511,13 @@ def _sinyal_blogu(assessment: RiskSignalAssessment) -> str:
     if not assessment.risky_assets:
         return ""
 
+    # EN FAZLA ÜÇ BULGU. Blok her risk yanıtının sonuna ekleniyor; dördüncü
+    # ve sonraki bulgular ölçülen turda (1 Eylül 2026) hep aynı ağırlık
+    # gözlemini farklı kelimelerle tekrarlıyordu ve cevabı bastırıyordu.
+    # Sıra LLM'in verdiği sırayla korunuyor — yeniden sıralamak bir yargı
+    # olurdu ve model bulguları zaten önem sırasına göre üretiyor.
     satirlar = []
-    for bulgu in assessment.risky_assets:
+    for bulgu in assessment.risky_assets[:_MAX_SINYAL_BULGUSU]:
         adlar = ", ".join(_SINYAL_ADLARI.get(s.value, s.value) for s in bulgu.signals)
         # 2026-08-31 düzeltmesi: ağırlık YALNIZCA anlamlıysa yazılır.
         #
@@ -572,7 +581,21 @@ def _kullanilmayan_kapasite(
         for h in holdings_data.get("holdings", [])
         if not h.get("price_missing")
     }
-    return sorted(ac.value for ac in izinli if ac.value not in elde_tutulan)
+    # NAKİT BU KARŞILAŞTIRMAYA GİRMEZ, iki ayrı sebeple.
+    #
+    # 1. Nakit bir `holdings` satırı değil, defter bakiyesidir; `elde_tutulan`
+    #    kümesinde hiçbir zaman görünmez. Dolayısıyla süzgeç olmadan CASH
+    #    HER kullanıcıda, HER turda "kullanılmayan kapasite" sayılıyordu —
+    #    nakdi olanlarda da. Ölçüldü (1 Eylül 2026): 175.866 TL serbest nakdi
+    #    olan demo personasına 14 ayrı yanıtta "nakit sınıfını içermediği
+    #    için profil sapması" dendi.
+    # 2. Anlamı da ters. Bu sinyal "profilinin izin verdiğinden daha temkinli
+    #    duruyorsun" demek için var; nakit tutmamak temkinli DEĞİL, tam tersi
+    #    (tamamen yatırılmış) bir duruştur. Modeller bunu fark edip prompt'un
+    #    dayattığı "daha temkinli" ifadesiyle çelişen cümleler kuruyordu.
+    return sorted(
+        ac.value for ac in izinli if ac is not AssetClass.CASH and ac.value not in elde_tutulan
+    )
 
 
 def _build_signal_context(

@@ -140,6 +140,7 @@ ortamda değerinin `true` olduğu doğrulanmalı.
   "total_cost_basis": 1682346.32,
   "net_invested": 1870000.00,
   "total_gain_loss": { "amount": 811069.66, "percent": 43.37 },
+  "cash_try": 398326.94,
   "allocation": [
     { "asset_class": "stock", "value": 1194764.65, "percent": 44.56 },
     { "asset_class": "precious_metal", "value": 452028.34, "percent": 16.86 },
@@ -234,6 +235,8 @@ Varlık tablosu: TRY değer, ağırlık, ortalama maliyet, gerçekleşmiş/gerç
       "realized_pnl_try": 0.0, "price_missing": false
     }
   ],
+  "cash_try": 398326.94,
+  "cash_weight_percent": 14.87,
   "best_performer": { "symbol": "CUMHUR", "name": "Cumhuriyet Altını", "unrealized_pnl_percent": 201.46 },
   "worst_performer": { "symbol": "SASA", "name": "Sasa Polyester", "unrealized_pnl_percent": -82.67 },
   "excluded_symbols": []
@@ -247,6 +250,14 @@ Varlık tablosu: TRY değer, ağırlık, ortalama maliyet, gerçekleşmiş/gerç
   `get_portfolio_summary.total_value` ile aynı payda, böylece pasta grafiğindeki
   sınıf ağırlıklarıyla tutarlı. Sonuç: satırlar `100`'e değil, `100 − nakit%`
   değerine toplanır.
+- **Nakit satır değil, alandır** (`cash_try` + `cash_weight_percent`). Satın
+  alınmış bir varlık olmadığı için sembolü, birim fiyatı ve maliyeti yok; sahte
+  bir satır tabloyu ve K/Z sıralamasını bozardı. Ama alan olarak verilmezse
+  yukarıdaki ağırlık farkı açıklanamaz kalıyor: ölçüldü (1 Eylül 2026),
+  "Ne kadar param nakitte duruyor?" sorusu *"verilerde yer almıyor"* cevabını
+  alıyordu. `holdings[].weight_percent` toplamı + `cash_weight_percent` = 100.
+- Nakdi olmayan portföyde `cash_try` **`0`** döner, `null` değil — `null`
+  "bilinmiyor" demek olurdu.
 - `best_performer` / `worst_performer` **kodda** seçilir. Dil modelinin iki satırı
   karşılaştırıp "en çok kazandıran bu" demesi hesaplama sayılır ve yasaktır.
 

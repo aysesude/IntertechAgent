@@ -498,6 +498,12 @@ def _render(data: dict[str, Any]) -> str:
             f"Kâr/zarar: {_tr_amount(gain.get('amount'))} TL "
             f"({_tr_percent(gain.get('percent'), signed=True)})",
         ]
+        # Nakit TUTAR olarak da yazılır. `allocation` onu yalnızca yüzde
+        # dilimi olarak taşıyor; "ne kadar param nakitte duruyor" sorusu
+        # tutar istiyor ve yüzdeyi toplam değerle çarpmak modelin yapması
+        # yasak olan bir hesap. Ölçüldü (1 Eylül 2026): soru
+        # "verilerde yer almıyor" cevabını alıyordu.
+        lines.append(f"Serbest nakit: {_tr_amount(summary.get('cash_try'))} TL")
         allocation = summary.get("allocation") or []
         if allocation:
             parts = [
@@ -521,6 +527,16 @@ def _render(data: dict[str, Any]) -> str:
                 f"{_tr_amount(row.get('market_value_try'))} TL, "
                 f"ağırlık %{_tr_amount(row.get('weight_percent'))}, "
                 f"K/Z {_tr_percent(row.get('unrealized_pnl_percent'), signed=True)}"
+            )
+        # Satırların ağırlığı 100'e DEĞİL (100 − nakit%) değerine toplanır:
+        # payda nakit dahil toplam değer. Nakit yazılmazsa aradaki fark
+        # açıklanamaz kalıyor ve model eksik ağırlığı yorumlamaya çalışıyor.
+        nakit = holdings.get("cash_try")
+        if nakit is not None:
+            lines.append(
+                f"Serbest nakit (varlık değil, defter bakiyesi): "
+                f"{_tr_amount(nakit)} TL, "
+                f"ağırlık %{_tr_amount(holdings.get('cash_weight_percent'))}"
             )
         for label, key in (
             ("En çok kazandıran", "best_performer"),

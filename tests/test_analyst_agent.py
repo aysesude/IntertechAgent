@@ -162,3 +162,22 @@ async def test_LLM_DUSERSE_hata_yaniti_gecerlidir(monkeypatch):
     assert yanit.success is False
     assert yanit.agent_name == "analyst"
     assert yanit.error
+
+
+async def test_SIRKETIN_KENDI_fiyat_serisini_de_ceker(sahte_llm):
+    """Endeksin serisi çekiliyordu ama şirketinki hiç istenmiyordu.
+
+    Ölçüldü (1 Eylül 2026): beş analiz yanıtının beşi de aynı cümleyle
+    bitiyordu — "hisseye ait üç aylık fiyat serisi bulunmadığı için endekse
+    göre karşılaştırma yapılamıyor". Prompt kuralı 7 bağıl performans yorumu
+    istiyor; girdisi eksikti.
+    """
+    ajan = SahteAjan()
+    await ajan.execute(_istek("Aselsan endekse göre nasıl performans gösterdi?"))
+    seri_cagrilari = [args for ad, args in ajan.cagrilar if ad == "get_asset_price_history"]
+    istenen = {tuple(a["symbols"]) for a in seri_cagrilari}
+
+    assert ("ASELS",) in istenen, f"şirketin serisi istenmedi: {istenen}"
+    assert ("XU100",) in istenen, f"endeksin serisi istenmedi: {istenen}"
+    # İki seri AYNI pencerede olmalı, yoksa farklı dönemler kıyaslanır.
+    assert {a["window"] for a in seri_cagrilari} == {"3m"}

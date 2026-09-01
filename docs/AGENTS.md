@@ -70,11 +70,30 @@ Ajan iki ayrı soru tipine bakar ve **girişte dallanır**:
 | **Fiyat / kur** | `get_current_prices` | "dolar ne kadar", "gram altın kaç TL" |
 | **Fiyat seyri** | `get_asset_price_history` | "dolar son bir yılda ne yaptı" |
 | **Haber / bilanço / belge** | `search_market_news` (RAG) | "Aselsan haberleri", "Tüpraş 2. çeyrek bilançosu" |
+| **Hedef fiyat / tavsiye** | `get_target_prices` | "Aselsan hedef fiyatı kaç" |
+| **Değerleme çarpanı** | `get_fundamentals` | "Aselsan'ın F/K'sı kaç", "Akbank PD/DD" |
 
 Dallanma `agents/price_query.py` ile **kural tabanlı** yapılır, LLM
 kullanılmaz: soru tipi ("ne kadar", "kaç TL") ve varlık adı sonlu ve iyi
 tanımlı bir küme. İkinci bir LLM planlayıcısı hem yanıta gecikme ekler hem de
 sohbetin en sık sorulan sorusunu modelin gününe bağlardı.
+
+**Endeksler de fiyat yolundan geçer.** `tradable=False` bir ALIM kısıtıdır,
+fiyat sorgusu kısıtı değil: XU100 ve SPX fiyatlanıyor, Piyasa şeridinde
+gösteriliyor ve "BIST bugün nasıl?" meşru bir soru. Ölçüldü (1 Eylül 2026):
+bu sorular belge aramasına düşüp "doğrulanmış bilgi bulunamadı" alıyordu —
+aynı oturumda Analist Ajanı XU100 serisini sorunsuz kullanırken.
+`price_query._FIYATLANAN_ALINAMAYAN` bu istisnayı taşıyor. **BRENT bilerek
+dışarıda:** `scope.yaml` petrolü kapsam dışı sayıyor ama şeritte
+gösteriliyor — tutarsızlık bir ürün kararı bekliyor.
+
+**Değerleme çarpanları da RAG'e gitmez** (`temel_oran_niyeti` →
+`get_fundamentals`). Hedef fiyatla aynı gerekçe: F/K, PD/DD ve marjlar
+dokümanlarda değil, yfinance'te yaşıyor. Ölçüldü: doğrudan sorulduğunda bu
+ajan "elimdeki belgelerde yer almıyor" derken, iki soru sonra Analist Ajanı
+aynı şirketin F/K'sını veriyordu — aynı soruya iki farklı cevap, tek bir
+hatadan daha çok güven kaybettirir. Sayılar LLM'den geçmeden basılır ve
+**kaynak + çekilme zamanı her blokta yazılır** (AK 5.3).
 
 **Neden bu dal var:** kur ve fiyat dokümanlarda değil `price_history`
 tablosunda yaşıyor. Dal olmadan "dolar ne kadar?" belge aramasına düşüyor ve
@@ -198,6 +217,18 @@ parametresi için kullanılmaya devam ediyor. Bedeli bilinerek kabul edildi
 (Yağız, 2026-08-31): tur başına ek `get_holdings` + `get_portfolio_news` +
 `get_macro_news` çağrısı ve bir ek LLM turu.
 
+**Blok en fazla ÜÇ bulgu basar** ve her bulgunun açıklaması tek cümledir.
+Ölçüldü (1 Eylül 2026): blok 14 yanıtta aynı üç varlık için 2-3 cümlelik
+açıklamalarla tekrarlanıp cevabın kendisini bastırıyordu.
+
+**Nakit bu sinyale hiç girmez.** `_kullanilmayan_kapasite` "izinli sınıflar
+eksi elde tutulan sınıflar" hesabı yapıyor; nakit bir `holdings` satırı değil
+defter bakiyesi olduğu için "elde tutulan" kümesinde hiçbir zaman görünmüyor
+ve CASH her kullanıcıda "kullanılmayan kapasite" çıkıyordu. 175.866 TL
+serbest nakdi olan demo personasına 14 yanıtta "nakit sınıfını içermediği
+için profil sapması" dendi. Anlamı da ters: nakit tutmamak "daha temkinli"
+değil, tam tersi bir duruştur.
+
 **Blokta yalnızca `risky_assets` gösteriliyor.** Şemanın diğer alanları
 bilinçli dışarıda: `risk_level` LLM'in kendi kategorik yargısı ve ana
 yanıttaki deterministik seviyeyle çelişen ikinci bir risk seviyesi olurdu;
@@ -260,10 +291,12 @@ söylüyor" olması — `detect_intent`'te `ANALYSIS` etiketi bunu ayırır ve
 `MARKET` ile birlikte seçilebilir.
 
 Akış: sorudaki şirketler `market_query.sirketleri_tespit_et` ile bulunur
-(**en fazla 3** — hız/token sınırı), her biri için dört tool eşzamanlı çağrılır
+(**en fazla 3** — hız/token sınırı), her biri için beş tool eşzamanlı çağrılır
 (`get_target_prices`, `get_current_prices`, `get_fundamentals`,
-`search_market_news`), ayrıca kullanıcının risk profili
-(`get_user_risk_survey`) ve endeks kıyası için XU100'ün 3 aylık seyri alınır.
+`search_market_news`, `get_asset_price_history`), ayrıca kullanıcının risk
+profili (`get_user_risk_survey`) ve endeks kıyası için XU100'ün 3 aylık seyri
+alınır. Şirketin kendi serisi ile endeksin serisi **aynı pencerede** (3 ay)
+istenir; farklı pencere iki ayrı dönemi kıyaslamak olurdu.
 Toplanan veri `prompts/analyst_agent.md`'ye gömülür.
 
 ### Düğüm neden `try/except` ile sarılı

@@ -8,6 +8,7 @@ Bu tool internete çıkmaz; `price_history` tablosunu okur. Fiyatların tazeliğ
 günlük toplama işinin sorumluluğudur (`app/services/price_ingest.py`).
 """
 
+from datetime import datetime, timezone
 from typing import Any
 
 from fastmcp import FastMCP
@@ -181,6 +182,12 @@ def register(mcp: FastMCP) -> list[str]:
             "data": {
                 "records": results,
                 "symbols_without_data": unknown,
+                # KAYNAK + ZAMAN DAMGASI (AK 5.3). Diğer fiyat yollarında bu
+                # bilgi her satırda yazılıyor; burada hiç yoktu ve çarpanlar
+                # tarihsiz sunuluyordu. Değerler ANLIK çekiliyor (önbellek
+                # yok), dolayısıyla damga çağrı anıdır.
+                "source": "yfinance",
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
             },
         }
 

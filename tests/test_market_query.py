@@ -309,3 +309,24 @@ class TestPortfoyReferansi:
         from agents.market_query import portfoy_referansi_var_mi
 
         assert portfoy_referansi_var_mi(query) is False
+
+
+def test_BIRIM_ifadesi_sirket_sanilmaz():
+    """`company_mappings.json` para birimlerini de takma ad taşıyor
+    ("dolar" -> USDTRY) — haber filtresi için doğru, ama "kaç dolar" sorunun
+    BİRİMİdir, konusu değil.
+
+    Ölçüldü (1 Eylül 2026): "Brent petrol kaç dolar?" sorgusu `sirket=USDTRY`
+    filtresiyle RAG'e gidiyor ve kullanıcıya *"USDTRY için kayıt bulunamadı"*
+    diyordu — hem yanlış konu, hem de kullanıcıya gösterilmek üzere
+    yazılmamış bir iç mesaj.
+    """
+    assert sirket_tespit_et("Brent petrol kaç dolar?") is None
+    # Gerçek konu varsa birim onu EZMEZ: iki farklı "şirket" (AAPL + USDTRY)
+    # bulunsaydı `sirket_tespit_et` belirsizlik sayıp None dönerdi ve filtre
+    # hiç konulmazdı.
+    assert sirket_tespit_et("Apple hissesi kaç dolar?") == "AAPL"
+
+    # Konu GERÇEKTEN dolar ise tespit korunur.
+    assert sirket_tespit_et("Dolar ne kadar?") == "USDTRY"
+    assert sirket_tespit_et("Dolar hakkında son haberler") == "USDTRY"

@@ -68,7 +68,7 @@ from agents.market_query import (
     guncellik_istegi_var_mi,
     sirket_sayisi,
 )
-from agents.price_query import fiyat_niyeti, hedef_fiyat_niyeti
+from agents.price_query import fiyat_niyeti, hedef_fiyat_niyeti, temel_oran_niyeti
 from app.core.llm_client import get_llm_client
 from app.providers.universe import SPEC_BY_SYMBOL
 from app.services.advice_eligibility import is_asset_advice_allowed
@@ -269,6 +269,75 @@ _HEDEF_FIYAT_YON_METNI = {
 }
 
 
+# yfinance alan adı -> (Türkçe etiket, yüzdeye çevrilsin mi).
+#
+# SÖZLEŞME ÖLÇÜLDÜ (yfinance 1.6.0, 1 Eylül 2026): `profitMargins` ve
+# `ebitdaMargins` KESİR döner (0,2949), `dividendYield` ise ZATEN YÜZDEDİR
+# (3,06). İkisine de aynı işlemi uygulamak sayıyı yüz kat yanlış gösterirdi.
+_TEMEL_ORAN_ETIKETLERI: tuple[tuple[str, str, bool], ...] = (
+    ("trailingPE", "F/K", False),
+    ("forwardPE", "İleri F/K", False),
+    ("priceToBook", "PD/DD", False),
+    ("ebitdaMargins", "FAVÖK marjı", True),
+    ("profitMargins", "Kâr marjı", True),
+    ("dividendYield", "Temettü verimi", False),
+)
+
+
+def _buyuk_tutar(deger: float) -> str:
+    """Piyasa değeri gibi büyük tutarları okunur ölçekte yazar.
+
+    Ham hâli "374.399.991.808,00" — bir insan bunu okuyup büyüklüğünü
+    kavrayamaz ve modelin özetlerken yeniden yazması (dolayısıyla yanlış
+    yazması) riskini artırır.
+    """
+    deger = float(deger)
+    for esik, birim in ((1e12, "trilyon"), (1e9, "milyar"), (1e6, "milyon")):
+        if abs(deger) >= esik:
+            return f"{_tr_amount(deger / esik)} {birim}"
+    return _tr_amount(deger)
+
+
+def _render_temel_oranlar(sirket: str, data: dict[str, Any]) -> str:
+    """Değerleme çarpanlarını LLM'den geçirmeden ham satırlar olarak döker.
+
+    Sıfır ve `None` değerler YAZILMAZ: bankalarda `ebitdaMargins` 0 gelir
+    (FAVÖK kavramı bankada tanımsızdır) ve "%0,00" basmak bir ÖLÇÜM iddiası
+    olurdu — oysa o oranın o şirket için anlamı yok.
+    """
+    kayit = (data.get("records") or {}).get(sirket) or {}
+    satirlar: list[str] = []
+    for alan, etiket, yuzde_mi in _TEMEL_ORAN_ETIKETLERI:
+        deger = kayit.get(alan)
+        if deger in (None, 0):
+            continue
+        if yuzde_mi:
+            satirlar.append(f"- {etiket}: %{_tr_amount(float(deger) * 100)}")
+        else:
+            birim = "%" if alan == "dividendYield" else ""
+            satirlar.append(f"- {etiket}: {birim}{_tr_amount(deger)}")
+
+    piyasa_degeri = kayit.get("marketCap")
+    if piyasa_degeri:
+        para = kayit.get("currency") or "TRY"
+        satirlar.append(f"- Piyasa değeri: {_buyuk_tutar(piyasa_degeri)} {para}")
+
+    if not satirlar:
+        eksik = ", ".join(data.get("symbols_without_data") or [sirket])
+        return f"Temel analiz oranları bulunamadı: {eksik}."
+
+    baslik = f"{sirket} temel analiz oranları:"
+    dipnot = ""
+    if data.get("fetched_at"):
+        # Tarih ve kaynak HER ZAMAN yazılır — diğer fiyat yollarındaki kural
+        # (AK 5.3); tarihsiz bir oran, olmayan bir tazelik iddiasıdır.
+        dipnot = (
+            f"\n(Kaynak: {data.get('source', 'yfinance')}, "
+            f"{_tarih_bicimle(data['fetched_at'])} itibarıyla)"
+        )
+    return baslik + "\n" + "\n".join(satirlar) + dipnot
+
+
 def _render_hedef_fiyat(data: dict[str, Any]) -> str:
     """Hedef fiyat/analist tavsiyesi kayıtlarını LLM'den geçirmeden ham
     satırlar olarak döker — `_kap_blogu` ile aynı gerekçe: bu GEÇMİŞTE
@@ -364,6 +433,14 @@ class MarketAgent(BaseAgent):
         # değil).
         if (hedef_sirket := hedef_fiyat_niyeti(request.query)) is not None:
             return await self._hedef_fiyat_yaniti(hedef_sirket)
+
+        # DEĞERLEME ÇARPANLARI DA RAG'E GİTMEZ — hedef fiyatla aynı gerekçe:
+        # F/K, PD/DD, marjlar dokümanlarda değil `get_fundamentals`'ta
+        # (yfinance) yaşıyor. Ölçüldü (1 Eylül 2026): doğrudan sorulduğunda
+        # bu ajan "elimdeki belgelerde yer almıyor" diyor, aynı oturumda
+        # Analist Ajanı aynı şirketin F/K'sını veriyordu.
+        if (oran_sirketi := temel_oran_niyeti(request.query)) is not None:
+            return await self._temel_oran_yaniti(oran_sirketi)
 
         filtreler = filtre_cikar(request.query)
 
@@ -536,6 +613,23 @@ class MarketAgent(BaseAgent):
             agent_name=self.agent_name,
             success=True,
             summary_text=_render_hedef_fiyat(data),
+            data=data,
+        )
+
+    async def _temel_oran_yaniti(self, sirket: str) -> AgentResponse:
+        """Değerleme çarpanları yanıtı — LLM DEVREDE DEĞİL (`_hedef_fiyat_yaniti`
+        ile aynı gerekçe: ara bir LLM çağrısı rakamı yeniden yazma riski
+        taşır)."""
+        tool_result = await self.call_mcp_tool("get_fundamentals", {"symbols": [sirket]})
+        if not tool_result.get("success"):
+            error = tool_result.get("error", {})
+            return self.error_response(error.get("message", "Temel analiz verisi alınamadı"))
+
+        data = tool_result["data"]
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=_render_temel_oranlar(sirket, data),
             data=data,
         )
 

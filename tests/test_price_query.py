@@ -205,3 +205,38 @@ class TestHedefFiyatNiyeti:
         ikisi çakışırsa güncel fiyat yolu (yanlışlıkla) kazanırdı."""
         assert fiyat_niyeti("GARAN'ın hedef fiyatı ne?") is None
         assert fiyat_niyeti("ASELS için analist tavsiyesi ne?") is None
+
+
+# ---------------------------------------------------------------------------
+# Endeksler — fiyatlanıyor ama satın alınamıyor
+# ---------------------------------------------------------------------------
+
+
+def test_ENDEKS_sorulari_fiyat_yoluna_gider():
+    """`tradable=False` bir ALIM kısıtıdır, fiyat sorgusu kısıtı değil.
+
+    Ölçüldü (1 Eylül 2026 sohbet turu): "BIST bugün nasıl?" ve "S&P 500 ne
+    durumda?" belge aramasına düşüp *"veritabanımızda bu sorguyla ilgili
+    doğrulanmış bir bilgi bulunamadı"* cevabı alıyordu — aynı oturumda
+    Analist Ajanı XU100 serisini sorunsuz kullanırken. Endeksin kaç puan
+    olduğu meşru bir sorudur ve verisi elimizde.
+    """
+    for soru, beklenen in (
+        ("BIST bugün nasıl?", "XU100"),
+        ("BIST 100 kaç puan?", "XU100"),
+        ("Borsa İstanbul ne durumda?", "XU100"),
+        ("S&P 500 ne durumda?", "SPX"),
+    ):
+        niyet = fiyat_niyeti(soru)
+        assert niyet is not None, f"{soru!r} fiyat yoluna girmedi"
+        assert niyet["symbols"] == [beklenen], soru
+
+
+def test_endeks_kaliplari_ICERIK_sorusunu_yutmaz():
+    """ "ne durumda" gibi genel kalıplar eklendi; bilanço/finansal tablo
+    soruları yine RAG'de kalmalı (`_ICERIK_KELIMELERI_RE` önceliği)."""
+    assert fiyat_niyeti("Aselsan bilançosu nasıl?") is None
+    assert fiyat_niyeti("Tüpraş'ın 2. çeyrek net kârı ne kadar?") is None
+    assert fiyat_niyeti("Borsa saat kaçta kapanır?") is None
+    # Varlık adı geçmeyen genel soru fiyat sorgusu değildir.
+    assert fiyat_niyeti("Portföyüm ne durumda?") is None

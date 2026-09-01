@@ -36,9 +36,17 @@ class AnalystAgent(BaseAgent):
             self.call_mcp_tool(
                 "search_market_news", {"query": f"{symbol} {request_message}", "top_k": 3}
             ),
+            # ŞİRKETİN KENDİ FİYAT SERİSİ. Endeksin serisi ayrıca çekiliyor
+            # ama şirketinki hiç istenmiyordu; sonuç: ölçülen turda (1 Eylül
+            # 2026) beş analiz yanıtının beşi de aynı cümleyle bitiyordu —
+            # "hisseye ait üç aylık fiyat serisi bulunmadığı için endekse
+            # göre karşılaştırma yapılamıyor". Prompt kuralı 7 bağıl
+            # performans yorumu istiyor; girdisi eksikti. Pencere endeksle
+            # AYNI (3 ay) olmalı, yoksa iki farklı dönem kıyaslanır.
+            self.call_mcp_tool("get_asset_price_history", {"symbols": [symbol], "window": "3m"}),
         ]
 
-        target_res, price_res, fund_res, news_res = await asyncio.gather(
+        target_res, price_res, fund_res, news_res, history_res = await asyncio.gather(
             *coros, return_exceptions=True
         )
 
@@ -66,6 +74,16 @@ class AnalystAgent(BaseAgent):
         if not isinstance(news_res, Exception) and news_res.get("success") and news_res.get("data"):
             lines.append(
                 f"İlgili Haberler/Belgeler: {json.dumps(news_res['data'], ensure_ascii=False)}"
+            )
+
+        if (
+            not isinstance(history_res, Exception)
+            and history_res.get("success")
+            and history_res.get("data")
+        ):
+            lines.append(
+                f"3 Aylık Fiyat Serisi (endeksle AYNI dönem): "
+                f"{json.dumps(history_res['data'], ensure_ascii=False)}"
             )
 
         return "\n".join(lines)
