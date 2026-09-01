@@ -330,3 +330,21 @@ def test_BIRIM_ifadesi_sirket_sanilmaz():
     # Konu GERÇEKTEN dolar ise tespit korunur.
     assert sirket_tespit_et("Dolar ne kadar?") == "USDTRY"
     assert sirket_tespit_et("Dolar hakkında son haberler") == "USDTRY"
+
+
+def test_HABER_KAYNAGI_adi_gundem_istegi_sayilir():
+    """Kullanıcı konuyu değil KAYNAĞI söyleyebiliyor.
+
+    Ölçüldü (1 Eylül 2026): "Bloomberg HT'de bugün ne var?" cümlesinde
+    haber/gündem/piyasa kelimelerinin hiçbiri geçmiyor; soru Web Araştırma
+    Ajanı'na düşüp TELEVİZYON YAYIN AKIŞI cevabı alıyordu — oysa "Son piyasa
+    haberleri neler?" aynı veriyi sorunsuz getiriyor.
+    """
+    assert genel_gundem_istegi_var_mi("Bloomberg HT'de bugün ne var?")
+    assert genel_gundem_istegi_var_mi("bloomberght ne diyor bugün?")
+
+    # Beslediğimiz kaynak yalnızca BloombergHT; sunmadığımız bir yayını
+    # tanımak, olmayan bir kaynağı sunuyormuş gibi görünmek olurdu.
+    assert not genel_gundem_istegi_var_mi("CNBC'de bugün ne var?")
+    # Kavram sorusu gündem sayılmaz.
+    assert not genel_gundem_istegi_var_mi("Temettü nedir?")

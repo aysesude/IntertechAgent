@@ -85,6 +85,12 @@ _TAKMA_ADLAR: dict[str, str] = {
     "s&p 500": "SPX",
     "sp 500": "SPX",
     "sp500": "SPX",
+    # Fon türleri. Kullanıcı fon KODUNU değil TÜRÜNÜ yazıyor ("serbest fon
+    # alabilir miyim"); her türün evrende tek temsilcisi var, dolayısıyla
+    # eşleme tek anlamlı.
+    "serbest fon": "BHE",
+    "para piyasasi fonu": "IOO",
+    "eurobond fonu": "AKE",
     # ABD hisseleri — şirket adıyla.
     "apple": "AAPL",
     "microsoft": "MSFT",
@@ -270,6 +276,73 @@ def varlik_tespit_et(query: str) -> list[str]:
 _SURE_KALIP_RE = re.compile(r"\bson\s+\d+\s+(gun|hafta|ay|yil)\w*")
 
 
+# Sorguda geçen ZAMAN PENCERESİ -> TimeWindow değeri.
+#
+# Uzun kalıplar önce denenir: "son 12 ay" hem "son 12 ay" hem "son ay" ile
+# eşleşir, spesifik olan kazanmalıdır.
+#
+# Ölçülen hata (1 Eylül 2026): "Dolar son bir yılda ne yaptı?" sorusu
+# `get_asset_price_history`'ye pencere GEÇİRMEDEN gidiyordu; tool varsayılanı
+# 3 ay olduğu için cevap *"son bir yıllık performansı bulunmuyor"* deyip 3
+# aylık veriyi veriyordu. Bir yıllık seri veritabanında duruyordu; sorulan
+# soru cevaplanmamıştı.
+_PENCERE_KALIPLARI: tuple[tuple[str, str], ...] = (
+    ("yilbasindan", "ytd"),
+    ("yil basindan", "ytd"),
+    ("bu yil", "ytd"),
+    ("son 12 ay", "12m"),
+    ("son bir yil", "12m"),
+    ("son 1 yil", "12m"),
+    ("gecen yil", "12m"),
+    ("son yil", "12m"),
+    ("son 6 ay", "6m"),
+    ("son alti ay", "6m"),
+    ("son 3 ay", "3m"),
+    ("son uc ay", "3m"),
+    ("son ceyrek", "3m"),
+    ("son 1 ay", "1m"),
+    ("son bir ay", "1m"),
+    ("gecen ay", "1m"),
+    ("son ay", "1m"),
+    ("son hafta", "1m"),
+    ("gecen hafta", "1m"),
+)
+
+# Pencere anlaşılamazsa tool'un kendi varsayılanı kullanılır; burada bir
+# tahmin üretilmez.
+VARSAYILAN_PENCERE = "3m"
+
+
+def pencere_cikar(query: str) -> str | None:
+    """Sorguda geçen zaman penceresini `TimeWindow` değeri olarak döndürür.
+
+    Hiçbir kalıp eşleşmezse `None` — çağıran taraf tool varsayılanına bırakır.
+    "Son 2 ay"/"son 9 ay" gibi ara değerler en yakın ÜST pencereye yuvarlanır
+    (`_SURE_KALIP_RE` yolu): kullanıcının istediğinden kısa bir pencere
+    göstermek, sorulan soruyu cevaplamamak olur.
+    """
+    normalized = _normalize(query)
+    for kalip, pencere in _PENCERE_KALIPLARI:
+        if kalip in normalized:
+            return pencere
+
+    eslesme = _SURE_KALIP_RE.search(normalized)
+    if eslesme is None:
+        return None
+
+    sayi = int(re.search(r"\d+", eslesme.group(0)).group(0))
+    birim = eslesme.group(1)
+    if birim.startswith("yil"):
+        return "12m"
+    if birim.startswith("gun") or birim.startswith("hafta"):
+        return "1m"
+    # Ay: en yakın ÜST pencere.
+    for esik, pencere in ((1, "1m"), (3, "3m"), (6, "6m")):
+        if sayi <= esik:
+            return pencere
+    return "12m"
+
+
 def _icerir(normalized: str, kaliplar: tuple[str, ...]) -> bool:
     return any(k in normalized for k in kaliplar)
 
@@ -312,7 +385,12 @@ def fiyat_niyeti(query: str) -> dict | None:
     if not gecmis and not _icerir(normalized, _FIYAT_KALIPLARI):
         return None
 
-    return {"symbols": semboller, "history": gecmis}
+    return {
+        "symbols": semboller,
+        "history": gecmis,
+        # Yalnızca geçmiş sorgusunda anlamlı; güncel fiyatta pencere yok.
+        "window": pencere_cikar(query) if gecmis else None,
+    }
 
 
 # "GARAN'ın hedef fiyatı ne?", "ASELS için analist tavsiyesi ne?" gibi
@@ -353,6 +431,42 @@ _TEMEL_ORAN_KALIPLARI = (
     "degerleme carpan",
     "carpanlari",
 )
+
+
+# "Serbest fon alabilir miyim?", "BIST 100'den alabilir miyim?" — kullanıcı
+# fiyat değil, KENDİ ERİŞİMİNİ soruyor. Cevabı sistemin kendi verisinde:
+# varlığın uygunluk seviyesi (`advice_eligibility`) ile kullanıcının anket
+# puanı, ayrıca `tradable` bayrağı.
+#
+# Ölçüldü (1 Eylül 2026): iki soru da Web Araştırma Ajanı'na düşüp
+# ansiklopedik bir cevap aldı ("nitelikli yatırımcı statüsüne bağlıdır"),
+# oysa doğru cevap elimizde: puan 6, serbest fon seviye 7 — alamaz.
+_UYGUNLUK_KALIPLARI = (
+    "alabilir miyim",
+    "alabilir miyiz",
+    "alabiliyor muyum",
+    "alim yapabilir miyim",
+    "yatirim yapabilir miyim",
+    "erisebilir miyim",
+    "bana uygun mu",
+    "benim icin uygun mu",
+)
+
+
+def uygunluk_niyeti(query: str) -> str | None:
+    """Sorgu "bunu alabilir miyim" tipindeyse hedef varlığın sembolünü
+    döndürür, değilse None.
+
+    Varlık tespit edilemezse None — "fon alabilir miyim" gibi genel bir soru
+    hangi fonu kastettiğini söylemiyor ve uydurma bir sembol seçmek yanlış
+    cevap üretirdi; o durumda soru normal akışta kalır.
+    """
+    normalized = _normalize(query)
+    if not any(k in normalized for k in _UYGUNLUK_KALIPLARI):
+        return None
+
+    semboller = varlik_tespit_et(query)
+    return semboller[0] if len(semboller) == 1 else None
 
 
 def temel_oran_niyeti(query: str) -> str | None:

@@ -72,6 +72,7 @@ Ajan iki ayrı soru tipine bakar ve **girişte dallanır**:
 | **Haber / bilanço / belge** | `search_market_news` (RAG) | "Aselsan haberleri", "Tüpraş 2. çeyrek bilançosu" |
 | **Hedef fiyat / tavsiye** | `get_target_prices` | "Aselsan hedef fiyatı kaç" |
 | **Değerleme çarpanı** | `get_fundamentals` | "Aselsan'ın F/K'sı kaç", "Akbank PD/DD" |
+| **Uygunluk** | tool yok — evren + anket puanı | "Serbest fon alabilir miyim" |
 
 Dallanma `agents/price_query.py` ile **kural tabanlı** yapılır, LLM
 kullanılmaz: soru tipi ("ne kadar", "kaç TL") ve varlık adı sonlu ve iyi
@@ -95,6 +96,15 @@ aynı şirketin F/K'sını veriyordu — aynı soruya iki farklı cevap, tek bir
 hatadan daha çok güven kaybettirir. Sayılar LLM'den geçmeden basılır ve
 **kaynak + çekilme zamanı her blokta yazılır** (AK 5.3).
 
+**"Bunu alabilir miyim?" sorusu da RAG'e gitmez** (`uygunluk_niyeti` →
+`_uygunluk_yaniti`). Cevap üç deterministik kaynaktan birleşir: evren tanımı
+(`SPEC_BY_SYMBOL`), uygunluk seviyesi (`advice_eligibility`) ve kullanıcının
+anket puanı. Tutulabilirlik önce söylenir — satın alınamayan bir varlıkta puan
+tartışması anlamsızdır. Anket doldurulmamışsa puan **uydurulmaz**, durum
+söylenir. Ölçüldü (1 Eylül 2026): "Serbest fon alabilir miyim?" Web Araştırma
+Ajanı'na düşüp *"nitelikli yatırımcı statüsüne bağlıdır"* cevabı aldı; doğru
+cevap elimizdeydi (puan 6, serbest fon seviye 7).
+
 **Neden bu dal var:** kur ve fiyat dokümanlarda değil `price_history`
 tablosunda yaşıyor. Dal olmadan "dolar ne kadar?" belge aramasına düşüyor ve
 "veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı"
@@ -105,6 +115,19 @@ cümleyi orchestrator'ın merge adımı kurar. Fiyatın tarihi ve kaynağı her
 satırda yazılır — fiyat "bugünün" fiyatı olmak zorunda değil (piyasa hafta
 sonu kapalı) ve tarihi söylemeden vermek olmayan bir tazelik iddia etmek
 olurdu. Beklenenden eski fiyat gizlenmez, eskiliği söylenir.
+
+**"Belgelerde yok" cevabına kaynak eklenmez.** Kaynak listesi koda gömülü
+olarak ekleniyor; model "bilgi yok" dediğinde cevap kendi kendisiyle
+çelişiyordu — üstte "veri yok", altta iki kaynak (ölçüldü 1 Eylül 2026: S&P
+500 cevabının kaynağı "Tofaş Şirket Profili", olmayan bir şirketin kaynağı
+"Pegasus Şirket Profili"). Aynı ilke gündem dalında zaten vardı.
+
+**Prompt konu ile yorumu ayırır.** Eski kural 3 sorunun TAMAMINA bakıyordu:
+"Aselsan'ın son haberleri portföyümü nasıl etkiler?" sorusunda elde ASELSAN
+bilanço parçaları varken model "haber verisi bulunmadığı için hesaplanamıyor"
+diyor, elindeki haberi çöpe atıyordu. Ajanın işi belgelerin KONU hakkında ne
+söylediğini aktarmak; portföye etkisini portföy/risk ajanları ve merge adımı
+kuruyor.
 
 **Haber yolu** (`search_market_news`) saf DB tabanlı RAG'dır (LLM yok,
 internetten canlı veri çekmez). Sorguyla alakalı kayıt yoksa tool
