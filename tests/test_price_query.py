@@ -341,3 +341,15 @@ def test_uygunluk_sorusu_belirsizse_UYDURMAZ():
     # Uygunluk kalıbı yoksa bu yola hiç girilmez.
     assert uygunluk_niyeti("Serbest fon nedir?") is None
     assert uygunluk_niyeti("Dolar ne kadar?") is None
+
+
+def test_BRENT_kapsam_ici():
+    """Ürün kararı (1 Eylül 2026): Brent kapsam İÇİ. Fiyatını her gün
+    topluyoruz ve Piyasa şeridinde gösteriyoruz; ekranda gösterip sohbette
+    reddetmek tutarsızdı."""
+    for soru in ("Brent petrol kaç dolar?", "Petrol ne durumda?", "brent ne kadar?"):
+        niyet = fiyat_niyeti(soru)
+        assert niyet is not None, soru
+        assert niyet["symbols"] == ["BRENT"], soru
+
+    assert fiyat_niyeti("brent son 3 ayda ne yaptı?")["window"] == "3m"

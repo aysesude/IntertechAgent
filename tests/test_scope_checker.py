@@ -221,10 +221,24 @@ def test_gumus_ve_platin_artik_kapsam_ici(query):
     assert _intent(query) == "pass_to_llm"
 
 
+def test_PETROL_kapsam_ici():
+    """ÜRÜN KARARI (1 Eylül 2026): petrol/Brent kapsam İÇİNE alındı.
+
+    Bu test daha önce tam tersini kilitliyordu. Karar değişti çünkü ortada
+    bir tutarsızlık vardı: Brent'in fiyatını her gün topluyoruz ve Piyasa
+    şeridinde GÖSTERİYORUZ, ama sohbette "kapsam dışı" diye reddediliyordu.
+    Ölçüldü (1 Eylül sohbet turu, [26]): "Brent petrol kaç dolar?" sorusu
+    ekranda duran bir veriye rağmen cevapsız kalıyordu.
+    """
+    assert _intent("petrol fiyatı ne kadar") == "pass_to_llm"
+    assert _intent("Brent petrol kaç dolar") == "pass_to_llm"
+
+
 def test_gercek_kapsam_disi_diger_emtialar_hala_reddedilir():
-    """Yalnızca gümüş/platin kapsama alındı; petrol gibi diğer emtialar
-    hâlâ kapsam dışı kalmalı."""
-    assert _intent("petrol fiyatı ne kadar") == "OUT_OF_SCOPE"
+    """Petrol kapsama alındı ama bakır/buğday/doğalgaz DIŞARIDA kaldı —
+    onların verisi yok; kapsama almak sunmadığımız bir şeyi sunmak olurdu."""
+    assert _intent("bakır fiyatı ne kadar") == "OUT_OF_SCOPE"
+    assert _intent("buğday fiyatı ne kadar") == "OUT_OF_SCOPE"
 
 
 def test_coklu_sirketli_sorguda_yapi_kredi_kredi_etiketiyle_cakissa_bile_gecer():

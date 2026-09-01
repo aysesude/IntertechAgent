@@ -57,6 +57,7 @@ daraltılabilir.
 import re
 from collections.abc import Callable
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -401,11 +402,43 @@ def _render_temel_oranlar(sirket: str, data: dict[str, Any]) -> str:
     return baslik + "\n" + "\n".join(satirlar) + dipnot
 
 
-def _render_hedef_fiyat(data: dict[str, Any]) -> str:
+def _guncel_fiyat_haritasi(guncel: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """`get_current_prices` yanıtını sembol -> kayıt sözlüğüne çevirir."""
+    if not guncel:
+        return {}
+    return {p.get("symbol"): p for p in (guncel.get("prices") or []) if p.get("symbol")}
+
+
+def _hedefe_uzaklik(hedef: Any, guncel: Any) -> Decimal | None:
+    """Güncel fiyata göre hedefe uzaklık, yüzde. Hesaplanamıyorsa None.
+
+    Ürün kararı (1 Eylül 2026, seçenek C): kullanıcı "hedef 180, şu an 150,
+    yüzde kaç potansiyel var?" diye sorduğunda "hesaplanmış yüzde verilerde
+    yer almıyor" cevabı alıyordu (ölçüldü, [69]). Kural gereği doğruydu —
+    sayısal değer LLM'den çıkamaz — ama kullanışsızdı.
+
+    Hesap KODDA yapılıyor ve KULLANICININ verdiği sayılarla değil, kendi
+    verimizle: kullanıcının rakamları eski/yanlış olabilir ve onlarla hesap
+    yapmak o rakamlara otorite kazandırırdı.
+    """
+    try:
+        h, g = Decimal(str(hedef)), Decimal(str(guncel))
+    except (InvalidOperation, TypeError):
+        return None
+    if g <= 0:
+        return None
+    return ((h / g - 1) * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _render_hedef_fiyat(data: dict[str, Any], guncel: dict[str, Any] | None = None) -> str:
     """Hedef fiyat/analist tavsiyesi kayıtlarını LLM'den geçirmeden ham
     satırlar olarak döker — `_kap_blogu` ile aynı gerekçe: bu GEÇMİŞTE
     raporlanmış bir rakam, LLM'in yeniden yazması uydurma riski taşır
-    (bkz. app/services/target_price_ingest.py docstring'i)."""
+    (bkz. app/services/target_price_ingest.py docstring'i).
+
+    `guncel` verilirse hedefe uzaklık da yazılır (bkz. `_hedefe_uzaklik`).
+    """
+    guncel_harita = _guncel_fiyat_haritasi(guncel)
     satirlar: list[str] = []
     for k in data.get("records") or []:
         para = k.get("currency") or "TRY"
@@ -425,6 +458,22 @@ def _render_hedef_fiyat(data: dict[str, Any]) -> str:
                 f"{_HEDEF_FIYAT_YON_METNI.get(yon, yon)}"
             )
         satirlar.append("- " + satir)
+
+        # Hedefe uzaklık AYRI bir satırda ve GÜNCEL fiyatla birlikte: hangi
+        # fiyata göre hesaplandığı yazılmazsa yüzde doğrulanamaz olur.
+        kayit = guncel_harita.get(k.get("symbol"))
+        if (
+            kayit is not None
+            and (uzaklik := _hedefe_uzaklik(k.get("target_price"), kayit.get("price"))) is not None
+        ):
+            # İşaret yüzde imininin ÖNÜNDE: Türkçe yazımda "-%4,80" doğru,
+            # "%-4,80" değil (bkz. agents/formatting.tr_percent, aynı kural).
+            isaret = "+" if uzaklik > 0 else ("-" if uzaklik < 0 else "")
+            satirlar.append(
+                f"  → Güncel {_tr_amount(kayit.get('price'))} {para}'ye göre hedefe uzaklık: "
+                f"{isaret}%{_tr_amount(abs(uzaklik))} "
+                f"({_tarih_bicimle(kayit.get('price_date'))} kapanışı)"
+            )
 
     eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
     if eksik:
@@ -688,12 +737,28 @@ class MarketAgent(BaseAgent):
             error = tool_result.get("error", {})
             return self.error_response(error.get("message", "Hedef fiyat verisi alınamadı"))
 
+        # GÜNCEL FİYAT DA ÇEKİLİR — hedefe uzaklığı hesaplayabilmek için.
+        #
+        # Ürün kararı (1 Eylül 2026, seçenek C): "Hedef 180, şu an 150, yüzde
+        # kaç potansiyel var?" sorusuna "hesaplanmış yüzde verilerde yer
+        # almıyor" deniyordu (ölçüldü, [69]). Kural gereği doğruydu — sayısal
+        # değer LLM'den çıkamaz — ama kullanıcıya kullanışsız görünüyordu.
+        #
+        # Kullanıcının VERDİĞİ sayılarla hesap yapmıyoruz (doğrulukları
+        # bilinmiyor ve hesaplamak onlara otorite kazandırırdı); KENDİ
+        # verimizle hesaplıyoruz ve hesap KODDA yapılıyor.
+        #
+        # Bu çağrı başarısız olursa uzaklık satırı sessizce atlanır: hedef
+        # fiyat cevabı kendi başına geçerli, uzaklık "varsa iyi" bir ek.
+        guncel_result = await self.call_mcp_tool("get_current_prices", {"symbols": [sirket]})
+        guncel = guncel_result.get("data") if guncel_result.get("success") else None
+
         data = tool_result["data"]
         return AgentResponse(
             agent_name=self.agent_name,
             success=True,
-            summary_text=_render_hedef_fiyat(data),
-            data=data,
+            summary_text=_render_hedef_fiyat(data, guncel),
+            data={**data, "guncel_fiyat": guncel} if guncel else data,
         )
 
     async def _uygunluk_yaniti(self, sembol: str, user_id: str) -> AgentResponse:

@@ -70,7 +70,7 @@ Ajan iki ayrı soru tipine bakar ve **girişte dallanır**:
 | **Fiyat / kur** | `get_current_prices` | "dolar ne kadar", "gram altın kaç TL" |
 | **Fiyat seyri** | `get_asset_price_history` | "dolar son bir yılda ne yaptı" |
 | **Haber / bilanço / belge** | `search_market_news` (RAG) | "Aselsan haberleri", "Tüpraş 2. çeyrek bilançosu" |
-| **Hedef fiyat / tavsiye** | `get_target_prices` | "Aselsan hedef fiyatı kaç" |
+| **Hedef fiyat / tavsiye** | `get_target_prices` + `get_current_prices` | "Aselsan hedef fiyatı kaç" |
 | **Değerleme çarpanı** | `get_fundamentals` | "Aselsan'ın F/K'sı kaç", "Akbank PD/DD" |
 | **Uygunluk** | tool yok — evren + anket puanı | "Serbest fon alabilir miyim" |
 
@@ -84,9 +84,22 @@ fiyat sorgusu kısıtı değil: XU100 ve SPX fiyatlanıyor, Piyasa şeridinde
 gösteriliyor ve "BIST bugün nasıl?" meşru bir soru. Ölçüldü (1 Eylül 2026):
 bu sorular belge aramasına düşüp "doğrulanmış bilgi bulunamadı" alıyordu —
 aynı oturumda Analist Ajanı XU100 serisini sorunsuz kullanırken.
-`price_query._FIYATLANAN_ALINAMAYAN` bu istisnayı taşıyor. **BRENT bilerek
-dışarıda:** `scope.yaml` petrolü kapsam dışı sayıyor ama şeritte
-gösteriliyor — tutarsızlık bir ürün kararı bekliyor.
+`price_query._FIYATLANAN_ALINAMAYAN` bu istisnayı taşıyor. **BRENT de 1
+Eylül 2026'da buraya eklendi** (ürün kararı): fiyatı her gün toplanıyor ve
+şeritte gösteriliyorken sohbette kapsam dışı sayılması tutarsızdı;
+`scope.yaml`'daki `emtia_diger` kaydından çıkarıldı. Bakır/buğday/doğalgaz
+kapsam dışı KALDI — onların verisi yok, kapsama almak sunmadığımız bir şeyi
+sunmak olurdu.
+
+**Hedef fiyat yanıtı HEDEFE UZAKLIĞI da yazar** (ürün kararı, 1 Eylül 2026).
+Kullanıcı "hedef 180, şu an 150, yüzde kaç potansiyel var?" diye sorduğunda
+"hesaplanmış yüzde verilerde yer almıyor" cevabı alıyordu — kural gereği
+doğruydu (sayısal değer LLM'den çıkamaz) ama kullanışsızdı. Artık yüzde
+KODDA ve **kendi verimizle** hesaplanıyor: kullanıcının verdiği sayılarla
+değil, `get_target_prices` + `get_current_prices` ile. Sebebi: kullanıcının
+rakamları eski/yanlış olabilir ve onlarla hesap yapmak o rakamlara otorite
+kazandırırdı. Güncel fiyat alınamazsa satır sessizce atlanır; uydurma yüzde
+üretilmez.
 
 **Değerleme çarpanları da RAG'e gitmez** (`temel_oran_niyeti` →
 `get_fundamentals`). Hedef fiyatla aynı gerekçe: F/K, PD/DD ve marjlar
@@ -332,11 +345,14 @@ tüm yanıt kayboluyordu**: `ANALYSIS` etiketi alan her soru boş dönüyordu.
 Kalkan, ajanın iç mantığı için değil, bir düğümün tüm grafiği düşürebilmesi
 için orada.
 
-### Bilinen açık noktalar (ürün/sahiplik kararı bekliyor)
+### Verilen kararlar ve bilinen açık noktalar
 
-- **Prompt kuralı 6 kişiselleştirme istiyor** ("Risk profilinize uygun
-  olarak…"). Bu, PO'nun "sistem yalnızca uyarır, ne yapılacağını önermez"
-  kararıyla gerilimde. Sınırın nerede olduğu netleşmeli.
+- **Prompt kuralı 6 (kişiselleştirme) KALIYOR — karar verildi (1 Eylül
+  2026).** Ajan "Agresif risk profiliniz açısından…" gibi ifadeler
+  kullanabiliyor. PO'nun "sistem yalnızca uyarır, ne yapılacağını önermez"
+  kararıyla arasında bir gerilim OLDUĞU biliniyor ve bilerek kabul edildi;
+  bu bir açık uç değil, verilmiş bir karardır. Sınır değişirse burası da
+  değişir.
 - **Kural 2 ile 5/7 çelişiyor:** biri hesaplamayı yasaklıyor, diğerleri oran
   kıyaslaması istiyor. Modelin kendi aritmetiğini yapması riskli.
 - **`get_fundamentals` canlı yfinance'e gidiyor**; önbellek, zaman aşımı yok ve

@@ -5,6 +5,7 @@ fonksiyonlar — render katmanı ve filtresiz-yedek-arama güvenlik ağı.
 from agents.market_agent import (
     MarketAgent,
     _belge_bulunamadi_metni,
+    _hedefe_uzaklik,
     _kaynak_kullanilmadi_mi,
     _render_hedef_fiyat,
     _render_temel_oranlar,
@@ -303,3 +304,65 @@ def test_belge_bulunamadi_metni_taninmayan_sembolde_COKMEZ():
     """Evrende olmayan bir sembolde ad yerine sembolün kendisi kullanılır —
     cevabı büsbütün kaybetmektense sembol göstermek iyidir."""
     assert "BILINMEYEN" in _belge_bulunamadi_metni("BILINMEYEN")
+
+
+# ---------------------------------------------------------------------------
+# Hedefe uzaklık — kendi verimizle, kodda
+# ---------------------------------------------------------------------------
+
+HEDEF_KAYIT = {
+    "records": [
+        {
+            "symbol": "ASELS",
+            "institution": "Şeker Yatırım",
+            "recommendation": "AL",
+            "target_price": 495.0,
+            "currency": "TRY",
+            "report_date": "2026-08-31",
+            "price_at_report": 404.0,
+        }
+    ]
+}
+
+
+def _guncel(fiyat: float) -> dict:
+    return {"prices": [{"symbol": "ASELS", "price": fiyat, "price_date": "2026-09-01"}]}
+
+
+def test_hedefe_uzaklik_KODDA_hesaplanir():
+    """Ürün kararı (1 Eylül 2026, seçenek C): "hedef 180, şu an 150, yüzde kaç
+    potansiyel var?" sorusuna "hesaplanmış yüzde verilerde yer almıyor"
+    deniyordu ([69]). Kural gereği doğruydu ama kullanışsızdı.
+
+    Hesap kodda ve KENDİ verimizle yapılıyor — kullanıcının verdiği sayılarla
+    değil: onlar eski/yanlış olabilir ve hesaplamak o rakamlara otorite
+    kazandırırdı.
+    """
+    metin = _render_hedef_fiyat(HEDEF_KAYIT, _guncel(402.25))
+
+    assert "hedefe uzaklık: +%23,06" in metin
+    # Hangi fiyata göre hesaplandığı YAZILIR, yoksa yüzde doğrulanamaz.
+    assert "402,25" in metin and "01.09.2026" in metin
+
+
+def test_hedefe_uzaklik_ISARETI_yuzde_iminin_onunde():
+    """Türkçe yazımda "-%4,81" doğru, "%-4,81" değil."""
+    metin = _render_hedef_fiyat(HEDEF_KAYIT, _guncel(520.0))
+
+    assert "-%4,81" in metin
+    assert "%-4" not in metin
+
+
+def test_guncel_fiyat_yoksa_uzaklik_SATIRI_HIC_YAZILMAZ():
+    """Hedef fiyat cevabı kendi başına geçerli; uzaklık "varsa iyi" bir ek.
+    Uydurma bir yüzde üretilmez (AK 5.5)."""
+    metin = _render_hedef_fiyat(HEDEF_KAYIT)
+
+    assert "hedefe uzaklık" not in metin
+    assert "495,00" in metin
+
+
+def test_gecersiz_guncel_fiyatta_uzaklik_hesaplanmaz():
+    assert _hedefe_uzaklik(495.0, 0) is None
+    assert _hedefe_uzaklik(495.0, None) is None
+    assert _hedefe_uzaklik(None, 402.25) is None
