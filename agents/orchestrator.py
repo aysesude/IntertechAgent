@@ -24,6 +24,7 @@ from typing import Annotated, Any, TypedDict
 from langgraph.graph import END, StateGraph
 from langgraph.types import StreamWriter
 
+from agents.analyst_agent import AnalystAgent
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.market_query import portfoy_referansi_var_mi
@@ -55,13 +56,14 @@ class OrchestratorState(TypedDict):
 # (OUT_OF_SCOPE, AMBIGUOUS vb.) ya da bunlardan bir veya birkaçının "+" ile
 # birleşmiş hâlidir ("risk", "portfolio+risk"). Alan orchestrator dışına
 # çıkmıyor; tek tüketicisi _route_after_intent.
-AGENT_INTENTS = ("portfolio", "market", "risk", "web_research")
+AGENT_INTENTS = ("portfolio", "market", "risk", "web_research", "analysis")
 
 AGENT_NODES = {
     "portfolio": "portfolio_agent",
     "market": "market_agent",
     "risk": "risk_agent",
     "web_research": "web_research_agent",
+    "analysis": "analyst_agent",
 }
 
 
@@ -166,6 +168,11 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "nasıl etkiler', 'son gelişmeler portföyüm için ne anlama geliyor', "
         "'enflasyon haberi portföyümü nasıl etkiler'. Burada MARKET haberi "
         "getirir, RISK onu portföydeki varlıklarla ilişkilendirir.\n\n"
+        "ANALYSIS — Bir piyasa verisinin (haber, bilanço, hedef fiyat) ne anlama "
+        "geldiğinin objektif yorumlanması veya analiz edilmesi. Yalnızca veri değil, "
+        "'YORUM' isteniyorsa bu etiket eklenir (MARKET ile BİRLİKTE kullanılabilir).\n"
+        "  Örnek: 'Tüpraş bilançosu ne anlama geliyor?', 'Akbank'ın hedef "
+        "fiyatlarına bakarak hisse ucuz mu?', 'Bu haber piyasayı nasıl fiyatlar?'\n\n"
         "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
         "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
         "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
@@ -340,6 +347,12 @@ async def run_risk_agent(state: OrchestratorState) -> dict:
 
 async def run_web_research_agent(state: OrchestratorState) -> dict:
     agent = WebResearchAgent(mcp_server_url=settings.mcp_server_url)
+    response = await agent.execute(_build_request(state), on_token=None)
+    return {"agent_responses": [response]}
+
+
+async def run_analyst_agent(state: OrchestratorState) -> dict:
+    agent = AnalystAgent(mcp_server_url=settings.mcp_server_url)
     response = await agent.execute(_build_request(state), on_token=None)
     return {"agent_responses": [response]}
 
@@ -650,6 +663,7 @@ def _build_graph():
     graph.add_node("market_agent", run_market_agent)
     graph.add_node("risk_agent", run_risk_agent)
     graph.add_node("web_research_agent", run_web_research_agent)
+    graph.add_node("analyst_agent", run_analyst_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
@@ -663,6 +677,7 @@ def _build_graph():
             "market_agent": "market_agent",
             "risk_agent": "risk_agent",
             "web_research_agent": "web_research_agent",
+            "analyst_agent": "analyst_agent",
         },
     )
 
@@ -671,6 +686,7 @@ def _build_graph():
     graph.add_edge("market_agent", "merge")
     graph.add_edge("risk_agent", "merge")
     graph.add_edge("web_research_agent", "merge")
+    graph.add_edge("analyst_agent", "merge")
     graph.add_edge("merge", END)
 
     return graph.compile()
