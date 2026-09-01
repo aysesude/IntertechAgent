@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from agents.orchestrator import run_orchestrator
-from app.core.config import settings
 
 async def main():
     # Provide dummy API key if missing
