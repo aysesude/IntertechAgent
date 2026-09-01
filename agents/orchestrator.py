@@ -24,6 +24,7 @@ from typing import Annotated, Any, TypedDict
 from langgraph.graph import END, StateGraph
 from langgraph.types import StreamWriter
 
+from agents.analyst_agent import AnalystAgent
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.market_query import portfoy_referansi_var_mi
@@ -31,7 +32,6 @@ from agents.portfolio_agent import PortfolioAgent
 from agents.risk_agent import RiskAgent
 from agents.scope_checker import check_scope
 from agents.web_research_agent import WebResearchAgent
-from agents.analyst_agent import AnalystAgent
 from app.core.config import settings
 from app.core.llm_client import get_llm_client
 

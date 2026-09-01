@@ -6,7 +6,7 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agents.orchestrator import run_orchestrator
+from agents.orchestrator import run_orchestrator  # noqa: E402, I001
 
 async def main():
     # Provide dummy API key if missing
