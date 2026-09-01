@@ -279,7 +279,18 @@ def guncellik_istegi_var_mi(query: str) -> bool:
 # Sorgunun GENEL piyasa gündemini istediğini işaretleyen kelimeler. Kelime
 # sınırıyla aranır; "haberler" gibi çekimli hâlleri yakalamak için gövde
 # olarak yazıldı ("haber" -> "haberler", "haberi").
-_GUNDEM_KELIMELERI_RE = re.compile(r"\b(haber\w*|gundem\w*|piyasa\w*|borsa\w*|ekonomi\w*)\b")
+# Kullanıcı konuyu değil KAYNAĞI söyleyebiliyor: "Bloomberg HT'de bugün ne
+# var?" cümlesinde haber/gündem/piyasa kelimelerinin hiçbiri geçmiyor ve soru
+# Web Araştırma Ajanı'na düşüp TELEVİZYON YAYIN AKIŞI cevabı alıyordu
+# (ölçüldü, 1 Eylül 2026) — oysa "Son piyasa haberleri neler?" aynı veriyi
+# sorunsuz getiriyor.
+#
+# YALNIZCA fiilen beslediğimiz kaynak burada. Başka bir yayın adı eklemek
+# (CNBC, Reuters) kullanıcıya sunmadığımız bir kaynağı sunuyormuş gibi
+# görünmek olurdu; canlı başlıklar BloombergHT'den geliyor.
+_GUNDEM_KELIMELERI_RE = re.compile(
+    r"\b(haber\w*|gundem\w*|piyasa\w*|borsa\w*|ekonomi\w*|bloomberg\w*)\b"
+)
 
 
 def genel_gundem_istegi_var_mi(query: str) -> bool:

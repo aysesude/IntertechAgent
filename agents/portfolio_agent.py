@@ -196,7 +196,16 @@ class PortfolioAgent(BaseAgent):
         # doğrudan API'den alıyor.
         performance = data.get("performance")
         if isinstance(performance, dict) and "series" in performance:
-            data["performance"] = {k: v for k, v in performance.items() if k != "series"}
+            # Seri atılırken DÖNEM BAŞLANGICI korunur. Özet skalerleri tarih
+            # taşımıyor; seri de atılınca anlatıda hiçbir tarih kalmıyordu ve
+            # cevap "son üç ayda +%5,43 kazandınız" deyip hangi üç ay olduğunu
+            # söylemiyordu (ölçüldü, 1 Eylül 2026 — 21 Ağustos turundan beri
+            # açık duran bulgu). Bitiş zaten `as_of`.
+            seri = performance.get("series") or []
+            data["performance"] = {
+                **{k: v for k, v in performance.items() if k != "series"},
+                "series_start": seri[0].get("date") if seri else None,
+            }
 
         # Boş metinle "başarılı" dönmek yasak: orchestrator'ın merge adımı
         # `success=True` gördüğünde metni LLM'e anlatı için veriyor, metin boşsa
@@ -576,15 +585,30 @@ def _render(data: dict[str, Any]) -> str:
             + " Bu bir satış zorunluluğu değildir, yalnızca bilgilendirmedir."
         )
 
-    performance = (data.get("performance") or {}).get("summary")
+    performans_payload = data.get("performance") or {}
+    performance = performans_payload.get("summary")
     if performance:
-        blocks.append(
-            "Performans\n"
+        satirlar = ["Performans"]
+        # DÖNEMİN TARİHLERİ HER ZAMAN YAZILIR. "Son üç ayda +%5,43 kazandınız"
+        # cümlesi hangi üç ayı kastettiğini söylemeden eksiktir; aynı oturumda
+        # farklı pencerelerden gelen iki yüzde karşılaştırılamaz hale gelir.
+        baslangic = performans_payload.get("series_start")
+        bitis = performans_payload.get("as_of")
+        if baslangic and bitis:
+            satir = f"Dönem: {_tr_date(baslangic)} – {_tr_date(bitis)}"
+            if performans_payload.get("truncated_to_inception"):
+                # Pencere portföyün ömründen uzunsa başlangıç ilk işleme
+                # çekilir; "yıllık" yazıp dört aylık getiri göstermek kıyası
+                # olduğundan iyi ya da kötü gösterir.
+                satir += " (portföy bu dönemden genç, başlangıç ilk işleme çekildi)"
+            satirlar.append(satir)
+        satirlar += [
             f"Dönem değişimi: {_tr_percent(performance.get('change_percent'), signed=True)} "
-            f"({_tr_amount(performance.get('change_amount'))} TL)\n"
+            f"({_tr_amount(performance.get('change_amount'))} TL)",
             f"Dönem başı: {_tr_amount(performance.get('start_value'))} TL · "
-            f"dönem sonu: {_tr_amount(performance.get('end_value'))} TL"
-        )
+            f"dönem sonu: {_tr_amount(performance.get('end_value'))} TL",
+        ]
+        blocks.append("\n".join(satirlar))
 
     transactions = data.get("transactions")
     if transactions:
@@ -597,7 +621,12 @@ def _render(data: dict[str, Any]) -> str:
             f"{b['name']} {_tr_percent(b.get('return_percent'), signed=True)}"
             for b in benchmark.get("benchmarks") or []
         ]
-        blocks.append("Kıyaslama: " + " | ".join(parts))
+        # Kıyaslamanın da dönemi yazılır: aynı sayfadaki iki yüzde ancak aynı
+        # dönemi kapsıyorsa karşılaştırılabilir.
+        baslik = "Kıyaslama"
+        if benchmark.get("start_date") and benchmark.get("end_date"):
+            baslik += f" ({_tr_date(benchmark['start_date'])} – {_tr_date(benchmark['end_date'])})"
+        blocks.append(f"{baslik}: " + " | ".join(parts))
 
     price_history = data.get("price_history")
     if price_history:
@@ -690,12 +719,15 @@ def _render_transactions(payload: dict[str, Any]) -> str:
 
     parts = []
     for (symbol, tx_type), bucket in sirali:
-        satir = (
-            f"{symbol} {bucket['count']} {_TX_TYPE_TR.get(tx_type, tx_type)}, "
-            f"{_tr_amount(bucket['quantity'])} adet, "
-            f"toplam {_tr_amount(bucket['amount'])} TL, "
-            f"ilk {_tr_date(bucket['ilk'])}"
-        )
+        # ADET YALNIZCA ANLAMLIYSA YAZILIR. Nakit ayaklarında (para yatırma,
+        # çekme, faiz) "adet" diye bir kavram yok ve satır "1 para yatırma,
+        # 0,00 adet, toplam 1.250.000,00 TL" gibi çıkıyordu — sıfır bir ÖLÇÜM
+        # değil, o alanın o işlem için tanımsız olduğunun işareti (ölçüldü,
+        # 1 Eylül 2026).
+        satir = f"{symbol} {bucket['count']} {_TX_TYPE_TR.get(tx_type, tx_type)}, "
+        if bucket["quantity"]:
+            satir += f"{_tr_amount(bucket['quantity'])} adet, "
+        satir += f"toplam {_tr_amount(bucket['amount'])} TL, ilk {_tr_date(bucket['ilk'])}"
         if bucket["son"] != bucket["ilk"]:
             satir += f", son {_tr_date(bucket['son'])}"
         parts.append(satir)

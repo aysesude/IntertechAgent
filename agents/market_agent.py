@@ -54,6 +54,7 @@ atlanır. Bu davranış "her şirket sorusunda daha mantıklı" (kullanıcı kar
 daraltılabilir.
 """
 
+import re
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -68,10 +69,15 @@ from agents.market_query import (
     guncellik_istegi_var_mi,
     sirket_sayisi,
 )
-from agents.price_query import fiyat_niyeti, hedef_fiyat_niyeti, temel_oran_niyeti
+from agents.price_query import (
+    fiyat_niyeti,
+    hedef_fiyat_niyeti,
+    temel_oran_niyeti,
+    uygunluk_niyeti,
+)
 from app.core.llm_client import get_llm_client
 from app.providers.universe import SPEC_BY_SYMBOL
-from app.services.advice_eligibility import is_asset_advice_allowed
+from app.services.advice_eligibility import asset_risk_level, is_asset_advice_allowed
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_text(
     encoding="utf-8"
@@ -124,6 +130,39 @@ def _kaynak_blogu(results: list[dict[str, Any]]) -> str:
     if not gorulen:
         return ""
     return _KAYNAK_BASLIGI + "\n".join(f"- {etiket}" for etiket in gorulen)
+
+
+# "Belgelerde yok" cevabının kalıbı. Prompt tek bir cümle dayatıyor ama model
+# onu soruya uyarlıyor: "Elimdeki belgelerde ASELSAN'ın sözleşme tutarı bilgisi
+# yer almıyor.", "Elimdeki belgelerde S&P 500'ün mevcut durumuna ilişkin bilgi
+# yer almıyor." Ortak çekirdek iki parça: "elimdeki belgelerde" + olumsuzlama.
+_BULUNAMADI_RE = re.compile(
+    r"elimdeki belgelerde.*(yer almiyor|bulunmuyor|bulunamadi|bilgi yok)", re.S
+)
+
+# Üstündeki metin bu uzunluğu aşıyorsa cevap artık "tek cümlelik yokluk
+# bildirimi" değildir: model belgelerden bir şeyler aktarmış ve yalnızca BİR
+# ayrıntının eksik olduğunu söylüyordur. O durumda kaynaklar gerçekten
+# kullanılmıştır ve listelenmelidir.
+_BULUNAMADI_MAX_UZUNLUK = 220
+
+_TR_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a"})
+
+
+def _kaynak_kullanilmadi_mi(ozet: str) -> bool:
+    """Özet "belgelerde yok" diyorsa kaynak listesi EKLENMEMELİ.
+
+    Kaynak listesi koda gömülü olarak ekleniyor; model "bilgi yok" dediğinde
+    cevap kendi kendisiyle çelişiyordu — üstte "veri yok", altta iki kaynak
+    (ölçüldü 1 Eylül 2026: [27] S&P 500 cevabının kaynağı "Tofaş Şirket
+    Profili", [71] olmayan bir şirketin kaynağı "Pegasus Şirket Profili").
+
+    Bu, kod tabanında zaten var olan ilkenin aynısı: kullanılmayan bir
+    kaynağı göstermek, kaynak göstermenin amacını tersine çevirir (bkz.
+    gündem dalındaki aynı gerekçe).
+    """
+    sade = ozet.replace("İ", "i").lower().translate(_TR_FOLD).strip()
+    return len(sade) <= _BULUNAMADI_MAX_UZUNLUK and bool(_BULUNAMADI_RE.search(sade))
 
 
 def _kap_blogu(disclosures: list[dict[str, Any]]) -> str:
@@ -442,6 +481,15 @@ class MarketAgent(BaseAgent):
         if (oran_sirketi := temel_oran_niyeti(request.query)) is not None:
             return await self._temel_oran_yaniti(oran_sirketi)
 
+        # "BUNU ALABİLİR MİYİM?" SORUSU DA RAG'E GİTMEZ. Cevabı sistemin
+        # kendi verisinde: varlığın uygunluk seviyesi + kullanıcının anket
+        # puanı + `tradable` bayrağı. Ölçüldü (1 Eylül 2026): "Serbest fon
+        # alabilir miyim?" ve "BIST 100 endeksinden alabilir miyim?"
+        # Web Araştırma Ajanı'na düşüp ansiklopedik cevap aldı, oysa doğru
+        # cevap elimizdeydi (puan 6, serbest fon seviye 7 — alamaz).
+        if (uygunluk_sembolu := uygunluk_niyeti(request.query)) is not None:
+            return await self._uygunluk_yaniti(uygunluk_sembolu, request.user_id)
+
         filtreler = filtre_cikar(request.query)
 
         # SAF GÜNDEM SORUSU RAG'E GİTMEZ.
@@ -581,6 +629,14 @@ class MarketAgent(BaseAgent):
         if niyet["history"]:
             tool_adi = "get_asset_price_history"
             args: dict[str, Any] = {"symbols": semboller}
+            # SORULAN PENCERE TOOL'A GEÇER. Geçmiyordu: tool varsayılanı 3 ay
+            # olduğu için "Dolar son bir yılda ne yaptı?" sorusu *"son bir
+            # yıllık performansı bulunmuyor"* deyip 3 aylık veriyi veriyordu
+            # (ölçüldü, 1 Eylül 2026) — bir yıllık seri veritabanında
+            # dururken. Pencere anlaşılamadıysa geçilmez, tool kendi
+            # varsayılanını kullanır; burada tahmin üretilmez.
+            if niyet.get("window"):
+                args["window"] = niyet["window"]
         else:
             tool_adi = "get_current_prices"
             args = {"symbols": semboller}
@@ -614,6 +670,66 @@ class MarketAgent(BaseAgent):
             success=True,
             summary_text=_render_hedef_fiyat(data),
             data=data,
+        )
+
+    async def _uygunluk_yaniti(self, sembol: str, user_id: str) -> AgentResponse:
+        """ "Bunu alabilir miyim?" — LLM DEVREDE DEĞİL.
+
+        Üç kaynak birleşiyor, üçü de deterministik: varlığın evren tanımı
+        (`SPEC_BY_SYMBOL`), uygunluk seviyesi (`advice_eligibility`) ve
+        kullanıcının anket puanı. Anket doldurulmamışsa puan uydurulmaz —
+        durum dürüstçe söylenir (AK 5.5).
+        """
+        spec = SPEC_BY_SYMBOL.get(sembol)
+        if spec is None:
+            return self.error_response(f"{sembol} için varlık tanımı bulunamadı.")
+
+        seviye = asset_risk_level(sembol, spec.asset_class)
+        puan = await self._fetch_risk_survey_score(user_id)
+
+        satirlar = [f"{spec.symbol} — {spec.name}"]
+
+        # TUTULABİLİRLİK ÖNCE GELİR: uygunluk puanı ne olursa olsun
+        # satın alınamayan bir varlıkta puan tartışması anlamsızdır.
+        if not spec.tradable:
+            satirlar.append(
+                "Bu varlık satın alınamaz; fiyatı takip ediliyor ve "
+                "karşılaştırma için kullanılıyor, ama portföye eklenemez."
+            )
+            return AgentResponse(
+                agent_name=self.agent_name,
+                success=True,
+                summary_text="\n".join(satirlar),
+                data={"symbol": sembol, "tradable": False, "uygunluk_seviyesi": seviye},
+            )
+
+        satirlar.append(f"Uygunluk seviyesi: {seviye}")
+        if puan is None:
+            satirlar.append(
+                "Risk anketiniz henüz doldurulmadığı için uygunluk "
+                "karşılaştırması yapılamıyor; anketi doldurduğunuzda bu soru "
+                "kesin olarak cevaplanabilir."
+            )
+        else:
+            satirlar.append(f"Sizin risk puanınız: {puan}")
+            if is_asset_advice_allowed(sembol, spec.asset_class, puan):
+                satirlar.append("Bu varlık risk puanınızın kapsamındadır.")
+            else:
+                satirlar.append(
+                    f"Bu varlık risk puanınızın kapsamı dışında: seviyesi {seviye}, "
+                    f"puanınız {puan}. Kapsam dışı varlıklar için öneri üretilmez."
+                )
+
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text="\n".join(satirlar),
+            data={
+                "symbol": sembol,
+                "tradable": True,
+                "uygunluk_seviyesi": seviye,
+                "risk_survey_score": puan,
+            },
         )
 
     async def _temel_oran_yaniti(self, sirket: str) -> AgentResponse:
@@ -706,6 +822,12 @@ class MarketAgent(BaseAgent):
         # Kaynak listesi LLM'e bırakılmaz (uydurulmuş kaynak riski) — metadata'dan
         # üretilip akışın sonuna eklenir, kullanıcı da akarken görsün diye
         # on_token'dan geçirilir.
+        #
+        # AMA "belgelerde yok" cevabına kaynak eklenmez: o kaynaklar cevabı
+        # DESTEKLEMİYOR, aksine cevapla çelişiyor (bkz. _kaynak_kullanilmadi_mi).
+        if _kaynak_kullanilmadi_mi(full_text):
+            return full_text
+
         kaynaklar = _kaynak_blogu(results)
         if kaynaklar:
             full_text += kaynaklar

@@ -215,3 +215,106 @@ def test_render_varlik_listesinde_nakdi_agirligiyla_yazar():
     assert "Serbest nakit" in metin
     assert "175.866,14 TL" in metin
     assert "%11,10" in metin
+
+
+# ---------------------------------------------------------------------------
+# Dönem tarihleri — hangi üç ay olduğu yazılmalı
+# ---------------------------------------------------------------------------
+
+
+def test_performansta_DONEM_TARIHLERI_yazilir():
+    """21 Ağustos turundan beri açık duran bulgu, 1 Eylül'de yine ölçüldü:
+    "Son üç ayda +%5,43 kazandınız" cümlesi hangi üç ayı kastettiğini
+    söylemiyordu. Özet skalerleri tarih taşımıyor ve değer serisi anlatıdan
+    atılıyor; başlangıç günü atılırken korunmalı."""
+    metin = _render(
+        {
+            "performance": {
+                "as_of": "2026-08-31",
+                "series_start": "2026-06-02",
+                "truncated_to_inception": False,
+                "summary": {
+                    "change_percent": 5.43,
+                    "change_amount": 81629.07,
+                    "start_value": 1502074.49,
+                    "end_value": 1583703.56,
+                },
+            }
+        }
+    )
+
+    assert "Dönem: 02.06.2026 – 31.08.2026" in metin
+
+
+def test_kirpilmis_pencere_SOYLENIR():
+    """ "Yıllık" yazıp dört aylık getiri göstermek kıyası olduğundan iyi ya da
+    kötü gösterir."""
+    metin = _render(
+        {
+            "performance": {
+                "as_of": "2026-08-31",
+                "series_start": "2026-01-27",
+                "truncated_to_inception": True,
+                "summary": {"change_percent": 26.71},
+            }
+        }
+    )
+
+    assert "portföy bu dönemden genç" in metin
+
+
+def test_kiyaslamanin_da_donemi_yazilir():
+    """Aynı sayfadaki iki yüzde ancak aynı dönemi kapsıyorsa
+    karşılaştırılabilir."""
+    metin = _render(
+        {
+            "benchmark": {
+                "start_date": "2026-06-02",
+                "end_date": "2026-08-31",
+                "portfolio_return_percent": 5.43,
+                "benchmarks": [{"name": "BIST 100", "return_percent": 4.69}],
+            }
+        }
+    )
+
+    assert "Kıyaslama (02.06.2026 – 31.08.2026)" in metin
+
+
+def test_nakit_isleminde_ADET_YAZILMAZ():
+    """ "1 para yatırma, 0,00 adet, toplam 1.250.000,00 TL" — nakit ayağında
+    adet kavramı yok; sıfır bir ölçüm değil, alanın tanımsız olduğunun
+    işareti (ölçüldü, 1 Eylül 2026)."""
+    metin = _render_transactions(
+        {
+            "transactions": [
+                {
+                    "transaction_date": "2025-09-01T10:00:00+00:00",
+                    "type": "deposit",
+                    "symbol": None,
+                    "quantity": 0,
+                    "cash_amount_try": 1250000.0,
+                }
+            ]
+        }
+    )
+
+    assert "0,00 adet" not in metin
+    assert "1.250.000,00 TL" in metin
+
+
+def test_varlik_isleminde_adet_KORUNUR():
+    metin = _render_transactions(
+        {
+            "transactions": [
+                {
+                    "transaction_date": "2025-10-23T10:00:00+00:00",
+                    "type": "buy",
+                    "symbol": "ASELS",
+                    "quantity": 866,
+                    "cash_amount_try": -224970.45,
+                }
+            ]
+        }
+    )
+
+    assert "866,00 adet" in metin

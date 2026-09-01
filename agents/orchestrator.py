@@ -148,6 +148,13 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'THYAO'nun F/K oranı kaç', 'Tüpraş 2. çeyrek bilançosu nasıl', "
         "'Akbank'ın 2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam "
         "soruluyor, TAHMIN değil)\n"
+        # 2026-09-01: "Bloomberg HT'de bugün ne var?" WEB_RESEARCH'e düşüp
+        # TELEVİZYON YAYIN AKIŞI cevabı alıyordu — oysa canlı piyasa
+        # başlıklarını fiilen BloombergHT'den çekiyoruz ve "Son piyasa
+        # haberleri neler?" aynı veriyi sorunsuz getiriyor. Kullanıcı konuyu
+        # değil KAYNAĞI söylediğinde de soru piyasa sorusudur.
+        "  Kullanıcı konu yerine bir HABER KAYNAĞI adı söylerse de MARKET: "
+        "'Bloomberg HT'de bugün ne var', 'bloomberght ne diyor'.\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
