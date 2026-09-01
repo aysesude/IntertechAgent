@@ -361,6 +361,69 @@ için orada.
 
 Sözleşme testleri: `tests/test_analyst_agent.py` (LLM ve MCP sahte).
 
+## Özet Ajanı (`agents/summary_agent.py`) — "Hızlı Özet" paneli
+
+Arayüzdeki yüzen düğmeden açılan dört kartı üretir: **Genel** (zaman — ne
+değişti), **Portföy** (yapı — neye sahipsin), **Piyasa** (dışarısı — hangi
+gelişme var), **Risk** (ölçü — profille aran nasıl).
+
+### Kendi sayısı olmayan ajan
+
+Bu ajanın tanımı budur ve **kodla garanti edilir**:
+
+- Hiçbir hesap yapmaz. Diğer ajanların kullandığı **aynı MCP tool'larını**
+  çağırır (`get_portfolio_summary`, `get_portfolio_performance`,
+  `get_holdings`, `get_risk_assessment`, `get_portfolio_news`) ve dönen
+  değerleri olduğu gibi taşır.
+- LLM yalnızca **cümleyi** kurar. Ürettiği metindeki her sayı, kendisine
+  verilen deterministik bloğun içinde birebir geçmek zorundadır; geçmiyorsa
+  o kart LLM metnini değil deterministik özeti gösterir
+  (`_sayilari_dogrula`).
+
+**Neden bu kadar sıkı.** 1 Eylül 2026 turunun en pahalı bulgusu (K3) şuydu:
+aynı soruya iki ajan iki farklı cevap veriyordu. Özet kartları sohbetteki
+ajanlarla **aynı** portföy hakkında konuşuyor; kart ile sohbet farklı sayı
+söylerse aynı hata ürün düzeyinde geri gelir. Doğrulama bunu prompt'a
+güvenerek değil yapısal olarak engelliyor.
+
+Doğrulamanın inceliği: biçim farkı uydurma değildir (`1.583.703,56` =
+`1583703,56`, `%26,70` = `%26,7`), ama **ölçüm taşıyan hiçbir sayı muaf
+değildir** — `%` ya da para birimi gören sayı her boyutta doğrulanır.
+Muafiyet yalnızca ölçüm olmayan küçük tam sayılara ("üç varlık", "ilk 3").
+
+### Arayüz: FAB menü → bulanık katman → akordeon kartlar
+
+Yüzen düğme (`AssistantFab`) Material Design 3'ün FAB menü kalıbı: hover
+**ve** tıklamayla açılıyor, iki eylem sunuyor — **Hızlı özet** ve **Mini
+sohbet**. Düğmenin altındaki "Asistan" yazısı kaldırıldı; eylemler menüde
+adlarıyla duruyor.
+
+- **Basılı tutma yok.** Keşfedilebilirliği sıfır ve kayıtlı demo
+  videolarında izleyici ne yapıldığını göremez.
+- **Kartlar tıklamayla açılır, hover ile değil.** Hover ile açmak, fare
+  kartlara doğru giderken içeriği değiştirir; dokunmatikte hiç çalışmaz.
+- Panel açılırken arka plan bulanıklaşır ve kenarlarda dalgalı mavi bir ışık
+  yanar (`InsightGlow`). Işık gecikmeyi gizlemiyor, **görünür kılıyor**:
+  beş tool + bir LLM turu birkaç saniye sürüyor. `prefers-reduced-motion`
+  açıksa dalga durur, ışık kalır — sinyal kaybolmasın.
+- Panel açıldığında **bulunulan sayfanın kartı** geniş gelir. Al/Sat'ın kartı
+  yok (eylem sayfası); oradan açılan panel genel kartla başlar.
+
+### Orchestrator'a bağlı değil
+
+Tetikleyici deterministik (kullanıcı düğmeye basar), dolayısıyla niyet
+sınıflandırmasına gerek yok. Sohbet grafiğine eklenmemesi bilinçli: panelin
+üretimi kullanıcının sohbet geçmişini kirletmemeli. `execute` çağrılırsa
+açıkça `NotImplementedError` atar — biri onu grafiğe eklemeye kalkarsa
+sessizce boş yanıt dönmesin.
+
+### Zarif düşüş
+
+Panel **hiçbir koşulda boş açılmaz.** Bir tool düşerse yalnızca kendi kartı
+`degraded` olur; LLM düşerse dört kart da deterministik gövdeyle döner;
+beklenmeyen bir hata ya da zaman aşımında dört kart "şu anda üretilemedi"
+metniyle gelir. Veri hiç yoksa kart bunu **söyler**, boş gövde göstermez.
+
 ## Web Araştırma Ajanı (`agents/web_research_agent.py`) — çalışıyor
 
 Genel finans kavramlarını açıklar: "lot ne demek", "borsa saat kaçta kapanır",
@@ -449,6 +512,8 @@ detect_intent ──┼─> risk_agent ─────────┼─> merge 
                 ├─> web_research_agent ─┤
                 ├─> analyst_agent ──────┘
                 └─> handle_out_of_scope → END
+
+Özet Ajanı bu grafiğin DIŞINDA: `/api/insight` ucundan doğrudan çağrılır.
 ```
 
 - `detect_intent`: önce kural tabanlı kapsam kontrolü (`scope_checker`), sonra

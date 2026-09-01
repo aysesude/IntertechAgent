@@ -649,6 +649,37 @@ enstrümanının aynı dönemdeki fiyat getirisi.
   değerine hiç girmedikleri için getiri eksik hesaplanmıştır (AK 5.5).
 - Getiriler hesaplanamıyorsa **`null`**, `0` değil (AK 5.5).
 
+### `GET /api/insight/{user_id}`
+
+Arayüzdeki **"Hızlı Özet"** panelinin dört kartı. Üreten:
+`agents/summary_agent.py` (bkz. `docs/AGENTS.md` — "kendi sayısı olmayan
+ajan").
+
+```json
+{
+  "user_id": "3fa85f64-...",
+  "generated_at": "2026-09-01T20:14:00Z",
+  "cards": [
+    { "id": "genel",   "title": "Genel Durum", "body": "...", "degraded": false },
+    { "id": "portfoy", "title": "Portföyünüz", "body": "...", "degraded": false },
+    { "id": "piyasa",  "title": "Piyasa",      "body": "...", "degraded": false },
+    { "id": "risk",    "title": "Risk",        "body": "...", "degraded": true  }
+  ]
+}
+```
+
+- Kartlar **her çağrıda yeniden üretilir**; ne sunucuda ne istemcide önbellek
+  var (ürün kararı: paneli açmak yenilemek demektir).
+- `degraded: true` → o kartın LLM metni **sayı doğrulamasından geçemedi** ya
+  da tool'u düştü; gövde deterministik özettir. Kart düşmez, arayüz bunu
+  belirtebilsin diye işaretlenir.
+- **Panel hiçbir koşulda boş dönmez:** dört kart her zaman gelir. Zaman aşımı
+  (30 sn) ya da beklenmeyen hatada gövde "şu anda üretilemedi" olur.
+- Sohbete **hiçbir şey yazmaz** — panel bir düğmeyle açılıyor, sohbet mesajı
+  değil.
+- Kullanıcıya özel uç: `Depends(get_current_user)` + `verify_user_access`
+  (AK 5.4).
+
 ### `GET /api/risk/{user_id}?profile_override=`
 
 7 kademeli risk seviyesi, yıllık volatilite, VaR, Sharpe, yoğunlaşma ve
