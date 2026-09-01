@@ -13,10 +13,10 @@ from typing import Any
 from fastmcp import FastMCP
 
 from app.core.config import Granularity, PriceCurrency, TimeWindow
+from app.providers.yfinance_p import YFinanceProvider
 from app.services.price_service import get_asset_price_history as fetch_price_history
 from app.services.price_service import get_current_prices as fetch_current_prices
 from app.services.target_price_service import get_target_prices as fetch_target_prices
-from app.providers.yfinance_p import YFinanceProvider
 from mcp_server.tools._base import db_session, tool_handler
 
 
