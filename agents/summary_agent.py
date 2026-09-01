@@ -32,6 +32,7 @@ import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from agents.base import BaseAgent
@@ -297,8 +298,14 @@ class SummaryAgent(BaseAgent):
 
     async def kartlari_uret(self, user_id: str) -> list[dict[str, Any]]:
         """Dört kartı üretir. Hiçbir koşulda boş liste dönmez."""
+        # AŞAMA SÜRELERİ ÖLÇÜLÜYOR. "Özet alınamadı" bildirildiğinde sebebin
+        # tool'lar mı yoksa LLM mi olduğunu tahmin etmek yerine log'dan
+        # okuyabilmek için (2 Eylül 2026).
+        t0 = perf_counter()
         bloklar = await self._deterministik_bloklar(user_id)
+        t1 = perf_counter()
         metinler = await self._llm_metinleri(bloklar)
+        logger.info("[AJAN] summary: tool'lar %.1f sn, LLM %.1f sn", t1 - t0, perf_counter() - t1)
 
         kartlar: list[dict[str, Any]] = []
         for kart_id in KART_SIRASI:

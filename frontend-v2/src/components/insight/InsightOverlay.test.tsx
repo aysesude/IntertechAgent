@@ -47,6 +47,56 @@ afterEach(() => {
   kok.remove();
 });
 
+describe("InsightOverlay — iki aşama", () => {
+  it("HAZIRLANIRKEN panel YOK, yalnızca ışık var", () => {
+    // İlk sürüm açılır açılmaz tam ekran katman ve BOŞ iskelet kartlar
+    // gösteriyordu ("bam diye bir sayfa açıldı ve boş kartlar göründü",
+    // 2 Eylül 2026). İskelet, gelecek içeriğin şeklini taklit ederek bir
+    // vaatte bulunuyordu; ışık aynı bilgiyi sayfayı kaçırmadan veriyor.
+    useInsightData.mockReturnValue({ cards: [], loading: true, error: null, refetch: vi.fn() });
+
+    render(<InsightOverlay open onClose={() => {}} activeCardId="genel" />, {
+      container: document.body.appendChild(document.createElement("div")),
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.querySelector(".insight-glow")).not.toBeNull();
+  });
+
+  it("HAZIRLANIRKEN sayfa hâlâ KULLANICININ — inert yok", () => {
+    // Kilitler yalnızca panel görünürken; hazırlık aşamasında kullanıcı
+    // sayfasını kullanmaya devam edebilmeli.
+    useInsightData.mockReturnValue({ cards: [], loading: true, error: null, refetch: vi.fn() });
+
+    render(<InsightOverlay open onClose={() => {}} activeCardId="genel" />, {
+      container: document.body.appendChild(document.createElement("div")),
+    });
+
+    expect(kok.hasAttribute("inert")).toBe(false);
+  });
+
+  it("hazır olunca panel belirir ve ışık söner", () => {
+    render(<InsightOverlay open onClose={() => {}} activeCardId="genel" />, {
+      container: document.body.appendChild(document.createElement("div")),
+    });
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(document.querySelector(".insight-glow")).toBeNull();
+  });
+
+  it("hata durumunda TEKRAR DENE düğmesi çıkar", () => {
+    const refetch = vi.fn();
+    useInsightData.mockReturnValue({ cards: [], loading: false, error: "Özet alınamadı", refetch });
+
+    render(<InsightOverlay open onClose={() => {}} activeCardId="genel" />, {
+      container: document.body.appendChild(document.createElement("div")),
+    });
+    fireEvent.click(screen.getByText("Tekrar dene"));
+
+    expect(refetch).toHaveBeenCalled();
+  });
+});
+
 describe("InsightOverlay — erişilebilirlik", () => {
   it("açıkken arka plan INERT olur, kapanınca kalkar", () => {
     // Odak tuzağı tek başına yetmez: `inert` arka planı erişilebilirlik

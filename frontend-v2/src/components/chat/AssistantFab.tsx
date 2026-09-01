@@ -16,10 +16,11 @@ import { useTheme } from "@/context/ThemeContext";
  * "Asistan" yazısı KALDIRILDI: iki eylem menüde adlarıyla duruyor, düğmenin
  * altındaki etiket artık bilgi taşımıyordu.
  *
- * MENÜ HEM HOVER HEM TIKLAMAYLA AÇILIR. Yalnızca hover'a bağlamak iki yerden
- * kırılırdı: dokunmatikte hover yok, ve fare düğmenin üstünden geçerken menü
- * kazara açılırdı. Yalnızca tıklamaya bağlamak ise masaüstünde MD3'ün
- * beklenen davranışını kaybettirirdi.
+ * MENÜ YALNIZCA TIKLAMAYLA AÇILIR. Önce hover ile de açılıyordu; sahada
+ * ölçüldü (2 Eylül 2026): menü fare imlecinin ALTINDA belirdiği için
+ * kullanıcı daha ne olduğunu görmeden bir eyleme tıklamış oluyor, sonra da
+ * kapatıyordu. Hover'ın kazandırdığı tek şey bir tıklamaydı; kaybettirdiği
+ * şey kontroldü.
  *
  * BASILI TUTMA YOK — bilerek. Keşfedilebilirliği sıfır (kimse denemez) ve
  * kayıtlı demo videolarında izleyici ne yapıldığını göremez: ekranda bir şey
@@ -80,8 +81,6 @@ export function AssistantFab({ activeCardId }: AssistantFabProps) {
           karıştırıyordu (önceki sürümde ölçüldü). */}
       <div
         ref={kapsayici}
-        onMouseEnter={() => setMenuAcik(true)}
-        onMouseLeave={() => setMenuAcik(false)}
         className={`fixed bottom-6 right-4 z-[150] flex-col items-end gap-2 sm:bottom-8 sm:right-8 ${
           panelAcik ? "hidden" : "flex"
         }`}

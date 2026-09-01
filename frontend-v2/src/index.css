@@ -279,3 +279,31 @@
     opacity: 0.75;
   }
 }
+
+
+/* Hızlı Özet — akordeon kart yerleşimi.
+   Dar ekranda alt alta; sm ve üstünde tek satır ve genişlik geçişi
+   KAPSAYICIDA (grid-template-columns) yapılıyor. Tek bir özelliğin geçişi,
+   kartların tek tek flex-basis yarıştırmasından hem daha yumuşak hem de
+   içerik genişliğinden bağımsız. Gerekçe: InsightCards.tsx docstring'i. */
+.insight-kartlar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .insight-kartlar {
+    display: grid;
+    grid-template-columns: var(--insight-sutunlar);
+    gap: 1rem;
+    transition: grid-template-columns 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insight-kartlar {
+    transition: none;
+  }
+}
