@@ -156,7 +156,15 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
               transition={GECIS}
               // YARIM SAYFA: tam ekran değil. Kartlar ekranın ortasında bir
               // yüzey üzerinde durur, arkasındaki sayfa görünmeye devam eder.
-              className="fixed left-1/2 top-1/2 z-[200] flex w-[min(1100px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-3xl border border-white/20 bg-white/85 p-6 shadow-pop outline-none backdrop-blur-2xl dark:border-white/10 dark:bg-[#0B151E]/85 sm:p-7"
+              //
+              // `max-h` ZORUNLU: panel dikeyde ortalanmış (`-translate-y-1/2`)
+              // ve yükseklik sınırı olmayınca uzun içerik ekranın ALTINDAN VE
+              // ÜSTÜNDEN birden taşıyordu — üst kısım hiç ulaşılamaz hâle
+              // geliyordu (sahada ölçüldü, 2 Eylül 2026). Sınır + iç kaydırma
+              // (aşağıdaki `min-h-0 overflow-y-auto`) ikisi birlikte gerekli:
+              // yalnızca `max-h` içeriği kırpar, yalnızca kaydırma taşmayı
+              // durdurmaz.
+              className="fixed left-1/2 top-1/2 z-[200] flex max-h-[88vh] w-[min(1100px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-3xl border border-white/20 bg-white/85 p-6 shadow-pop outline-none backdrop-blur-2xl dark:border-white/10 dark:bg-[#0B151E]/85 sm:p-7"
             >
               <div className="flex items-center justify-between">
                 <h2 className="font-display m-0 text-[19px] font-semibold text-ink">Hızlı Özet</h2>
@@ -169,6 +177,11 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
                 </button>
               </div>
 
+              {/* KAYDIRILABİLİR ORTA BÖLGE. Başlık ve sorumluluk reddi sabit
+                  kalır, yalnızca kartlar kayar — uyarı, kaydırılıp gözden
+                  kaybolabilen bir yerde durmamalı (CLAUDE.md §4). `min-h-0`
+                  olmadan flex çocuğu küçülmez ve kaydırma hiç çalışmaz. */}
+              <div className="min-h-0 flex-1 overflow-y-auto">
               {error ? (
                 <div className="flex flex-col items-center gap-3 py-8">
                   <p className="m-0 text-center text-sm font-medium text-negative">{error}</p>
@@ -186,6 +199,7 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
                   Özet için yeterli veri bulunamadı.
                 </p>
               )}
+              </div>
 
               {/* CLAUDE.md §4: her finansal çıktı bu ibareyi taşımak zorunda. */}
               <p className="m-0 text-center text-xs italic text-ink-soft dark:text-ink-faint">

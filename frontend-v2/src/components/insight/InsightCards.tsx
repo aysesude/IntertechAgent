@@ -74,7 +74,7 @@ export function InsightCards({ cards, initialCardId }: InsightCardsProps) {
               aria-hidden={!acik}
               className={
                 "min-w-0 overflow-hidden transition-all duration-300 " +
-                (acik ? "mt-3 max-h-[60vh] opacity-100" : "max-h-0 opacity-0")
+                (acik ? "mt-3 max-h-[46vh] opacity-100" : "max-h-0 opacity-0")
               }
             >
               <p className="m-0 whitespace-pre-line text-[13.5px] leading-relaxed text-ink-muted">
