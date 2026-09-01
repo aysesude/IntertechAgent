@@ -43,8 +43,12 @@ class OrchestratorState(TypedDict):
     session_id: str
     message: str
     # Son N mesajlık sohbet geçmişi ({"role": ..., "content": ...} sözlükleri).
-    # TODO: Ajanlar şu an bunu prompt'larına dahil etmiyor (tek turluk
-    # çalışıyorlar); alan, çok turlu bağlam gereken ajanlar için hazır tutuluyor.
+    #
+    # İKİ TÜKETİCİSİ VAR: (1) niyet tespiti — takip sorularının hangi konuya
+    # bağlandığını anlamak için, (2) `_kaynak_takip_yaniti` — "kaynağın ne"
+    # sorusunu bir önceki yanıttan deterministik olarak cevaplamak için.
+    # AJANLAR hâlâ kullanmıyor (tek turluk çalışıyorlar); alan çok turlu
+    # bağlam gereken ajanlar için hazır duruyor.
     history: list[dict[str, str]]
     intent: str
     flags: list[str]
@@ -91,6 +95,107 @@ _AMBIGUOUS_MESSAGE = (
 )
 
 
+# --- Kaynak takip sorusu ----------------------------------------------------
+#
+# CLAUDE.md §4 kaynak izlenebilirliğini zorunlu tutuyor: "RAG yanıtları hangi
+# dokümana dayandığını gösterebilmelidir." Yanıtın kendisi bunu zaten yapıyor
+# ama kullanıcı SONRADAN sorduğunda kayboluyordu.
+
+_TR_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a"})
+
+_KAYNAK_SORUSU_KALIPLARI = (
+    "kaynak",
+    "neye dayan",
+    "nereden ald",
+    "nereden buldun",
+    "hangi belge",
+    "referans",
+)
+
+# Yanıtlara kod tarafından eklenen blokların başlıkları (bkz. market_agent).
+_KAYNAK_BLOK_BASLIKLARI = (
+    "Kaynaklar:",
+    "Güncel KAP Bildirimleri:",
+    "Güncel Piyasa Başlıkları:",
+)
+
+_KAYNAKSIZ_YANIT = (
+    "Önceki yanıt belgeye dayalı bir kaynak listesi taşımıyordu: oradaki "
+    "sayılar arşiv dokümanlarından değil, sistemin kendi kayıtlarından "
+    "(portföy defteri ve fiyat geçmişi) geliyor ve kullanılan fiyatın tarihi "
+    "yanıtın içinde yazılı. Belgeye dayalı bir cevap için bir şirket ya da "
+    "bilanço sorabilirsiniz."
+)
+
+
+def _son_asistan_mesaji(history: list[dict[str, str]]) -> str | None:
+    for mesaj in reversed(history):
+        if mesaj.get("role") != "user":
+            return mesaj.get("content") or None
+    return None
+
+
+def _kaynak_bloklarini_ayikla(metin: str) -> list[str]:
+    """Yanıt metnindeki kaynak/KAP/gündem bloklarını olduğu gibi çıkarır.
+
+    Bloklar koda gömülü olarak üretiliyor ve madde madde; başlık satırından
+    sonra gelen `-` ile başlayan satırlar (ve gündem bloğunun kapanışındaki
+    `Kaynak:` satırı) bloğa dahildir.
+    """
+    bloklar: list[str] = []
+    satirlar = metin.splitlines()
+    i = 0
+    while i < len(satirlar):
+        if satirlar[i].strip() in _KAYNAK_BLOK_BASLIKLARI:
+            blok = [satirlar[i].strip()]
+            i += 1
+            while i < len(satirlar):
+                sonraki = satirlar[i].strip()
+                if sonraki.startswith("-") or sonraki.startswith("Kaynak:"):
+                    blok.append(sonraki)
+                    i += 1
+                else:
+                    break
+            if len(blok) > 1:
+                bloklar.append("\n".join(blok))
+            continue
+        i += 1
+    return bloklar
+
+
+def _kaynak_takip_yaniti(query: str, history: list[dict[str, str]]) -> str | None:
+    """Soru "önceki cevabın kaynağı ne" ise yanıtı üretir, değilse None.
+
+    ÜÇ KOŞUL BİRDEN aranıyor:
+
+    1. Kaynak kalıbı geçmeli.
+    2. Sohbet geçmişinde bir asistan yanıtı olmalı — ilk mesajda "kaynağın ne"
+       sorusu sistemin genel çalışmasını soruyordur, normal akışta kalmalı.
+    3. Soruda BELİRLİ bir şirket/varlık geçmemeli. "Tüpraş'ın haber kaynağı
+       nedir?" bir önceki cevap Aselsan hakkındaysa, o cevabın kaynaklarını
+       göstermek yanlış olurdu — kullanıcı YENİ bir konu soruyor.
+    """
+    from agents.market_query import sirket_tespit_et
+    from agents.price_query import varlik_tespit_et
+
+    normalized = query.replace("İ", "i").lower().translate(_TR_FOLD)
+    if not any(k in normalized for k in _KAYNAK_SORUSU_KALIPLARI):
+        return None
+
+    onceki = _son_asistan_mesaji(history)
+    if not onceki:
+        return None
+
+    if sirket_tespit_et(query) or varlik_tespit_et(query):
+        return None
+
+    bloklar = _kaynak_bloklarini_ayikla(onceki)
+    if not bloklar:
+        return _KAYNAKSIZ_YANIT
+
+    return "Önceki yanıt şu kaynaklara dayanıyordu:\n\n" + "\n\n".join(bloklar)
+
+
 async def detect_intent(state: OrchestratorState) -> dict:
     """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
     query = state["message"].strip()
@@ -107,6 +212,20 @@ async def detect_intent(state: OrchestratorState) -> dict:
                 "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
             ),
         }
+
+    # 1.5. KAYNAK TAKİP SORUSU — geçmişten cevaplanır, LLM'e ve RAG'e gitmez.
+    #
+    # "Kaynak olarak neye dayanıyorsun?" bir VERİ sorusu değil, bir önceki
+    # yanıt hakkında META bir sorudur. Ölçüldü (1 Eylül 2026, [32] ve [34]):
+    # soru Piyasa Ajanı'na düşüp bu cümlenin KENDİSİ belgelerde aranıyor ve
+    # "doğrulanmış bilgi bulunamadı" dönüyordu — oysa bir önceki yanıt iki
+    # kaynağı ve bir KAP bağlantısını LİSTELEMİŞTİ. Cevap zaten elimizdeydi.
+    #
+    # RAG'e göndermenin anlamı yok: aranan şey belge değil, ÖNCEKİ CEVABIN
+    # dayanağı. Bu yüzden deterministik olarak burada karşılanıyor.
+    if (kaynak_yaniti := _kaynak_takip_yaniti(query, state.get("history") or [])) is not None:
+        logger.info("[ORCHESTRATOR] Kaynak takip sorusu geçmişten cevaplandı")
+        return {"intent": "SOURCE_RECALL", "flags": [], "final_answer": kaynak_yaniti}
 
     # 2. LLM Tabanlı Niyet Tespiti
     #
@@ -664,6 +783,9 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
         "AMBIGUOUS",
         "SMALLTALK_META",
         "FUTURE_PREDICTION",
+        # Yanıt geçmişten deterministik olarak üretildi; ajana gitmesine
+        # gerek yok (bkz. `_kaynak_takip_yaniti`).
+        "SOURCE_RECALL",
     }
 
     if state["intent"] in early_exit_intents:
