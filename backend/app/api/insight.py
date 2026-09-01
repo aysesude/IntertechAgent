@@ -8,6 +8,7 @@ sohbet geçmişini kirletmez (tasarım kararı, 1 Eylül 2026).
 import asyncio
 import logging
 from datetime import datetime, timezone
+from time import perf_counter
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,7 +27,16 @@ router = APIRouter(prefix="/api/insight", tags=["insight"])
 # sağlayıcı tökezlerse panel süresiz "yükleniyor"da kalmamalı. Süre dolarsa
 # kartlar deterministik gövdeyle DEĞİL, dürüst bir "üretilemedi" metniyle
 # döner — yarım veriyle özet yazmak uydurmaya açık kapıdır.
-_ZAMAN_ASIMI_SANIYE = 30
+#
+# 30 -> 60 (2 Eylül 2026). Sahada "sık sık özet alınamadı" bildirildi ve en
+# olası sebep bu sınırdı: risk değerlendirmesi tüm fiyat geçmişini tarıyor,
+# üstüne bir LLM turu biniyor. Sınırı gevşetmenin bedeli ARTIK DÜŞÜK, çünkü
+# bekleme kullanıcıyı kilitlemiyor: panel hazır olana kadar açılmıyor,
+# ekranda yalnızca kenar ışığı var ve sayfa kullanılabilir durumda.
+#
+# Bu bir TAHMİN, ölçüm değil — aşağıdaki süre kaydı bir sonraki raporda
+# gerçek sebebi göstersin diye eklendi.
+_ZAMAN_ASIMI_SANIYE = 60
 
 _URETILEMEDI = "Özet şu anda üretilemedi, lütfen tekrar deneyin."
 
@@ -48,12 +58,21 @@ async def read_insight(
     verify_user_access(user_id, current_user)
 
     agent = SummaryAgent(mcp_server_url=settings.mcp_server_url)
+    baslangic = perf_counter()
     try:
         kartlar = await asyncio.wait_for(
             agent.kartlari_uret(str(user_id)), timeout=_ZAMAN_ASIMI_SANIYE
         )
+        logger.info(
+            "[INSIGHT] özet üretildi: %.1f sn, degraded=%d/%d",
+            perf_counter() - baslangic,
+            sum(1 for k in kartlar if k["degraded"]),
+            len(kartlar),
+        )
     except asyncio.TimeoutError:
-        logger.warning("[INSIGHT] özet zaman aşımına uğradı: %s", user_id)
+        logger.warning(
+            "[INSIGHT] özet zaman aşımına uğradı (%s sn): %s", _ZAMAN_ASIMI_SANIYE, user_id
+        )
         kartlar = _bos_kartlar()
     except Exception:
         # Ajan içindeki her yol kendi hatasını yutuyor; buraya düşen bir

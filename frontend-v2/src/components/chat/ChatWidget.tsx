@@ -47,7 +47,7 @@ export function ChatWidget({
   if (!open) return null;
 
   return (
-    <div className="animate-slideUpPanel fixed inset-x-4 top-[250px] bottom-4 z-[150] flex flex-col overflow-hidden rounded-[14px] border border-transparent bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-16 sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
+    <div className="animate-slideUpPanel fixed inset-x-4 top-[250px] bottom-4 z-[150] flex flex-col overflow-hidden rounded-[14px] border border-transparent bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-6 sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
       <div className="flex shrink-0 items-center gap-[11px] bg-[#234FA2] px-4 py-2.5 dark:bg-[#7A2B39] sm:px-[18px] sm:py-4">
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/18 text-white sm:h-8 sm:w-8 sm:rounded-[9px]">
           <AssistantIcon size={16} strokeWidth={2.2} />
