@@ -85,6 +85,21 @@ _TAKMA_ADLAR: dict[str, str] = {
     "s&p 500": "SPX",
     "sp 500": "SPX",
     "sp500": "SPX",
+    # Brent. Ürün kararı (1 Eylül 2026): kapsam İÇİ. Fiyatını her gün
+    # topluyoruz ve Piyasa şeridinde gösteriyoruz; ekranda gösterip sohbette
+    # reddetmek tutarsızdı (`scope.yaml`'daki `emtia_diger` kaydından
+    # çıkarıldı).
+    #
+    # BİLİNEN SINIR: çıplak "petrol" de eşleşiyor, dolayısıyla "Tüpraş petrol
+    # fiyatı ne kadar?" gibi hem şirket hem emtia geçen bir soruda Brent
+    # fiyatı dönebilir. Alternatif, her sorguda şirket taraması yapıp çıplak
+    # "petrol"ü elemekti — sıcak yola 443 kayıtlık bir regex taraması daha
+    # eklerdi. Kaçırılan durum dar ve dönen cevap hâlâ konuyla ilgili;
+    # "petrol kaç dolar" ise en doğal soru biçimi ve onu kaybetmek istemedik.
+    "brent": "BRENT",
+    "brent petrol": "BRENT",
+    "ham petrol": "BRENT",
+    "petrol": "BRENT",
     # Fon türleri. Kullanıcı fon KODUNU değil TÜRÜNÜ yazıyor ("serbest fon
     # alabilir miyim"); her türün evrende tek temsilcisi var, dolayısıyla
     # eşleme tek anlamlı.
@@ -199,12 +214,9 @@ _BUYUK_HARF_SEMBOLLER = {"V", "META"}
 # alım-satım kısıtıdır, fiyat sorgusu kısıtı değil: endeksin kaç puan olduğu
 # meşru bir sorudur ve verisi elimizde.
 #
-# BRENT bilerek DIŞARIDA: `agents/scope.yaml` petrolü `emtia_diger` altında
-# kapsam dışı sayıyor, oysa Piyasa şeridinde gösteriliyor. Bu bir tutarsızlık
-# ve çözümü bir ürün kararı — kapsam içiyse buraya eklenir, değilse şeritten
-# çıkarılır. Karar verilmeden tek taraflı açmak, kapsam kuralını koddan
-# sessizce ezmek olurdu.
-_FIYATLANAN_ALINAMAYAN = {"XU100", "SPX"}
+# BRENT 1 Eylül 2026'da eklendi (ürün kararı): kapsam dışıyken Piyasa
+# şeridinde gösteriliyordu, tutarsızlık kapsam İÇİ seçilerek kapatıldı.
+_FIYATLANAN_ALINAMAYAN = {"XU100", "SPX", "BRENT"}
 
 
 @lru_cache(maxsize=1)
