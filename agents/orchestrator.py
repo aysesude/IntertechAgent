@@ -352,8 +352,30 @@ async def run_web_research_agent(state: OrchestratorState) -> dict:
 
 
 async def run_analyst_agent(state: OrchestratorState) -> dict:
+    """Analist Ajanı düğümü.
+
+    TEK `try/except`İ OLAN DÜĞÜM BU, bilerek. Diğer ajanlar istisnayı kendi
+    içlerinde yakalayıp `AgentResponse(success=False)` döndürüyor; bu ajan
+    `execute`'un ilk satırlarında (şirket tespiti, risk profili çağrısı)
+    korumasız. Oradan çıkan bir istisna LangGraph düğümünü düşürüyor ve —
+    ölçüldü — DİĞER ajanlar başarılı olsa bile tüm yanıt kayboluyordu:
+    `ANALYSIS` etiketi alan her soru boş dönüyordu.
+
+    Kalkan burada duruyor çünkü sorun ajanın iç mantığı değil, bir düğümün
+    tüm grafiği düşürebilmesi. Ajan kendi hatasını yakalar hale gelirse bu
+    blok zararsız biçimde etkisiz kalır.
+    """
     agent = AnalystAgent(mcp_server_url=settings.mcp_server_url)
-    response = await agent.execute(_build_request(state), on_token=None)
+    try:
+        response = await agent.execute(_build_request(state), on_token=None)
+    except Exception:  # noqa: BLE001 — düğüm hatası grafiği düşürmemeli
+        logger.exception("[ORCHESTRATOR] Analist ajanı düştü")
+        response = AgentResponse(
+            agent_name="analyst",
+            success=False,
+            summary_text="",
+            error=_mesaj("analiz_hatasi", "Analiz şu anda yapılamıyor."),
+        )
     return {"agent_responses": [response]}
 
 

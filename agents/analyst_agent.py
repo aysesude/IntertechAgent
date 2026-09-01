@@ -6,6 +6,7 @@ from typing import Any
 
 from agents.base import AgentRequest, AgentResponse, BaseAgent
 from agents.market_query import sirketleri_tespit_et
+from app.core.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,11 @@ class AnalystAgent(BaseAgent):
     bilanço, haberler, temel veriler) üzerindeki 'YORUM' ve 'ANALİZ' isteklerini,
     yatırım tavsiyesi vermeden değerlendiren ajandır.
     """
+
+    # `AgentResponse.agent_name` zorunlu alan (bkz. agents/base.py) ve
+    # `BaseAgent.error_response` bunu okuyor; tanımsız bırakılınca her yanıt
+    # üretiminde ValidationError çıkıyordu.
+    agent_name = "analyst"
 
     async def _fetch_company_data(self, symbol: str, request_message: str) -> str:
         """Bir şirket için hedef fiyat, güncel fiyat, temel analiz ve haberleri eşzamanlı çeker."""
@@ -66,12 +72,23 @@ class AnalystAgent(BaseAgent):
 
     async def execute(self, request: AgentRequest, on_token: Any = None) -> AgentResponse:
         # En fazla 3 şirket alıyoruz ki hız/token sınırı aşılmasın
-        symbols = sirketleri_tespit_et(request.message)[:3]
+        symbols = sirketleri_tespit_et(request.query)[:3]
 
         context_data = []
 
         # Kullanıcının Risk Profilini Çek
-        risk_res = await self.call_mcp_tool("get_user_risk_survey", {"user_id": request.user_id})
+        # Profil YEDEĞE düşebilmeli. `call_mcp_tool` tool hatalarını zarf içinde
+        # döndürür ama MCP sunucusuna hiç bağlanılamadığında istisna atar; bu
+        # çağrı `execute`'un ilk satırındaydı, dolayısıyla aşağıdaki
+        # "Bilinmiyor" yedeğine hiçbir zaman düşülemiyordu. Profil bilinmese de
+        # analiz üretilebilir — kişiselleştirme kaybolur, cevap kaybolmaz.
+        try:
+            risk_res = await self.call_mcp_tool(
+                "get_user_risk_survey", {"user_id": request.user_id}
+            )
+        except Exception:  # noqa: BLE001 — profil isteğe bağlı bir zenginleştirme
+            logger.warning("[AJAN] analyst: risk profili alınamadı", exc_info=True)
+            risk_res = None
         risk_profile_info = "Bilinmiyor"
         if isinstance(risk_res, dict) and risk_res.get("success") and risk_res.get("data"):
             profile = risk_res["data"].get("risk_profile")
@@ -83,10 +100,10 @@ class AnalystAgent(BaseAgent):
 
         if symbols:
             # Tüm şirketler için eşzamanlı veri çek (ayrıca benchmark XU100 güncel fiyatı)
-            coros = [self._fetch_company_data(sym, request.message) for sym in symbols]
+            coros = [self._fetch_company_data(sym, request.query) for sym in symbols]
             coros.append(
                 self.call_mcp_tool(
-                    "get_asset_price_history", {"symbols": ["XU100.IS"], "window": "3m"}
+                    "get_asset_price_history", {"symbols": ["XU100"], "window": "3m"}
                 )
             )
 
@@ -115,13 +132,17 @@ class AnalystAgent(BaseAgent):
         )
         prompt = _PROMPT_TEMPLATE.replace("{{veriler}}", veriler)
 
-        llm = self._get_llm(request)
+        llm = get_llm_client()
         try:
             yanit = await llm.generate(
-                prompt=f"Kullanıcının Sorusu: {request.message}\n\nLütfen kurallara uyarak analizini yap.",
+                prompt=f"Kullanıcının Sorusu: {request.query}\n\nLütfen kurallara uyarak analizini yap.",
                 system=prompt,
             )
-            return AgentResponse(success=True, summary_text=f"Analist Yorumu:\n{yanit}")
+            return AgentResponse(
+                agent_name=self.agent_name,
+                success=True,
+                summary_text=f"Analist Yorumu:\n{yanit}",
+            )
         except Exception as e:
             logger.error("[AJAN] analyst hatası: %s", e)
-            return AgentResponse(success=False, error="Analiz sırasında bir hata oluştu.")
+            return self.error_response("Analiz sırasında bir hata oluştu.")
