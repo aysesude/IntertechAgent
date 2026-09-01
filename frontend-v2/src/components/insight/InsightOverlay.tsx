@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import type { InsightCardId } from "@/api/insight";
 import { XIcon } from "@/components/icons";
 import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
@@ -10,10 +11,35 @@ import { InsightGlow } from "./InsightGlow";
  * "Hızlı Özet" panelini kaplayan katman: arka planı bulanıklaştırır, kenar
  * ışığını yakar ve hazır olunca dört kartı gösterir.
  *
- * ERİŞİLEBİLİRLİK: arka plan yalnızca görsel olarak bulanıklaşmıyor, `inert`
- * ile etkileşime de kapanıyor — aksi hâlde bulanık ekranın arkasındaki
- * düğmeler sekmeyle gezilebilir ve tıklanabilir kalırdı. Esc kapatır.
+ * ERİŞİLEBİLİRLİK — İKİ AYRI KORUMA, ikisi de gerekli:
+ *
+ * 1. **Odak tuzağı.** Tab/Shift+Tab katmanın içinde döner, arka plandaki
+ *    düğmelere kaçmaz. Kalıp `HoldingReturnDetail`'den geliyor (aynı
+ *    `FOCUSABLE_SELECTOR`, aynı döngü); oraya ek olarak burada kapanışta
+ *    odak, paneli AÇAN öğeye geri veriliyor — klavye kullanıcısı listenin
+ *    başına fırlamamalı.
+ * 2. **`inert`.** Arka plan yalnızca Tab sırasından değil, ERİŞİLEBİLİRLİK
+ *    AĞACINDAN da çıkıyor: ekran okuyucu kullanıcısı bulanık arka plandaki
+ *    içeriği hiç duymuyor. Odak tuzağı tek başına bunu yapmaz.
+ *
+ * React 18 `inert`'i prop olarak tanımıyor (React 19'da var), bu yüzden ref
+ * üzerinden `setAttribute` ile veriliyor. Yükseltme GEREKMİYOR: çalışma
+ * zamanı davranışı birebir aynı (karar, 2 Eylül 2026 — React 19'a geçmek
+ * recharts/framer-motion/google-charts zincirini de yükseltmek demek ve
+ * etki alanı her grafik + her sayfa geçişi).
+ *
+ * PORTAL: katman `document.body` altına taşınıyor. `HoldingReturnDetail`'in
+ * gerekçesi burada da geçerli — `backdrop-filter` kullanan bir ata, içindeki
+ * `position: fixed` elemanlar için yeni bir containing block oluşturabiliyor
+ * ve katmanı tüm ekran yerine o kutunun içine hapsedebiliyor.
  */
+
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+/** Uygulama kapsayıcısı (bkz. `index.html`). Katman portal ile bunun DIŞINA
+ *  çıktığı için `inert` doğrudan buna verilebiliyor. */
+const UYGULAMA_KOKU_ID = "root";
 
 interface InsightOverlayProps {
   open: boolean;
@@ -24,38 +50,79 @@ interface InsightOverlayProps {
 
 export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayProps) {
   const { cards, loading, error } = useInsightData(open);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // `onClose` REF'TE TUTULUYOR, bağımlılık listesinde DEĞİL.
+  //
+  // Çağıran taraf onu satır içi ok fonksiyonu olarak veriyor (her render'da
+  // yeni bir kimlik). Bağımlılıkta kalsaydı ebeveynin her render'ında efekt
+  // temizlenip yeniden kurulurdu: `inert` bir an kalkıp geri gelir ve
+  // temizlikteki odak geri verme her seferinde çalışırdı — panel açıkken
+  // odak, paneli açan düğmeye sıçrardı.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
 
-    const kapat = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const kapat = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", kapat);
 
-    // Arka planı etkileşime kapat. `#root` uygulamanın tamamı; katman onun
-    // DIŞINDA (portal değil ama z-index'i üstte) olmadığı için `inert`
-    // yerine odak tuzağı gerekirdi — bunun yerine gövde kaydırması
-    // kilitleniyor ve katman kendi içinde odaklanabilir tek yüzey oluyor.
     const oncekiOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    // Arka plan erişilebilirlik ağacından da çıkar (bkz. bileşen
+    // docstring'i, 2. madde). React 18 `inert`'i prop olarak tanımadığı için
+    // öznitelik elle veriliyor.
+    const kok = document.getElementById(UYGULAMA_KOKU_ID);
+    kok?.setAttribute("inert", "");
+
+    // Paneli AÇAN öğe: kapanışta odak buraya geri verilecek.
+    const oncekiOdak = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
 
     return () => {
       document.removeEventListener("keydown", kapat);
       document.body.style.overflow = oncekiOverflow;
+      kok?.removeAttribute("inert");
+      // `inert` kalkmadan odak verilemez: inert bir ağaçtaki öğe odak alamaz.
+      oncekiOdak?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
+
+  /** Tab tuzağı — `HoldingReturnDetail`'deki kalıbın aynısı. */
+  function odagiTut(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "Tab") return;
+    const kok = panelRef.current;
+    if (!kok) return;
+    const odaklanabilir = kok.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    if (odaklanabilir.length === 0) return;
+    const ilk = odaklanabilir[0];
+    const son = odaklanabilir[odaklanabilir.length - 1];
+    if (e.shiftKey && document.activeElement === ilk) {
+      e.preventDefault();
+      son.focus();
+    } else if (!e.shiftKey && document.activeElement === son) {
+      e.preventDefault();
+      ilk.focus();
+    }
+  }
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <>
       <InsightGlow active={loading} />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Hızlı Özet"
-        className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 bg-white/55 px-4 py-10 backdrop-blur-2xl dark:bg-[#050B12]/60"
+        tabIndex={-1}
+        onKeyDown={odagiTut}
+        className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 bg-white/55 px-4 py-10 outline-none backdrop-blur-2xl dark:bg-[#050B12]/60"
         onClick={(e) => {
           // Dışarı tıklama kapatır; kartların üstündeki tıklama kapatmamalı.
           if (e.target === e.currentTarget) onClose();
@@ -103,6 +170,7 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
           {INVESTMENT_DISCLAIMER}
         </p>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
