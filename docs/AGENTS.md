@@ -375,6 +375,24 @@ Doğrulamanın inceliği: biçim farkı uydurma değildir (`1.583.703,56` =
 değildir** — `%` ya da para birimi gören sayı her boyutta doğrulanır.
 Muafiyet yalnızca ölçüm olmayan küçük tam sayılara ("üç varlık", "ilk 3").
 
+### Arayüz: FAB menü → bulanık katman → akordeon kartlar
+
+Yüzen düğme (`AssistantFab`) Material Design 3'ün FAB menü kalıbı: hover
+**ve** tıklamayla açılıyor, iki eylem sunuyor — **Hızlı özet** ve **Mini
+sohbet**. Düğmenin altındaki "Asistan" yazısı kaldırıldı; eylemler menüde
+adlarıyla duruyor.
+
+- **Basılı tutma yok.** Keşfedilebilirliği sıfır ve kayıtlı demo
+  videolarında izleyici ne yapıldığını göremez.
+- **Kartlar tıklamayla açılır, hover ile değil.** Hover ile açmak, fare
+  kartlara doğru giderken içeriği değiştirir; dokunmatikte hiç çalışmaz.
+- Panel açılırken arka plan bulanıklaşır ve kenarlarda dalgalı mavi bir ışık
+  yanar (`InsightGlow`). Işık gecikmeyi gizlemiyor, **görünür kılıyor**:
+  beş tool + bir LLM turu birkaç saniye sürüyor. `prefers-reduced-motion`
+  açıksa dalga durur, ışık kalır — sinyal kaybolmasın.
+- Panel açıldığında **bulunulan sayfanın kartı** geniş gelir. Al/Sat'ın kartı
+  yok (eylem sayfası); oradan açılan panel genel kartla başlar.
+
 ### Orchestrator'a bağlı değil
 
 Tetikleyici deterministik (kullanıcı düğmeye basar), dolayısıyla niyet

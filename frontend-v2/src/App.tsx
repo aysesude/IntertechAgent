@@ -3,7 +3,8 @@ import { AnimatePresence } from "framer-motion";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BackgroundLayer } from "@/components/BackgroundLayer";
 import { Header } from "@/components/layout/Header";
-import { ChatWidget } from "@/components/chat/ChatWidget";
+import type { InsightCardId } from "@/api/insight";
+import { AssistantFab } from "@/components/chat/AssistantFab";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { PortfolioPage } from "@/pages/PortfolioPage";
 import { TradePage } from "@/pages/TradePage";
@@ -49,6 +50,23 @@ const SCREEN_PATHS: Record<ScreenId, string> = {
 };
 
 const SCREEN_IDS = Object.keys(SCREEN_PATHS) as ScreenId[];
+
+/**
+ * Ekran -> Hızlı Özet kartı. Panel açıldığında bulunulan sayfanın kartı geniş
+ * gelir; kullanıcı Risk sayfasından açtıysa risk kartını görmeli.
+ *
+ * Al/Sat'ın KENDİ KARTI YOK (ürün kararı): o bir EYLEM sayfası, özetlenecek
+ * bir durumu yok. Oradan açılan panel genel kartla başlar. Sohbet sayfasında
+ * düğme zaten görünmüyor; yine de eşleme tam olsun diye yazılı.
+ */
+const KART_ID: Record<ScreenId, InsightCardId> = {
+  dashboard: "genel",
+  portfolio: "portfoy",
+  market: "piyasa",
+  risk: "risk",
+  trade: "genel",
+  chat: "genel",
+};
 
 function screenFromPath(pathname: string): ScreenId {
   const match = SCREEN_IDS.find((id) => pathname.startsWith(SCREEN_PATHS[id]));
@@ -219,7 +237,7 @@ function AppShell() {
               </AnimatePresence>
             </main>
 
-            {screen !== "chat" && <ChatWidget />}
+            {screen !== "chat" && <AssistantFab activeCardId={KART_ID[screen]} />}
           </div>
         </DashboardEnterFade>
         </ChatProvider>
