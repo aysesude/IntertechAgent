@@ -66,7 +66,7 @@ services/price_ingest.py  ──► price_history      ledger_service.record_tra
 cp .env.example .env       # gerekirse EVDS_API_KEY doldurun
 docker compose up -d postgres
 docker compose exec api alembic upgrade head
-make seed                  # 50 kullanıcı + sentetik fiyat + işlem defteri
+make seed                  # 51 kullanıcı + sentetik fiyat + işlem defteri
 ```
 Docker yoksa: `.venv` ile `alembic upgrade head && python -m data.generate_dummy`
 (pytest `PYTHONPATH=. backend` ile SQLite üzerinde koşar: `pytest -q`).
@@ -436,6 +436,32 @@ rebuild_holdings(db, portfolio_id)       # önbelleği tazele
   **Sentetik satırlar ankrajı ilerletmez** — onların son günü zaten bir
   önceki ankrajdan geliyor; ölçüt alınsaydı ankraj kendi kuyruğunu yer ve
   hiç ilerlemezdi.
+- **Ad ve e-posta `data/names.py`ten gelir, Faker'dan değil.** Faker'ın
+  `tr_TR` sağlayıcısı ünvanlı/arkaik adlar üretiyordu ("Uz. Zamir Aşıkel
+  Tarhan") ve e-postayı addan bağımsız seçiyordu (`yildirimsatrettin@…` ↔ o
+  ad). Ad üst çubukta ve baş harf rozetinde her sayfada duruyor; demo
+  videolarında her karede görünen metin. E-posta artık addan türetiliyor
+  (`zeynep.yilmaz@ornek.com`). **T.C. kimlik numaraları ve kullanıcı
+  UUID'leri bu değişiklikten etkilenmedi** — giriş bilgileri korunuyor.
+- **51. kullanıcı elle kurulmuş DEMO PERSONASIDIR**
+  (`seed_ledger.DEMO_PERSONA_*`). Sunum/demo videolarında hangi hesaba
+  girileceği şansa kalmasın diye var: dört varlık sınıfı, serbest nakit,
+  USD cinsi bir varlık (kur çevrimi ekranda görünsün) ve RAG doküman kümesinde
+  belgesi olan BIST şirketleri (ASELS, THYAO) tek portföyde; ayrıca geçmiş
+  bir satış (gerçekleşmiş K/Z + dolu işlem geçmişi).
+
+  **Neden agresif bantta (puan 6):** uygunluk merdiveni hisseyi ancak 5.
+  puanda açıyor. Ölçüldü — puan 3: 2 sınıf / 12 varlık, puan 4: 3 sınıf /
+  17 varlık, puan 5+: 4 sınıf / 139 varlık. Dengeli bir persona **hiç hisse
+  tutamaz**, dolayısıyla "X şirketinin son çeyreği portföyümü nasıl etkiler"
+  senaryosu onda çalışmaz. Sepet yine de profilin kategori üst sınırlarının
+  altında ve profil uyumsuzluğu üretmiyor (merdiven neyin tutulabileceğini
+  söyler, ne tutulması gerektiğini değil).
+
+  **Neden sonda:** mevcut 50 kullanıcıdan biri elle şekillendirilseydi o
+  indeksin arketipi/puanı değişir, dağılım kayar ve elde tutulan test
+  kimlikleri ölürdü. Sona eklenince 0-49 bit bit aynı kalıyor —
+  `tests/test_demo_names_ve_persona.py` bunu kilitliyor.
 - **Kullanıcı kimlikleri de tohuma bağlıdır.** Model varsayılanı `uuid.uuid4`
   işletim sisteminin rastgeleliğini kullanır ve SEED'den etkilenmez; isimler
   ve portföyler aynı üretilirken kimlikler her seed'de değişiyordu.

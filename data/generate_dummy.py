@@ -46,6 +46,7 @@ from data.seed_ledger import (
     MAX_HOLDINGS_PER_USER,
     MIN_HOLDINGS_PER_USER,
     NUM_USERS,
+    TOPLAM_KULLANICI,
     seed_ledger,
 )
 from data.seed_prices_synthetic import HISTORY_DAYS, seed_prices_synthetic
@@ -54,6 +55,7 @@ __all__ = [
     "MAX_HOLDINGS_PER_USER",
     "MIN_HOLDINGS_PER_USER",
     "NUM_USERS",
+    "TOPLAM_KULLANICI",
     "HISTORY_DAYS",
     "main",
 ]
@@ -99,7 +101,8 @@ def main(wipe_all: bool = False) -> None:
         tx_count = seed_ledger(session)
 
         print(
-            f"{NUM_USERS} kullanıcı, {len(assets_by_symbol)} varlık, "
+            f"{TOPLAM_KULLANICI} kullanıcı ({NUM_USERS} üretilmiş + demo personası), "
+            f"{len(assets_by_symbol)} varlık, "
             f"{price_rows} sentetik fiyat satırı, {tx_count} işlem üretildi."
         )
         ankraj = resolve_anchor_date(session)

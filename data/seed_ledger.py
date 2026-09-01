@@ -30,6 +30,7 @@ from app.core.config import (
     ASSET_QUANTITY_PRECISION,
     AssetClass,
     RiskProfile,
+    risk_profile_for_survey_score,
     settings,
     survey_score_band,
 )
@@ -39,6 +40,7 @@ from app.providers.universe import SPEC_BY_SYMBOL
 from app.services.advice_eligibility import asset_risk_level, is_asset_advice_allowed
 from app.services.ledger_service import position_as_of, rebuild_holdings, record_transaction
 from data.anchor import resolve_anchor_date
+from data.names import ad_soyad, eposta
 
 SEED = 42
 NUM_USERS = 50
@@ -374,23 +376,21 @@ def seed_ledger(session: Session) -> int:
     from app.models import Portfolio, User  # döngüsel görünümü önlemek için yerel
 
     rng = random.Random(SEED)
-    Faker.seed(SEED)
-    fake = Faker("tr_TR")
-    fake.unique.clear()
 
     # Modül düzeyinde değil burada: bcrypt özeti pahalı bir hesap ve seed
     # dışında bu modülü import eden hiç kimseye maliyet çıkarmamalı.
     demo_password_hash = hash_password(settings.demo_user_password)
 
-    # AYRI ve KENDİ RNG'sine sahip bir Faker örneği, bilerek. T.C. kimlik
-    # numaralarını yukarıdaki `fake`ten üretmek her kullanıcıda bir çağrı daha
-    # ekler ve SONRAKİ kullanıcıların e-posta/adlarını kaydırırdı; bu
-    # değişikliğin mevcut seed çıktısına dokunmaması gerekiyor.
+    # Faker YALNIZCA T.C. kimlik numarası için kaldı. Ad ve e-posta artık
+    # `data/names.py`ten geliyor (Faker'ın tr_TR sağlayıcısı ünvanlı/arkaik
+    # adlar üretiyordu ve e-postayı addan bağımsız seçiyordu — gerekçe orada).
     #
     # `Faker.seed()` DEĞİL `seed_instance()`: birincisi sınıf düzeyindedir ve
-    # tüm örneklerin PAYLAŞTIĞI üreteci sıfırlar — burada çağrılsaydı `fake`in
-    # akışını da başa sardırırdı. `seed_instance` bu örneğe kendi Random'ını
-    # verir, iki akış tamamen bağımsız olur.
+    # tüm Faker örneklerinin PAYLAŞTIĞI üreteci sıfırlar; başka bir modül aynı
+    # süreçte Faker kullanırsa bu örneğin akışını da kaydırırdı.
+    # `seed_instance` bu örneğe kendi Random'ını verir, akış yalıtılmış olur.
+    # (Doğrulandı: ad/e-posta çağrıları kaldırıldığında üretilen kimlik
+    # numaraları değişmiyor — ekibin ezberlediği giriş bilgileri korunuyor.)
     fake_identity = Faker("tr_TR")
     fake_identity.seed_instance(SEED)
     fake_identity.unique.clear()
@@ -428,10 +428,11 @@ def seed_ledger(session: Session) -> int:
         # buradan geliyor. İki ayrı çağrı olsaydı biri değiştiğinde diğeri
         # sessizce geride kalır ve seed kendi kuralını ihlal ederdi.
         survey_score = _survey_score(user_index, ARCHETYPE_RISK_PROFILE[archetype_name])
+        full_name = ad_soyad(user_index)
         user = User(
             id=_user_id(user_index),
-            email=fake.unique.email(),
-            full_name=fake.name(),
+            email=eposta(full_name),
+            full_name=full_name,
             risk_profile=ARCHETYPE_RISK_PROFILE[archetype_name],
             # Anket puanı YETKİLİ alan, profil ondan türer. Seed'de sıra
             # tersine işliyor (arketip -> profil -> bant içinde puan) çünkü
@@ -645,5 +646,201 @@ def seed_ledger(session: Session) -> int:
         # holdings = defterden türetilir; elle yazım YOK.
         rebuild_holdings(session, portfolio.id)
 
+    # Demo personası döngünün DIŞINDA, en sonda: ana döngünün `rng` akışına
+    # dokunmuyor, dolayısıyla 0-49 arasındaki kullanıcılar bit bit aynı kalıyor.
+    tx_count += _seed_demo_persona(
+        session,
+        assets,
+        prices,
+        days_by_asset,
+        usdtry_id,
+        anchor,
+        national_id=fake_identity.unique.ssn(),
+        password_hash=demo_password_hash,
+    )
+
     session.commit()
+    return tx_count
+
+
+# --- Demo personası ---------------------------------------------------------
+#
+# ELLE KURULMUŞ 51. KULLANICI. Sunum/demo videolarında hangi hesaba girileceği
+# şansa bırakılmasın diye var: dört varlık sınıfının dördü de, serbest nakit,
+# döviz cinsi bir varlık ve haberi olan BIST şirketleri tek portföyde.
+#
+# NEDEN 51. SIRADA. Mevcut 50 kullanıcıdan biri elle şekillendirilseydi o
+# indeksin arketipi/puanı değişir, `_survey_score` dağılımı kayar ve seed'in
+# bütün dağılım testleri yeniden yazılmak zorunda kalırdı. Sona eklenince
+# 0-49 arasındaki UUID'ler, portföyler ve dağılımlar HİÇ kıpırdamıyor.
+#
+# NEDEN AGRESİF (puan 6). Uygunluk merdiveni (`advice_eligibility`) hisseyi
+# ancak 5. puanda açıyor; ölçüldü: puan 3 iki sınıf (12 varlık), puan 4 üç
+# sınıf (17 varlık), puan 5+ dört sınıf (139 varlık). Yani dengeli bir persona
+# HİÇ hisse tutamaz — tanıtım dosyasındaki manşet senaryo ("X şirketinin son
+# çeyreği portföyümü nasıl etkiler") çalışmaz, çünkü personanın şirketi yoktur.
+#
+# AĞIRLIKLAR PROFİLE UYGUN. Merdiven neyin TUTULABİLECEĞİNİ söyler, ne
+# tutulması gerektiğini değil; izin verilenden düşük riskli varlık tutmak
+# uyumsuzluk değildir. Sepet, agresif profilin kategori üst sınırlarının
+# altında kalıyor (hisse %35 ≤ %85, maden %20 ≤ %35, döviz %20 ≤ %40,
+# tahvil %15 ≤ %50, nakit %10 ≤ %25) ve yoğunlaşma nedenini tetiklemiyor
+# (HHI 0,14 < 0,25; en ağır varlık %18 < %35). Bu bilinçli: yoğunlaşma
+# uyarısı yalnızca risk YÜKSEK çıktığında sebep olarak gösteriliyor ve
+# istenen şey çeşitlilik — ikisi aynı portföyde birbirini götürür.
+#
+# RASTGELELİK YOK. Ana döngü `rng` kullanıyor; persona kullanmıyor. Alım
+# günleri pencere içindeki ORANLA seçiliyor, dolayısıyla ankraj kayınca da
+# aynı şekil korunuyor ve persona ana döngünün rastgele akışına dokunmuyor.
+DEMO_PERSONA_INDEX = NUM_USERS
+TOPLAM_KULLANICI = NUM_USERS + 1
+
+DEMO_PERSONA_SURVEY_SCORE = 6
+DEMO_PERSONA_BUDGET = Decimal("1250000")
+
+# (sembol, bütçe payı, alım günlerinin pencere içindeki konumu)
+#
+# ASELS iki kez alınıyor: ağırlıklı ortalama maliyetin ve çok lotlu bir
+# pozisyonun ekranda görünmesi için. RAG doküman kümesinde en çok belgesi
+# olan şirket de o (üç doküman), yani haber senaryosu en sağlam onda çalışır.
+# AAPL USD cinsi: portföy değerlemesindeki kur çevrimi (AK 5.7) ekranda
+# gerçekten görünür olsun diye.
+DEMO_PERSONA_SEPET: tuple[tuple[str, str, tuple[float, ...]], ...] = (
+    ("APT", "0.15", (0.08,)),
+    ("XAUTRY", "0.20", (0.10,)),
+    ("USDTRY", "0.12", (0.12,)),
+    ("ASELS", "0.18", (0.15, 0.55)),
+    ("THYAO", "0.09", (0.20,)),
+    ("AAPL", "0.08", (0.30,)),
+    ("EURTRY", "0.08", (0.35,)),
+)
+# Payların toplamı 0,90; kalan %10 hiç harcanmayıp serbest nakit olarak kalır
+# (nakit satın alınmaz — bkz. universe.py).
+
+# Geçmişte kısmi satış: gerçekleşmiş kâr/zarar ve dolu bir işlem geçmişi
+# olmadan "işlemlerim" ekranı boş bir liste gibi görünüyor.
+DEMO_PERSONA_SATIS = ("THYAO", "0.35", 0.75)
+
+
+def _konum_gunu(gunler: list[date], oran: float) -> date:
+    """Gün listesinde orana karşılık gelen gün. Liste boşsa çağrılmamalı."""
+    return gunler[min(int(len(gunler) * oran), len(gunler) - 1)]
+
+
+def _seed_demo_persona(
+    session: Session,
+    assets: dict[str, Asset],
+    prices: dict,
+    days_by_asset: dict,
+    usdtry_id,
+    anchor: date,
+    national_id: str,
+    password_hash: str,
+) -> int:
+    """Elle kurulmuş demo personasını yazar; üretilen işlem sayısını döndürür."""
+    from app.models import Portfolio, User
+
+    full_name = ad_soyad(DEMO_PERSONA_INDEX)
+    user = User(
+        id=_user_id(DEMO_PERSONA_INDEX),
+        email=eposta(full_name),
+        full_name=full_name,
+        risk_profile=risk_profile_for_survey_score(DEMO_PERSONA_SURVEY_SCORE),
+        risk_survey_score=DEMO_PERSONA_SURVEY_SCORE,
+        national_id=national_id,
+        password_hash=password_hash,
+    )
+    session.add(user)
+    session.flush()
+    portfolio = Portfolio(user_id=user.id)
+    session.add(portfolio)
+    session.flush()
+
+    window = [d for d in days_by_asset[usdtry_id] if d <= anchor]
+    if not window:
+        raise RuntimeError("Demo personası için fiyat penceresi boş")
+    deposit_day = window[0]
+
+    tx_count = 0
+    record_transaction(
+        session,
+        portfolio.id,
+        TransactionType.DEPOSIT,
+        transaction_date=_tx_datetime(deposit_day),
+        cash_amount_try=DEMO_PERSONA_BUDGET,
+        note="Başlangıç fonlaması",
+    )
+    tx_count += 1
+
+    for symbol, pay, konumlar in DEMO_PERSONA_SEPET:
+        asset = assets.get(symbol)
+        if asset is None:
+            # Evrenden bir sembol çıkarılmışsa persona sessizce eksilir ama
+            # seed çökmez; eksik varlık `scripts/data_doctor` ile görülür.
+            continue
+        asset_days = [d for d in days_by_asset[asset.id] if deposit_day < d <= anchor]
+        if not asset_days:
+            continue
+        per_buy = DEMO_PERSONA_BUDGET * Decimal(pay) / len(konumlar)
+
+        for oran in konumlar:
+            buy_day = _konum_gunu(asset_days, oran)
+            price = prices[asset.id][buy_day]
+            fx = (
+                _fx_rate_on(prices, days_by_asset, usdtry_id, buy_day)
+                if asset.currency == "USD"
+                else Decimal(1)
+            )
+            quantity = (per_buy / (price * fx)).quantize(
+                QUANTITY_PRECISION[asset.asset_class], rounding=ROUND_DOWN
+            )
+            if quantity <= 0:
+                continue
+            gross = quantity * price * fx
+            fee = (
+                (gross * STOCK_FEE_RATE).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP)
+                if asset.asset_class == AssetClass.STOCK
+                else Decimal(0)
+            )
+            record_transaction(
+                session,
+                portfolio.id,
+                TransactionType.BUY,
+                transaction_date=_tx_datetime(buy_day),
+                asset_id=asset.id,
+                quantity=quantity,
+                price=price,
+                currency=asset.currency,
+                fx_rate_to_try=fx,
+                fee_try=fee,
+            )
+            tx_count += 1
+
+    satis_sembol, satis_oran, satis_konum = DEMO_PERSONA_SATIS
+    satis_asset = assets.get(satis_sembol)
+    if satis_asset is not None:
+        gunler = [d for d in days_by_asset[satis_asset.id] if d <= anchor]
+        sell_day = _konum_gunu(gunler, satis_konum)
+        elde = position_as_of(session, portfolio.id, sell_day).get(satis_asset.id, Decimal(0))
+        sell_qty = (elde * Decimal(satis_oran)).quantize(
+            QUANTITY_PRECISION[satis_asset.asset_class], rounding=ROUND_DOWN
+        )
+        if sell_qty > 0:
+            price = prices[satis_asset.id][sell_day]
+            gross = sell_qty * price
+            record_transaction(
+                session,
+                portfolio.id,
+                TransactionType.SELL,
+                transaction_date=_tx_datetime(sell_day),
+                asset_id=satis_asset.id,
+                quantity=sell_qty,
+                price=price,
+                currency=satis_asset.currency,
+                fx_rate_to_try=Decimal(1),
+                fee_try=(gross * STOCK_FEE_RATE).quantize(_TRY_QUANT, rounding=ROUND_HALF_UP),
+            )
+            tx_count += 1
+
+    rebuild_holdings(session, portfolio.id)
     return tx_count

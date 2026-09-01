@@ -46,7 +46,7 @@ from app.services.portfolio_service import get_portfolio_summary
 from app.services.price_ingest import upsert_prices
 from app.services.valuation_service import twr, unrealized_pnl
 from data.generate_dummy import main as generate_dummy_main
-from data.seed_ledger import NUM_USERS, _user_id
+from data.seed_ledger import TOPLAM_KULLANICI, _user_id
 
 
 @pytest.fixture(scope="module")
@@ -132,7 +132,7 @@ def test_seeded_user_ids_are_stable(seeded):
     """DB'ye yazılan kimlikler _user_id ile birebir eşleşmeli."""
     with Session(seeded) as session:
         stored = set(session.execute(select(User.id)).scalars().all())
-    expected = {_user_id(i) for i in range(NUM_USERS)}
+    expected = {_user_id(i) for i in range(TOPLAM_KULLANICI)}
     assert expected <= stored, "seed farklı kimlikler yazdı"
 
 
