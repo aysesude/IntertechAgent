@@ -977,3 +977,35 @@ def test_sinyal_blogu_EN_FAZLA_UC_bulgu_basar():
     assert blok.count("\n- ") + blok.count("- SEM") - blok.count("\n- ") == 3 or True
     basilan = [s for s in ("SEM0", "SEM1", "SEM2", "SEM3", "SEM4") if s in blok]
     assert basilan == ["SEM0", "SEM1", "SEM2"], f"beklenen ilk üç bulgu, gelen: {basilan}"
+
+
+def test_compact_SINIF_BASINA_varlik_sayisini_tasir():
+    """Ölçüldü (1 Eylül 2026): aynı oturumda Portföy Ajanı "3 hisse senedi
+    bulunuyor" derken Risk Ajanı dört soru sonra "kaç farklı hisse bulunduğu
+    belirtilmediği için kesin olarak söylenemez" diyordu. Bilgi elimizdeydi
+    (`asset_metrics`), `_compact` yalnızca TOPLAM sayıyı geçiriyordu.
+
+    Sayım KODDA yapılır: modelin listeyi sayması hesaplama sayılır."""
+    compact = _compact(
+        {
+            "metrics": {
+                "holdings_count": 7,
+                "asset_metrics": [
+                    {"asset_symbol": "ASELS", "asset_class": "stock"},
+                    {"asset_symbol": "THYAO", "asset_class": "stock"},
+                    {"asset_symbol": "AAPL", "asset_class": "stock"},
+                    {"asset_symbol": "XAUTRY", "asset_class": "precious_metal"},
+                    {"asset_symbol": "APT", "asset_class": "bond"},
+                ],
+            }
+        }
+    )
+
+    assert compact["sinif_varlik_sayilari"] == {"stock": 3, "precious_metal": 1, "bond": 1}
+    assert compact["varlik_sayisi"] == 7
+
+
+def test_compact_asset_metrics_yoksa_BOS_sozluk():
+    """Risk hesaplanamadığında (yetersiz fiyat geçmişi) alan boş kalır,
+    uydurma bir sayı üretilmez."""
+    assert _compact({"metrics": {}})["sinif_varlik_sayilari"] == {}

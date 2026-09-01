@@ -6,6 +6,7 @@ import { ErrorBanner } from "@/components/common/ErrorBanner";
 import { AssetClassCards } from "@/components/portfolio/AssetClassCards";
 import { HoldingsTable } from "@/components/portfolio/HoldingsTable";
 import { AssetComparisonChart } from "@/components/portfolio/AssetComparisonChart";
+import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
 import { usePortfolioData } from "@/hooks/usePortfolioData";
 
 export function PortfolioPage() {
@@ -69,6 +70,13 @@ export function PortfolioPage() {
         </>
       )}
       </div>
+
+      {/* CLAUDE.md §4: her finansal çıktı bu ibareyi taşımak zorunda.
+          Bu sayfa K/Z, ağırlık ve getiri gösteriyor — Dashboard/Risk/Al-Sat
+          ile aynı sınıfta. Beş sayfada vardı, burada yoktu. */}
+      <p className="m-0 mt-5 text-center text-xs italic text-ink-soft dark:text-ink-faint">
+        {INVESTMENT_DISCLAIMER}
+      </p>
     </div>
   );
 }

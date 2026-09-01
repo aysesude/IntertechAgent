@@ -149,6 +149,30 @@ _BULUNAMADI_MAX_UZUNLUK = 220
 _TR_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a"})
 
 
+def _belge_bulunamadi_metni(sembol: str) -> str:
+    """Kullanıcıya gidecek "bulunamadı" metni — NEYİN bulunamadığını söyler.
+
+    Eski metin `"USDTRY için kayıt bulunamadı."` idi ve iki sorunu vardı:
+
+    1. **Neyin bulunamadığını söylemiyordu.** "Kayıt yok" cümlesi "bu varlığa
+       dair hiçbir verimiz yok" gibi okunuyor. Oysa bulunamayan şey yalnızca
+       ARŞİV BELGESİ; fiyatı `price_history`'de duruyor ve başka bir ajan onu
+       aynı yanıtta verebiliyor. Ölçüldü (1 Eylül 2026, soru [54]): tek
+       paragrafta hem "USD/TRY 45,93'ten 48,26'ya çıkmış" hem "USDTRY için
+       kayıt bulunamadığı belirtiliyor" yazıyordu. İkisi de doğruydu ama
+       cümle onları çelişkili gösteriyordu.
+    2. **Ham sembol sızdırıyordu.** `USDTRY` iç gösterimdir; kullanıcı
+       "dolar" yazmıştı.
+
+    Merge adımı "ALINAMAYAN BİLGİLER"i bilerek anlatıya katıyor (kısmi
+    başarıda eksiği söylemek doğru davranış), dolayısıyla düzeltilmesi
+    gereken metnin kendisi.
+    """
+    spec = SPEC_BY_SYMBOL.get(sembol)
+    ad = spec.name if spec is not None else sembol
+    return f"Belgeler arasında {ad} ile ilgili bir kayıt bulunamadı."
+
+
 def _kaynak_kullanilmadi_mi(ozet: str) -> bool:
     """Özet "belgelerde yok" diyorsa kaynak listesi EKLENMEMELİ.
 
@@ -548,7 +572,7 @@ class MarketAgent(BaseAgent):
                 if not elenmis:
                     tool_result = {
                         "success": False,
-                        "error": {"message": f"{istenen_sirket} için kayıt bulunamadı."},
+                        "error": {"message": _belge_bulunamadi_metni(istenen_sirket)},
                     }
                 elif len(elenmis) != len(ham_sonuclar):
                     tool_result = {
