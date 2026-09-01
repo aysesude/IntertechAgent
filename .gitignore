@@ -39,3 +39,9 @@ models--*/
 .vscode/
 .idea/
 .DS_Store
+
+# commit mesaji taslaklari
+# `git commit -F commit_msg.txt` akisindan kalan artiklar depoya sizmisti
+# (31 Agustos 2026: uc dosya birden). Mesajin kendisi zaten git gecmisinde
+# duruyor; kok dizindeki kopya yalnizca kafa karistirir.
+commit_msg*.txt
