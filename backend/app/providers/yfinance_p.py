@@ -16,6 +16,7 @@ dosyanın docstring'i — neden RAG değil, neden istek anında değil batch).
 import math
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from app.core.config import PriceSource
 from app.providers.base import NewsItem, PricePoint, ProviderError
@@ -105,6 +106,27 @@ class YFinanceProvider:
         items = [item for raw in raw_items if (item := _parse_news_item(raw)) is not None]
         items.sort(key=lambda item: item.published_at, reverse=True)
         return items[:limit]
+
+    def fetch_fundamentals(self, symbol: str) -> dict[str, Any] | None:
+        """Sembol için finansal oranları ve temel analiz verilerini çeker."""
+        import yfinance
+
+        try:
+            info = yfinance.Ticker(symbol).info
+            if not info:
+                return None
+            return {
+                "trailingPE": info.get("trailingPE"),
+                "forwardPE": info.get("forwardPE"),
+                "priceToBook": info.get("priceToBook"),
+                "ebitdaMargins": info.get("ebitdaMargins"),
+                "profitMargins": info.get("profitMargins"),
+                "dividendYield": info.get("dividendYield"),
+                "marketCap": info.get("marketCap"),
+                "currency": info.get("currency"),
+            }
+        except Exception as exc:
+            raise ProviderError("yfinance", symbol, f"temel analiz isteği başarısız: {exc}") from exc
 
     def _history(self, symbol: str, **kwargs):
         import yfinance
