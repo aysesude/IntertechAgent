@@ -12,6 +12,7 @@ _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "analyst_agent.md").read
     encoding="utf-8"
 )
 
+
 class AnalystAgent(BaseAgent):
     """
     Kullanıcının tekil şirket/varlık veya piyasa verileri (hedef fiyat,
@@ -19,9 +20,7 @@ class AnalystAgent(BaseAgent):
     tavsiyesi vermeden değerlendiren ajandır.
     """
 
-    async def execute(
-        self, request: AgentRequest, on_token: Any = None
-    ) -> AgentResponse:
+    async def execute(self, request: AgentRequest, on_token: Any = None) -> AgentResponse:
         sorgu = sirket_tespit_et(request.message)
         context_data = []
 
