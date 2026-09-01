@@ -126,7 +126,9 @@ class YFinanceProvider:
                 "currency": info.get("currency"),
             }
         except Exception as exc:
-            raise ProviderError("yfinance", symbol, f"temel analiz isteği başarısız: {exc}") from exc
+            raise ProviderError(
+                "yfinance", symbol, f"temel analiz isteği başarısız: {exc}"
+            ) from exc
 
     def _history(self, symbol: str, **kwargs):
         import yfinance

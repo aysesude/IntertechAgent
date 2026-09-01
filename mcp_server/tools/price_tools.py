@@ -181,7 +181,12 @@ def register(mcp: FastMCP) -> list[str]:
             "data": {
                 "records": results,
                 "symbols_without_data": unknown,
-            }
+            },
         }
 
-    return ["get_asset_price_history", "get_current_prices", "get_target_prices", "get_fundamentals"]
+    return [
+        "get_asset_price_history",
+        "get_current_prices",
+        "get_target_prices",
+        "get_fundamentals",
+    ]

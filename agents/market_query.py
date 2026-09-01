@@ -129,7 +129,7 @@ def sirket_tespit_et(query: str) -> str | None:
 
 def sirketleri_tespit_et(query: str) -> list[str]:
     """Sorguda geçen TÜM şirketlerin borsa kodlarını bir liste olarak döndürür.
-    
+
     Analist Ajanı'nın "Akbank mı Yapı Kredi mi" gibi çoklu karşılaştırma
     sorularında kullanılmak üzere yazılmıştır.
     """
