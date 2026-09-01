@@ -13,6 +13,7 @@ from agents.orchestrator import (
     AGENT_NODES,
     _ayikla_korunan_bloklar,
     _build_graph,
+    _kaynak_takip_yaniti,
     _route_after_intent,
     detect_intent,
     merge_responses,
@@ -712,3 +713,75 @@ async def test_merge_llm_sessiz_kalirsa_korunan_blok_iki_kez_gorunmez():
 
     assert result["final_answer"].count("Varlık bazlı gözlemler") == 1
     assert "[NOT — kullanıcıya gösterme:" not in result["final_answer"]
+
+
+# ---------------------------------------------------------------------------
+# Kaynak takip sorusu — geçmişten cevaplanır
+# ---------------------------------------------------------------------------
+
+ONCEKI_YANIT = """THYAO'da son gelişmeler, 2026 ilk yarı sonuçlarının açıklanmasıdır.
+
+Kaynaklar:
+- Türk Hava Yolları (THYAO) 2026 2. Çeyrek Finansal Sonuçları (AeroNews24, 05.08.2026)
+- Türk Hava Yolları Şirket Profili (THY Yatırımcı İlişkileri / KAP, 20.08.2026)
+
+Güncel KAP Bildirimleri:
+- Finansal Rapor (6 Aylık) — 05.08.2026 (https://www.kap.org.tr/tr/Bildirim/1643238)"""
+
+GECMIS = [
+    {"role": "user", "content": "THYAO hakkında son gelişmeler neler?"},
+    {"role": "assistant", "content": ONCEKI_YANIT},
+]
+
+
+def test_kaynak_sorusu_ONCEKI_YANITTAN_cevaplanir():
+    """Ölçüldü (1 Eylül 2026, [32] ve [34]): "Kaynak olarak neye
+    dayanıyorsun?" Piyasa Ajanı'na düşüp bu cümlenin KENDİSİ belgelerde
+    aranıyor ve "doğrulanmış bilgi bulunamadı" dönüyordu — oysa bir önceki
+    yanıt iki kaynağı ve bir KAP bağlantısını listelemişti.
+
+    CLAUDE.md §4 kaynak izlenebilirliğini zorunlu tutuyor; yanıt bunu
+    veriyordu ama kullanıcı SONRADAN sorduğunda kayboluyordu.
+    """
+    yanit = _kaynak_takip_yaniti("Kaynak olarak neye dayanıyorsun?", GECMIS)
+
+    assert yanit is not None
+    assert "AeroNews24" in yanit
+    assert "kap.org.tr" in yanit
+    # Bloklar AYNEN taşınır, yeniden yazılmaz.
+    assert "Kaynaklar:" in yanit and "Güncel KAP Bildirimleri:" in yanit
+
+
+def test_kaynak_sorusu_ILK_MESAJDA_normal_akista_kalir():
+    """Geçmiş yoksa "kaynağın ne" sorusu sistemin genel çalışmasını
+    soruyordur; önceki yanıt diye bir şey yok."""
+    assert _kaynak_takip_yaniti("Kaynak olarak neye dayanıyorsun?", []) is None
+
+
+def test_kaynak_sorusunda_YENI_KONU_gecerse_devralinmaz():
+    """ "Tüpraş kaynakları neler?" bir önceki cevap THYAO hakkındaysa, o
+    cevabın kaynaklarını göstermek yanlış olurdu — kullanıcı yeni bir konu
+    soruyor."""
+    assert _kaynak_takip_yaniti("Tüpraş kaynakları neler?", GECMIS) is None
+
+
+def test_kaynaksiz_yanitta_DURUSTCE_soylenir():
+    """Fiyat/portföy cevapları arşiv belgesine dayanmıyor; "kaynak yok"
+    demek yerine nereden geldiği söylenir (AK 5.5)."""
+    gecmis = [{"role": "assistant", "content": "Amerikan Doları 48,26 TL (31.08.2026, TCMB)."}]
+
+    yanit = _kaynak_takip_yaniti("Neye dayanıyorsun?", gecmis)
+
+    assert yanit is not None
+    assert "kaynak listesi taşımıyordu" in yanit
+
+
+def test_kaynak_kalibi_yoksa_bu_yola_girilmez():
+    assert _kaynak_takip_yaniti("Portföyüm ne durumda?", GECMIS) is None
+
+
+def test_SOURCE_RECALL_erken_cikis_listesinde():
+    """Yanıt geçmişten üretildi; ajana gitmesine gerek yok."""
+    from agents.orchestrator import _route_after_intent
+
+    assert _route_after_intent({"intent": "SOURCE_RECALL"}) == ["handle_out_of_scope"]

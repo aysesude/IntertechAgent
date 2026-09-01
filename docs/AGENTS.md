@@ -460,6 +460,15 @@ detect_intent ──┼─> risk_agent ─────────┼─> merge 
   (`AgentRequest.context["recent_messages"]`'a geçiyor). **PortfolioAgent şu
   an bunu prompt'una dahil etmiyor** (tek turluk çalışıyor) — çok turlu bağlam
   gereken ajanlar için altyapı hazır tutuluyor.
+- **Kaynak takip sorusu geçmişten cevaplanır** (`_kaynak_takip_yaniti`,
+  `SOURCE_RECALL` erken çıkışı). "Kaynak olarak neye dayanıyorsun?" bir VERİ
+  sorusu değil, önceki yanıt hakkında META bir sorudur; RAG'e gönderilince bu
+  cümlenin kendisi belgelerde aranıyor ve "doğrulanmış bilgi bulunamadı"
+  dönüyordu (ölçüldü, 1 Eylül 2026) — oysa önceki yanıt kaynakları
+  listelemişti. Bloklar önceki mesajdan AYNEN çıkarılıp gösteriliyor; LLM
+  devreye girmiyor. Üç koşul birden aranır: kaynak kalıbı, geçmişte bir
+  asistan yanıtı, ve soruda YENİ bir şirket/varlık geçmemesi (geçiyorsa
+  kullanıcı yeni konu soruyordur, önceki cevabın kaynakları devralınmaz).
 - `merge`: başarılı ajan yanıtlarını LLM ile tek metinde birleştirir.
   Hiçbiri başarılı değilse **ajanların kendi hata mesajları** gösterilir —
   bunlar kullanıcıya gösterilmek üzere yazılmıştır (`tools/_base.py`
