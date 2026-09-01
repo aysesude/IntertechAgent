@@ -141,6 +141,11 @@ ZORUNLU KURALLAR:
   (Türkçeye yerleşmiş finans terimi, ekip böyle kullanır); "oynaklık",
   "dalgalanma", "değişkenlik" gibi karşılıklarını KULLANMA. Yasak olan yalnızca
   İngilizce yazımıdır ("volatility").
+- "explanation" TEK CÜMLE olmalı, en fazla ~25 kelime. Bu blok her risk
+  yanıtının sonuna ekleniyor; ölçüldü (1 Eylül 2026 sohbet turu): 14 yanıtta
+  aynı üç varlık için 2-3 cümlelik açıklamalar tekrarlandı ve blok cevabın
+  kendisini bastırdı. Aynı bilgiyi iki kez söyleme, ağırlığı tekrar yazma
+  (zaten satır başında basılıyor).
 - "signals" HER ZAMAN bir dizidir, en az bir eleman içerir. Aynı varlıkta
   birden fazla sinyal varsa hepsini bu diziye ekle (yukarıdaki kurala bak) —
   aynı varlık için ikinci bir "risky_assets" kaydı ASLA açma.

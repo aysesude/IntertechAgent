@@ -2,7 +2,11 @@
 fonksiyonlar — render katmanı ve filtresiz-yedek-arama güvenlik ağı.
 """
 
-from agents.market_agent import _render_hedef_fiyat, _yanlis_sirket_sonuclarini_ele
+from agents.market_agent import (
+    _render_hedef_fiyat,
+    _render_temel_oranlar,
+    _yanlis_sirket_sonuclarini_ele,
+)
 
 
 def test_render_hedef_fiyat_tek_kayit():
@@ -124,3 +128,53 @@ def test_karisik_sonuclarda_yalnizca_yanlis_sirket_elenir():
 
 def test_bos_liste_bos_doner():
     assert _yanlis_sirket_sonuclarini_ele([], "ISCTR") == []
+
+
+# ---------------------------------------------------------------------------
+# Değerleme çarpanları (F/K, PD/DD) — RAG'e gitmez
+# ---------------------------------------------------------------------------
+
+
+def test_temel_oran_render_YFINANCE_sozlesmesine_uyar():
+    """Ölçüldü (yfinance 1.6.0): `profitMargins` KESİR (0,2949),
+    `dividendYield` ZATEN YÜZDE (3,06). İkisine aynı işlemi uygulamak sayıyı
+    yüz kat yanlış gösterirdi."""
+    metin = _render_temel_oranlar(
+        "AKBNK",
+        {
+            "records": {
+                "AKBNK": {
+                    "trailingPE": 5.6074767,
+                    "forwardPE": 4.1189933,
+                    "priceToBook": 1.1527562,
+                    "ebitdaMargins": 0.0,
+                    "profitMargins": 0.29490998,
+                    "dividendYield": 3.06,
+                    "marketCap": 374399991808,
+                    "currency": "TRY",
+                }
+            },
+            "symbols_without_data": [],
+            "source": "yfinance",
+            "fetched_at": "2026-09-01T17:30:00+00:00",
+        },
+    )
+
+    assert "F/K: 5,61" in metin
+    assert "PD/DD: 1,15" in metin
+    assert "Kâr marjı: %29,49" in metin
+    assert "Temettü verimi: %3,06" in metin
+    # Bankada FAVÖK tanımsız; yfinance 0 döner. "%0,00" basmak bir ÖLÇÜM
+    # iddiası olurdu — o oranın o şirket için anlamı yok.
+    assert "FAVÖK" not in metin
+    # Kaynak + tarih HER ZAMAN yazılır (AK 5.3).
+    assert "yfinance" in metin and "01.09.2026" in metin
+    # Büyük tutar okunur ölçekte.
+    assert "374,40 milyar TRY" in metin
+
+
+def test_temel_oran_veri_yoksa_UYDURMAZ():
+    metin = _render_temel_oranlar("ZZZZ", {"records": {}, "symbols_without_data": ["ZZZZ"]})
+
+    assert "bulunamadı" in metin
+    assert "ZZZZ" in metin

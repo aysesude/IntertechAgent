@@ -29,6 +29,7 @@ from app.services.portfolio_service import (
     get_benchmark_comparison,
     get_holdings_valuation,
     get_portfolio_performance,
+    get_portfolio_summary,
     get_transactions,
 )
 
@@ -527,3 +528,73 @@ def test_benchmark_nakit_once_yatirilmissa_da_calisir(db_session):
     # 1-9 Ocak nakitte bekliyor (getiri 0), 10 Ocak'ta 1.000 TL hisseye
     # giriyor, 20 Ocak'ta 1.500 TL: %50. Beklenen gunler sonucu degistirmiyor.
     assert result.portfolio_return_percent == Decimal("50.00")
+
+
+# ---------------------------------------------------------------------------
+# Serbest nakit — TUTAR olarak görünürlük
+# ---------------------------------------------------------------------------
+
+
+def test_ak_1_3_serbest_nakit_TUTAR_olarak_dondurulur(db_session):
+    """Nakit satır DEĞİL alan olarak döner; satırlar + nakit = %100.
+
+    Bulunan hata (1 Eylül 2026 sohbet turu): "Ne kadar param nakitte
+    duruyor?" sorusu *"verilerde yer almıyor"* cevabını alıyordu. Nakit
+    bilerek bir `holdings` satırı değil (sembolü, maliyeti, birim fiyatı
+    yok) ama `weight_percent`in paydası nakit DAHİL toplam değer olduğu
+    için satırlar 100'e toplanmıyor; nakit ayrı bir alan olarak
+    verilmezse aradaki fark açıklanamaz kalıyordu.
+    """
+    user = User(email="nakit@example.com", full_name="Nakit")
+    stock = Asset(symbol="TSTN", name="Test", asset_class=AssetClass.STOCK, currency="TRY")
+    db_session.add_all([user, stock])
+    db_session.flush()
+    portfolio = Portfolio(user_id=user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    db_session.add_all(
+        [
+            PriceHistory(
+                asset_id=stock.id, price_date=date(2026, 1, 2), close_price=Decimal("100")
+            ),
+            # 1.000 TL yatırılıyor, 750 TL'si hisseye giriyor -> 250 TL nakit.
+            _tx(portfolio.id, TransactionType.DEPOSIT, date(2026, 1, 1), cash="1000"),
+            _tx(
+                portfolio.id,
+                TransactionType.BUY,
+                date(2026, 1, 2),
+                asset_id=stock.id,
+                quantity="7.5",
+                cash="-750",
+                price="100",
+            ),
+            Holding(
+                portfolio_id=portfolio.id,
+                asset_id=stock.id,
+                quantity=Decimal("7.5"),
+                avg_cost_price=Decimal("100"),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    hv = get_holdings_valuation(db_session, user.id)
+    ozet = get_portfolio_summary(db_session, user.id)
+
+    assert hv.cash_try == Decimal("250.00")
+    assert hv.cash_weight_percent == Decimal("25.00")
+    assert ozet.cash_try == Decimal("250.00")
+
+    # Değişmez: varlık ağırlıkları + nakit ağırlığı = 100.
+    varlik_agirligi = sum(row.weight_percent for row in hv.holdings)
+    assert varlik_agirligi + hv.cash_weight_percent == Decimal("100.00")
+
+
+def test_nakit_YOKSA_sifir_doner_None_degil(db_session, valuation_fixture):
+    """Nakdi olmayan portföyde alan 0 döner; `None` "bilinmiyor" demek
+    olurdu ve ajan yine "veri yok" derdi."""
+    hv = get_holdings_valuation(db_session, valuation_fixture.id)
+
+    assert hv.cash_try == Decimal("0.00")
+    assert hv.cash_weight_percent == Decimal("0.00")

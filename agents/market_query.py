@@ -68,6 +68,12 @@ def _sirket_eslemesi() -> dict[str, str]:
     return {_normalize(ad): kayit["ticker"] for ad, kayit in ham.items() if kayit.get("ticker")}
 
 
+# Sorunun BİRİMİNİ belirten, konusunu belirtmeyen ifadeler (bkz.
+# `_tum_sirketleri_tespit_et`). `price_query.varlik_tespit_et` de aynı
+# temizliği yapıyor.
+_BIRIM_IFADELERI = ("kac dolar", "kac tl", "kac lira", "kac euro")
+
+
 def _tum_sirketleri_tespit_et(query: str) -> set[str]:
     """Sorguda geçen TÜM farklı şirketlerin borsa kodlarını döndürür.
 
@@ -93,6 +99,16 @@ def _tum_sirketleri_tespit_et(query: str) -> set[str]:
 
     # 2) Normal tarama: küçültülmüş ve aksansız.
     normalized = _normalize(query)
+
+    # BİRİM İFADELERİ ÖNCE SİLİNİR. `company_mappings.json` para birimlerini
+    # de takma ad olarak taşıyor ("dolar" -> USDTRY) — haber filtresi için
+    # doğru, ama "kaç dolar" sorunun BİRİMİdir, konusu değil. Ölçüldü
+    # (1 Eylül 2026): "Brent petrol kaç dolar?" sorgusu `sirket=USDTRY`
+    # filtresiyle RAG'e gidip kullanıcıya *"USDTRY için kayıt bulunamadı"*
+    # diyordu — hem yanlış konu hem de kullanıcıya gösterilmek için
+    # yazılmamış bir iç mesaj.
+    for birim in _BIRIM_IFADELERI:
+        normalized = normalized.replace(birim, " ")
     for ad, ticker in eslemeler.items():
         if re.search(rf"\b{re.escape(ad)}\b", normalized):
             bulunanlar.add(ticker)

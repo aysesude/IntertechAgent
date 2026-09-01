@@ -290,6 +290,7 @@ def get_portfolio_summary(db: Session, user_id: UUID) -> PortfolioSummary:
         total_cost_basis=_round2(total_cost_basis),
         net_invested=_round2(net_invested),
         total_gain_loss=GainLoss(amount=_round2(gain_amount), percent=_round2(gain_percent)),
+        cash_try=_round2(cash_balance),
         allocation=allocation,
         # Tamamen satılmış (quantity=0) satırlar gerçekleşmiş K-Z taşımak için
         # tabloda durur; aktif pozisyon sayısına katılmaz.
@@ -456,7 +457,8 @@ def get_holdings_valuation(db: Session, user_id: UUID) -> HoldingsValuation:
         )
 
     # Payda get_portfolio_summary ile aynı olmalı: serbest nakit de dahil.
-    total_portfolio_value = total_market_value + cash_balance_as_of(db, portfolio.id)
+    cash_balance = cash_balance_as_of(db, portfolio.id)
+    total_portfolio_value = total_market_value + cash_balance
 
     # Tablo okunabilirliği: büyükten küçüğe, fiyatı bilinmeyenler en sonda.
     ara_satirlar.sort(
@@ -490,6 +492,12 @@ def get_holdings_valuation(db: Session, user_id: UUID) -> HoldingsValuation:
         user_id=user_id,
         as_of=max(as_of_dates) if as_of_dates else date.today(),
         holdings=rows,
+        cash_try=_round2(cash_balance),
+        cash_weight_percent=(
+            _round2(cash_balance / total_portfolio_value * 100)
+            if total_portfolio_value > 0
+            else None
+        ),
         best_performer=(
             _performer(max(ranked, key=lambda r: r.unrealized_pnl_percent)) if ranked else None
         ),

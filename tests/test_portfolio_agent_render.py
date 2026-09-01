@@ -8,7 +8,7 @@ boşluğu kapatıyor.
 """
 
 from agents.formatting import tr_date
-from agents.portfolio_agent import _render_price_history, _render_transactions
+from agents.portfolio_agent import _render, _render_price_history, _render_transactions
 
 
 def _tx(gun: str, tur: str, sembol, adet, nakit):
@@ -153,3 +153,65 @@ def test_fiyat_gecmisi_bulunamayan_sembolleri_soyler():
     )
     assert "YOKBOYLE" in metin
     assert "OLD" in metin
+
+
+# ---------------------------------------------------------------------------
+# Serbest nakit — anlatıya TUTAR olarak girer
+# ---------------------------------------------------------------------------
+
+
+def test_render_ozette_serbest_nakdi_TUTAR_olarak_yazar():
+    """Ölçülen hata (1 Eylül 2026): "Ne kadar param nakitte duruyor?" sorusu
+    *"verilerde yer almıyor"* cevabını alıyordu.
+
+    `allocation` nakdi yalnızca YÜZDE dilimi olarak taşıyordu; yüzdeyi toplam
+    değerle çarpmak modelin yapması yasak olan bir hesap (sayısal hiçbir değer
+    LLM tarafından üretilmez kuralı). Tutarın serileştirmeye girmesi gerekiyor.
+    """
+    metin = _render(
+        {
+            "summary": {
+                "as_of": "2026-09-01",
+                "total_value": 1583703.56,
+                "net_invested": 1250000.00,
+                "total_cost_basis": 1407837.42,
+                "total_gain_loss": {"amount": 333703.56, "percent": 26.70},
+                "cash_try": 175866.14,
+                "allocation": [{"asset_class": "cash", "percent": 11.10}],
+                "holdings_count": 7,
+            }
+        }
+    )
+
+    assert "Serbest nakit: 175.866,14 TL" in metin
+
+
+def test_render_varlik_listesinde_nakdi_agirligiyla_yazar():
+    """Satırların ağırlığı 100'e değil (100 − nakit%) değerine toplanır.
+
+    Nakit yazılmazsa model eksik ağırlığı yorumlamaya çalışıyor; ölçülen
+    turda varlık listesi %88,90'da kalıyordu ve fark hiçbir yerde
+    açıklanmıyordu.
+    """
+    metin = _render(
+        {
+            "holdings": {
+                "holdings": [
+                    {
+                        "symbol": "ASELS",
+                        "asset_class": "stock",
+                        "quantity": 866,
+                        "market_value_try": 348348.50,
+                        "weight_percent": 22.00,
+                        "unrealized_pnl_percent": 54.84,
+                    }
+                ],
+                "cash_try": 175866.14,
+                "cash_weight_percent": 11.10,
+            }
+        }
+    )
+
+    assert "Serbest nakit" in metin
+    assert "175.866,14 TL" in metin
+    assert "%11,10" in metin
