@@ -251,6 +251,44 @@ motorun kendisini değiştirmeyi gerektirir (`_target_volatility` hep üst
 sınırı hedefliyor, aksiyonlar riskli→savunma yönünde taşıyor) ve ayrıca bir
 ürün kararıdır — analist onayı bekliyor.
 
+## Analist Ajanı (`agents/analyst_agent.py`)
+
+Piyasa verisinin **ne anlama geldiğini** yorumlar: hedef fiyat, güncel fiyat,
+temel oranlar (F/K, PD/DD) ve ilgili belgeleri tek bağlamda toplayıp analitik
+bir metin üretir. Diğer ajanlardan farkı, sorunun "veri nedir" değil "veri ne
+söylüyor" olması — `detect_intent`'te `ANALYSIS` etiketi bunu ayırır ve
+`MARKET` ile birlikte seçilebilir.
+
+Akış: sorudaki şirketler `market_query.sirketleri_tespit_et` ile bulunur
+(**en fazla 3** — hız/token sınırı), her biri için dört tool eşzamanlı çağrılır
+(`get_target_prices`, `get_current_prices`, `get_fundamentals`,
+`search_market_news`), ayrıca kullanıcının risk profili
+(`get_user_risk_survey`) ve endeks kıyası için XU100'ün 3 aylık seyri alınır.
+Toplanan veri `prompts/analyst_agent.md`'ye gömülür.
+
+### Düğüm neden `try/except` ile sarılı
+
+`run_analyst_agent`, orchestrator'daki **tek korumalı düğümdür**. Diğer ajanlar
+istisnayı kendi içlerinde yakalayıp `AgentResponse(success=False)` döndürüyor;
+bu ajan `execute`'un ilk satırlarında korumasız. Oradan çıkan bir istisna
+LangGraph düğümünü düşürüyor ve — ölçüldü — **diğer ajanlar başarılı olsa bile
+tüm yanıt kayboluyordu**: `ANALYSIS` etiketi alan her soru boş dönüyordu.
+Kalkan, ajanın iç mantığı için değil, bir düğümün tüm grafiği düşürebilmesi
+için orada.
+
+### Bilinen açık noktalar (ürün/sahiplik kararı bekliyor)
+
+- **Prompt kuralı 6 kişiselleştirme istiyor** ("Risk profilinize uygun
+  olarak…"). Bu, PO'nun "sistem yalnızca uyarır, ne yapılacağını önermez"
+  kararıyla gerilimde. Sınırın nerede olduğu netleşmeli.
+- **Kural 2 ile 5/7 çelişiyor:** biri hesaplamayı yasaklıyor, diğerleri oran
+  kıyaslaması istiyor. Modelin kendi aritmetiğini yapması riskli.
+- **`get_fundamentals` canlı yfinance'e gidiyor**; önbellek, zaman aşımı yok ve
+  dönen oranlar **tarihsiz/kaynaksız** — AK 5.3 (kaynak + zaman damgası) bu
+  yolda karşılanmıyor. Diğer fiyat yollarında bu bilgi her satırda yazılıyor.
+
+Sözleşme testleri: `tests/test_analyst_agent.py` (LLM ve MCP sahte).
+
 ## Web Araştırma Ajanı (`agents/web_research_agent.py`) — çalışıyor
 
 Genel finans kavramlarını açıklar: "lot ne demek", "borsa saat kaçta kapanır",
@@ -336,12 +374,13 @@ geçmişini okumuyor: takip soruları ("peki ne zaman verilir") bağlamsız gidi
                 ┌─> portfolio_agent ────┐
                 ├─> market_agent ───────┤
 detect_intent ──┼─> risk_agent ─────────┼─> merge → END
-                ├─> web_research_agent ─┘
+                ├─> web_research_agent ─┤
+                ├─> analyst_agent ──────┘
                 └─> handle_out_of_scope → END
 ```
 
 - `detect_intent`: önce kural tabanlı kapsam kontrolü (`scope_checker`), sonra
-  LLM ile sınıflandırma. `PORTFOLIO`, `MARKET`, `RISK`, `WEB_RESEARCH`
+  LLM ile sınıflandırma. `PORTFOLIO`, `MARKET`, `RISK`, `WEB_RESEARCH`, `ANALYSIS`
   etiketlerinden **bir veya birkaçı** seçilebilir; `intent` alanı bunları `"+"` ile birleştirir
   (`"portfolio+risk"`). Eski tek kelimelik `BOTH` geriye dönük tanınır.
   Etiket alanı orchestrator dışına çıkmaz.
