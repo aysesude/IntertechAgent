@@ -24,10 +24,14 @@ DÖRT KART, DÖRT İŞ BÖLÜMÜ (prompt'ta da yazılı):
     portfoy YAPI      neye sahipsin         get_holdings
     piyasa  DIŞARISI  hangi gelişme var     get_portfolio_news
     risk    ÖLÇÜ      profille aran nasıl   get_risk_assessment
+
+DÖRT AYRI LLM ÇAĞRISI, PARALEL. Panelin bütün maliyeti LLM'de: ölçüm (test
+sunucusu, 2 Eylül 2026) tool'lar 0,3 sn, LLM 29,5 sn. Tek çağrıda dört kartın
+metni arka arkaya yazılıyordu; bölününce süre en uzun tek karta iniyor ve
+kartlar ek süre maliyeti olmadan uzayabiliyor. Ayrıntı: `_llm_metinleri`.
 """
 
 import asyncio
-import json
 import logging
 import re
 from collections.abc import Callable
@@ -48,7 +52,9 @@ _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "summary_agent.md").read
     encoding="utf-8"
 )
 
-_JSON_FENCE = re.compile(r"^```(?:json)?|```$", re.MULTILINE)
+# Model düz metin yazmalı ama bazen çıktıyı kod çitine alıyor; savunma
+# amaçlı temizleniyor.
+_KOD_CITI = re.compile(r"^```(?:json|markdown)?|```$", re.MULTILINE)
 
 # Metinden sayı çıkarma. Türkçe biçimde binlik nokta, ondalık virgül:
 # "1.583.703,56" tek bir sayıdır, "1", "583" ve "703" değil.
@@ -73,6 +79,17 @@ KART_BASLIKLARI = {
     "portfoy": "Portföyünüz",
     "piyasa": "Piyasa",
     "risk": "Risk",
+}
+
+# Her kartın GÖREVİ. Kartlar artık AYRI çağrılarda yazıldığı için hiçbiri
+# diğerinin metnini göremiyor; tekrarı engelleyen tek şey bu tablonun her
+# prompt'a "seninki bu, diğerleri şunlar" diye yazılması.
+KART_GOREVLERI = {
+    "genel": "ZAMAN. Ne oldu, ne değişti, dönem içinde nereye geldi.",
+    "portfoy": "YAPI. Neye sahip, dağılım nasıl, ağırlık nerede toplanmış.",
+    "piyasa": "DIŞARISI. Elindeki varlıklarla ilgili hangi gelişme var, "
+    "kaynak belgeler ne söylüyor.",
+    "risk": "ÖLÇÜ. Risk seviyesi, profiliyle arasındaki fark ve sebebi.",
 }
 
 
@@ -212,15 +229,50 @@ def _blok_portfoy(veri: dict[str, Any]) -> list[str]:
     return satirlar
 
 
+# Doküman metninden alınacak en fazla karakter. Kart "haber yorumu yok, sadece
+# başlık sıralıyor" diye bildirildi (sahada ölçüldü, 2 Eylül 2026) — sebebi
+# modelin yetersizliği değil, BLOĞUN İÇERİK TAŞIMAMASIYDI: LLM'e yalnızca
+# başlık/kaynak/tarih veriliyor, yorumlayacağı metin hiç verilmiyordu.
+#
+# Sınır var çünkü tam metinler uzun ve kartın işi belgeyi aktarmak değil.
+# Kesme CÜMLE SONUNDA yapılıyor: yarım kalan bir cümle modeli, olmayan bir
+# devamı tamamlamaya davet eder.
+_DOKUMAN_METIN_SINIRI = 320
+_PIYASA_VARLIK_SAYISI = 4
+_PIYASA_DOKUMAN_SAYISI = 2
+
+
+def _metin_kirp(metin: Any) -> str:
+    """Sınıra kadar kırpar, son tam cümlede biter."""
+    if not isinstance(metin, str):
+        return ""
+    duz = " ".join(metin.split())
+    if len(duz) <= _DOKUMAN_METIN_SINIRI:
+        return duz
+    kesik = duz[:_DOKUMAN_METIN_SINIRI]
+    son = max(kesik.rfind(". "), kesik.rfind("! "), kesik.rfind("? "))
+    # Cümle sonu çok başta kaldıysa kırpma metnin neredeyse tamamını atardı;
+    # o durumda kelime sınırında kesip açıkça devamı olduğunu belirtiyoruz.
+    if son > _DOKUMAN_METIN_SINIRI // 2:
+        return kesik[: son + 1]
+    return kesik.rsplit(" ", 1)[0] + "…"
+
+
 def _blok_piyasa(veri: dict[str, Any]) -> list[str]:
     haberler = veri.get("news") or {}
     satirlar: list[str] = []
-    for varlik in (haberler.get("assets") or [])[:3]:
-        for dokuman in (varlik.get("documents") or [])[:1]:
-            satirlar.append(
-                f"{varlik.get('symbol')}: {dokuman.get('baslik')} "
+    for varlik in (haberler.get("assets") or [])[:_PIYASA_VARLIK_SAYISI]:
+        for dokuman in (varlik.get("documents") or [])[:_PIYASA_DOKUMAN_SAYISI]:
+            baslik = (
+                f"{varlik.get('symbol')} [{dokuman.get('tur') or 'belge'}]: "
+                f"{dokuman.get('baslik')} "
                 f"({dokuman.get('kaynak')}, {_tr_date(dokuman.get('tarih'))})"
             )
+            icerik = _metin_kirp(dokuman.get("content"))
+            # İçerikteki sayılar KAYNAKLIDIR: belgeden geliyor, uydurma değil.
+            # Bloğa girdikleri için sayı doğrulaması da onlara izin verir ve
+            # kart bir bilanço rakamını gerekçe göstererek konuşabilir.
+            satirlar.append(f"{baslik}\n  {icerik}" if icerik else baslik)
 
     kapsanan = haberler.get("covered_weight_percent")
     if kapsanan is not None:
@@ -274,6 +326,15 @@ _BLOK_URETICILERI = {
 }
 
 _VERI_YOK = "Bu kart için yeterli veri alınamadı."
+
+
+def _diger_kartlar(kart_id: str) -> str:
+    """Bir kartın prompt'una diğer üçünün konusunu yazar — tekrarı engelleyen
+    tek mekanizma bu (kartlar ayrı çağrılarda yazılıyor, birbirlerini
+    göremiyorlar)."""
+    return "\n".join(
+        f"- {KART_BASLIKLARI[k]}: {KART_GOREVLERI[k]}" for k in KART_SIRASI if k != kart_id
+    )
 
 
 class SummaryAgent(BaseAgent):
@@ -340,7 +401,10 @@ class SummaryAgent(BaseAgent):
             "performance": ("get_portfolio_performance", {"user_id": user_id, "window": "1m"}),
             "holdings": ("get_holdings", {"user_id": user_id}),
             "risk": ("get_risk_assessment", {"user_id": user_id}),
-            "news": ("get_portfolio_news", {"user_id": user_id, "per_asset": 1}),
+            "news": (
+                "get_portfolio_news",
+                {"user_id": user_id, "per_asset": _PIYASA_DOKUMAN_SAYISI},
+            ),
         }
         sonuclar = await asyncio.gather(
             *(self.call_mcp_tool(ad, arg) for ad, arg in cagrilar.values()),
@@ -358,35 +422,63 @@ class SummaryAgent(BaseAgent):
         return {kart: uretici(veri) for kart, uretici in _BLOK_URETICILERI.items()}
 
     async def _llm_metinleri(self, bloklar: dict[str, list[str]]) -> dict[str, str]:
-        """LLM'den dört kart metnini alır. Herhangi bir aksilikte boş sözlük
-        döner ve çağıran taraf deterministik bloklara düşer."""
+        """Kart metinlerini alır. KART BAŞINA BİR ÇAĞRI, DÖRDÜ PARALEL.
+
+        NEDEN TEK ÇAĞRI DEĞİL — bu bir hız düzeltmesi. Ölçüm (test sunucusu,
+        2 Eylül 2026): tool'lar 0,3 sn, LLM 29,5 sn. Yani panelin bütün
+        maliyeti tek bir üretimde ve orada süreyi belirleyen, ÜRETİLEN TOKEN
+        SAYISIDIR. Dört kartın metnini tek çağrıda arka arkaya yazdırmak,
+        dördünü sırayla beklemek demekti.
+
+        Bölündüğünde LLM aşaması dört kartın toplamı yerine EN UZUN TEK KARTA
+        iner. Üç yan faydası var: (1) kartlar uzayabiliyor, çünkü ek metin
+        artık toplam süreye eklenmiyor; (2) her çağrı yalnızca kendi bloğunu
+        taşıdığı için piyasa kartının uzun belge alıntıları diğer üç çağrıyı
+        şişirmiyor; (3) JSON ayrıştırma kırılganlığı ortadan kalkıyor —
+        model artık düz metin yazıyor.
+
+        Bedeli TEKRAR RİSKİ: kartlar birbirinin metnini göremiyor. Prompt her
+        çağrıda "senin işin bu, diğerlerininki şu" diyerek bunu kapatıyor
+        (`KART_GOREVLERI`).
+
+        Bir kartın çağrısı düşerse yalnızca o kart deterministik özete iner;
+        `return_exceptions=True` bunun için.
+        """
         dolu = {k: v for k, v in bloklar.items() if v}
         if not dolu:
             return {}
 
-        girdi = "\n\n".join(
-            f"[{kart_id}] {KART_BASLIKLARI[kart_id]}\n" + "\n".join(satirlar)
-            for kart_id, satirlar in dolu.items()
+        istemci = get_llm_client()
+        sonuclar = await asyncio.gather(
+            *(self._tek_kart(istemci, k, v) for k, v in dolu.items()),
+            return_exceptions=True,
         )
-        prompt = _PROMPT_TEMPLATE.replace("{{veriler}}", girdi)
 
-        try:
-            ham = await get_llm_client().generate("Kartları yaz.", system=prompt)
-            cozulmus = json.loads(_JSON_FENCE.sub("", ham.strip()).strip())
-        except Exception:
-            logger.warning("[AJAN] summary: LLM metni alınamadı", exc_info=True)
-            return {}
+        gecerli: dict[str, str] = {}
+        for kart_id, sonuc in zip(dolu, sonuclar):
+            if isinstance(sonuc, Exception):
+                logger.warning("[AJAN] summary: %s kartı yazılamadı — %s", kart_id, sonuc)
+                continue
+            if sonuc:
+                gecerli[kart_id] = sonuc
+        return gecerli
 
-        if not isinstance(cozulmus, dict):
-            return {}
+    async def _tek_kart(self, istemci: Any, kart_id: str, satirlar: list[str]) -> str | None:
+        """Bir kartın metnini üretir; doğrulamadan geçmezse `None`."""
+        prompt = (
+            _PROMPT_TEMPLATE.replace("{{kart_basligi}}", KART_BASLIKLARI[kart_id])
+            .replace("{{kart_gorevi}}", KART_GOREVLERI[kart_id])
+            .replace("{{diger_kartlar}}", _diger_kartlar(kart_id))
+            .replace("{{veriler}}", "\n".join(satirlar))
+        )
+
+        ham = await istemci.generate("Kartı yaz.", system=prompt)
+        metin = _KOD_CITI.sub("", (ham or "").strip()).strip()
+        if not metin:
+            return None
 
         # SAYI DOĞRULAMASI KART BAZINDA. Bir kartta uydurma sayı varsa yalnızca
         # o kart düşer; diğer üçü cezalandırılmaz.
-        gecerli: dict[str, str] = {}
-        for kart_id, satirlar in dolu.items():
-            metin = cozulmus.get(kart_id)
-            if not isinstance(metin, str) or not metin.strip():
-                continue
-            if _sayilari_dogrula(metin, "\n".join(satirlar)):
-                gecerli[kart_id] = metin.strip()
-        return gecerli
+        if not _sayilari_dogrula(metin, "\n".join(satirlar)):
+            return None
+        return metin
