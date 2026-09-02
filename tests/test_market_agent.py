@@ -2,7 +2,15 @@
 fonksiyonlar — render katmanı ve filtresiz-yedek-arama güvenlik ağı.
 """
 
-from agents.market_agent import _render_hedef_fiyat, _yanlis_sirket_sonuclarini_ele
+from agents.market_agent import (
+    MarketAgent,
+    _belge_bulunamadi_metni,
+    _hedefe_uzaklik,
+    _kaynak_kullanilmadi_mi,
+    _render_hedef_fiyat,
+    _render_temel_oranlar,
+    _yanlis_sirket_sonuclarini_ele,
+)
 
 
 def test_render_hedef_fiyat_tek_kayit():
@@ -124,3 +132,237 @@ def test_karisik_sonuclarda_yalnizca_yanlis_sirket_elenir():
 
 def test_bos_liste_bos_doner():
     assert _yanlis_sirket_sonuclarini_ele([], "ISCTR") == []
+
+
+# ---------------------------------------------------------------------------
+# Değerleme çarpanları (F/K, PD/DD) — RAG'e gitmez
+# ---------------------------------------------------------------------------
+
+
+def test_temel_oran_render_YFINANCE_sozlesmesine_uyar():
+    """Ölçüldü (yfinance 1.6.0): `profitMargins` KESİR (0,2949),
+    `dividendYield` ZATEN YÜZDE (3,06). İkisine aynı işlemi uygulamak sayıyı
+    yüz kat yanlış gösterirdi."""
+    metin = _render_temel_oranlar(
+        "AKBNK",
+        {
+            "records": {
+                "AKBNK": {
+                    "trailingPE": 5.6074767,
+                    "forwardPE": 4.1189933,
+                    "priceToBook": 1.1527562,
+                    "ebitdaMargins": 0.0,
+                    "profitMargins": 0.29490998,
+                    "dividendYield": 3.06,
+                    "marketCap": 374399991808,
+                    "currency": "TRY",
+                }
+            },
+            "symbols_without_data": [],
+            "source": "yfinance",
+            "fetched_at": "2026-09-01T17:30:00+00:00",
+        },
+    )
+
+    assert "F/K: 5,61" in metin
+    assert "PD/DD: 1,15" in metin
+    assert "Kâr marjı: %29,49" in metin
+    assert "Temettü verimi: %3,06" in metin
+    # Bankada FAVÖK tanımsız; yfinance 0 döner. "%0,00" basmak bir ÖLÇÜM
+    # iddiası olurdu — o oranın o şirket için anlamı yok.
+    assert "FAVÖK" not in metin
+    # Kaynak + tarih HER ZAMAN yazılır (AK 5.3).
+    assert "yfinance" in metin and "01.09.2026" in metin
+    # Büyük tutar okunur ölçekte.
+    assert "374,40 milyar TRY" in metin
+
+
+def test_temel_oran_veri_yoksa_UYDURMAZ():
+    metin = _render_temel_oranlar("ZZZZ", {"records": {}, "symbols_without_data": ["ZZZZ"]})
+
+    assert "bulunamadı" in metin
+    assert "ZZZZ" in metin
+
+
+# ---------------------------------------------------------------------------
+# "Belgelerde yok" cevabına kaynak eklenmez
+# ---------------------------------------------------------------------------
+
+
+def test_bulunamadi_cevabina_KAYNAK_EKLENMEZ():
+    """Kaynak listesi koda gömülü olarak ekleniyor; model "bilgi yok"
+    dediğinde cevap kendi kendisiyle çelişiyordu.
+
+    Ölçüldü (1 Eylül 2026): [27] "S&P 500 ne durumda?" cevabının kaynağı
+    olarak *Tofaş Şirket Profili*, [71] olmayan bir şirket (ZZZZ) için
+    *Pegasus Hava Yolları Şirket Profili* gösterildi. Kullanılmayan bir
+    kaynağı göstermek, kaynak göstermenin amacını tersine çevirir.
+    """
+    assert _kaynak_kullanilmadi_mi("Elimdeki belgelerde bu bilgi yer almıyor.")
+    # Model cümleyi soruya uyarlıyor; kalıp buna dayanmalı.
+    assert _kaynak_kullanilmadi_mi(
+        "Elimdeki belgelerde ASELSAN'ın sözleşme tutarı bilgisi yer almıyor."
+    )
+    assert _kaynak_kullanilmadi_mi(
+        "Elimdeki belgelerde S&P 500'ün mevcut durumuna ilişkin bilgi yer almıyor."
+    )
+
+
+def test_dolu_cevapta_kaynak_KORUNUR():
+    """Yalnızca BİR ayrıntının eksik olduğunu söyleyen dolu bir cevapta
+    kaynaklar gerçekten kullanılmıştır ve listelenmelidir."""
+    dolu = (
+        "Tüpraş 2026 ikinci çeyrekte 45,877 milyar TL net kâr açıkladı. "
+        "Hasılat yıllık %43 arttı. Özkaynaklar çeyrek içinde %21 büyüdü. "
+        "İlk yarı net kârı 49,847 milyar TL oldu. Serbest nakit akışı 118 "
+        "milyar TL. Ancak segment kırılımı elimdeki belgelerde yer almıyor."
+    )
+
+    assert not _kaynak_kullanilmadi_mi(dolu)
+    assert not _kaynak_kullanilmadi_mi(
+        "THYAO 5 Ağustos 2026'da ilk yarı sonuçlarını açıkladı; hasılat 585 milyar TL."
+    )
+
+
+def test_prompt_KONU_ile_YORUMU_ayirmayi_soyluyor():
+    """REGRESYON: prompt kuralı 3 eskiden sorunun TAMAMINA bakıyordu.
+
+    "Aselsan'ın son haberleri portföyümü nasıl etkiler?" sorusunda elde
+    ASELSAN bilanço parçaları varken model "haber verisi bulunmadığı için
+    hesaplanamıyor" diyordu — belgeler haberi içeriyor ama portföy etkisini
+    içermiyor, model kuralı sorunun tamamına uygulayıp elindeki haberi
+    çöpe atıyordu.
+    """
+    from agents.market_agent import _PROMPT_TEMPLATE
+
+    assert "SORUNUN KONUSU ile SORUNUN İSTEDİĞİ YORUMU AYIR" in _PROMPT_TEMPLATE
+
+
+async def test_uygunluk_yaniti_PUANLA_KARSILASTIRIR():
+    """Üç kaynak deterministik olarak birleşir: evren tanımı, uygunluk
+    seviyesi, kullanıcının anket puanı. LLM devrede değil."""
+
+    class Sahte(MarketAgent):
+        def __init__(self, puan):
+            super().__init__(mcp_server_url="http://kullanilmiyor")
+            self._puan = puan
+
+        async def _fetch_risk_survey_score(self, user_id):
+            return self._puan
+
+    # Serbest fon seviye 7; puanı 6 olan kullanıcı alamaz.
+    kapsam_disi = await Sahte(6)._uygunluk_yaniti("BHE", "u")
+    assert "kapsamı dışında" in kapsam_disi.summary_text
+    assert "seviyesi 7" in kapsam_disi.summary_text and "puanınız 6" in kapsam_disi.summary_text
+
+    # Yabancı hisse seviye 5; aynı kullanıcı alabilir.
+    kapsam_ici = await Sahte(6)._uygunluk_yaniti("AAPL", "u")
+    assert "kapsamındadır" in kapsam_ici.summary_text
+
+
+async def test_uygunluk_yaniti_TUTULABILIRLIGI_once_soyler():
+    """Satın alınamayan bir varlıkta puan tartışması anlamsız."""
+
+    class Sahte(MarketAgent):
+        async def _fetch_risk_survey_score(self, user_id):
+            return 6
+
+    yanit = await Sahte(mcp_server_url="x")._uygunluk_yaniti("XU100", "u")
+
+    assert "satın alınamaz" in yanit.summary_text
+    assert "risk puanınız" not in yanit.summary_text
+
+
+async def test_uygunluk_yaniti_anket_yoksa_PUAN_UYDURMAZ():
+    class Sahte(MarketAgent):
+        async def _fetch_risk_survey_score(self, user_id):
+            return None
+
+    yanit = await Sahte(mcp_server_url="x")._uygunluk_yaniti("BHE", "u")
+
+    assert "anketiniz henüz doldurulmadığı" in yanit.summary_text
+
+
+def test_belge_bulunamadi_metni_NEYIN_bulunamadigini_soyler():
+    """Eski metin "USDTRY için kayıt bulunamadı." idi ve iki sorunu vardı.
+
+    (1) Neyin bulunamadığını söylemiyordu: "kayıt yok" cümlesi "bu varlığa
+    dair hiçbir verimiz yok" gibi okunuyordu. Oysa bulunamayan yalnızca ARŞİV
+    BELGESİ; fiyat `price_history`'de duruyor. Ölçüldü (1 Eylül 2026, [54]):
+    tek paragrafta hem "USD/TRY 45,93'ten 48,26'ya çıkmış" hem "USDTRY için
+    kayıt bulunamadığı belirtiliyor" yazıyordu.
+    (2) Ham sembol sızdırıyordu; kullanıcı "dolar" yazmıştı.
+    """
+    metin = _belge_bulunamadi_metni("USDTRY")
+
+    assert "Belgeler" in metin
+    assert "Amerikan Doları" in metin
+    assert "USDTRY" not in metin
+
+
+def test_belge_bulunamadi_metni_taninmayan_sembolde_COKMEZ():
+    """Evrende olmayan bir sembolde ad yerine sembolün kendisi kullanılır —
+    cevabı büsbütün kaybetmektense sembol göstermek iyidir."""
+    assert "BILINMEYEN" in _belge_bulunamadi_metni("BILINMEYEN")
+
+
+# ---------------------------------------------------------------------------
+# Hedefe uzaklık — kendi verimizle, kodda
+# ---------------------------------------------------------------------------
+
+HEDEF_KAYIT = {
+    "records": [
+        {
+            "symbol": "ASELS",
+            "institution": "Şeker Yatırım",
+            "recommendation": "AL",
+            "target_price": 495.0,
+            "currency": "TRY",
+            "report_date": "2026-08-31",
+            "price_at_report": 404.0,
+        }
+    ]
+}
+
+
+def _guncel(fiyat: float) -> dict:
+    return {"prices": [{"symbol": "ASELS", "price": fiyat, "price_date": "2026-09-01"}]}
+
+
+def test_hedefe_uzaklik_KODDA_hesaplanir():
+    """Ürün kararı (1 Eylül 2026, seçenek C): "hedef 180, şu an 150, yüzde kaç
+    potansiyel var?" sorusuna "hesaplanmış yüzde verilerde yer almıyor"
+    deniyordu ([69]). Kural gereği doğruydu ama kullanışsızdı.
+
+    Hesap kodda ve KENDİ verimizle yapılıyor — kullanıcının verdiği sayılarla
+    değil: onlar eski/yanlış olabilir ve hesaplamak o rakamlara otorite
+    kazandırırdı.
+    """
+    metin = _render_hedef_fiyat(HEDEF_KAYIT, _guncel(402.25))
+
+    assert "hedefe uzaklık: +%23,06" in metin
+    # Hangi fiyata göre hesaplandığı YAZILIR, yoksa yüzde doğrulanamaz.
+    assert "402,25" in metin and "01.09.2026" in metin
+
+
+def test_hedefe_uzaklik_ISARETI_yuzde_iminin_onunde():
+    """Türkçe yazımda "-%4,81" doğru, "%-4,81" değil."""
+    metin = _render_hedef_fiyat(HEDEF_KAYIT, _guncel(520.0))
+
+    assert "-%4,81" in metin
+    assert "%-4" not in metin
+
+
+def test_guncel_fiyat_yoksa_uzaklik_SATIRI_HIC_YAZILMAZ():
+    """Hedef fiyat cevabı kendi başına geçerli; uzaklık "varsa iyi" bir ek.
+    Uydurma bir yüzde üretilmez (AK 5.5)."""
+    metin = _render_hedef_fiyat(HEDEF_KAYIT)
+
+    assert "hedefe uzaklık" not in metin
+    assert "495,00" in metin
+
+
+def test_gecersiz_guncel_fiyatta_uzaklik_hesaplanmaz():
+    assert _hedefe_uzaklik(495.0, 0) is None
+    assert _hedefe_uzaklik(495.0, None) is None
+    assert _hedefe_uzaklik(None, 402.25) is None

@@ -13,9 +13,9 @@ eşlenir. Aşağıdaki testler bu yeni sözleşmeyi doğrular.
 from app.core.config import RISK_MAX_CATEGORY_WEIGHT, AssetClass, RiskProfile
 from data.seed_ledger import (
     ARCHETYPE_RISK_PROFILE,
-    NUM_USERS,
     PORTFOLIO_ARCHETYPE_CYCLE,
     PORTFOLIO_ARCHETYPES,
+    TOPLAM_KULLANICI,
     _user_id,
 )
 
@@ -60,10 +60,12 @@ def test_kullanici_kimlikleri_tohuma_bagli():
     portföyler aynı üretilirken kimlikler her `make seed` sonrası değişiyor,
     elde tutulan test kimlikleri ölüyordu.
     """
-    ilk = [_user_id(i) for i in range(NUM_USERS)]
-    ikinci = [_user_id(i) for i in range(NUM_USERS)]
+    # Demo personası da dahil (TOPLAM_KULLANICI): kimliği aynı ad alanından
+    # üretiliyor, çakışma kontrolü onu da kapsamalı.
+    ilk = [_user_id(i) for i in range(TOPLAM_KULLANICI)]
+    ikinci = [_user_id(i) for i in range(TOPLAM_KULLANICI)]
 
     assert ilk == ikinci, "aynı sıra farklı UUID üretti"
-    assert len(set(ilk)) == NUM_USERS, "UUID çakışması"
+    assert len(set(ilk)) == TOPLAM_KULLANICI, "UUID çakışması"
     # uuid5 sürüm damgası — yanlışlıkla uuid4'e dönülürse yakalanır.
     assert all(u.version == 5 for u in ilk)

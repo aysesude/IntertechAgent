@@ -68,6 +68,12 @@ def _sirket_eslemesi() -> dict[str, str]:
     return {_normalize(ad): kayit["ticker"] for ad, kayit in ham.items() if kayit.get("ticker")}
 
 
+# Sorunun BİRİMİNİ belirten, konusunu belirtmeyen ifadeler (bkz.
+# `_tum_sirketleri_tespit_et`). `price_query.varlik_tespit_et` de aynı
+# temizliği yapıyor.
+_BIRIM_IFADELERI = ("kac dolar", "kac tl", "kac lira", "kac euro")
+
+
 def _tum_sirketleri_tespit_et(query: str) -> set[str]:
     """Sorguda geçen TÜM farklı şirketlerin borsa kodlarını döndürür.
 
@@ -93,6 +99,16 @@ def _tum_sirketleri_tespit_et(query: str) -> set[str]:
 
     # 2) Normal tarama: küçültülmüş ve aksansız.
     normalized = _normalize(query)
+
+    # BİRİM İFADELERİ ÖNCE SİLİNİR. `company_mappings.json` para birimlerini
+    # de takma ad olarak taşıyor ("dolar" -> USDTRY) — haber filtresi için
+    # doğru, ama "kaç dolar" sorunun BİRİMİdir, konusu değil. Ölçüldü
+    # (1 Eylül 2026): "Brent petrol kaç dolar?" sorgusu `sirket=USDTRY`
+    # filtresiyle RAG'e gidip kullanıcıya *"USDTRY için kayıt bulunamadı"*
+    # diyordu — hem yanlış konu hem de kullanıcıya gösterilmek için
+    # yazılmamış bir iç mesaj.
+    for birim in _BIRIM_IFADELERI:
+        normalized = normalized.replace(birim, " ")
     for ad, ticker in eslemeler.items():
         if re.search(rf"\b{re.escape(ad)}\b", normalized):
             bulunanlar.add(ticker)
@@ -125,6 +141,15 @@ def sirket_tespit_et(query: str) -> str | None:
     if len(bulunanlar) == 1:
         return next(iter(bulunanlar))
     return None
+
+
+def sirketleri_tespit_et(query: str) -> list[str]:
+    """Sorguda geçen TÜM şirketlerin borsa kodlarını bir liste olarak döndürür.
+
+    Analist Ajanı'nın "Akbank mı Yapı Kredi mi" gibi çoklu karşılaştırma
+    sorularında kullanılmak üzere yazılmıştır.
+    """
+    return list(_tum_sirketleri_tespit_et(query))
 
 
 def sirket_sayisi(query: str) -> int:
@@ -254,7 +279,18 @@ def guncellik_istegi_var_mi(query: str) -> bool:
 # Sorgunun GENEL piyasa gündemini istediğini işaretleyen kelimeler. Kelime
 # sınırıyla aranır; "haberler" gibi çekimli hâlleri yakalamak için gövde
 # olarak yazıldı ("haber" -> "haberler", "haberi").
-_GUNDEM_KELIMELERI_RE = re.compile(r"\b(haber\w*|gundem\w*|piyasa\w*|borsa\w*|ekonomi\w*)\b")
+# Kullanıcı konuyu değil KAYNAĞI söyleyebiliyor: "Bloomberg HT'de bugün ne
+# var?" cümlesinde haber/gündem/piyasa kelimelerinin hiçbiri geçmiyor ve soru
+# Web Araştırma Ajanı'na düşüp TELEVİZYON YAYIN AKIŞI cevabı alıyordu
+# (ölçüldü, 1 Eylül 2026) — oysa "Son piyasa haberleri neler?" aynı veriyi
+# sorunsuz getiriyor.
+#
+# YALNIZCA fiilen beslediğimiz kaynak burada. Başka bir yayın adı eklemek
+# (CNBC, Reuters) kullanıcıya sunmadığımız bir kaynağı sunuyormuş gibi
+# görünmek olurdu; canlı başlıklar BloombergHT'den geliyor.
+_GUNDEM_KELIMELERI_RE = re.compile(
+    r"\b(haber\w*|gundem\w*|piyasa\w*|borsa\w*|ekonomi\w*|bloomberg\w*)\b"
+)
 
 
 def genel_gundem_istegi_var_mi(query: str) -> bool:

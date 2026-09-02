@@ -79,6 +79,10 @@ class PortfolioSummary(BaseModel):
     total_cost_basis: Money
     net_invested: Money
     total_gain_loss: GainLoss
+    # Serbest nakit, TUTAR olarak. `allocation` bunu zaten bir yüzde dilimi
+    # olarak taşıyor ama "ne kadar param nakitte duruyor" sorusu tutar ister;
+    # yüzdeyi toplam değerle çarpmak ajanın yapmasi yasak olan bir hesaptır.
+    cash_try: Money
     allocation: list[AllocationItem]
     holdings_count: int
 
@@ -127,11 +131,25 @@ class PerformerRef(BaseModel):
 
 
 class HoldingsValuation(BaseModel):
+    """Varlık satırları + serbest nakit.
+
+    NAKİT SATIR DEĞİL, ALAN. Nakit satın alınmış bir varlık değil, defter
+    bakiyesidir: sembolü, maliyeti, birim fiyatı yoktur. Sahte bir satır
+    üretmek tabloyu ve K/Z sıralamasını bozardı. Ama `weight_percent`in
+    paydası nakit DAHİL toplam değer olduğu için satırlar 100'e değil
+    (100 − nakit%) değerine toplanır; nakit ayrı bir alan olarak verilmezse
+    aradaki fark açıklanamaz kalır ve ajan "nakit bilgisi yok" der (ölçüldü,
+    1 Eylül 2026 sohbet turu).
+    """
+
     model_config = ConfigDict(frozen=True)
 
     user_id: UUID
     as_of: date
     holdings: list[HoldingRow]
+    # Serbest nakit (TRY) ve toplam portföy değeri içindeki payı.
+    cash_try: Money
+    cash_weight_percent: MoneyOpt = None
     # Fiyatı eksik varlıklar sıralamaya girmez.
     best_performer: PerformerRef | None = None
     worst_performer: PerformerRef | None = None
@@ -243,6 +261,23 @@ class AssetClassReturn(BaseModel):
 
 
 class BenchmarkComparison(BaseModel):
+    """Kıyaslama kartı.
+
+    İKİ FARKLI ÖLÇÜ bilerek yan yana duruyor:
+
+    - `portfolio_return_percent`: TWR — dış para giriş-çıkışından arındırılmış,
+      **nakit dahil** gerçek getiri. Performans kartındaki
+      `PerformanceSummary.change_percent` ile AYNI sayıdır (aynı fonksiyon,
+      aynı pencere).
+    - `benchmarks[].return_percent`: endeksin saf FİYAT getirisi.
+
+    Hesapta duran para getiri üretmez, endeks ise tamamen yatırımdadır; fark
+    kullanıcının gerçekten yaşadığı farktır ve arayüzde yazılıdır.
+
+    `by_asset_class` üçüncü bir ölçüdür (donmuş t0 sepetinin sınıf bazlı fiyat
+    getirisi) ve toplamı `portfolio_return_percent`e EŞİT DEĞİLDİR.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     user_id: UUID
@@ -253,8 +288,8 @@ class BenchmarkComparison(BaseModel):
     portfolio_return_percent: MoneyOpt = None
     by_asset_class: list[AssetClassReturn] = []
     benchmarks: list[BenchmarkEntry] = []
-    # Pencere başında fiyatı olmayan varlıklar hesaba katılmaz; eksik maliyetle
-    # bölmek yanlış getiri üretirdi.
+    # Dönem sonunda fiyatı bulunamayan varlıklar: portföy değerine hiç
+    # girmezler, dolayısıyla getiri eksik hesaplanmıştır (AK 5.5).
     excluded_symbols: list[str] = []
 
 

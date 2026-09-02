@@ -8,11 +8,13 @@ Bu tool internete çıkmaz; `price_history` tablosunu okur. Fiyatların tazeliğ
 günlük toplama işinin sorumluluğudur (`app/services/price_ingest.py`).
 """
 
+from datetime import datetime, timezone
 from typing import Any
 
 from fastmcp import FastMCP
 
 from app.core.config import Granularity, PriceCurrency, TimeWindow
+from app.providers.yfinance_p import YFinanceProvider
 from app.services.price_service import get_asset_price_history as fetch_price_history
 from app.services.price_service import get_current_prices as fetch_current_prices
 from app.services.target_price_service import get_target_prices as fetch_target_prices
@@ -150,4 +152,48 @@ def register(mcp: FastMCP) -> list[str]:
         with db_session() as db:
             return fetch_target_prices(db, symbols)
 
-    return ["get_asset_price_history", "get_current_prices", "get_target_prices"]
+    @mcp.tool(name="get_fundamentals")
+    @tool_handler()
+    def get_fundamentals(symbols: list[str]) -> dict[str, Any]:
+        """Verilen sembollerin F/K, PD/DD, FAVÖK Marjı, Temettü Verimi gibi temel
+        analiz oranlarını (fundamentals) döndürür.
+
+        Ne zaman kullanılır: "Hisse ucuz mu", "F/K'sı nedir", "Temel analizi nasıldır"
+        gibi sorular sorulduğunda.
+
+        Args:
+            symbols: Sembol listesi, ör. ["GARAN", "ASELS"]. Boş olamaz.
+        """
+        provider = YFinanceProvider()
+        results = {}
+        unknown = []
+        for sym in symbols:
+            try:
+                data = provider.fetch_fundamentals(sym + ".IS" if not sym.endswith(".IS") else sym)
+                if data:
+                    results[sym] = data
+                else:
+                    unknown.append(sym)
+            except Exception:
+                unknown.append(sym)
+
+        return {
+            "success": True,
+            "data": {
+                "records": results,
+                "symbols_without_data": unknown,
+                # KAYNAK + ZAMAN DAMGASI (AK 5.3). Diğer fiyat yollarında bu
+                # bilgi her satırda yazılıyor; burada hiç yoktu ve çarpanlar
+                # tarihsiz sunuluyordu. Değerler ANLIK çekiliyor (önbellek
+                # yok), dolayısıyla damga çağrı anıdır.
+                "source": "yfinance",
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            },
+        }
+
+    return [
+        "get_asset_price_history",
+        "get_current_prices",
+        "get_target_prices",
+        "get_fundamentals",
+    ]

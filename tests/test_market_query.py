@@ -309,3 +309,42 @@ class TestPortfoyReferansi:
         from agents.market_query import portfoy_referansi_var_mi
 
         assert portfoy_referansi_var_mi(query) is False
+
+
+def test_BIRIM_ifadesi_sirket_sanilmaz():
+    """`company_mappings.json` para birimlerini de takma ad taşıyor
+    ("dolar" -> USDTRY) — haber filtresi için doğru, ama "kaç dolar" sorunun
+    BİRİMİdir, konusu değil.
+
+    Ölçüldü (1 Eylül 2026): "Brent petrol kaç dolar?" sorgusu `sirket=USDTRY`
+    filtresiyle RAG'e gidiyor ve kullanıcıya *"USDTRY için kayıt bulunamadı"*
+    diyordu — hem yanlış konu, hem de kullanıcıya gösterilmek üzere
+    yazılmamış bir iç mesaj.
+    """
+    assert sirket_tespit_et("Brent petrol kaç dolar?") is None
+    # Gerçek konu varsa birim onu EZMEZ: iki farklı "şirket" (AAPL + USDTRY)
+    # bulunsaydı `sirket_tespit_et` belirsizlik sayıp None dönerdi ve filtre
+    # hiç konulmazdı.
+    assert sirket_tespit_et("Apple hissesi kaç dolar?") == "AAPL"
+
+    # Konu GERÇEKTEN dolar ise tespit korunur.
+    assert sirket_tespit_et("Dolar ne kadar?") == "USDTRY"
+    assert sirket_tespit_et("Dolar hakkında son haberler") == "USDTRY"
+
+
+def test_HABER_KAYNAGI_adi_gundem_istegi_sayilir():
+    """Kullanıcı konuyu değil KAYNAĞI söyleyebiliyor.
+
+    Ölçüldü (1 Eylül 2026): "Bloomberg HT'de bugün ne var?" cümlesinde
+    haber/gündem/piyasa kelimelerinin hiçbiri geçmiyor; soru Web Araştırma
+    Ajanı'na düşüp TELEVİZYON YAYIN AKIŞI cevabı alıyordu — oysa "Son piyasa
+    haberleri neler?" aynı veriyi sorunsuz getiriyor.
+    """
+    assert genel_gundem_istegi_var_mi("Bloomberg HT'de bugün ne var?")
+    assert genel_gundem_istegi_var_mi("bloomberght ne diyor bugün?")
+
+    # Beslediğimiz kaynak yalnızca BloombergHT; sunmadığımız bir yayını
+    # tanımak, olmayan bir kaynağı sunuyormuş gibi görünmek olurdu.
+    assert not genel_gundem_istegi_var_mi("CNBC'de bugün ne var?")
+    # Kavram sorusu gündem sayılmaz.
+    assert not genel_gundem_istegi_var_mi("Temettü nedir?")

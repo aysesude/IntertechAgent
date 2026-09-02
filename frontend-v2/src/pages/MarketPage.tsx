@@ -4,6 +4,7 @@ import { MarketTicker } from "@/components/market/MarketTicker";
 import { NewsFeed } from "@/components/market/NewsFeed";
 import { InfluenceList } from "@/components/market/InfluenceList";
 import { CalendarCard } from "@/components/market/CalendarCard";
+import { INVESTMENT_DISCLAIMER } from "@/data/mockData";
 import { useMarketData } from "@/hooks/useMarketData";
 
 export function MarketPage() {
@@ -59,6 +60,13 @@ export function MarketPage() {
           </div>
         </div>
       </div>
+
+      {/* CLAUDE.md §4: her finansal çıktı bu ibareyi taşımak zorunda.
+          Bu sayfa fiyat, değişim ve etki listesi gösteriyor. Beş sayfada
+          vardı, burada yoktu. */}
+      <p className="m-0 mt-5 text-center text-xs italic text-ink-soft dark:text-ink-faint">
+        {INVESTMENT_DISCLAIMER}
+      </p>
     </div>
   );
 }

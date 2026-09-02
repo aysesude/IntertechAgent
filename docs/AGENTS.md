@@ -70,11 +70,53 @@ Ajan iki ayrı soru tipine bakar ve **girişte dallanır**:
 | **Fiyat / kur** | `get_current_prices` | "dolar ne kadar", "gram altın kaç TL" |
 | **Fiyat seyri** | `get_asset_price_history` | "dolar son bir yılda ne yaptı" |
 | **Haber / bilanço / belge** | `search_market_news` (RAG) | "Aselsan haberleri", "Tüpraş 2. çeyrek bilançosu" |
+| **Hedef fiyat / tavsiye** | `get_target_prices` + `get_current_prices` | "Aselsan hedef fiyatı kaç" |
+| **Değerleme çarpanı** | `get_fundamentals` | "Aselsan'ın F/K'sı kaç", "Akbank PD/DD" |
+| **Uygunluk** | tool yok — evren + anket puanı | "Serbest fon alabilir miyim" |
 
 Dallanma `agents/price_query.py` ile **kural tabanlı** yapılır, LLM
 kullanılmaz: soru tipi ("ne kadar", "kaç TL") ve varlık adı sonlu ve iyi
 tanımlı bir küme. İkinci bir LLM planlayıcısı hem yanıta gecikme ekler hem de
 sohbetin en sık sorulan sorusunu modelin gününe bağlardı.
+
+**Endeksler de fiyat yolundan geçer.** `tradable=False` bir ALIM kısıtıdır,
+fiyat sorgusu kısıtı değil: XU100 ve SPX fiyatlanıyor, Piyasa şeridinde
+gösteriliyor ve "BIST bugün nasıl?" meşru bir soru. Ölçüldü (1 Eylül 2026):
+bu sorular belge aramasına düşüp "doğrulanmış bilgi bulunamadı" alıyordu —
+aynı oturumda Analist Ajanı XU100 serisini sorunsuz kullanırken.
+`price_query._FIYATLANAN_ALINAMAYAN` bu istisnayı taşıyor. **BRENT de 1
+Eylül 2026'da buraya eklendi** (ürün kararı): fiyatı her gün toplanıyor ve
+şeritte gösteriliyorken sohbette kapsam dışı sayılması tutarsızdı;
+`scope.yaml`'daki `emtia_diger` kaydından çıkarıldı. Bakır/buğday/doğalgaz
+kapsam dışı KALDI — onların verisi yok, kapsama almak sunmadığımız bir şeyi
+sunmak olurdu.
+
+**Hedef fiyat yanıtı HEDEFE UZAKLIĞI da yazar** (ürün kararı, 1 Eylül 2026).
+Kullanıcı "hedef 180, şu an 150, yüzde kaç potansiyel var?" diye sorduğunda
+"hesaplanmış yüzde verilerde yer almıyor" cevabı alıyordu — kural gereği
+doğruydu (sayısal değer LLM'den çıkamaz) ama kullanışsızdı. Artık yüzde
+KODDA ve **kendi verimizle** hesaplanıyor: kullanıcının verdiği sayılarla
+değil, `get_target_prices` + `get_current_prices` ile. Sebebi: kullanıcının
+rakamları eski/yanlış olabilir ve onlarla hesap yapmak o rakamlara otorite
+kazandırırdı. Güncel fiyat alınamazsa satır sessizce atlanır; uydurma yüzde
+üretilmez.
+
+**Değerleme çarpanları da RAG'e gitmez** (`temel_oran_niyeti` →
+`get_fundamentals`). Hedef fiyatla aynı gerekçe: F/K, PD/DD ve marjlar
+dokümanlarda değil, yfinance'te yaşıyor. Ölçüldü: doğrudan sorulduğunda bu
+ajan "elimdeki belgelerde yer almıyor" derken, iki soru sonra Analist Ajanı
+aynı şirketin F/K'sını veriyordu — aynı soruya iki farklı cevap, tek bir
+hatadan daha çok güven kaybettirir. Sayılar LLM'den geçmeden basılır ve
+**kaynak + çekilme zamanı her blokta yazılır** (AK 5.3).
+
+**"Bunu alabilir miyim?" sorusu da RAG'e gitmez** (`uygunluk_niyeti` →
+`_uygunluk_yaniti`). Cevap üç deterministik kaynaktan birleşir: evren tanımı
+(`SPEC_BY_SYMBOL`), uygunluk seviyesi (`advice_eligibility`) ve kullanıcının
+anket puanı. Tutulabilirlik önce söylenir — satın alınamayan bir varlıkta puan
+tartışması anlamsızdır. Anket doldurulmamışsa puan **uydurulmaz**, durum
+söylenir. Ölçüldü (1 Eylül 2026): "Serbest fon alabilir miyim?" Web Araştırma
+Ajanı'na düşüp *"nitelikli yatırımcı statüsüne bağlıdır"* cevabı aldı; doğru
+cevap elimizdeydi (puan 6, serbest fon seviye 7).
 
 **Neden bu dal var:** kur ve fiyat dokümanlarda değil `price_history`
 tablosunda yaşıyor. Dal olmadan "dolar ne kadar?" belge aramasına düşüyor ve
@@ -86,6 +128,19 @@ cümleyi orchestrator'ın merge adımı kurar. Fiyatın tarihi ve kaynağı her
 satırda yazılır — fiyat "bugünün" fiyatı olmak zorunda değil (piyasa hafta
 sonu kapalı) ve tarihi söylemeden vermek olmayan bir tazelik iddia etmek
 olurdu. Beklenenden eski fiyat gizlenmez, eskiliği söylenir.
+
+**"Belgelerde yok" cevabına kaynak eklenmez.** Kaynak listesi koda gömülü
+olarak ekleniyor; model "bilgi yok" dediğinde cevap kendi kendisiyle
+çelişiyordu — üstte "veri yok", altta iki kaynak (ölçüldü 1 Eylül 2026: S&P
+500 cevabının kaynağı "Tofaş Şirket Profili", olmayan bir şirketin kaynağı
+"Pegasus Şirket Profili"). Aynı ilke gündem dalında zaten vardı.
+
+**Prompt konu ile yorumu ayırır.** Eski kural 3 sorunun TAMAMINA bakıyordu:
+"Aselsan'ın son haberleri portföyümü nasıl etkiler?" sorusunda elde ASELSAN
+bilanço parçaları varken model "haber verisi bulunmadığı için hesaplanamıyor"
+diyor, elindeki haberi çöpe atıyordu. Ajanın işi belgelerin KONU hakkında ne
+söylediğini aktarmak; portföye etkisini portföy/risk ajanları ve merge adımı
+kuruyor.
 
 **Haber yolu** (`search_market_news`) saf DB tabanlı RAG'dır (LLM yok,
 internetten canlı veri çekmez). Sorguyla alakalı kayıt yoksa tool
@@ -198,6 +253,18 @@ parametresi için kullanılmaya devam ediyor. Bedeli bilinerek kabul edildi
 (Yağız, 2026-08-31): tur başına ek `get_holdings` + `get_portfolio_news` +
 `get_macro_news` çağrısı ve bir ek LLM turu.
 
+**Blok en fazla ÜÇ bulgu basar** ve her bulgunun açıklaması tek cümledir.
+Ölçüldü (1 Eylül 2026): blok 14 yanıtta aynı üç varlık için 2-3 cümlelik
+açıklamalarla tekrarlanıp cevabın kendisini bastırıyordu.
+
+**Nakit bu sinyale hiç girmez.** `_kullanilmayan_kapasite` "izinli sınıflar
+eksi elde tutulan sınıflar" hesabı yapıyor; nakit bir `holdings` satırı değil
+defter bakiyesi olduğu için "elde tutulan" kümesinde hiçbir zaman görünmüyor
+ve CASH her kullanıcıda "kullanılmayan kapasite" çıkıyordu. 175.866 TL
+serbest nakdi olan demo personasına 14 yanıtta "nakit sınıfını içermediği
+için profil sapması" dendi. Anlamı da ters: nakit tutmamak "daha temkinli"
+değil, tam tersi bir duruştur.
+
 **Blokta yalnızca `risky_assets` gösteriliyor.** Şemanın diğer alanları
 bilinçli dışarıda: `risk_level` LLM'in kendi kategorik yargısı ve ana
 yanıttaki deterministik seviyeyle çelişen ikinci bir risk seviyesi olurdu;
@@ -250,6 +317,112 @@ risk tercihinin altında kalıyor"); risk artırıcı yönlendirme prompt kural
 motorun kendisini değiştirmeyi gerektirir (`_target_volatility` hep üst
 sınırı hedefliyor, aksiyonlar riskli→savunma yönünde taşıyor) ve ayrıca bir
 ürün kararıdır — analist onayı bekliyor.
+
+## Analist Ajanı (`agents/analyst_agent.py`)
+
+Piyasa verisinin **ne anlama geldiğini** yorumlar: hedef fiyat, güncel fiyat,
+temel oranlar (F/K, PD/DD) ve ilgili belgeleri tek bağlamda toplayıp analitik
+bir metin üretir. Diğer ajanlardan farkı, sorunun "veri nedir" değil "veri ne
+söylüyor" olması — `detect_intent`'te `ANALYSIS` etiketi bunu ayırır ve
+`MARKET` ile birlikte seçilebilir.
+
+Akış: sorudaki şirketler `market_query.sirketleri_tespit_et` ile bulunur
+(**en fazla 3** — hız/token sınırı), her biri için beş tool eşzamanlı çağrılır
+(`get_target_prices`, `get_current_prices`, `get_fundamentals`,
+`search_market_news`, `get_asset_price_history`), ayrıca kullanıcının risk
+profili (`get_user_risk_survey`) ve endeks kıyası için XU100'ün 3 aylık seyri
+alınır. Şirketin kendi serisi ile endeksin serisi **aynı pencerede** (3 ay)
+istenir; farklı pencere iki ayrı dönemi kıyaslamak olurdu.
+Toplanan veri `prompts/analyst_agent.md`'ye gömülür.
+
+### Düğüm neden `try/except` ile sarılı
+
+`run_analyst_agent`, orchestrator'daki **tek korumalı düğümdür**. Diğer ajanlar
+istisnayı kendi içlerinde yakalayıp `AgentResponse(success=False)` döndürüyor;
+bu ajan `execute`'un ilk satırlarında korumasız. Oradan çıkan bir istisna
+LangGraph düğümünü düşürüyor ve — ölçüldü — **diğer ajanlar başarılı olsa bile
+tüm yanıt kayboluyordu**: `ANALYSIS` etiketi alan her soru boş dönüyordu.
+Kalkan, ajanın iç mantığı için değil, bir düğümün tüm grafiği düşürebilmesi
+için orada.
+
+### Verilen kararlar ve bilinen açık noktalar
+
+- **Prompt kuralı 6 (kişiselleştirme) KALIYOR — karar verildi (1 Eylül
+  2026).** Ajan "Agresif risk profiliniz açısından…" gibi ifadeler
+  kullanabiliyor. PO'nun "sistem yalnızca uyarır, ne yapılacağını önermez"
+  kararıyla arasında bir gerilim OLDUĞU biliniyor ve bilerek kabul edildi;
+  bu bir açık uç değil, verilmiş bir karardır. Sınır değişirse burası da
+  değişir.
+- **Kural 2 ile 5/7 çelişiyor:** biri hesaplamayı yasaklıyor, diğerleri oran
+  kıyaslaması istiyor. Modelin kendi aritmetiğini yapması riskli.
+- **`get_fundamentals` canlı yfinance'e gidiyor**; önbellek, zaman aşımı yok ve
+  dönen oranlar **tarihsiz/kaynaksız** — AK 5.3 (kaynak + zaman damgası) bu
+  yolda karşılanmıyor. Diğer fiyat yollarında bu bilgi her satırda yazılıyor.
+
+Sözleşme testleri: `tests/test_analyst_agent.py` (LLM ve MCP sahte).
+
+## Özet Ajanı (`agents/summary_agent.py`) — "Hızlı Özet" paneli
+
+Arayüzdeki yüzen düğmeden açılan dört kartı üretir: **Genel** (zaman — ne
+değişti), **Portföy** (yapı — neye sahipsin), **Piyasa** (dışarısı — hangi
+gelişme var), **Risk** (ölçü — profille aran nasıl).
+
+### Kendi sayısı olmayan ajan
+
+Bu ajanın tanımı budur ve **kodla garanti edilir**:
+
+- Hiçbir hesap yapmaz. Diğer ajanların kullandığı **aynı MCP tool'larını**
+  çağırır (`get_portfolio_summary`, `get_portfolio_performance`,
+  `get_holdings`, `get_risk_assessment`, `get_portfolio_news`) ve dönen
+  değerleri olduğu gibi taşır.
+- LLM yalnızca **cümleyi** kurar. Ürettiği metindeki her sayı, kendisine
+  verilen deterministik bloğun içinde birebir geçmek zorundadır; geçmiyorsa
+  o kart LLM metnini değil deterministik özeti gösterir
+  (`_sayilari_dogrula`).
+
+**Neden bu kadar sıkı.** 1 Eylül 2026 turunun en pahalı bulgusu (K3) şuydu:
+aynı soruya iki ajan iki farklı cevap veriyordu. Özet kartları sohbetteki
+ajanlarla **aynı** portföy hakkında konuşuyor; kart ile sohbet farklı sayı
+söylerse aynı hata ürün düzeyinde geri gelir. Doğrulama bunu prompt'a
+güvenerek değil yapısal olarak engelliyor.
+
+Doğrulamanın inceliği: biçim farkı uydurma değildir (`1.583.703,56` =
+`1583703,56`, `%26,70` = `%26,7`), ama **ölçüm taşıyan hiçbir sayı muaf
+değildir** — `%` ya da para birimi gören sayı her boyutta doğrulanır.
+Muafiyet yalnızca ölçüm olmayan küçük tam sayılara ("üç varlık", "ilk 3").
+
+### Arayüz: FAB menü → bulanık katman → akordeon kartlar
+
+Yüzen düğme (`AssistantFab`) Material Design 3'ün FAB menü kalıbı: hover
+**ve** tıklamayla açılıyor, iki eylem sunuyor — **Hızlı özet** ve **Mini
+sohbet**. Düğmenin altındaki "Asistan" yazısı kaldırıldı; eylemler menüde
+adlarıyla duruyor.
+
+- **Basılı tutma yok.** Keşfedilebilirliği sıfır ve kayıtlı demo
+  videolarında izleyici ne yapıldığını göremez.
+- **Kartlar tıklamayla açılır, hover ile değil.** Hover ile açmak, fare
+  kartlara doğru giderken içeriği değiştirir; dokunmatikte hiç çalışmaz.
+- Panel açılırken arka plan bulanıklaşır ve kenarlarda dalgalı mavi bir ışık
+  yanar (`InsightGlow`). Işık gecikmeyi gizlemiyor, **görünür kılıyor**:
+  beş tool + bir LLM turu birkaç saniye sürüyor. `prefers-reduced-motion`
+  açıksa dalga durur, ışık kalır — sinyal kaybolmasın.
+- Panel açıldığında **bulunulan sayfanın kartı** geniş gelir. Al/Sat'ın kartı
+  yok (eylem sayfası); oradan açılan panel genel kartla başlar.
+
+### Orchestrator'a bağlı değil
+
+Tetikleyici deterministik (kullanıcı düğmeye basar), dolayısıyla niyet
+sınıflandırmasına gerek yok. Sohbet grafiğine eklenmemesi bilinçli: panelin
+üretimi kullanıcının sohbet geçmişini kirletmemeli. `execute` çağrılırsa
+açıkça `NotImplementedError` atar — biri onu grafiğe eklemeye kalkarsa
+sessizce boş yanıt dönmesin.
+
+### Zarif düşüş
+
+Panel **hiçbir koşulda boş açılmaz.** Bir tool düşerse yalnızca kendi kartı
+`degraded` olur; LLM düşerse dört kart da deterministik gövdeyle döner;
+beklenmeyen bir hata ya da zaman aşımında dört kart "şu anda üretilemedi"
+metniyle gelir. Veri hiç yoksa kart bunu **söyler**, boş gövde göstermez.
 
 ## Web Araştırma Ajanı (`agents/web_research_agent.py`) — çalışıyor
 
@@ -336,12 +509,15 @@ geçmişini okumuyor: takip soruları ("peki ne zaman verilir") bağlamsız gidi
                 ┌─> portfolio_agent ────┐
                 ├─> market_agent ───────┤
 detect_intent ──┼─> risk_agent ─────────┼─> merge → END
-                ├─> web_research_agent ─┘
+                ├─> web_research_agent ─┤
+                ├─> analyst_agent ──────┘
                 └─> handle_out_of_scope → END
+
+Özet Ajanı bu grafiğin DIŞINDA: `/api/insight` ucundan doğrudan çağrılır.
 ```
 
 - `detect_intent`: önce kural tabanlı kapsam kontrolü (`scope_checker`), sonra
-  LLM ile sınıflandırma. `PORTFOLIO`, `MARKET`, `RISK`, `WEB_RESEARCH`
+  LLM ile sınıflandırma. `PORTFOLIO`, `MARKET`, `RISK`, `WEB_RESEARCH`, `ANALYSIS`
   etiketlerinden **bir veya birkaçı** seçilebilir; `intent` alanı bunları `"+"` ile birleştirir
   (`"portfolio+risk"`). Eski tek kelimelik `BOTH` geriye dönük tanınır.
   Etiket alanı orchestrator dışına çıkmaz.
@@ -365,6 +541,15 @@ detect_intent ──┼─> risk_agent ─────────┼─> merge 
   (`AgentRequest.context["recent_messages"]`'a geçiyor). **PortfolioAgent şu
   an bunu prompt'una dahil etmiyor** (tek turluk çalışıyor) — çok turlu bağlam
   gereken ajanlar için altyapı hazır tutuluyor.
+- **Kaynak takip sorusu geçmişten cevaplanır** (`_kaynak_takip_yaniti`,
+  `SOURCE_RECALL` erken çıkışı). "Kaynak olarak neye dayanıyorsun?" bir VERİ
+  sorusu değil, önceki yanıt hakkında META bir sorudur; RAG'e gönderilince bu
+  cümlenin kendisi belgelerde aranıyor ve "doğrulanmış bilgi bulunamadı"
+  dönüyordu (ölçüldü, 1 Eylül 2026) — oysa önceki yanıt kaynakları
+  listelemişti. Bloklar önceki mesajdan AYNEN çıkarılıp gösteriliyor; LLM
+  devreye girmiyor. Üç koşul birden aranır: kaynak kalıbı, geçmişte bir
+  asistan yanıtı, ve soruda YENİ bir şirket/varlık geçmemesi (geçiyorsa
+  kullanıcı yeni konu soruyordur, önceki cevabın kaynakları devralınmaz).
 - `merge`: başarılı ajan yanıtlarını LLM ile tek metinde birleştirir.
   Hiçbiri başarılı değilse **ajanların kendi hata mesajları** gösterilir —
   bunlar kullanıcıya gösterilmek üzere yazılmıştır (`tools/_base.py`

@@ -9,6 +9,9 @@ import { BRAND, DANGER } from "@/utils/colors";
  * (BIST100, USD, EUR, Altın). Backend `BENCHMARK_SYMBOLS` sırasını koruyarak
  * döndürüyor; burada sıra DEĞİŞTİRİLMİYOR, yalnızca portföy başa ekleniyor —
  * dönem değişince çubukların yer değiştirmesi karşılaştırmayı okunmaz yapar.
+ *
+ * ÖLÇÜ: portföy çubuğu Performans kartındaki getirinin AYNISIDIR (nakit
+ * dahil, para giriş-çıkışından arındırılmış); endeksler saf fiyat getirisi.
  */
 
 export interface BenchmarkBar {
@@ -61,8 +64,8 @@ export function toBenchmarkBars(kiyas: ApiBenchmarkComparison): BenchmarkBar[] {
  * - **Kırpılmış pencere:** portföy pencereden gençse başlangıç ilk varlık
  *   alımına çekiliyor. "Yıllık" yazıp dört aylık getiri göstermek, kıyası
  *   olduğundan iyi ya da kötü gösterir.
- * - **Dışarıda kalan varlık:** pencere başında fiyatı olmayan varlık hesaba
- *   katılmıyor; portföy getirisi o varlığı içermiyor demektir.
+ * - **Fiyatlanamayan varlık:** dönem sonunda fiyatı bulunamayan varlık portföy
+ *   değerine hiç girmiyor; getiri o varlık yokmuş gibi hesaplanmış demektir.
  */
 export function benchmarkUyarisi(kiyas: ApiBenchmarkComparison): string | null {
   const parcalar: string[] = [];
@@ -71,7 +74,7 @@ export function benchmarkUyarisi(kiyas: ApiBenchmarkComparison): string | null {
   }
   if (kiyas.excluded_symbols.length > 0) {
     parcalar.push(
-      `dönem başında fiyatı olmayan ${kiyas.excluded_symbols.join(", ")} hesaba katılmadı`,
+      `fiyatı alınamayan ${kiyas.excluded_symbols.join(", ")} portföy değerine katılmadı`,
     );
   }
   return parcalar.length > 0 ? parcalar.join(" · ") : null;

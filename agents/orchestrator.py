@@ -24,6 +24,7 @@ from typing import Annotated, Any, TypedDict
 from langgraph.graph import END, StateGraph
 from langgraph.types import StreamWriter
 
+from agents.analyst_agent import AnalystAgent
 from agents.base import AgentRequest, AgentResponse
 from agents.market_agent import MarketAgent
 from agents.market_query import portfoy_referansi_var_mi
@@ -42,8 +43,12 @@ class OrchestratorState(TypedDict):
     session_id: str
     message: str
     # Son N mesajlık sohbet geçmişi ({"role": ..., "content": ...} sözlükleri).
-    # TODO: Ajanlar şu an bunu prompt'larına dahil etmiyor (tek turluk
-    # çalışıyorlar); alan, çok turlu bağlam gereken ajanlar için hazır tutuluyor.
+    #
+    # İKİ TÜKETİCİSİ VAR: (1) niyet tespiti — takip sorularının hangi konuya
+    # bağlandığını anlamak için, (2) `_kaynak_takip_yaniti` — "kaynağın ne"
+    # sorusunu bir önceki yanıttan deterministik olarak cevaplamak için.
+    # AJANLAR hâlâ kullanmıyor (tek turluk çalışıyorlar); alan çok turlu
+    # bağlam gereken ajanlar için hazır duruyor.
     history: list[dict[str, str]]
     intent: str
     flags: list[str]
@@ -55,13 +60,14 @@ class OrchestratorState(TypedDict):
 # (OUT_OF_SCOPE, AMBIGUOUS vb.) ya da bunlardan bir veya birkaçının "+" ile
 # birleşmiş hâlidir ("risk", "portfolio+risk"). Alan orchestrator dışına
 # çıkmıyor; tek tüketicisi _route_after_intent.
-AGENT_INTENTS = ("portfolio", "market", "risk", "web_research")
+AGENT_INTENTS = ("portfolio", "market", "risk", "web_research", "analysis")
 
 AGENT_NODES = {
     "portfolio": "portfolio_agent",
     "market": "market_agent",
     "risk": "risk_agent",
     "web_research": "web_research_agent",
+    "analysis": "analyst_agent",
 }
 
 
@@ -89,6 +95,107 @@ _AMBIGUOUS_MESSAGE = (
 )
 
 
+# --- Kaynak takip sorusu ----------------------------------------------------
+#
+# CLAUDE.md §4 kaynak izlenebilirliğini zorunlu tutuyor: "RAG yanıtları hangi
+# dokümana dayandığını gösterebilmelidir." Yanıtın kendisi bunu zaten yapıyor
+# ama kullanıcı SONRADAN sorduğunda kayboluyordu.
+
+_TR_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a"})
+
+_KAYNAK_SORUSU_KALIPLARI = (
+    "kaynak",
+    "neye dayan",
+    "nereden ald",
+    "nereden buldun",
+    "hangi belge",
+    "referans",
+)
+
+# Yanıtlara kod tarafından eklenen blokların başlıkları (bkz. market_agent).
+_KAYNAK_BLOK_BASLIKLARI = (
+    "Kaynaklar:",
+    "Güncel KAP Bildirimleri:",
+    "Güncel Piyasa Başlıkları:",
+)
+
+_KAYNAKSIZ_YANIT = (
+    "Önceki yanıt belgeye dayalı bir kaynak listesi taşımıyordu: oradaki "
+    "sayılar arşiv dokümanlarından değil, sistemin kendi kayıtlarından "
+    "(portföy defteri ve fiyat geçmişi) geliyor ve kullanılan fiyatın tarihi "
+    "yanıtın içinde yazılı. Belgeye dayalı bir cevap için bir şirket ya da "
+    "bilanço sorabilirsiniz."
+)
+
+
+def _son_asistan_mesaji(history: list[dict[str, str]]) -> str | None:
+    for mesaj in reversed(history):
+        if mesaj.get("role") != "user":
+            return mesaj.get("content") or None
+    return None
+
+
+def _kaynak_bloklarini_ayikla(metin: str) -> list[str]:
+    """Yanıt metnindeki kaynak/KAP/gündem bloklarını olduğu gibi çıkarır.
+
+    Bloklar koda gömülü olarak üretiliyor ve madde madde; başlık satırından
+    sonra gelen `-` ile başlayan satırlar (ve gündem bloğunun kapanışındaki
+    `Kaynak:` satırı) bloğa dahildir.
+    """
+    bloklar: list[str] = []
+    satirlar = metin.splitlines()
+    i = 0
+    while i < len(satirlar):
+        if satirlar[i].strip() in _KAYNAK_BLOK_BASLIKLARI:
+            blok = [satirlar[i].strip()]
+            i += 1
+            while i < len(satirlar):
+                sonraki = satirlar[i].strip()
+                if sonraki.startswith("-") or sonraki.startswith("Kaynak:"):
+                    blok.append(sonraki)
+                    i += 1
+                else:
+                    break
+            if len(blok) > 1:
+                bloklar.append("\n".join(blok))
+            continue
+        i += 1
+    return bloklar
+
+
+def _kaynak_takip_yaniti(query: str, history: list[dict[str, str]]) -> str | None:
+    """Soru "önceki cevabın kaynağı ne" ise yanıtı üretir, değilse None.
+
+    ÜÇ KOŞUL BİRDEN aranıyor:
+
+    1. Kaynak kalıbı geçmeli.
+    2. Sohbet geçmişinde bir asistan yanıtı olmalı — ilk mesajda "kaynağın ne"
+       sorusu sistemin genel çalışmasını soruyordur, normal akışta kalmalı.
+    3. Soruda BELİRLİ bir şirket/varlık geçmemeli. "Tüpraş'ın haber kaynağı
+       nedir?" bir önceki cevap Aselsan hakkındaysa, o cevabın kaynaklarını
+       göstermek yanlış olurdu — kullanıcı YENİ bir konu soruyor.
+    """
+    from agents.market_query import sirket_tespit_et
+    from agents.price_query import varlik_tespit_et
+
+    normalized = query.replace("İ", "i").lower().translate(_TR_FOLD)
+    if not any(k in normalized for k in _KAYNAK_SORUSU_KALIPLARI):
+        return None
+
+    onceki = _son_asistan_mesaji(history)
+    if not onceki:
+        return None
+
+    if sirket_tespit_et(query) or varlik_tespit_et(query):
+        return None
+
+    bloklar = _kaynak_bloklarini_ayikla(onceki)
+    if not bloklar:
+        return _KAYNAKSIZ_YANIT
+
+    return "Önceki yanıt şu kaynaklara dayanıyordu:\n\n" + "\n\n".join(bloklar)
+
+
 async def detect_intent(state: OrchestratorState) -> dict:
     """Kullanıcının niyetini LLM yardımıyla sınıflandırır. Kapsam dışı sorular baştan reddedilir."""
     query = state["message"].strip()
@@ -105,6 +212,20 @@ async def detect_intent(state: OrchestratorState) -> dict:
                 "Finansal danışmanınız olarak yalnızca portföyünüz ve finansal piyasalar hakkındaki sorularınızı yanıtlayabilirim.",
             ),
         }
+
+    # 1.5. KAYNAK TAKİP SORUSU — geçmişten cevaplanır, LLM'e ve RAG'e gitmez.
+    #
+    # "Kaynak olarak neye dayanıyorsun?" bir VERİ sorusu değil, bir önceki
+    # yanıt hakkında META bir sorudur. Ölçüldü (1 Eylül 2026, [32] ve [34]):
+    # soru Piyasa Ajanı'na düşüp bu cümlenin KENDİSİ belgelerde aranıyor ve
+    # "doğrulanmış bilgi bulunamadı" dönüyordu — oysa bir önceki yanıt iki
+    # kaynağı ve bir KAP bağlantısını LİSTELEMİŞTİ. Cevap zaten elimizdeydi.
+    #
+    # RAG'e göndermenin anlamı yok: aranan şey belge değil, ÖNCEKİ CEVABIN
+    # dayanağı. Bu yüzden deterministik olarak burada karşılanıyor.
+    if (kaynak_yaniti := _kaynak_takip_yaniti(query, state.get("history") or [])) is not None:
+        logger.info("[ORCHESTRATOR] Kaynak takip sorusu geçmişten cevaplandı")
+        return {"intent": "SOURCE_RECALL", "flags": [], "final_answer": kaynak_yaniti}
 
     # 2. LLM Tabanlı Niyet Tespiti
     #
@@ -146,6 +267,13 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "'THYAO'nun F/K oranı kaç', 'Tüpraş 2. çeyrek bilançosu nasıl', "
         "'Akbank'ın 2026 temettüsü ne kadar' (RAPORLANMIŞ bir rakam "
         "soruluyor, TAHMIN değil)\n"
+        # 2026-09-01: "Bloomberg HT'de bugün ne var?" WEB_RESEARCH'e düşüp
+        # TELEVİZYON YAYIN AKIŞI cevabı alıyordu — oysa canlı piyasa
+        # başlıklarını fiilen BloombergHT'den çekiyoruz ve "Son piyasa
+        # haberleri neler?" aynı veriyi sorunsuz getiriyor. Kullanıcı konuyu
+        # değil KAYNAĞI söylediğinde de soru piyasa sorusudur.
+        "  Kullanıcı konu yerine bir HABER KAYNAĞI adı söylerse de MARKET: "
+        "'Bloomberg HT'de bugün ne var', 'bloomberght ne diyor'.\n"
         "RISK — portföyün riski, volatilitesi, yoğunlaşması, dengesi; yeniden "
         "dengeleme ve strateji önerisi. Soruda 'risk' kelimesi GEÇMESE DE bu "
         "etiket kullanılır.\n"
@@ -166,6 +294,11 @@ async def detect_intent(state: OrchestratorState) -> dict:
         "nasıl etkiler', 'son gelişmeler portföyüm için ne anlama geliyor', "
         "'enflasyon haberi portföyümü nasıl etkiler'. Burada MARKET haberi "
         "getirir, RISK onu portföydeki varlıklarla ilişkilendirir.\n\n"
+        "ANALYSIS — Bir piyasa verisinin (haber, bilanço, hedef fiyat) ne anlama "
+        "geldiğinin objektif yorumlanması veya analiz edilmesi. Yalnızca veri değil, "
+        "'YORUM' isteniyorsa bu etiket eklenir (MARKET ile BİRLİKTE kullanılabilir).\n"
+        "  Örnek: 'Tüpraş bilançosu ne anlama geliyor?', 'Akbank'ın hedef "
+        "fiyatlarına bakarak hisse ucuz mu?', 'Bu haber piyasayı nasıl fiyatlar?'\n\n"
         "WEB_RESEARCH — KAVRAM ve PROSEDÜR soruları: bir terim ne demek, bir "
         "süreç nasıl işler, bir hesap nasıl yapılır, bir uygulama genelde "
         "nasıldır. Muhasebe standartları ve düzenleyici çerçeve de buraya "
@@ -344,6 +477,34 @@ async def run_web_research_agent(state: OrchestratorState) -> dict:
     return {"agent_responses": [response]}
 
 
+async def run_analyst_agent(state: OrchestratorState) -> dict:
+    """Analist Ajanı düğümü.
+
+    TEK `try/except`İ OLAN DÜĞÜM BU, bilerek. Diğer ajanlar istisnayı kendi
+    içlerinde yakalayıp `AgentResponse(success=False)` döndürüyor; bu ajan
+    `execute`'un ilk satırlarında (şirket tespiti, risk profili çağrısı)
+    korumasız. Oradan çıkan bir istisna LangGraph düğümünü düşürüyor ve —
+    ölçüldü — DİĞER ajanlar başarılı olsa bile tüm yanıt kayboluyordu:
+    `ANALYSIS` etiketi alan her soru boş dönüyordu.
+
+    Kalkan burada duruyor çünkü sorun ajanın iç mantığı değil, bir düğümün
+    tüm grafiği düşürebilmesi. Ajan kendi hatasını yakalar hale gelirse bu
+    blok zararsız biçimde etkisiz kalır.
+    """
+    agent = AnalystAgent(mcp_server_url=settings.mcp_server_url)
+    try:
+        response = await agent.execute(_build_request(state), on_token=None)
+    except Exception:  # noqa: BLE001 — düğüm hatası grafiği düşürmemeli
+        logger.exception("[ORCHESTRATOR] Analist ajanı düştü")
+        response = AgentResponse(
+            agent_name="analyst",
+            success=False,
+            summary_text="",
+            error=_mesaj("analiz_hatasi", "Analiz şu anda yapılamıyor."),
+        )
+    return {"agent_responses": [response]}
+
+
 async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) -> dict:
     """Kapsam dışı durumlarda LLM'e gitmeden doğrudan uyarı mesajını akıtır."""
     # Metni kelime kelime akıtarak animasyonlu hissi ver
@@ -353,8 +514,89 @@ async def handle_out_of_scope(state: OrchestratorState, writer: StreamWriter) ->
     return {}
 
 
+# Bu başlıkla başlayan blok, üretildiği ajanın `summary_text`'inin KESİN
+# SONUDUR: risk_agent execute()'ta `summary_text += sinyal_blok` en son
+# işlemdir, arkasından hiçbir şey eklenmez — bu yüzden metnin idx'ten SONUNA
+# kadarki tamamı güvenle blok sayılır (düşük güven notu gibi kendi İÇİNDEKİ
+# "\n\n" ayraçları da dahil, ayrı bir blok olarak yanlış bölünmez).
+_TAM_KUYRUK_BASLIGI = "Varlık bazlı gözlemler"
+
+# Bu başlıkla başlayan blok ise portfolio_agent `_render`'daki `blocks`
+# listesinin ORTASINDA olabilir (Performans, işlemler, kıyaslama gibi bloklar
+# ardından gelebilir) — kendi İÇİNDE "\n\n" yoktur (tek bir cümle), o yüzden
+# idx'ten SONRAKİ İLK "\n\n" bir sonraki bloğun başlangıcıdır ve orada kesilir.
+_SINIRLI_KUYRUK_BASLIGI = "Risk profili uyumu"
+
+
+def _not_ekle(text: str, idx: int, end: int | None, baslik: str) -> tuple[str, str]:
+    """`text[idx:end]` (end=None ise metnin sonu) aralığındaki bloğu keser,
+    yerine LLM'e yönelik kısa bir NOT bırakır. Kesilen ham blok ve güncellenmiş
+    metni döner."""
+    blok = text[idx:end].strip() if end is not None else text[idx:].strip()
+    kalan = text[end:] if end is not None else ""
+    not_metni = (
+        f"\n\n[NOT — kullanıcıya gösterme: '{baslik}' ile ilgili bir bulgu "
+        "var; ayrıntılar (sembol/seviye/yüzde gibi) yanıtın SONUNA ayrıca "
+        "ve AYNEN eklenecek. Bu ayrıntıları tahmin edip yazma ya da kendi "
+        "cümlenle özetleme; yalnızca konuya değiniyorsan TEK kısa cümleyle "
+        "işaret et, bu notun kendisini tekrar etme.]"
+    )
+    return text[:idx].rstrip("\n") + not_metni + kalan, blok
+
+
+def _ayikla_korunan_bloklar(text: str) -> tuple[str, list[str]]:
+    """`_TAM_KUYRUK_BASLIGI` / `_SINIRLI_KUYRUK_BASLIGI` ile başlayan kuyruk
+    blokları varsa METİNDEN ÇIKARIR, yerlerine LLM'e yönelik kısa bir NOT
+    bırakır; çıkarılan ham blok(lar) ayrı döner.
+
+    NEDEN (2026-08-31, canlı arayüz testi). İki blok da yalnızca sistem
+    promptunda "AYNEN koru" talimatıyla merge LLM'ine gösteriliyordu:
+
+    - 'Varlık bazlı gözlemler' (risk_agent sinyal bloğu): talimata rağmen
+      LLM başlığı ve madde listesini düşürdü, yalnızca kapanış cümlesi
+      ('Bu gözlemler sınırlı sayıda kaynağa dayanıyor...') hayatta kaldı.
+    - 'Risk profili uyumu' (portfolio_agent varlık bazlı uyumsuzluk bloğu):
+      hiç korunmuyordu; LLM onu SINIF düzeyine geri yorumladı ('Borçlanma
+      Araçları sınıfı ... artık tavsiye kapsamında değil') — tam olarak
+      2026-08-31'de asset-level'e taşınarak düzeltilmiş olan hatayı, merge
+      adımı tekrar üretti.
+
+    Çözüm: ayrıntıları (sembol, seviye, yüzde) LLM'e hiç göstermiyoruz —
+    yanlış yorumlayamaz veya düşüremez — yerine ham blok merge'den SONRA kod
+    tarafından yanıtın sonuna AYNEN ekleniyor (bkz. `merge_responses`)."""
+    bloklar: list[str] = []
+
+    idx = text.find(f"{_TAM_KUYRUK_BASLIGI}\n")
+    if idx != -1:
+        text, blok = _not_ekle(text, idx, None, _TAM_KUYRUK_BASLIGI)
+        bloklar.append(blok)
+
+    idx = text.find(f"{_SINIRLI_KUYRUK_BASLIGI}\n")
+    if idx != -1:
+        end = text.find("\n\n", idx)
+        text, blok = _not_ekle(text, idx, None if end == -1 else end, _SINIRLI_KUYRUK_BASLIGI)
+        bloklar.append(blok)
+
+    return text, bloklar
+
+
 async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dict:
-    successful = [r.summary_text for r in state["agent_responses"] if r.success]
+    # `successful_raw`: ajanın ürettiği METNİN TAMAMI, hiç dokunulmamış — yalnızca
+    # LLM tamamen sessiz kalırsa (aşağıdaki `final_answer.strip()` boşsa) ham
+    # dökümü kullanıcıya göstermek için tutulur; o yolda korunan bloklar zaten
+    # doğal yerinde bulunduğundan AYRICA eklenmez (tekrar önlenir).
+    #
+    # `successful`: merge LLM'ine giden, korunan kuyruk bloklarının ÇIKARILIP
+    # yerine kısa bir yönlendirme notu bırakıldığı hâli (bkz.
+    # `_ayikla_korunan_bloklar`). `korunan_bloklar`: aynı çağrılardan çıkan ham
+    # bloklar — merge LLM'i çalıştıktan SONRA yanıta AYNEN eklenir.
+    successful_raw = [r.summary_text for r in state["agent_responses"] if r.success]
+    successful: list[str] = []
+    korunan_bloklar: list[str] = []
+    for text in successful_raw:
+        temiz, bloklar = _ayikla_korunan_bloklar(text)
+        successful.append(temiz)
+        korunan_bloklar.extend(bloklar)
     errors = [r.error for r in state["agent_responses"] if r.error]
 
     # Hiçbir ajan başarılı olmadı. Ajanların KENDİ hata mesajları gösterilir:
@@ -458,18 +700,20 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
         "Bu bloklardaki bir maddeyi 'belgelerde yer alan' diye de sunma: o "
         "bilgi arşiv dokümanlarından değil, canlı kaynaktan geldi.\n"
         "\n"
-        # 2026-08-31: bu blok eklendiğinde merge başlığı atıp maddeleri kendi
-        # cümlelerine karıştırdı; bir bulgunun ağırlığı ana metindeki sınıf
-        # ağırlığıyla yan yana düşünce de kullanıcıya "veriler tutarsız" diye
-        # rapor edildi (arayüz testinde ölçüldü). Blok, kaynak/canlı bloklar
-        # gibi korunmalı.
-        "VARLIK BAZLI GÖZLEMLERİ KORU: Verilerde 'Varlık bazlı gözlemler' "
-        "başlıklı bir liste varsa başlığıyla ve madde madde AYNEN kalır. "
-        "Maddeleri düzyazıya çevirme, birleştirme, özetleme; bu bloktaki bir "
-        "varlığı ayrıca kendi cümlende TEKRAR anlatma. Bloktaki yüzdeler o "
-        "bulguya aittir; metnin başka yerindeki sınıf/portföy yüzdeleriyle "
-        "KARŞILAŞTIRMA, aralarında çelişki kurma, 'veriler tutarsız' gibi bir "
-        "yorum yapma — farklı şeyleri ölçüyorlar.\n"
+        # 2026-08-31 (ilk deneme): 'Varlık bazlı gözlemler' bloğunu burada
+        # "AYNEN koru" talimatıyla bırakmıştık; merge yine de başlığı ve
+        # maddeleri düşürdü (arayüz testinde ölçüldü, yalnızca kapanış cümlesi
+        # hayatta kaldı) ve korunmayan 'Risk profili uyumu' bloğunu da SINIF
+        # düzeyine geri yorumladı. İkinci deneme: bu iki blok artık `merge_
+        # responses`'ta kod tarafından metinden ÇIKARILIP kısa bir NOT'a
+        # dönüştürülüyor (bkz. `_ayikla_korunan_bloklar`) ve ham hâlleriyle
+        # yanıtın sonuna AYRICA eklenecek — talimata değil koda güveniliyor.
+        "KÖŞELİ PARANTEZLİ NOTLAR: Verilerde '[NOT — kullanıcıya gösterme: ...]' "
+        "biçiminde bir not görürsen bu SANA yönelik bir sistem talimatıdır, "
+        "kullanıcıya asla gösterme veya alıntılama. Yalnızca notun istediği "
+        "kısa referans cümlesini (varsa) kendi cümlelerinle yaz; notta "
+        "geçmeyen hiçbir sembol, seviye veya yüzde uydurma — o ayrıntılar "
+        "ayrıca ve AYNEN eklenecek.\n"
         "\n"
         "Verilerin hangi ajandan veya kaynaktan geldiğini söyleme. "
         "'Merhaba', 'Cevap:' gibi etiketler ekleme, sadece içeriği ver.\n"
@@ -508,9 +752,22 @@ async def merge_responses(state: OrchestratorState, writer: StreamWriter) -> dic
     # writer hiç çağrılmazdı: SSE'de ne token ne error olayı gider, arayüzde
     # boş balon durur. Yukarıdaki `except` yalnızca istisnayı yakalıyordu,
     # boş çıktıyı değil — iki durumu da aynı düşüş kapatıyor.
+    #
+    # Bu yolda `successful_raw` (HAM metin) kullanılır, `successful` (notlu,
+    # bloğu çıkarılmış hâli) DEĞİL: LLM hiç çalışmadıysa kullanıcıya
+    # gösterilecek en iyi şey ajanların kendi ham metnidir, içine gömülü
+    # '[NOT — kullanıcıya gösterme: ...]' talimatı değil. Korunan bloklar bu
+    # ham metinde zaten doğal yerinde bulunduğundan aşağıda AYRICA eklenmez.
     if not final_answer.strip():
-        final_answer = "\n\n".join(successful)
+        final_answer = "\n\n".join(successful_raw)
         writer({"delta": final_answer})
+    elif korunan_bloklar:
+        # Normal yol: LLM'e hiç gösterilmemiş ham bloklar burada, merge
+        # çıktısından SONRA, kod tarafından AYNEN eklenir (bkz.
+        # `_ayikla_korunan_bloklar` docstring'i — talimata değil koda güven).
+        ek = "\n\n" + "\n\n".join(dict.fromkeys(korunan_bloklar))
+        final_answer += ek
+        writer({"delta": ek})
 
     return {"final_answer": final_answer}
 
@@ -526,6 +783,9 @@ def _route_after_intent(state: OrchestratorState) -> list[str]:
         "AMBIGUOUS",
         "SMALLTALK_META",
         "FUTURE_PREDICTION",
+        # Yanıt geçmişten deterministik olarak üretildi; ajana gitmesine
+        # gerek yok (bkz. `_kaynak_takip_yaniti`).
+        "SOURCE_RECALL",
     }
 
     if state["intent"] in early_exit_intents:
@@ -554,6 +814,7 @@ def _build_graph():
     graph.add_node("market_agent", run_market_agent)
     graph.add_node("risk_agent", run_risk_agent)
     graph.add_node("web_research_agent", run_web_research_agent)
+    graph.add_node("analyst_agent", run_analyst_agent)
     graph.add_node("merge", merge_responses)
 
     graph.set_entry_point("detect_intent")
@@ -567,6 +828,7 @@ def _build_graph():
             "market_agent": "market_agent",
             "risk_agent": "risk_agent",
             "web_research_agent": "web_research_agent",
+            "analyst_agent": "analyst_agent",
         },
     )
 
@@ -575,6 +837,7 @@ def _build_graph():
     graph.add_edge("market_agent", "merge")
     graph.add_edge("risk_agent", "merge")
     graph.add_edge("web_research_agent", "merge")
+    graph.add_edge("analyst_agent", "merge")
     graph.add_edge("merge", END)
 
     return graph.compile()

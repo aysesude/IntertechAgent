@@ -39,6 +39,9 @@ varlik_siniflari:
     # alındı: price_query.py gümüş/platini XAGTRY/XPTTRY ile zaten tam
     # destekliyordu, scope_checker'ın kapsam dışı sayması bir tutarsızlıktı
     # (ölçümle doğrulandı, analist canlı test turu).
+    - id: emtia
+      etiketler: [petrol, brent, ham petrol, brent petrol]
+
     - id: kiymetli_maden_diger
       etiketler: [gümüş, gumus, gram gümüş, XAG, platin, gram platin, XPT]
 
@@ -46,7 +49,8 @@ varlik_siniflari:
     # target_price_ingest.py) — analist hedef fiyatı/tavsiyesi artık
     # gerçekten desteklenen bir veri, kapsam dışı sayılmamalı.
     - id: hedef_fiyat
-      etiketler: [hedef fiyat, hedef kapanış, analist tavsiyesi, analist hedef]
+      etiketler: [hedef fiyat, hedef kapanış, analist tavsiyesi, analist hedef,
+                  analist tahmini]
 
     - id: doviz
       etiketler: [dolar, usd, "$", euro, eur, "€", kur, döviz, parite,
@@ -80,8 +84,12 @@ varlik_siniflari:
     - id: gayrimenkul
       etiketler: [ev, konut, arsa, gayrimenkul, kira getirisi, ipotek]
 
+    # 1 Eylül 2026 ürün kararı: PETROL/BRENT bu listeden ÇIKARILDI, kapsam
+    # içine alındı. Fiyatı her gün toplanıyor ve Piyasa şeridinde
+    # gösteriliyor; ekranda gösterip sohbette reddetmek tutarsızdı.
+    # Bakır/buğday/doğalgaz kapsam dışı KALIYOR — onların verisi yok.
     - id: emtia_diger
-      etiketler: [petrol, brent, bakır, buğday, doğalgaz]
+      etiketler: [bakır, buğday, doğalgaz]
 
     - id: bankacilik_urunleri          # karar K-15 — v2'de yeniden değerlendirilecek
       etiketler: [kredi, kredi kartı, ihtiyaç kredisi, konut kredisi, taşıt kredisi,

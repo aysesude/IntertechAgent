@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from app.main import app
 from app.models import Portfolio, Transaction, TransactionType, User
+from app.services import auth_service
 from tests.test_survey_scoring import VAKALAR
 
 
@@ -151,6 +152,68 @@ def test_ayni_kimlik_ikinci_kez_kaydedilemez(db_session, anonim):
     # Hangi alanın çakıştığı SÖYLENMEZ: numaraları tek tek deneyerek kimin
     # müşteri olduğunu öğrenmeye açık bir araç yaratmamak için.
     assert "T.C." not in ikinci.json()["detail"]
+    # Ve GERÇEKTEN yazılmamış olmalı; 409 dönüp yine de eklemek en kötüsü.
+    assert len(db_session.execute(select(User).where(User.national_id == "12345678901")).all()) == 1
+
+
+def test_kimlik_ve_eposta_FARKLI_kisilere_aitse_de_409_doner(db_session, anonim):
+    """İki ayrı kullanıcıyla çakışan kayıt isteği.
+
+    Kontrol sorgusu bu durumda İKİ satır döndürüyor. `scalar_one_or_none`
+    kullanıldığı sürece `MultipleResultsFound` fırlıyor ve kullanıcı 409
+    yerine 500 görüyordu — üstelik bu senaryo eşzamanlılık gerektirmiyor,
+    sıradan bir kayıt denemesiyle tetikleniyor.
+    """
+    anonim.post("/api/auth/register", json=_govde())
+    anonim.post(
+        "/api/auth/register",
+        json=_govde(national_id="12345678910", email="ikinci@example.com"),
+    )
+
+    # Numara birinciye, e-posta ikinciye ait.
+    ucuncu = anonim.post(
+        "/api/auth/register",
+        json=_govde(national_id="12345678901", email="ikinci@example.com"),
+    )
+
+    assert ucuncu.status_code == 409
+
+
+def test_eposta_buyuk_kucuk_harf_farkiyla_ikinci_hesap_acilamaz(db_session, anonim):
+    """ "Ayse@x.com" ile "ayse@x.com" aynı adrestir.
+
+    `String` sütunundaki UNIQUE kısıt harf duyarlı olduğu için veritabanı
+    bunları iki farklı değer sayar; karşılaştırma küçük harfe indirilmezse
+    aynı kişi iki hesap açabilir.
+    """
+    anonim.post("/api/auth/register", json=_govde(email="ayse.yilmaz@example.com"))
+
+    ikinci = anonim.post(
+        "/api/auth/register",
+        json=_govde(national_id="12345678910", email="Ayse.Yilmaz@Example.com"),
+    )
+
+    assert ikinci.status_code == 409
+
+
+def test_yaris_durumunda_500_degil_409_doner(db_session, anonim, monkeypatch):
+    """Kontrol sorgusu ile yazma ARASINDA başkası aynı numarayı almışsa.
+
+    İki eşzamanlı istek de kontrolü geçer, biri yazar, diğeri veritabanının
+    UNIQUE kısıtına çarpar. Yarış gerçek hayatta ender ama sonucu ağır:
+    yakalanmazsa kullanıcı 500 görür ve kaydı tekrar tekrar dener.
+
+    Yarışı burada kontrol sorgusunu KÖRLEŞTİREREK canlandırıyoruz —
+    eşzamanlı istek kurgulamak testi kırılgan yapardı; önemli olan
+    veritabanının son sözü söylediğinin doğrulanması.
+    """
+    anonim.post("/api/auth/register", json=_govde())
+
+    monkeypatch.setattr(auth_service, "_cakisan_kullanici", lambda *a, **k: None)
+    ikinci = anonim.post("/api/auth/register", json=_govde(email="yaris@example.com"))
+
+    assert ikinci.status_code == 409
+    assert len(db_session.execute(select(User).where(User.national_id == "12345678901")).all()) == 1
 
 
 def test_kayit_sonrasi_gercekten_giris_yapilabiliyor(db_session, anonim):

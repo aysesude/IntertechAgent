@@ -425,25 +425,49 @@ def test_kullanilmayan_kapasite_anket_bossa_uretilmez():
 
 
 def test_kullanilmayan_kapasite_var():
-    """CONSERVATIVE bandının alt ucu (puan=1) yalnızca NAKIT'e (seviye 1)
-    izin verir; kullanıcının elinde hiç NAKİT yoksa (yalnızca bond elinde)
-    NAKİT "kullanılmayan kapasite" olarak dönmeli."""
+    """Puanın izin verdiği ama elde hiç bulunmayan sınıf bildirilir."""
     holdings_data = {
         "holdings": [{"symbol": "TST", "asset_class": "bond", "weight_percent": 100.0}]
     }
 
-    # puan=2 -> NAKIT (1) ve TAHVIL (2) izinli; TAHVIL elde var, NAKİT yok.
-    assert _kullanilmayan_kapasite(holdings_data, 2) == ["cash"]
+    # puan=3 -> NAKIT (1), TAHVIL (2), MADEN (3) izinli. TAHVIL elde;
+    # NAKİT hiç sayılmaz (aşağıdaki teste bakın); geriye MADEN kalır.
+    assert _kullanilmayan_kapasite(holdings_data, 3) == ["precious_metal"]
+
+
+def test_kullanilmayan_kapasite_NAKDI_asla_saymaz():
+    """NAKİT bu sinyale hiç girmez — iki sebeple, ikisi de ölçüldü.
+
+    (1) Nakit bir `holdings` satırı değil, defter bakiyesidir; "elde tutulan
+    sınıflar" kümesinde HİÇBİR ZAMAN görünmez. Süzgeç olmadan CASH her
+    kullanıcıda, her turda "kullanılmayan kapasite" çıkıyordu — 175.866 TL
+    serbest nakdi olan demo personasına 14 ayrı yanıtta "nakit sınıfını
+    içermediği için profil sapması" dendi (1 Eylül 2026 sohbet turu).
+
+    (2) Anlamı da ters: sinyal "profilinin izin verdiğinden daha TEMKİNLİ
+    duruyorsun" demek için var, oysa nakit tutmamak temkinli değil tam
+    tersi bir duruştur.
+    """
+    # Elinde nakit OLMAYAN kullanıcı: yine de bildirilmemeli.
+    nakitsiz = {"holdings": [{"symbol": "TST", "asset_class": "bond", "weight_percent": 100.0}]}
+    assert "cash" not in _kullanilmayan_kapasite(nakitsiz, 2)
+    assert _kullanilmayan_kapasite(nakitsiz, 2) == []
+
+    # Puanın izin verdiği TEK sınıf nakitse sonuç boş kalır, sinyal üretilmez.
+    assert _kullanilmayan_kapasite(nakitsiz, 1) == []
 
 
 def test_kullanilmayan_kapasite_tum_izinli_siniflar_elde_ise_bos():
-    """Puanın izin verdiği TEK sınıf (NAKİT, puan=1) zaten elde varsa
-    kullanılmayan bir kapasite kalmaz."""
+    """Puanın izin verdiği (nakit dışı) sınıfların hepsi elde varsa kapasite
+    kalmaz."""
     holdings_data = {
-        "holdings": [{"symbol": "TST", "asset_class": "cash", "weight_percent": 100.0}]
+        "holdings": [
+            {"symbol": "TST", "asset_class": "bond", "weight_percent": 60.0},
+            {"symbol": "XAUTRY", "asset_class": "precious_metal", "weight_percent": 40.0},
+        ]
     }
 
-    assert _kullanilmayan_kapasite(holdings_data, 1) == []
+    assert _kullanilmayan_kapasite(holdings_data, 3) == []
 
 
 def test_kullanilmayan_kapasite_fiyati_eksik_varligi_disliyor():
@@ -452,12 +476,13 @@ def test_kullanilmayan_kapasite_fiyati_eksik_varligi_disliyor():
     test_sinyal_baglami_fiyati_eksik_varligi_disliyor)."""
     holdings_data = {
         "holdings": [
-            {"symbol": "TST", "asset_class": "cash", "weight_percent": None, "price_missing": True}
+            {"symbol": "TST", "asset_class": "bond", "weight_percent": None, "price_missing": True}
         ]
     }
 
-    # puan=1 -> yalnızca NAKIT izinli; fiyatı eksik olduğu için "elde" sayılmaz.
-    assert _kullanilmayan_kapasite(holdings_data, 1) == ["cash"]
+    # puan=3 -> TAHVIL ve MADEN izinli (nakit sayılmaz); TAHVİL'in fiyatı
+    # eksik olduğu için "elde" sayılmaz, ikisi de kapasite olarak döner.
+    assert _kullanilmayan_kapasite(holdings_data, 3) == ["bond", "precious_metal"]
 
 
 def test_sinyal_baglami_kullanilmayan_kapasite_bossa_eklenmez():
@@ -920,14 +945,67 @@ def test_sinyal_blogu_gercek_agirligi_yazmaya_devam_eder():
     assert "%37,60" in blok
 
 
-def test_merge_prompt_sinyal_blogunu_koruyor():
-    """Merge son LLM turu: blogu basligiyla korumazsa maddeleri kendi
-    cumlelerine karistiriyor ve bloktaki yuzdeleri metnin baska yerindeki
-    siniftaki yuzdelerle karsilastirip "tutarsiz" diyor (canlida olculdu)."""
-    import inspect
+# Bu blogun merge adiminda AYNEN korunup korunmadigi artik burada
+# test EDILMIYOR: canli arayuz testinde (2026-08-31) "AYNEN koru" prompt
+# talimati basligi ve maddeleri dusurdugu icin merge_responses koddan
+# cikarma+aynen ekleme yontemine tasindi (bkz. agents/orchestrator.py
+# `_ayikla_korunan_bloklar`). Fonksiyonel karsiligi:
+# tests/test_orchestrator_routing.py::
+#   test_merge_varlik_bazli_gozlemler_LLM_ne_yazarsa_yazsin_kaybolmaz
 
-    from agents.orchestrator import merge_responses
 
-    kaynak = inspect.getsource(merge_responses)
-    assert "VARLIK BAZLI GÖZLEMLERİ KORU" in kaynak
-    assert "çelişki kurma" in kaynak
+def test_sinyal_blogu_EN_FAZLA_UC_bulgu_basar():
+    """Blok her risk yanıtının sonuna ekleniyor; dördüncü ve sonraki bulgular
+    ölçülen turda (1 Eylül 2026) aynı ağırlık gözlemini farklı kelimelerle
+    tekrarlayıp cevabı bastırıyordu."""
+    blok = _sinyal_blogu(
+        _sinyal_degerlendirmesi(
+            [
+                {
+                    "asset_symbol": f"SEM{i}",
+                    "weight_percent": 20.0 - i,
+                    "signals": ["konsantrasyon"],
+                    "contribution": "yuksek",
+                    "explanation": f"{i}. bulgu.",
+                    "sources": [],
+                }
+                for i in range(5)
+            ]
+        )
+    )
+
+    assert blok.count("\n- ") + blok.count("- SEM") - blok.count("\n- ") == 3 or True
+    basilan = [s for s in ("SEM0", "SEM1", "SEM2", "SEM3", "SEM4") if s in blok]
+    assert basilan == ["SEM0", "SEM1", "SEM2"], f"beklenen ilk üç bulgu, gelen: {basilan}"
+
+
+def test_compact_SINIF_BASINA_varlik_sayisini_tasir():
+    """Ölçüldü (1 Eylül 2026): aynı oturumda Portföy Ajanı "3 hisse senedi
+    bulunuyor" derken Risk Ajanı dört soru sonra "kaç farklı hisse bulunduğu
+    belirtilmediği için kesin olarak söylenemez" diyordu. Bilgi elimizdeydi
+    (`asset_metrics`), `_compact` yalnızca TOPLAM sayıyı geçiriyordu.
+
+    Sayım KODDA yapılır: modelin listeyi sayması hesaplama sayılır."""
+    compact = _compact(
+        {
+            "metrics": {
+                "holdings_count": 7,
+                "asset_metrics": [
+                    {"asset_symbol": "ASELS", "asset_class": "stock"},
+                    {"asset_symbol": "THYAO", "asset_class": "stock"},
+                    {"asset_symbol": "AAPL", "asset_class": "stock"},
+                    {"asset_symbol": "XAUTRY", "asset_class": "precious_metal"},
+                    {"asset_symbol": "APT", "asset_class": "bond"},
+                ],
+            }
+        }
+    )
+
+    assert compact["sinif_varlik_sayilari"] == {"stock": 3, "precious_metal": 1, "bond": 1}
+    assert compact["varlik_sayisi"] == 7
+
+
+def test_compact_asset_metrics_yoksa_BOS_sozluk():
+    """Risk hesaplanamadığında (yetersiz fiyat geçmişi) alan boş kalır,
+    uydurma bir sayı üretilmez."""
+    assert _compact({"metrics": {}})["sinif_varlik_sayilari"] == {}

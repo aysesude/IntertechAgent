@@ -10,7 +10,7 @@ from app.services.ledger_service import cash_balance_as_of
 from data.generate_dummy import (
     MAX_HOLDINGS_PER_USER,
     MIN_HOLDINGS_PER_USER,
-    NUM_USERS,
+    TOPLAM_KULLANICI,
 )
 from data.generate_dummy import (
     main as generate_dummy_main,
@@ -21,7 +21,7 @@ def test_generate_dummy_creates_expected_data(engine):
     generate_dummy_main()
 
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(User)) == NUM_USERS
+        assert session.scalar(select(func.count()).select_from(User)) == TOPLAM_KULLANICI
 
         holding_counts = (
             session.execute(
@@ -30,7 +30,7 @@ def test_generate_dummy_creates_expected_data(engine):
             .scalars()
             .all()
         )
-        assert len(holding_counts) == NUM_USERS
+        assert len(holding_counts) == TOPLAM_KULLANICI
         assert all(MIN_HOLDINGS_PER_USER <= c <= MAX_HOLDINGS_PER_USER for c in holding_counts)
 
         # quantity=0 satırlar (tamamen satılmış pozisyon) tasarım gereği kalabilir;
@@ -78,7 +78,7 @@ def test_generate_dummy_risk_profile_never_mismatches_stock_weight(engine):
 
     with Session(engine) as session:
         users = session.execute(select(User)).scalars().all()
-        assert users  # NUM_USERS>0 olduğu zaten başka testte doğrulanıyor
+        assert users  # TOPLAM_KULLANICI>0 olduğu zaten başka testte doğrulanıyor
 
         for user in users:
             holdings = user.portfolio.holdings

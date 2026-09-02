@@ -71,6 +71,41 @@ _TAKMA_ADLAR: dict[str, str] = {
     "gumus": "XAGTRY",
     "gram platin": "XPTTRY",
     "platin": "XPTTRY",
+    # Endeksler. Fiyatları `price_history`'de duruyor ve Piyasa şeridinde
+    # gösteriliyor ama satın alınamıyorlar (`tradable=False`), dolayısıyla
+    # `_sembol_kumesi`nin varsayılan süzgecine takılıyorlardı. Ölçüldü
+    # (1 Eylül 2026): "BIST bugün nasıl?" ve "S&P 500 ne durumda?" belge
+    # aramasına düşüp "doğrulanmış bilgi bulunamadı" cevabı alıyordu —
+    # aynı oturumda Analist Ajanı XU100 serisini sorunsuz kullanırken.
+    "bist": "XU100",
+    "bist 100": "XU100",
+    "bist100": "XU100",
+    "borsa istanbul": "XU100",
+    "s&p": "SPX",
+    "s&p 500": "SPX",
+    "sp 500": "SPX",
+    "sp500": "SPX",
+    # Brent. Ürün kararı (1 Eylül 2026): kapsam İÇİ. Fiyatını her gün
+    # topluyoruz ve Piyasa şeridinde gösteriyoruz; ekranda gösterip sohbette
+    # reddetmek tutarsızdı (`scope.yaml`'daki `emtia_diger` kaydından
+    # çıkarıldı).
+    #
+    # BİLİNEN SINIR: çıplak "petrol" de eşleşiyor, dolayısıyla "Tüpraş petrol
+    # fiyatı ne kadar?" gibi hem şirket hem emtia geçen bir soruda Brent
+    # fiyatı dönebilir. Alternatif, her sorguda şirket taraması yapıp çıplak
+    # "petrol"ü elemekti — sıcak yola 443 kayıtlık bir regex taraması daha
+    # eklerdi. Kaçırılan durum dar ve dönen cevap hâlâ konuyla ilgili;
+    # "petrol kaç dolar" ise en doğal soru biçimi ve onu kaybetmek istemedik.
+    "brent": "BRENT",
+    "brent petrol": "BRENT",
+    "ham petrol": "BRENT",
+    "petrol": "BRENT",
+    # Fon türleri. Kullanıcı fon KODUNU değil TÜRÜNÜ yazıyor ("serbest fon
+    # alabilir miyim"); her türün evrende tek temsilcisi var, dolayısıyla
+    # eşleme tek anlamlı.
+    "serbest fon": "BHE",
+    "para piyasasi fonu": "IOO",
+    "eurobond fonu": "AKE",
     # ABD hisseleri — şirket adıyla.
     "apple": "AAPL",
     "microsoft": "MSFT",
@@ -118,6 +153,14 @@ _FIYAT_KALIPLARI = (
     "kuru",
     "kur",
     "deger",
+    # Endekslerin doğal soru biçimi. "kac tl" endekse uymuyor (puan cinsinden
+    # kote edilir) ve kullanıcı "BIST bugün nasıl?" diye soruyor. İçerik
+    # soruları (bilanço, ciro, temettü...) `_ICERIK_KELIMELERI_RE` ile zaten
+    # bu yoldan önce eleniyor, dolayısıyla "X'in 2. çeyreği nasıl" buraya
+    # düşmüyor.
+    "ne durumda",
+    "kac puan",
+    "bugun nasil",
 )
 
 # Geçmişe/seyre dair soru: aynı varlık için farklı tool gerekir.
@@ -167,6 +210,15 @@ _BELIRSIZ_SEMBOLLER = {"CEYREK", "YARIM"}
 _BUYUK_HARF_SEMBOLLER = {"V", "META"}
 
 
+# Satın alınamayan ama FİYATI SORULABİLEN semboller. `tradable=False` bir
+# alım-satım kısıtıdır, fiyat sorgusu kısıtı değil: endeksin kaç puan olduğu
+# meşru bir sorudur ve verisi elimizde.
+#
+# BRENT 1 Eylül 2026'da eklendi (ürün kararı): kapsam dışıyken Piyasa
+# şeridinde gösteriliyordu, tutarsızlık kapsam İÇİ seçilerek kapatıldı.
+_FIYATLANAN_ALINAMAYAN = {"XU100", "SPX", "BRENT"}
+
+
 @lru_cache(maxsize=1)
 def _sembol_kumesi() -> set[str]:
     """Varlık evrenindeki tüm semboller (THYAO, USDTRY, ...).
@@ -182,7 +234,8 @@ def _sembol_kumesi() -> set[str]:
     return {
         a.symbol
         for a in ASSET_UNIVERSE
-        if (a.tradable or a.symbol == "XU100") and a.symbol not in _BELIRSIZ_SEMBOLLER
+        if (a.tradable or a.symbol in _FIYATLANAN_ALINAMAYAN)
+        and a.symbol not in _BELIRSIZ_SEMBOLLER
     }
 
 
@@ -235,6 +288,73 @@ def varlik_tespit_et(query: str) -> list[str]:
 _SURE_KALIP_RE = re.compile(r"\bson\s+\d+\s+(gun|hafta|ay|yil)\w*")
 
 
+# Sorguda geçen ZAMAN PENCERESİ -> TimeWindow değeri.
+#
+# Uzun kalıplar önce denenir: "son 12 ay" hem "son 12 ay" hem "son ay" ile
+# eşleşir, spesifik olan kazanmalıdır.
+#
+# Ölçülen hata (1 Eylül 2026): "Dolar son bir yılda ne yaptı?" sorusu
+# `get_asset_price_history`'ye pencere GEÇİRMEDEN gidiyordu; tool varsayılanı
+# 3 ay olduğu için cevap *"son bir yıllık performansı bulunmuyor"* deyip 3
+# aylık veriyi veriyordu. Bir yıllık seri veritabanında duruyordu; sorulan
+# soru cevaplanmamıştı.
+_PENCERE_KALIPLARI: tuple[tuple[str, str], ...] = (
+    ("yilbasindan", "ytd"),
+    ("yil basindan", "ytd"),
+    ("bu yil", "ytd"),
+    ("son 12 ay", "12m"),
+    ("son bir yil", "12m"),
+    ("son 1 yil", "12m"),
+    ("gecen yil", "12m"),
+    ("son yil", "12m"),
+    ("son 6 ay", "6m"),
+    ("son alti ay", "6m"),
+    ("son 3 ay", "3m"),
+    ("son uc ay", "3m"),
+    ("son ceyrek", "3m"),
+    ("son 1 ay", "1m"),
+    ("son bir ay", "1m"),
+    ("gecen ay", "1m"),
+    ("son ay", "1m"),
+    ("son hafta", "1m"),
+    ("gecen hafta", "1m"),
+)
+
+# Pencere anlaşılamazsa tool'un kendi varsayılanı kullanılır; burada bir
+# tahmin üretilmez.
+VARSAYILAN_PENCERE = "3m"
+
+
+def pencere_cikar(query: str) -> str | None:
+    """Sorguda geçen zaman penceresini `TimeWindow` değeri olarak döndürür.
+
+    Hiçbir kalıp eşleşmezse `None` — çağıran taraf tool varsayılanına bırakır.
+    "Son 2 ay"/"son 9 ay" gibi ara değerler en yakın ÜST pencereye yuvarlanır
+    (`_SURE_KALIP_RE` yolu): kullanıcının istediğinden kısa bir pencere
+    göstermek, sorulan soruyu cevaplamamak olur.
+    """
+    normalized = _normalize(query)
+    for kalip, pencere in _PENCERE_KALIPLARI:
+        if kalip in normalized:
+            return pencere
+
+    eslesme = _SURE_KALIP_RE.search(normalized)
+    if eslesme is None:
+        return None
+
+    sayi = int(re.search(r"\d+", eslesme.group(0)).group(0))
+    birim = eslesme.group(1)
+    if birim.startswith("yil"):
+        return "12m"
+    if birim.startswith("gun") or birim.startswith("hafta"):
+        return "1m"
+    # Ay: en yakın ÜST pencere.
+    for esik, pencere in ((1, "1m"), (3, "3m"), (6, "6m")):
+        if sayi <= esik:
+            return pencere
+    return "12m"
+
+
 def _icerir(normalized: str, kaliplar: tuple[str, ...]) -> bool:
     return any(k in normalized for k in kaliplar)
 
@@ -253,7 +373,7 @@ _ICERIK_KELIMELERI_RE = re.compile(
     r"\b(net kar|brut kar|faaliyet kari|favok|ciro|hasilat|nakit akis|"
     r"temettu|marj|segment|ortaklik yapisi|sermaye artir|yonetim kurulu|"
     r"kurumsal olay|bilanco|gelir tablosu|hedef fiyat|hedef kapanis|"
-    r"analist tavsiye)\w*"
+    r"analist tavsiye|analist tahmin)\w*"
 )
 
 
@@ -277,7 +397,12 @@ def fiyat_niyeti(query: str) -> dict | None:
     if not gecmis and not _icerir(normalized, _FIYAT_KALIPLARI):
         return None
 
-    return {"symbols": semboller, "history": gecmis}
+    return {
+        "symbols": semboller,
+        "history": gecmis,
+        # Yalnızca geçmiş sorgusunda anlamlı; güncel fiyatta pencere yok.
+        "window": pencere_cikar(query) if gecmis else None,
+    }
 
 
 # "GARAN'ın hedef fiyatı ne?", "ASELS için analist tavsiyesi ne?" gibi
@@ -285,7 +410,92 @@ def fiyat_niyeti(query: str) -> dict | None:
 # piyasa fiyatı DEĞİL (bkz. _ICERIK_KELIMELERI_RE'deki "hedef fiyat" bloğu:
 # fiyat_niyeti() bunları kendi kapsamına almıyor, market_agent bu fonksiyonu
 # fiyat_niyeti'nden ÖNCE kontrol eder).
-_HEDEF_FIYAT_KALIPLARI = ("hedef fiyat", "hedef kapanis", "analist tavsiye", "analist hedef")
+_HEDEF_FIYAT_KALIPLARI = (
+    "hedef fiyat",
+    "hedef kapanis",
+    "analist tavsiye",
+    "analist hedef",
+    "analist tahmin",
+)
+
+
+# "Aselsan'ın F/K oranı kaç?", "Akbank'ın PD/DD'si nedir?" — bir şirketin
+# DEĞERLEME ÇARPANLARI. Hedef fiyat gibi bu da RAG dokümanlarında değil,
+# `get_fundamentals` tool'unda (yfinance) yaşayan ayrı bir veri sınıfı.
+#
+# Ölçüldü (1 Eylül 2026 sohbet turu): doğrudan sorulduğunda soru Piyasa
+# Ajanı'na düşüyor ve o ajanın böyle bir tool'u olmadığı için *"elimdeki
+# belgelerde yer almıyor"* deniyordu; iki soru sonra aynı oturumda Analist
+# Ajanı aynı şirketin F/K'sını veriyordu. Aynı soruya iki farklı cevap, tek
+# bir hatadan daha çok güven kaybettirir.
+_TEMEL_ORAN_KALIPLARI = (
+    "f/k",
+    "fk orani",
+    "fiyat kazanc",
+    "pd/dd",
+    "pddd",
+    "pd dd",
+    "piyasa degeri defter",
+    "favok marj",
+    "kar marji",
+    "temettu verimi",
+    "temel analiz",
+    "degerleme carpan",
+    "carpanlari",
+)
+
+
+# "Serbest fon alabilir miyim?", "BIST 100'den alabilir miyim?" — kullanıcı
+# fiyat değil, KENDİ ERİŞİMİNİ soruyor. Cevabı sistemin kendi verisinde:
+# varlığın uygunluk seviyesi (`advice_eligibility`) ile kullanıcının anket
+# puanı, ayrıca `tradable` bayrağı.
+#
+# Ölçüldü (1 Eylül 2026): iki soru da Web Araştırma Ajanı'na düşüp
+# ansiklopedik bir cevap aldı ("nitelikli yatırımcı statüsüne bağlıdır"),
+# oysa doğru cevap elimizde: puan 6, serbest fon seviye 7 — alamaz.
+_UYGUNLUK_KALIPLARI = (
+    "alabilir miyim",
+    "alabilir miyiz",
+    "alabiliyor muyum",
+    "alim yapabilir miyim",
+    "yatirim yapabilir miyim",
+    "erisebilir miyim",
+    "bana uygun mu",
+    "benim icin uygun mu",
+)
+
+
+def uygunluk_niyeti(query: str) -> str | None:
+    """Sorgu "bunu alabilir miyim" tipindeyse hedef varlığın sembolünü
+    döndürür, değilse None.
+
+    Varlık tespit edilemezse None — "fon alabilir miyim" gibi genel bir soru
+    hangi fonu kastettiğini söylemiyor ve uydurma bir sembol seçmek yanlış
+    cevap üretirdi; o durumda soru normal akışta kalır.
+    """
+    normalized = _normalize(query)
+    if not any(k in normalized for k in _UYGUNLUK_KALIPLARI):
+        return None
+
+    semboller = varlik_tespit_et(query)
+    return semboller[0] if len(semboller) == 1 else None
+
+
+def temel_oran_niyeti(query: str) -> str | None:
+    """Sorgu bir şirketin değerleme çarpanlarını soruyorsa o şirketin
+    ticker'ını döndürür, değilse None.
+
+    `hedef_fiyat_niyeti` ile aynı kalıp: kalıp geçse bile şirket tespit
+    edilemezse None döner ("F/K oranı nasıl hesaplanır" bir KAVRAM sorusudur,
+    Web Araştırma Ajanı'na aittir) — uydurma şirket varsayılmaz.
+    """
+    normalized = _normalize(query)
+    if not any(k in normalized for k in _TEMEL_ORAN_KALIPLARI):
+        return None
+
+    from agents.market_query import sirket_tespit_et
+
+    return sirket_tespit_et(query)
 
 
 def hedef_fiyat_niyeti(query: str) -> str | None:

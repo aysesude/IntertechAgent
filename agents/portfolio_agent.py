@@ -15,19 +15,20 @@ analizi onun işi değildir; haber ve RAG piyasa ajanının.
 
 2026-08-28 eki — Profil-uygunluk bilgilendirmesi: bu, "risk analizi" (volatilite/
 VaR modelleme, yalnızca `agents/risk_agent.py`'nin işi) DEĞİLDİR — kullanıcının
-GÜNCEL elindeki varlık sınıflarının, GÜNCEL anket puanının izin verdiği
-sınıflarla basit bir küme farkıdır (`advice_eligibility.mismatched_asset_
-classes`), tıpkı K/Z yüzdesi gibi zaten `get_holdings`'ten gelen veriden
-deterministik olarak türetilen bir gerçek. `orchestrator.py`'nin RISK
-sorulmadıkça `risk_agent`'ı hiç çağırmaması yüzünden bu bilgi başka türlü
-yalnızca "ne yapmalıyım" tarzı bir soruda görünürdü — kullanıcı sadece
-"portföyümü göster" dediğinde bile GÜNCEL bir profil uyumsuzluğu varsa
-görmesi gerekir (bkz. `advice_eligibility.py`'nin KAPSAM notu, "sahipse
-profil UYUMSUZLUĞU sayılır"). Yalnızca `get_holdings` plandaysa çalışır (bkz.
-`_profil_uyum_disi_varliklar`) — `get_portfolio_summary`'nin özet dağılımı bu
-kontrol için KULLANILMIYOR, tutarlı tek kaynak `get_holdings` kalsın diye.
+GÜNCEL elindeki varlıkların, GÜNCEL anket puanının izin verdiği ölçüde
+tavsiye kapsamında olup olmadığının basit bir kontrolüdür
+(`advice_eligibility.mismatched_holdings`), tıpkı K/Z yüzdesi gibi zaten
+`get_holdings`'ten gelen veriden deterministik olarak türetilen bir gerçek.
+`orchestrator.py`'nin RISK sorulmadıkça `risk_agent`'ı hiç çağırmaması
+yüzünden bu bilgi başka türlü yalnızca "ne yapmalıyım" tarzı bir soruda
+görünürdü — kullanıcı sadece "portföyümü göster" dediğinde bile GÜNCEL bir
+profil uyumsuzluğu varsa görmesi gerekir (bkz. `advice_eligibility.py`'nin
+KAPSAM notu, "sahipse profil UYUMSUZLUĞU sayılır"). Yalnızca `get_holdings`
+plandaysa çalışır (bkz. `_profil_uyum_disi_varliklar`) — `get_portfolio_
+summary`'nin özet dağılımı bu kontrol için KULLANILMIYOR, tutarlı tek kaynak
+`get_holdings` kalsın diye.
 
-2026-08-31 eki — bu kontrol SINIF düzeyinden VARLIK düzeyine çekildi
+2026-08-31 eki — SINIF düzeyinden VARLIK düzeyine taşındı
 (`mismatched_asset_classes` → `mismatched_holdings`). Sınıf, tek tek
 varlıkların uygunluğuna karar vermek için fazla kabaydı ve canlıda yanlış
 bildiriyordu: Korumacı bir kullanıcının elindeki IOO (para piyasası fonu)
@@ -197,7 +198,16 @@ class PortfolioAgent(BaseAgent):
         # doğrudan API'den alıyor.
         performance = data.get("performance")
         if isinstance(performance, dict) and "series" in performance:
-            data["performance"] = {k: v for k, v in performance.items() if k != "series"}
+            # Seri atılırken DÖNEM BAŞLANGICI korunur. Özet skalerleri tarih
+            # taşımıyor; seri de atılınca anlatıda hiçbir tarih kalmıyordu ve
+            # cevap "son üç ayda +%5,43 kazandınız" deyip hangi üç ay olduğunu
+            # söylemiyordu (ölçüldü, 1 Eylül 2026 — 21 Ağustos turundan beri
+            # açık duran bulgu). Bitiş zaten `as_of`.
+            seri = performance.get("series") or []
+            data["performance"] = {
+                **{k: v for k, v in performance.items() if k != "series"},
+                "series_start": seri[0].get("date") if seri else None,
+            }
 
         # Boş metinle "başarılı" dönmek yasak: orchestrator'ın merge adımı
         # `success=True` gördüğünde metni LLM'e anlatı için veriyor, metin boşsa
@@ -411,17 +421,17 @@ def _profil_uyum_disi_varliklar(
     holdings_data: dict[str, Any], risk_survey_score: int | None
 ) -> list[dict[str, Any]]:
     """Kullanıcının GÜNCEL elinde olan ama anket puanının artık izin
-    vermediği VARLIKLAR — bkz. modül docstring'i "2026-08-28 eki",
+    vermediği VARLIKLARIN listesi — bkz. modül docstring'i "2026-08-31 eki",
     `advice_eligibility.mismatched_holdings`.
 
-    2026-08-31: bu fonksiyon SINIF düzeyindeydi
-    (`_profil_uyum_disi_siniflar`, `mismatched_asset_classes`) ve sınıfından
+    2026-08-31: SINIF düzeyinden (`_profil_uyum_disi_siniflar`,
+    `mismatched_asset_classes`) VARLIK düzeyine taşındı — sınıf, tek tek
+    varlıkların uygunluğuna karar vermek için fazla kaba ve sınıfından
     ayrılan varlıklarda YANLIŞ bildiriyordu. Canlıda ölçüldü: Korumacı bir
     kullanıcının elindeki IOO (para piyasası fonu) için "Borçlanma Araçları
     artık tavsiye kapsamında değil" deniyordu — oysa sınıfı BOND (seviye 2)
     olsa da IOO'nun kendi uygunluk seviyesi 1'dir ve o kullanıcı için
-    uyumludur. Sınıf, tek tek varlıkların uygunluğuna karar vermek için
-    fazla kaba; `advice_eligibility` modülü de bunu açıkça söylüyor.
+    uyumludur.
 
     Saf bir fonksiyondur: kural `advice_eligibility`'nin, burada yalnızca
     `get_holdings` sonucunun şekli o fonksiyonun beklediği hâle çevriliyor.
@@ -486,10 +496,16 @@ def _render(data: dict[str, Any]) -> str:
         # kâr/zarar artık ona göre hesaplanıyor ve `değer - yatırılan = kâr`
         # özdeşliği tutuyor. Maliyet gösterilseydi üç rakam birbirini tutmaz,
         # aradaki fark (serbest nakit) açıklamasız kalırdı.
-        lines = [
-            f"Portföy özeti ({summary.get('as_of', '—')})",
-            f"Toplam değer: {_tr_amount(summary.get('total_value'))} TL",
-        ]
+        # TARİH SAYININ YANINDA. Başlıkta da yazıyor ama merge adımı başlığı
+        # düşürüyor: "Portföyünüzün toplam değeri 1.583.703,56 TL." cümlesinde
+        # hiçbir tarih kalmıyordu (ölçüldü, 1 Eylül 2026, soru [1]) — oysa
+        # fiyat yollarında tarih her satırda yazılı. Tarihsiz bir değer,
+        # olmayan bir tazelik iddiasıdır.
+        as_of = summary.get("as_of")
+        toplam = f"Toplam değer: {_tr_amount(summary.get('total_value'))} TL"
+        if as_of:
+            toplam += f" ({_tr_date(as_of)} fiyatlarıyla)"
+        lines = [f"Portföy özeti ({as_of or '—'})", toplam]
         # Her varlık kendi son fiyatıyla değerlenir; tarihler ayrışıyorsa özet
         # `as_of` ile olduğundan taze görünür. Fark varsa kullanıcıya söylenir
         # (CLAUDE.md §4 uydurmama).
@@ -502,6 +518,12 @@ def _render(data: dict[str, Any]) -> str:
             f"Kâr/zarar: {_tr_amount(gain.get('amount'))} TL "
             f"({_tr_percent(gain.get('percent'), signed=True)})",
         ]
+        # Nakit TUTAR olarak da yazılır. `allocation` onu yalnızca yüzde
+        # dilimi olarak taşıyor; "ne kadar param nakitte duruyor" sorusu
+        # tutar istiyor ve yüzdeyi toplam değerle çarpmak modelin yapması
+        # yasak olan bir hesap. Ölçüldü (1 Eylül 2026): soru
+        # "verilerde yer almıyor" cevabını alıyordu.
+        lines.append(f"Serbest nakit: {_tr_amount(summary.get('cash_try'))} TL")
         allocation = summary.get("allocation") or []
         if allocation:
             parts = [
@@ -525,6 +547,16 @@ def _render(data: dict[str, Any]) -> str:
                 f"{_tr_amount(row.get('market_value_try'))} TL, "
                 f"ağırlık %{_tr_amount(row.get('weight_percent'))}, "
                 f"K/Z {_tr_percent(row.get('unrealized_pnl_percent'), signed=True)}"
+            )
+        # Satırların ağırlığı 100'e DEĞİL (100 − nakit%) değerine toplanır:
+        # payda nakit dahil toplam değer. Nakit yazılmazsa aradaki fark
+        # açıklanamaz kalıyor ve model eksik ağırlığı yorumlamaya çalışıyor.
+        nakit = holdings.get("cash_try")
+        if nakit is not None:
+            lines.append(
+                f"Serbest nakit (varlık değil, defter bakiyesi): "
+                f"{_tr_amount(nakit)} TL, "
+                f"ağırlık %{_tr_amount(holdings.get('cash_weight_percent'))}"
             )
         for label, key in (
             ("En çok kazandıran", "best_performer"),
@@ -564,15 +596,30 @@ def _render(data: dict[str, Any]) -> str:
             + " Bu bir satış zorunluluğu değildir, yalnızca bilgilendirmedir."
         )
 
-    performance = (data.get("performance") or {}).get("summary")
+    performans_payload = data.get("performance") or {}
+    performance = performans_payload.get("summary")
     if performance:
-        blocks.append(
-            "Performans\n"
+        satirlar = ["Performans"]
+        # DÖNEMİN TARİHLERİ HER ZAMAN YAZILIR. "Son üç ayda +%5,43 kazandınız"
+        # cümlesi hangi üç ayı kastettiğini söylemeden eksiktir; aynı oturumda
+        # farklı pencerelerden gelen iki yüzde karşılaştırılamaz hale gelir.
+        baslangic = performans_payload.get("series_start")
+        bitis = performans_payload.get("as_of")
+        if baslangic and bitis:
+            satir = f"Dönem: {_tr_date(baslangic)} – {_tr_date(bitis)}"
+            if performans_payload.get("truncated_to_inception"):
+                # Pencere portföyün ömründen uzunsa başlangıç ilk işleme
+                # çekilir; "yıllık" yazıp dört aylık getiri göstermek kıyası
+                # olduğundan iyi ya da kötü gösterir.
+                satir += " (portföy bu dönemden genç, başlangıç ilk işleme çekildi)"
+            satirlar.append(satir)
+        satirlar += [
             f"Dönem değişimi: {_tr_percent(performance.get('change_percent'), signed=True)} "
-            f"({_tr_amount(performance.get('change_amount'))} TL)\n"
+            f"({_tr_amount(performance.get('change_amount'))} TL)",
             f"Dönem başı: {_tr_amount(performance.get('start_value'))} TL · "
-            f"dönem sonu: {_tr_amount(performance.get('end_value'))} TL"
-        )
+            f"dönem sonu: {_tr_amount(performance.get('end_value'))} TL",
+        ]
+        blocks.append("\n".join(satirlar))
 
     transactions = data.get("transactions")
     if transactions:
@@ -585,7 +632,12 @@ def _render(data: dict[str, Any]) -> str:
             f"{b['name']} {_tr_percent(b.get('return_percent'), signed=True)}"
             for b in benchmark.get("benchmarks") or []
         ]
-        blocks.append("Kıyaslama: " + " | ".join(parts))
+        # Kıyaslamanın da dönemi yazılır: aynı sayfadaki iki yüzde ancak aynı
+        # dönemi kapsıyorsa karşılaştırılabilir.
+        baslik = "Kıyaslama"
+        if benchmark.get("start_date") and benchmark.get("end_date"):
+            baslik += f" ({_tr_date(benchmark['start_date'])} – {_tr_date(benchmark['end_date'])})"
+        blocks.append(f"{baslik}: " + " | ".join(parts))
 
     price_history = data.get("price_history")
     if price_history:
@@ -678,12 +730,15 @@ def _render_transactions(payload: dict[str, Any]) -> str:
 
     parts = []
     for (symbol, tx_type), bucket in sirali:
-        satir = (
-            f"{symbol} {bucket['count']} {_TX_TYPE_TR.get(tx_type, tx_type)}, "
-            f"{_tr_amount(bucket['quantity'])} adet, "
-            f"toplam {_tr_amount(bucket['amount'])} TL, "
-            f"ilk {_tr_date(bucket['ilk'])}"
-        )
+        # ADET YALNIZCA ANLAMLIYSA YAZILIR. Nakit ayaklarında (para yatırma,
+        # çekme, faiz) "adet" diye bir kavram yok ve satır "1 para yatırma,
+        # 0,00 adet, toplam 1.250.000,00 TL" gibi çıkıyordu — sıfır bir ÖLÇÜM
+        # değil, o alanın o işlem için tanımsız olduğunun işareti (ölçüldü,
+        # 1 Eylül 2026).
+        satir = f"{symbol} {bucket['count']} {_TX_TYPE_TR.get(tx_type, tx_type)}, "
+        if bucket["quantity"]:
+            satir += f"{_tr_amount(bucket['quantity'])} adet, "
+        satir += f"toplam {_tr_amount(bucket['amount'])} TL, ilk {_tr_date(bucket['ilk'])}"
         if bucket["son"] != bucket["ilk"]:
             satir += f", son {_tr_date(bucket['son'])}"
         parts.append(satir)

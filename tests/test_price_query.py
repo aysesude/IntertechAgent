@@ -7,7 +7,7 @@ bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı" dönüyordu — elde g�
 kur dururken.
 """
 
-from agents.price_query import fiyat_niyeti, varlik_tespit_et
+from agents.price_query import fiyat_niyeti, uygunluk_niyeti, varlik_tespit_et
 
 
 class TestVarlikTespiti:
@@ -49,13 +49,21 @@ class TestVarlikTespiti:
 
 class TestFiyatNiyeti:
     def test_guncel_fiyat_sorusu(self):
-        assert fiyat_niyeti("Dolar ne kadar?") == {"symbols": ["USDTRY"], "history": False}
-        assert fiyat_niyeti("Gram altın kaç TL?") == {"symbols": ["XAUTRY"], "history": False}
+        assert fiyat_niyeti("Dolar ne kadar?") == {
+            "symbols": ["USDTRY"],
+            "history": False,
+            "window": None,
+        }
+        assert fiyat_niyeti("Gram altın kaç TL?") == {
+            "symbols": ["XAUTRY"],
+            "history": False,
+            "window": None,
+        }
 
     def test_gecmis_sorusu_ayirt_edilir(self):
         # Aynı varlık, FARKLI tool: biri son kapanış, diğeri seri.
         niyet = fiyat_niyeti("XAUTRY'nin son 3 aydaki fiyat geçmişini ver")
-        assert niyet == {"symbols": ["XAUTRY"], "history": True}
+        assert niyet == {"symbols": ["XAUTRY"], "history": True, "window": "3m"}
         assert fiyat_niyeti("Dolar son bir yılda ne yaptı?")["history"] is True
 
     def test_araya_sayi_giren_sure_kaliplari_da_gecmis_sayilir(self):
@@ -67,9 +75,10 @@ class TestFiyatNiyeti:
         assert fiyat_niyeti("altın nasıl bir yükseklik gösterdi son 1 ayda") == {
             "symbols": ["XAUTRY"],
             "history": True,
+            "window": "1m",
         }
-        assert fiyat_niyeti("dolar son 6 ayda nasıl gitti")["history"] is True
-        assert fiyat_niyeti("gümüş son 2 haftada ne oldu")["history"] is True
+        assert fiyat_niyeti("dolar son 6 ayda nasıl gitti")["window"] == "6m"
+        assert fiyat_niyeti("gümüş son 2 haftada ne oldu")["window"] == "1m"
 
     def test_icerik_sorusu_bilanco_kalemi_gecince_fiyat_sayilmaz(self):
         """Sorguda bir BIST ticker'ı ("ARCLK", "PGSUS", "KCHOL" gibi kodun
@@ -88,10 +97,15 @@ class TestFiyatNiyeti:
         """Düzeltme kapıyı kapatmamalı: ticker + "ne kadar" gerçek bir fiyat
         sorusuysa (bilanço kalemi kelimesi geçmiyorsa) hâlâ fiyat tool'una
         gitmeli."""
-        assert fiyat_niyeti("ARCLK ne kadar?") == {"symbols": ["ARCLK"], "history": False}
+        assert fiyat_niyeti("ARCLK ne kadar?") == {
+            "symbols": ["ARCLK"],
+            "history": False,
+            "window": None,
+        }
         assert fiyat_niyeti("THYAO fiyatı ne kadar?") == {
             "symbols": ["THYAO"],
             "history": False,
+            "window": None,
         }
 
     def test_iki_sart_birlikte_aranir(self):
@@ -125,16 +139,26 @@ class TestYabanciHisseler:
         assert fiyat_niyeti("Apple hissesi ne kadar?") == {
             "symbols": ["AAPL"],
             "history": False,
+            "window": None,
         }
         assert fiyat_niyeti("Coca cola hisse fiyatı nedir?") == {
             "symbols": ["KO"],
             "history": False,
+            "window": None,
         }
 
     def test_sembolun_kendisiyle_de_bulunur(self):
-        assert fiyat_niyeti("TSLA fiyatı nedir?") == {"symbols": ["TSLA"], "history": False}
+        assert fiyat_niyeti("TSLA fiyatı nedir?") == {
+            "symbols": ["TSLA"],
+            "history": False,
+            "window": None,
+        }
         # Tire içeren tek sembol; kelime sınırı regex'i onu bölmemeli.
-        assert fiyat_niyeti("BRK-B ne kadar?") == {"symbols": ["BRK-B"], "history": False}
+        assert fiyat_niyeti("BRK-B ne kadar?") == {
+            "symbols": ["BRK-B"],
+            "history": False,
+            "window": None,
+        }
 
     def test_gecmis_yolu_yabancida_da_calisir(self):
         assert fiyat_niyeti("NVDA son 3 ayda ne yaptı?")["history"] is True
@@ -153,15 +177,28 @@ class TestBuyukHarfDuyarliSemboller:
         assert fiyat_niyeti("Meta fiyatları bu ay arttı mı?") is None
 
     def test_buyuk_harfli_sembol_calisir(self):
-        assert fiyat_niyeti("META hissesi ne kadar?") == {"symbols": ["META"], "history": False}
-        assert fiyat_niyeti("V hissesi ne kadar?") == {"symbols": ["V"], "history": False}
+        assert fiyat_niyeti("META hissesi ne kadar?") == {
+            "symbols": ["META"],
+            "history": False,
+            "window": None,
+        }
+        assert fiyat_niyeti("V hissesi ne kadar?") == {
+            "symbols": ["V"],
+            "history": False,
+            "window": None,
+        }
 
     def test_takma_ad_her_yazimda_erisim_birakir(self):
         """Kısıtlama erişimi KAPATMAMALI: şirket adı hâlâ her yazımda bulur."""
-        assert fiyat_niyeti("visa ne kadar?") == {"symbols": ["V"], "history": False}
+        assert fiyat_niyeti("visa ne kadar?") == {
+            "symbols": ["V"],
+            "history": False,
+            "window": None,
+        }
         assert fiyat_niyeti("facebook hissesi kaç dolar?") == {
             "symbols": ["META"],
             "history": False,
+            "window": None,
         }
 
 
@@ -171,9 +208,17 @@ def test_kac_dolar_kaliba_dahil_ama_kur_sorgusu_uretmez():
     Tuzak: kalıbın içindeki "dolar" USDTRY takma adıdır. Silinmeseydi
     kullanıcı hisse sorarken cevaba kur da eklenirdi.
     """
-    assert fiyat_niyeti("AAPL kaç dolar?") == {"symbols": ["AAPL"], "history": False}
+    assert fiyat_niyeti("AAPL kaç dolar?") == {
+        "symbols": ["AAPL"],
+        "history": False,
+        "window": None,
+    }
     # Gerçek kur sorusu bozulmamalı.
-    assert fiyat_niyeti("Dolar kaç TL?") == {"symbols": ["USDTRY"], "history": False}
+    assert fiyat_niyeti("Dolar kaç TL?") == {
+        "symbols": ["USDTRY"],
+        "history": False,
+        "window": None,
+    }
 
 
 class TestHedefFiyatNiyeti:
@@ -205,3 +250,106 @@ class TestHedefFiyatNiyeti:
         ikisi çakışırsa güncel fiyat yolu (yanlışlıkla) kazanırdı."""
         assert fiyat_niyeti("GARAN'ın hedef fiyatı ne?") is None
         assert fiyat_niyeti("ASELS için analist tavsiyesi ne?") is None
+
+
+# ---------------------------------------------------------------------------
+# Endeksler — fiyatlanıyor ama satın alınamıyor
+# ---------------------------------------------------------------------------
+
+
+def test_ENDEKS_sorulari_fiyat_yoluna_gider():
+    """`tradable=False` bir ALIM kısıtıdır, fiyat sorgusu kısıtı değil.
+
+    Ölçüldü (1 Eylül 2026 sohbet turu): "BIST bugün nasıl?" ve "S&P 500 ne
+    durumda?" belge aramasına düşüp *"veritabanımızda bu sorguyla ilgili
+    doğrulanmış bir bilgi bulunamadı"* cevabı alıyordu — aynı oturumda
+    Analist Ajanı XU100 serisini sorunsuz kullanırken. Endeksin kaç puan
+    olduğu meşru bir sorudur ve verisi elimizde.
+    """
+    for soru, beklenen in (
+        ("BIST bugün nasıl?", "XU100"),
+        ("BIST 100 kaç puan?", "XU100"),
+        ("Borsa İstanbul ne durumda?", "XU100"),
+        ("S&P 500 ne durumda?", "SPX"),
+    ):
+        niyet = fiyat_niyeti(soru)
+        assert niyet is not None, f"{soru!r} fiyat yoluna girmedi"
+        assert niyet["symbols"] == [beklenen], soru
+
+
+def test_endeks_kaliplari_ICERIK_sorusunu_yutmaz():
+    """ "ne durumda" gibi genel kalıplar eklendi; bilanço/finansal tablo
+    soruları yine RAG'de kalmalı (`_ICERIK_KELIMELERI_RE` önceliği)."""
+    assert fiyat_niyeti("Aselsan bilançosu nasıl?") is None
+    assert fiyat_niyeti("Tüpraş'ın 2. çeyrek net kârı ne kadar?") is None
+    assert fiyat_niyeti("Borsa saat kaçta kapanır?") is None
+    # Varlık adı geçmeyen genel soru fiyat sorgusu değildir.
+    assert fiyat_niyeti("Portföyüm ne durumda?") is None
+
+
+# ---------------------------------------------------------------------------
+# Zaman penceresi — sorulan dönem tool'a geçmeli
+# ---------------------------------------------------------------------------
+
+
+def test_SORULAN_PENCERE_niyete_girer():
+    """Ölçüldü (1 Eylül 2026): "Dolar son bir yılda ne yaptı?" sorusu
+    pencere GEÇİRMEDEN gidiyordu; tool varsayılanı 3 ay olduğu için cevap
+    *"son bir yıllık performansı bulunmuyor"* deyip 3 aylık veriyi
+    veriyordu — bir yıllık seri veritabanında dururken."""
+    assert fiyat_niyeti("Dolar son bir yılda ne yaptı?")["window"] == "12m"
+    assert fiyat_niyeti("Altın son 3 ayda ne yaptı?")["window"] == "3m"
+    assert fiyat_niyeti("Dolar son 1 ayda yükseldi mi?")["window"] == "1m"
+    assert fiyat_niyeti("Altın yılbaşından beri ne yaptı?")["window"] == "ytd"
+
+
+def test_ara_deger_UST_pencereye_yuvarlanir():
+    """ "Son 9 ay" diye bir pencere yok. Kullanıcının istediğinden KISA bir
+    pencere göstermek sorulan soruyu cevaplamamak olur; üste yuvarlanır."""
+    assert fiyat_niyeti("Altın son 9 ayda ne yaptı?")["window"] == "12m"
+    assert fiyat_niyeti("Dolar son 2 ayda ne yaptı?")["window"] == "3m"
+
+
+def test_guncel_fiyat_sorusunda_pencere_YOK():
+    """Pencere yalnızca geçmiş sorgusunda anlamlı."""
+    niyet = fiyat_niyeti("Dolar ne kadar?")
+
+    assert niyet["history"] is False
+    assert niyet["window"] is None
+
+
+# ---------------------------------------------------------------------------
+# "Bunu alabilir miyim?" — uygunluk sorusu
+# ---------------------------------------------------------------------------
+
+
+def test_uygunluk_sorusu_varligi_tespit_eder():
+    """Ölçüldü (1 Eylül 2026): "Serbest fon alabilir miyim?" ve "BIST 100
+    endeksinden alabilir miyim?" Web Araştırma Ajanı'na düşüp ansiklopedik
+    cevap aldı — oysa doğru cevap sistemin kendi verisinde (puan 6, serbest
+    fon seviye 7)."""
+    assert uygunluk_niyeti("Serbest fon alabilir miyim?") == "BHE"
+    assert uygunluk_niyeti("BIST 100 endeksinden alabilir miyim?") == "XU100"
+    assert uygunluk_niyeti("Para piyasası fonu bana uygun mu?") == "IOO"
+    assert uygunluk_niyeti("Apple hissesi alabilir miyim?") == "AAPL"
+
+
+def test_uygunluk_sorusu_belirsizse_UYDURMAZ():
+    """ "Fon alabilir miyim?" hangi fonu kastettiğini söylemiyor; uydurma bir
+    sembol seçmek yanlış cevap üretirdi."""
+    assert uygunluk_niyeti("Fon alabilir miyim?") is None
+    # Uygunluk kalıbı yoksa bu yola hiç girilmez.
+    assert uygunluk_niyeti("Serbest fon nedir?") is None
+    assert uygunluk_niyeti("Dolar ne kadar?") is None
+
+
+def test_BRENT_kapsam_ici():
+    """Ürün kararı (1 Eylül 2026): Brent kapsam İÇİ. Fiyatını her gün
+    topluyoruz ve Piyasa şeridinde gösteriyoruz; ekranda gösterip sohbette
+    reddetmek tutarsızdı."""
+    for soru in ("Brent petrol kaç dolar?", "Petrol ne durumda?", "brent ne kadar?"):
+        niyet = fiyat_niyeti(soru)
+        assert niyet is not None, soru
+        assert niyet["symbols"] == ["BRENT"], soru
+
+    assert fiyat_niyeti("brent son 3 ayda ne yaptı?")["window"] == "3m"

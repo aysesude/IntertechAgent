@@ -11,7 +11,9 @@ from agents.orchestrator import (
     _AMBIGUOUS_MESSAGE,
     AGENT_INTENTS,
     AGENT_NODES,
+    _ayikla_korunan_bloklar,
     _build_graph,
+    _kaynak_takip_yaniti,
     _route_after_intent,
     detect_intent,
     merge_responses,
@@ -496,3 +498,290 @@ async def test_merge_turkce_bicim_kurali_tasiyor():
     )
 
     assert "+%8,41" in llm.system, "biçim örneği prompt'ta olmalı"
+
+
+# ---------------------------------------------------------------------------
+# Korunan kuyruk bloklari (2026-08-31, ikinci tur)
+#
+# "Varlık bazlı gözlemler" ve "Risk profili uyumu" bloklari eskiden yalnizca
+# sistem promptunda "AYNEN koru" talimatiyla LLM'e gosteriliyordu. Canli
+# arayuz testinde ikisi de basarisiz oldu: ilkinde LLM basligi ve maddeleri
+# dusurup yalnizca kapanis cumlesini birakti; ikincisi hic korunmadigi icin
+# LLM onu SINIF duzeyine geri yorumladi (asil duzeltmenin tam tersi). Bu
+# yuzden artik LLM'e hic gosterilmiyorlar; `_ayikla_korunan_bloklar` onlari
+# metinden cikarip merge SONRASI kod tarafindan aynen ekliyor.
+# ---------------------------------------------------------------------------
+
+
+def test_ayikla_tam_kuyruk_soundaki_dusuk_guven_cumlesiyle_birlikte_cikar():
+    """risk_agent'in blogu KENDI ICINDE bir '\\n\\n' tasir (madde listesi ile
+    dusuk-guven cumlesi arasinda) — yine de TEK blok olarak, boluenmeden
+    cikmali (bu blok metnin KESIN SONUdur, ortasinda baska blok gelmez)."""
+    text = (
+        "Risk seviyesi: Çok Düşük\n\n"
+        "Varlık bazlı gözlemler\n"
+        "- IOO (%37,60, Yoğunlaşma): açıklama\n\n"
+        "Bu gözlemler sınırlı sayıda kaynağa dayanıyor; kapsamı dar olabilir."
+    )
+
+    kalan, bloklar = _ayikla_korunan_bloklar(text)
+
+    assert len(bloklar) == 1
+    assert bloklar[0] == (
+        "Varlık bazlı gözlemler\n"
+        "- IOO (%37,60, Yoğunlaşma): açıklama\n\n"
+        "Bu gözlemler sınırlı sayıda kaynağa dayanıyor; kapsamı dar olabilir."
+    )
+    # Ham ayrıntı (sembol, yüzde) LLM'in göreceği metinde KALMAMALI.
+    assert "IOO" not in kalan
+    assert "%37,60" not in kalan
+    assert "[NOT — kullanıcıya gösterme:" in kalan
+    assert "Risk seviyesi: Çok Düşük" in kalan
+
+
+def test_ayikla_sinirli_kuyruk_kendinden_sonraki_bloga_dokunmaz():
+    """portfolio_agent'daki 'Risk profili uyumu' blogu ORTADA olabilir
+    (Performans gibi bloklar ardindan gelebilir) — yalnizca kendisi
+    cikmali, sonraki blok LLM'in gorecegi metinde AYNEN kalmali."""
+    text = (
+        "Varlıklar\nIOO ...\n\n"
+        "Risk profili uyumu\n"
+        "Elinizde, güncel risk profilinize göre artık tavsiye kapsamında "
+        "olmayan şu varlıklar var: IOO (Borçlanma Araçları, uygunluk seviyesi 2). "
+        "Anket puanınız 1. Bu bir satış zorunluluğu değildir, yalnızca "
+        "bilgilendirmedir.\n\n"
+        "Performans\nDönem değişimi: +%1,00"
+    )
+
+    kalan, bloklar = _ayikla_korunan_bloklar(text)
+
+    assert len(bloklar) == 1
+    assert bloklar[0].startswith("Risk profili uyumu")
+    assert "uygunluk seviyesi 2" in bloklar[0]
+    # Sonraki blok, LLM'in gorecegi metinde kaybolmamali.
+    assert "Performans\nDönem değişimi: +%1,00" in kalan
+    # Ham ayrıntı (sembol, seviye, puan) LLM'in göreceği metinde KALMAMALI.
+    assert "uygunluk seviyesi 2" not in kalan
+    assert "Anket puanınız 1" not in kalan
+    assert "[NOT — kullanıcıya gösterme:" in kalan
+
+
+def test_ayikla_baslik_yoksa_metne_dokunmaz():
+    text = "Portföy özeti\nToplam değer: 100 TL"
+
+    kalan, bloklar = _ayikla_korunan_bloklar(text)
+
+    assert kalan == text
+    assert bloklar == []
+
+
+async def test_merge_varlik_bazli_gozlemler_LLM_ne_yazarsa_yazsin_kaybolmaz():
+    """Asil regresyon (2026-08-31, canli arayuz testi): blok yalnizca
+    prompt talimatiyla korunuyordu ve LLM basligi + maddeleri dusurup
+    yalnizca kapanis cumlesini biraktı. Artik LLM'e hic gosterilmiyor;
+    LLM ne cevap uydurursa uydursun blok yanita AYNEN eklenmeli."""
+    import agents.orchestrator as orch
+
+    class _BlogdanHabersizLLM:
+        async def stream(self, prompt, system=None):
+            # Canlida oldugu gibi: blok icerigine hic deginmeyen kisa bir
+            # cevap - LLM'in ne yazdigi ARTIK ONEMLI DEGIL.
+            yield "Portföyünüz düşük riskli."
+
+    original = orch.get_llm_client
+    orch.get_llm_client = lambda: _BlogdanHabersizLLM()
+    try:
+        state = {
+            "message": "portföyümün risk seviyesi nedir",
+            "agent_responses": [
+                _Response(
+                    True,
+                    summary_text=(
+                        "Risk seviyesi: Çok Düşük\n\n"
+                        "Varlık bazlı gözlemler\n"
+                        "- IOO (%37,60, Yoğunlaşma): açıklama\n\n"
+                        "Bu gözlemler sınırlı sayıda kaynağa dayanıyor; "
+                        "kapsamı dar olabilir."
+                    ),
+                )
+            ],
+        }
+        result = await merge_responses(state, lambda chunk: None)
+    finally:
+        orch.get_llm_client = original
+
+    assert "Varlık bazlı gözlemler" in result["final_answer"]
+    assert "IOO (%37,60, Yoğunlaşma): açıklama" in result["final_answer"]
+    assert "Bu gözlemler sınırlı sayıda kaynağa dayanıyor" in result["final_answer"]
+    assert "Portföyünüz düşük riskli." in result["final_answer"]
+
+
+async def test_merge_risk_profili_uyumu_sinifa_geri_yorumlanamaz():
+    """Ikinci regresyon: bu blok hic korunmuyordu, LLM onu SINIF duzeyine
+    geri yorumladi ('Borçlanma Araçları sınıfı ... artık tavsiye kapsamında
+    değil') — 2026-08-31'de asset-level'e tasinarak duzeltilen hatanin
+    aynisi. Artik LLM'e ayrinti hic gosterilmiyor, o yuzden uydurmaya
+    zemin de kalmiyor; dogru (sembol + kendi seviyesi) blok AYNEN eklenir."""
+    import agents.orchestrator as orch
+
+    class _SinifDuzeyineYorumlayanLLM:
+        async def stream(self, prompt, system=None):
+            # Tam olarak canlida olculen hatali cevap sekli.
+            yield "Borçlanma Araçları sınıfı güncel profilinize göre artık tavsiye kapsamında değil."
+
+    original = orch.get_llm_client
+    orch.get_llm_client = lambda: _SinifDuzeyineYorumlayanLLM()
+    try:
+        state = {
+            "message": "portföyümdeki varlıklar risk profilime uyuyor mu",
+            "agent_responses": [
+                _Response(
+                    True,
+                    summary_text=(
+                        "Risk profili uyumu\n"
+                        "Elinizde, güncel risk profilinize göre artık tavsiye "
+                        "kapsamında olmayan şu varlıklar var: IOO (Borçlanma "
+                        "Araçları, uygunluk seviyesi 2). Anket puanınız 1. Bu "
+                        "bir satış zorunluluğu değildir, yalnızca "
+                        "bilgilendirmedir."
+                    ),
+                )
+            ],
+        }
+        result = await merge_responses(state, lambda chunk: None)
+    finally:
+        orch.get_llm_client = original
+
+    # Dogru, sembol-bazli blok AYNEN yanitta olmali.
+    assert "IOO (Borçlanma Araçları, uygunluk seviyesi 2)" in result["final_answer"]
+    assert "Anket puanınız 1" in result["final_answer"]
+
+
+async def test_merge_korunan_blok_LLM_promptunda_ham_ayrinti_tasimaz():
+    """LLM'e giden metinde artik ham sembol/seviye/yuzde OLMAMALI — yanlis
+    yorumlayamasin diye. Yalnizca kisa bir NOT kalir."""
+    llm = await _merge_ile_calistir(
+        {
+            "message": "portföyümdeki varlıklar risk profilime uyuyor mu",
+            "agent_responses": [
+                _Response(
+                    True,
+                    summary_text=(
+                        "Risk profili uyumu\n"
+                        "Elinizde ... IOO (Borçlanma Araçları, uygunluk "
+                        "seviyesi 2). Anket puanınız 1. Bu bir satış "
+                        "zorunluluğu değildir, yalnızca bilgilendirmedir."
+                    ),
+                )
+            ],
+        }
+    )
+
+    assert "uygunluk seviyesi 2" not in llm.prompt
+    assert "Anket puanınız 1" not in llm.prompt
+    assert "[NOT — kullanıcıya gösterme: 'Risk profili uyumu'" in llm.prompt
+
+
+async def test_merge_llm_sessiz_kalirsa_korunan_blok_iki_kez_gorunmez():
+    """LLM hic parca uretmezse ham metin (`successful_raw`) kullanilir; blok
+    zaten dogal yerinde durdugundan AYRICA eklenip TEKRAR ETMEMELI, notun
+    kendisi de sizmamali."""
+    import agents.orchestrator as orch
+
+    class _SessizLLM:
+        async def stream(self, prompt, system=None):
+            return
+            yield  # pragma: no cover - üretici yapmak için
+
+    original = orch.get_llm_client
+    orch.get_llm_client = lambda: _SessizLLM()
+    try:
+        state = {
+            "agent_responses": [
+                _Response(
+                    True,
+                    summary_text=(
+                        "Risk seviyesi: Çok Düşük\n\nVarlık bazlı gözlemler\n"
+                        "- IOO (%37,60, Yoğunlaşma): açıklama"
+                    ),
+                )
+            ],
+        }
+        result = await merge_responses(state, lambda chunk: None)
+    finally:
+        orch.get_llm_client = original
+
+    assert result["final_answer"].count("Varlık bazlı gözlemler") == 1
+    assert "[NOT — kullanıcıya gösterme:" not in result["final_answer"]
+
+
+# ---------------------------------------------------------------------------
+# Kaynak takip sorusu — geçmişten cevaplanır
+# ---------------------------------------------------------------------------
+
+ONCEKI_YANIT = """THYAO'da son gelişmeler, 2026 ilk yarı sonuçlarının açıklanmasıdır.
+
+Kaynaklar:
+- Türk Hava Yolları (THYAO) 2026 2. Çeyrek Finansal Sonuçları (AeroNews24, 05.08.2026)
+- Türk Hava Yolları Şirket Profili (THY Yatırımcı İlişkileri / KAP, 20.08.2026)
+
+Güncel KAP Bildirimleri:
+- Finansal Rapor (6 Aylık) — 05.08.2026 (https://www.kap.org.tr/tr/Bildirim/1643238)"""
+
+GECMIS = [
+    {"role": "user", "content": "THYAO hakkında son gelişmeler neler?"},
+    {"role": "assistant", "content": ONCEKI_YANIT},
+]
+
+
+def test_kaynak_sorusu_ONCEKI_YANITTAN_cevaplanir():
+    """Ölçüldü (1 Eylül 2026, [32] ve [34]): "Kaynak olarak neye
+    dayanıyorsun?" Piyasa Ajanı'na düşüp bu cümlenin KENDİSİ belgelerde
+    aranıyor ve "doğrulanmış bilgi bulunamadı" dönüyordu — oysa bir önceki
+    yanıt iki kaynağı ve bir KAP bağlantısını listelemişti.
+
+    CLAUDE.md §4 kaynak izlenebilirliğini zorunlu tutuyor; yanıt bunu
+    veriyordu ama kullanıcı SONRADAN sorduğunda kayboluyordu.
+    """
+    yanit = _kaynak_takip_yaniti("Kaynak olarak neye dayanıyorsun?", GECMIS)
+
+    assert yanit is not None
+    assert "AeroNews24" in yanit
+    assert "kap.org.tr" in yanit
+    # Bloklar AYNEN taşınır, yeniden yazılmaz.
+    assert "Kaynaklar:" in yanit and "Güncel KAP Bildirimleri:" in yanit
+
+
+def test_kaynak_sorusu_ILK_MESAJDA_normal_akista_kalir():
+    """Geçmiş yoksa "kaynağın ne" sorusu sistemin genel çalışmasını
+    soruyordur; önceki yanıt diye bir şey yok."""
+    assert _kaynak_takip_yaniti("Kaynak olarak neye dayanıyorsun?", []) is None
+
+
+def test_kaynak_sorusunda_YENI_KONU_gecerse_devralinmaz():
+    """ "Tüpraş kaynakları neler?" bir önceki cevap THYAO hakkındaysa, o
+    cevabın kaynaklarını göstermek yanlış olurdu — kullanıcı yeni bir konu
+    soruyor."""
+    assert _kaynak_takip_yaniti("Tüpraş kaynakları neler?", GECMIS) is None
+
+
+def test_kaynaksiz_yanitta_DURUSTCE_soylenir():
+    """Fiyat/portföy cevapları arşiv belgesine dayanmıyor; "kaynak yok"
+    demek yerine nereden geldiği söylenir (AK 5.5)."""
+    gecmis = [{"role": "assistant", "content": "Amerikan Doları 48,26 TL (31.08.2026, TCMB)."}]
+
+    yanit = _kaynak_takip_yaniti("Neye dayanıyorsun?", gecmis)
+
+    assert yanit is not None
+    assert "kaynak listesi taşımıyordu" in yanit
+
+
+def test_kaynak_kalibi_yoksa_bu_yola_girilmez():
+    assert _kaynak_takip_yaniti("Portföyüm ne durumda?", GECMIS) is None
+
+
+def test_SOURCE_RECALL_erken_cikis_listesinde():
+    """Yanıt geçmişten üretildi; ajana gitmesine gerek yok."""
+    from agents.orchestrator import _route_after_intent
+
+    assert _route_after_intent({"intent": "SOURCE_RECALL"}) == ["handle_out_of_scope"]

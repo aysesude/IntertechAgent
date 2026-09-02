@@ -1,3 +1,4 @@
+import { act } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { SurveyResult, SurveyRule } from "@/api/survey";
@@ -130,7 +131,15 @@ async function anketiBitir(onSubmit: ReturnType<typeof vi.fn>) {
       fireEvent.click(document.querySelector(`input[name="${kod}"][value="a"]`)!);
     }
     const sonAdim = index === SURVEY_STEPS.length - 1;
-    fireEvent.click(screen.getByRole("button", { name: sonAdim ? "Profilimi göster" : "Devam et" }));
+    // Son adımdaki tıklama `onSubmit`i BEKLİYOR ve sonuç geldiğinde durumu
+    // güncelliyor; `act` ile sarılmazsa React o güncellemeyi test dışında
+    // yapılmış sayıp uyarı basıyor. Uyarı zararsız ama gerçek bir sorunu
+    // gizleyebilecek gürültü.
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: sonAdim ? "Profilimi göster" : "Devam et" }),
+      );
+    });
   }
   return { onDone };
 }

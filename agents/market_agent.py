@@ -54,8 +54,10 @@ atlanır. Bu davranış "her şirket sorusunda daha mantıklı" (kullanıcı kar
 daraltılabilir.
 """
 
+import re
 from collections.abc import Callable
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -68,10 +70,15 @@ from agents.market_query import (
     guncellik_istegi_var_mi,
     sirket_sayisi,
 )
-from agents.price_query import fiyat_niyeti, hedef_fiyat_niyeti
+from agents.price_query import (
+    fiyat_niyeti,
+    hedef_fiyat_niyeti,
+    temel_oran_niyeti,
+    uygunluk_niyeti,
+)
 from app.core.llm_client import get_llm_client
 from app.providers.universe import SPEC_BY_SYMBOL
-from app.services.advice_eligibility import is_asset_advice_allowed
+from app.services.advice_eligibility import asset_risk_level, is_asset_advice_allowed
 
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "market_agent.md").read_text(
     encoding="utf-8"
@@ -124,6 +131,63 @@ def _kaynak_blogu(results: list[dict[str, Any]]) -> str:
     if not gorulen:
         return ""
     return _KAYNAK_BASLIGI + "\n".join(f"- {etiket}" for etiket in gorulen)
+
+
+# "Belgelerde yok" cevabının kalıbı. Prompt tek bir cümle dayatıyor ama model
+# onu soruya uyarlıyor: "Elimdeki belgelerde ASELSAN'ın sözleşme tutarı bilgisi
+# yer almıyor.", "Elimdeki belgelerde S&P 500'ün mevcut durumuna ilişkin bilgi
+# yer almıyor." Ortak çekirdek iki parça: "elimdeki belgelerde" + olumsuzlama.
+_BULUNAMADI_RE = re.compile(
+    r"elimdeki belgelerde.*(yer almiyor|bulunmuyor|bulunamadi|bilgi yok)", re.S
+)
+
+# Üstündeki metin bu uzunluğu aşıyorsa cevap artık "tek cümlelik yokluk
+# bildirimi" değildir: model belgelerden bir şeyler aktarmış ve yalnızca BİR
+# ayrıntının eksik olduğunu söylüyordur. O durumda kaynaklar gerçekten
+# kullanılmıştır ve listelenmelidir.
+_BULUNAMADI_MAX_UZUNLUK = 220
+
+_TR_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a"})
+
+
+def _belge_bulunamadi_metni(sembol: str) -> str:
+    """Kullanıcıya gidecek "bulunamadı" metni — NEYİN bulunamadığını söyler.
+
+    Eski metin `"USDTRY için kayıt bulunamadı."` idi ve iki sorunu vardı:
+
+    1. **Neyin bulunamadığını söylemiyordu.** "Kayıt yok" cümlesi "bu varlığa
+       dair hiçbir verimiz yok" gibi okunuyor. Oysa bulunamayan şey yalnızca
+       ARŞİV BELGESİ; fiyatı `price_history`'de duruyor ve başka bir ajan onu
+       aynı yanıtta verebiliyor. Ölçüldü (1 Eylül 2026, soru [54]): tek
+       paragrafta hem "USD/TRY 45,93'ten 48,26'ya çıkmış" hem "USDTRY için
+       kayıt bulunamadığı belirtiliyor" yazıyordu. İkisi de doğruydu ama
+       cümle onları çelişkili gösteriyordu.
+    2. **Ham sembol sızdırıyordu.** `USDTRY` iç gösterimdir; kullanıcı
+       "dolar" yazmıştı.
+
+    Merge adımı "ALINAMAYAN BİLGİLER"i bilerek anlatıya katıyor (kısmi
+    başarıda eksiği söylemek doğru davranış), dolayısıyla düzeltilmesi
+    gereken metnin kendisi.
+    """
+    spec = SPEC_BY_SYMBOL.get(sembol)
+    ad = spec.name if spec is not None else sembol
+    return f"Belgeler arasında {ad} ile ilgili bir kayıt bulunamadı."
+
+
+def _kaynak_kullanilmadi_mi(ozet: str) -> bool:
+    """Özet "belgelerde yok" diyorsa kaynak listesi EKLENMEMELİ.
+
+    Kaynak listesi koda gömülü olarak ekleniyor; model "bilgi yok" dediğinde
+    cevap kendi kendisiyle çelişiyordu — üstte "veri yok", altta iki kaynak
+    (ölçüldü 1 Eylül 2026: [27] S&P 500 cevabının kaynağı "Tofaş Şirket
+    Profili", [71] olmayan bir şirketin kaynağı "Pegasus Şirket Profili").
+
+    Bu, kod tabanında zaten var olan ilkenin aynısı: kullanılmayan bir
+    kaynağı göstermek, kaynak göstermenin amacını tersine çevirir (bkz.
+    gündem dalındaki aynı gerekçe).
+    """
+    sade = ozet.replace("İ", "i").lower().translate(_TR_FOLD).strip()
+    return len(sade) <= _BULUNAMADI_MAX_UZUNLUK and bool(_BULUNAMADI_RE.search(sade))
 
 
 def _kap_blogu(disclosures: list[dict[str, Any]]) -> str:
@@ -269,11 +333,112 @@ _HEDEF_FIYAT_YON_METNI = {
 }
 
 
-def _render_hedef_fiyat(data: dict[str, Any]) -> str:
+# yfinance alan adı -> (Türkçe etiket, yüzdeye çevrilsin mi).
+#
+# SÖZLEŞME ÖLÇÜLDÜ (yfinance 1.6.0, 1 Eylül 2026): `profitMargins` ve
+# `ebitdaMargins` KESİR döner (0,2949), `dividendYield` ise ZATEN YÜZDEDİR
+# (3,06). İkisine de aynı işlemi uygulamak sayıyı yüz kat yanlış gösterirdi.
+_TEMEL_ORAN_ETIKETLERI: tuple[tuple[str, str, bool], ...] = (
+    ("trailingPE", "F/K", False),
+    ("forwardPE", "İleri F/K", False),
+    ("priceToBook", "PD/DD", False),
+    ("ebitdaMargins", "FAVÖK marjı", True),
+    ("profitMargins", "Kâr marjı", True),
+    ("dividendYield", "Temettü verimi", False),
+)
+
+
+def _buyuk_tutar(deger: float) -> str:
+    """Piyasa değeri gibi büyük tutarları okunur ölçekte yazar.
+
+    Ham hâli "374.399.991.808,00" — bir insan bunu okuyup büyüklüğünü
+    kavrayamaz ve modelin özetlerken yeniden yazması (dolayısıyla yanlış
+    yazması) riskini artırır.
+    """
+    deger = float(deger)
+    for esik, birim in ((1e12, "trilyon"), (1e9, "milyar"), (1e6, "milyon")):
+        if abs(deger) >= esik:
+            return f"{_tr_amount(deger / esik)} {birim}"
+    return _tr_amount(deger)
+
+
+def _render_temel_oranlar(sirket: str, data: dict[str, Any]) -> str:
+    """Değerleme çarpanlarını LLM'den geçirmeden ham satırlar olarak döker.
+
+    Sıfır ve `None` değerler YAZILMAZ: bankalarda `ebitdaMargins` 0 gelir
+    (FAVÖK kavramı bankada tanımsızdır) ve "%0,00" basmak bir ÖLÇÜM iddiası
+    olurdu — oysa o oranın o şirket için anlamı yok.
+    """
+    kayit = (data.get("records") or {}).get(sirket) or {}
+    satirlar: list[str] = []
+    for alan, etiket, yuzde_mi in _TEMEL_ORAN_ETIKETLERI:
+        deger = kayit.get(alan)
+        if deger in (None, 0):
+            continue
+        if yuzde_mi:
+            satirlar.append(f"- {etiket}: %{_tr_amount(float(deger) * 100)}")
+        else:
+            birim = "%" if alan == "dividendYield" else ""
+            satirlar.append(f"- {etiket}: {birim}{_tr_amount(deger)}")
+
+    piyasa_degeri = kayit.get("marketCap")
+    if piyasa_degeri:
+        para = kayit.get("currency") or "TRY"
+        satirlar.append(f"- Piyasa değeri: {_buyuk_tutar(piyasa_degeri)} {para}")
+
+    if not satirlar:
+        eksik = ", ".join(data.get("symbols_without_data") or [sirket])
+        return f"Temel analiz oranları bulunamadı: {eksik}."
+
+    baslik = f"{sirket} temel analiz oranları:"
+    dipnot = ""
+    if data.get("fetched_at"):
+        # Tarih ve kaynak HER ZAMAN yazılır — diğer fiyat yollarındaki kural
+        # (AK 5.3); tarihsiz bir oran, olmayan bir tazelik iddiasıdır.
+        dipnot = (
+            f"\n(Kaynak: {data.get('source', 'yfinance')}, "
+            f"{_tarih_bicimle(data['fetched_at'])} itibarıyla)"
+        )
+    return baslik + "\n" + "\n".join(satirlar) + dipnot
+
+
+def _guncel_fiyat_haritasi(guncel: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """`get_current_prices` yanıtını sembol -> kayıt sözlüğüne çevirir."""
+    if not guncel:
+        return {}
+    return {p.get("symbol"): p for p in (guncel.get("prices") or []) if p.get("symbol")}
+
+
+def _hedefe_uzaklik(hedef: Any, guncel: Any) -> Decimal | None:
+    """Güncel fiyata göre hedefe uzaklık, yüzde. Hesaplanamıyorsa None.
+
+    Ürün kararı (1 Eylül 2026, seçenek C): kullanıcı "hedef 180, şu an 150,
+    yüzde kaç potansiyel var?" diye sorduğunda "hesaplanmış yüzde verilerde
+    yer almıyor" cevabı alıyordu (ölçüldü, [69]). Kural gereği doğruydu —
+    sayısal değer LLM'den çıkamaz — ama kullanışsızdı.
+
+    Hesap KODDA yapılıyor ve KULLANICININ verdiği sayılarla değil, kendi
+    verimizle: kullanıcının rakamları eski/yanlış olabilir ve onlarla hesap
+    yapmak o rakamlara otorite kazandırırdı.
+    """
+    try:
+        h, g = Decimal(str(hedef)), Decimal(str(guncel))
+    except (InvalidOperation, TypeError):
+        return None
+    if g <= 0:
+        return None
+    return ((h / g - 1) * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _render_hedef_fiyat(data: dict[str, Any], guncel: dict[str, Any] | None = None) -> str:
     """Hedef fiyat/analist tavsiyesi kayıtlarını LLM'den geçirmeden ham
     satırlar olarak döker — `_kap_blogu` ile aynı gerekçe: bu GEÇMİŞTE
     raporlanmış bir rakam, LLM'in yeniden yazması uydurma riski taşır
-    (bkz. app/services/target_price_ingest.py docstring'i)."""
+    (bkz. app/services/target_price_ingest.py docstring'i).
+
+    `guncel` verilirse hedefe uzaklık da yazılır (bkz. `_hedefe_uzaklik`).
+    """
+    guncel_harita = _guncel_fiyat_haritasi(guncel)
     satirlar: list[str] = []
     for k in data.get("records") or []:
         para = k.get("currency") or "TRY"
@@ -293,6 +458,22 @@ def _render_hedef_fiyat(data: dict[str, Any]) -> str:
                 f"{_HEDEF_FIYAT_YON_METNI.get(yon, yon)}"
             )
         satirlar.append("- " + satir)
+
+        # Hedefe uzaklık AYRI bir satırda ve GÜNCEL fiyatla birlikte: hangi
+        # fiyata göre hesaplandığı yazılmazsa yüzde doğrulanamaz olur.
+        kayit = guncel_harita.get(k.get("symbol"))
+        if (
+            kayit is not None
+            and (uzaklik := _hedefe_uzaklik(k.get("target_price"), kayit.get("price"))) is not None
+        ):
+            # İşaret yüzde imininin ÖNÜNDE: Türkçe yazımda "-%4,80" doğru,
+            # "%-4,80" değil (bkz. agents/formatting.tr_percent, aynı kural).
+            isaret = "+" if uzaklik > 0 else ("-" if uzaklik < 0 else "")
+            satirlar.append(
+                f"  → Güncel {_tr_amount(kayit.get('price'))} {para}'ye göre hedefe uzaklık: "
+                f"{isaret}%{_tr_amount(abs(uzaklik))} "
+                f"({_tarih_bicimle(kayit.get('price_date'))} kapanışı)"
+            )
 
     eksik = list(data.get("unknown_symbols") or []) + list(data.get("symbols_without_data") or [])
     if eksik:
@@ -365,6 +546,23 @@ class MarketAgent(BaseAgent):
         if (hedef_sirket := hedef_fiyat_niyeti(request.query)) is not None:
             return await self._hedef_fiyat_yaniti(hedef_sirket)
 
+        # DEĞERLEME ÇARPANLARI DA RAG'E GİTMEZ — hedef fiyatla aynı gerekçe:
+        # F/K, PD/DD, marjlar dokümanlarda değil `get_fundamentals`'ta
+        # (yfinance) yaşıyor. Ölçüldü (1 Eylül 2026): doğrudan sorulduğunda
+        # bu ajan "elimdeki belgelerde yer almıyor" diyor, aynı oturumda
+        # Analist Ajanı aynı şirketin F/K'sını veriyordu.
+        if (oran_sirketi := temel_oran_niyeti(request.query)) is not None:
+            return await self._temel_oran_yaniti(oran_sirketi)
+
+        # "BUNU ALABİLİR MİYİM?" SORUSU DA RAG'E GİTMEZ. Cevabı sistemin
+        # kendi verisinde: varlığın uygunluk seviyesi + kullanıcının anket
+        # puanı + `tradable` bayrağı. Ölçüldü (1 Eylül 2026): "Serbest fon
+        # alabilir miyim?" ve "BIST 100 endeksinden alabilir miyim?"
+        # Web Araştırma Ajanı'na düşüp ansiklopedik cevap aldı, oysa doğru
+        # cevap elimizdeydi (puan 6, serbest fon seviye 7 — alamaz).
+        if (uygunluk_sembolu := uygunluk_niyeti(request.query)) is not None:
+            return await self._uygunluk_yaniti(uygunluk_sembolu, request.user_id)
+
         filtreler = filtre_cikar(request.query)
 
         # SAF GÜNDEM SORUSU RAG'E GİTMEZ.
@@ -423,7 +621,7 @@ class MarketAgent(BaseAgent):
                 if not elenmis:
                     tool_result = {
                         "success": False,
-                        "error": {"message": f"{istenen_sirket} için kayıt bulunamadı."},
+                        "error": {"message": _belge_bulunamadi_metni(istenen_sirket)},
                     }
                 elif len(elenmis) != len(ham_sonuclar):
                     tool_result = {
@@ -504,6 +702,14 @@ class MarketAgent(BaseAgent):
         if niyet["history"]:
             tool_adi = "get_asset_price_history"
             args: dict[str, Any] = {"symbols": semboller}
+            # SORULAN PENCERE TOOL'A GEÇER. Geçmiyordu: tool varsayılanı 3 ay
+            # olduğu için "Dolar son bir yılda ne yaptı?" sorusu *"son bir
+            # yıllık performansı bulunmuyor"* deyip 3 aylık veriyi veriyordu
+            # (ölçüldü, 1 Eylül 2026) — bir yıllık seri veritabanında
+            # dururken. Pencere anlaşılamadıysa geçilmez, tool kendi
+            # varsayılanını kullanır; burada tahmin üretilmez.
+            if niyet.get("window"):
+                args["window"] = niyet["window"]
         else:
             tool_adi = "get_current_prices"
             args = {"symbols": semboller}
@@ -531,11 +737,104 @@ class MarketAgent(BaseAgent):
             error = tool_result.get("error", {})
             return self.error_response(error.get("message", "Hedef fiyat verisi alınamadı"))
 
+        # GÜNCEL FİYAT DA ÇEKİLİR — hedefe uzaklığı hesaplayabilmek için.
+        #
+        # Ürün kararı (1 Eylül 2026, seçenek C): "Hedef 180, şu an 150, yüzde
+        # kaç potansiyel var?" sorusuna "hesaplanmış yüzde verilerde yer
+        # almıyor" deniyordu (ölçüldü, [69]). Kural gereği doğruydu — sayısal
+        # değer LLM'den çıkamaz — ama kullanıcıya kullanışsız görünüyordu.
+        #
+        # Kullanıcının VERDİĞİ sayılarla hesap yapmıyoruz (doğrulukları
+        # bilinmiyor ve hesaplamak onlara otorite kazandırırdı); KENDİ
+        # verimizle hesaplıyoruz ve hesap KODDA yapılıyor.
+        #
+        # Bu çağrı başarısız olursa uzaklık satırı sessizce atlanır: hedef
+        # fiyat cevabı kendi başına geçerli, uzaklık "varsa iyi" bir ek.
+        guncel_result = await self.call_mcp_tool("get_current_prices", {"symbols": [sirket]})
+        guncel = guncel_result.get("data") if guncel_result.get("success") else None
+
         data = tool_result["data"]
         return AgentResponse(
             agent_name=self.agent_name,
             success=True,
-            summary_text=_render_hedef_fiyat(data),
+            summary_text=_render_hedef_fiyat(data, guncel),
+            data={**data, "guncel_fiyat": guncel} if guncel else data,
+        )
+
+    async def _uygunluk_yaniti(self, sembol: str, user_id: str) -> AgentResponse:
+        """ "Bunu alabilir miyim?" — LLM DEVREDE DEĞİL.
+
+        Üç kaynak birleşiyor, üçü de deterministik: varlığın evren tanımı
+        (`SPEC_BY_SYMBOL`), uygunluk seviyesi (`advice_eligibility`) ve
+        kullanıcının anket puanı. Anket doldurulmamışsa puan uydurulmaz —
+        durum dürüstçe söylenir (AK 5.5).
+        """
+        spec = SPEC_BY_SYMBOL.get(sembol)
+        if spec is None:
+            return self.error_response(f"{sembol} için varlık tanımı bulunamadı.")
+
+        seviye = asset_risk_level(sembol, spec.asset_class)
+        puan = await self._fetch_risk_survey_score(user_id)
+
+        satirlar = [f"{spec.symbol} — {spec.name}"]
+
+        # TUTULABİLİRLİK ÖNCE GELİR: uygunluk puanı ne olursa olsun
+        # satın alınamayan bir varlıkta puan tartışması anlamsızdır.
+        if not spec.tradable:
+            satirlar.append(
+                "Bu varlık satın alınamaz; fiyatı takip ediliyor ve "
+                "karşılaştırma için kullanılıyor, ama portföye eklenemez."
+            )
+            return AgentResponse(
+                agent_name=self.agent_name,
+                success=True,
+                summary_text="\n".join(satirlar),
+                data={"symbol": sembol, "tradable": False, "uygunluk_seviyesi": seviye},
+            )
+
+        satirlar.append(f"Uygunluk seviyesi: {seviye}")
+        if puan is None:
+            satirlar.append(
+                "Risk anketiniz henüz doldurulmadığı için uygunluk "
+                "karşılaştırması yapılamıyor; anketi doldurduğunuzda bu soru "
+                "kesin olarak cevaplanabilir."
+            )
+        else:
+            satirlar.append(f"Sizin risk puanınız: {puan}")
+            if is_asset_advice_allowed(sembol, spec.asset_class, puan):
+                satirlar.append("Bu varlık risk puanınızın kapsamındadır.")
+            else:
+                satirlar.append(
+                    f"Bu varlık risk puanınızın kapsamı dışında: seviyesi {seviye}, "
+                    f"puanınız {puan}. Kapsam dışı varlıklar için öneri üretilmez."
+                )
+
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text="\n".join(satirlar),
+            data={
+                "symbol": sembol,
+                "tradable": True,
+                "uygunluk_seviyesi": seviye,
+                "risk_survey_score": puan,
+            },
+        )
+
+    async def _temel_oran_yaniti(self, sirket: str) -> AgentResponse:
+        """Değerleme çarpanları yanıtı — LLM DEVREDE DEĞİL (`_hedef_fiyat_yaniti`
+        ile aynı gerekçe: ara bir LLM çağrısı rakamı yeniden yazma riski
+        taşır)."""
+        tool_result = await self.call_mcp_tool("get_fundamentals", {"symbols": [sirket]})
+        if not tool_result.get("success"):
+            error = tool_result.get("error", {})
+            return self.error_response(error.get("message", "Temel analiz verisi alınamadı"))
+
+        data = tool_result["data"]
+        return AgentResponse(
+            agent_name=self.agent_name,
+            success=True,
+            summary_text=_render_temel_oranlar(sirket, data),
             data=data,
         )
 
@@ -612,6 +911,12 @@ class MarketAgent(BaseAgent):
         # Kaynak listesi LLM'e bırakılmaz (uydurulmuş kaynak riski) — metadata'dan
         # üretilip akışın sonuna eklenir, kullanıcı da akarken görsün diye
         # on_token'dan geçirilir.
+        #
+        # AMA "belgelerde yok" cevabına kaynak eklenmez: o kaynaklar cevabı
+        # DESTEKLEMİYOR, aksine cevapla çelişiyor (bkz. _kaynak_kullanilmadi_mi).
+        if _kaynak_kullanilmadi_mi(full_text):
+            return full_text
+
         kaynaklar = _kaynak_blogu(results)
         if kaynaklar:
             full_text += kaynaklar
