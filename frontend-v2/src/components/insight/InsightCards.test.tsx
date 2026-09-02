@@ -6,7 +6,7 @@ import { InsightCards } from "./InsightCards";
 /**
  * Akordeon kartlar.
  *
- * İki davranış kilitli:
+ * Üç davranış kilitli:
  *
  * 1. TIKLAMAYLA açılır, hover ile değil. Hover ile açmak fare kartlara doğru
  *    giderken içeriği değiştirir, dokunmatikte hiç çalışmaz ve kayıtlı demo
@@ -15,6 +15,10 @@ import { InsightCards } from "./InsightCards";
  *    görünürlükle ifade ediliyor. Önceden gövde mount/unmount oluyordu ve
  *    kartlar "birden büyüyüp birden küçülüp sonra genişliyordu" (sahada
  *    ölçüldü, 2 Eylül 2026) — her geçişte yeniden akış tetikleniyordu.
+ * 3. Başlık İKİ AYRI ELEMAN: dar hâl için dik, geniş hâl için yatay. Önce
+ *    tek eleman `rotate-180` ile döndürülüyordu ve geçişte kendi ekseninde
+ *    dönüyordu. Bu yüzden başlık aramaları `getAllByText` kullanır —
+ *    tek eşleşme beklemek, düzeltmenin geri alındığını gizlerdi.
  */
 
 const KARTLAR: ApiInsightCard[] = [
@@ -24,9 +28,16 @@ const KARTLAR: ApiInsightCard[] = [
   { id: "risk", title: "Risk", body: "Risk gövdesi.", degraded: true },
 ];
 
+/** Başlığın iki kopyası da AYNI düğmenin içinde; hangisi olursa olsun. */
+function kartDugmesi(baslik: string): HTMLElement {
+  const dugme = screen.getAllByText(baslik)[0].closest("button");
+  if (!dugme) throw new Error(`kart bulunamadı: ${baslik}`);
+  return dugme;
+}
+
 /** Kartın açık olup olmadığı — akordeonun görünür sözleşmesi. */
 function acikMi(baslik: string): boolean {
-  return screen.getByText(baslik).closest("button")?.getAttribute("aria-expanded") === "true";
+  return kartDugmesi(baslik).getAttribute("aria-expanded") === "true";
 }
 
 describe("InsightCards", () => {
@@ -41,7 +52,7 @@ describe("InsightCards", () => {
     render(<InsightCards cards={KARTLAR} initialCardId="genel" />);
     expect(acikMi("Genel Durum")).toBe(true);
 
-    fireEvent.click(screen.getByText("Piyasa"));
+    fireEvent.click(kartDugmesi("Piyasa"));
 
     expect(acikMi("Piyasa")).toBe(true);
     expect(acikMi("Genel Durum")).toBe(false);
@@ -50,7 +61,7 @@ describe("InsightCards", () => {
   it("HOVER kartı AÇMAZ", () => {
     render(<InsightCards cards={KARTLAR} initialCardId="genel" />);
 
-    fireEvent.mouseEnter(screen.getByText("Piyasa"));
+    fireEvent.mouseEnter(kartDugmesi("Piyasa"));
 
     expect(acikMi("Piyasa")).toBe(false);
     expect(acikMi("Genel Durum")).toBe(true);
@@ -87,7 +98,20 @@ describe("InsightCards", () => {
     render(<InsightCards cards={KARTLAR} initialCardId="genel" />);
 
     for (const kart of KARTLAR) {
-      expect(screen.getByText(kart.title)).toBeInTheDocument();
+      expect(screen.getAllByText(kart.title).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("başlık DÖNDÜRÜLMÜYOR — dik ve yatay iki ayrı eleman", () => {
+    // Tek elemanı `rotate` ile çevirmeye dönülürse başlık, kart geçişlerinde
+    // kendi ekseninde döner (sahada ölçüldü, 2 Eylül 2026).
+    render(<InsightCards cards={KARTLAR} initialCardId="genel" />);
+
+    const kopyalar = screen.getAllByText("Piyasa");
+    expect(kopyalar.length).toBe(2);
+
+    for (const eleman of kopyalar) {
+      expect(eleman.className).not.toMatch(/rotate/);
     }
   });
 });

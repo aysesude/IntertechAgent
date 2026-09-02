@@ -124,7 +124,7 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
 
   return createPortal(
     <>
-      <InsightGlow active={loading} />
+      <AnimatePresence>{loading && <InsightGlow key="isik" />}</AnimatePresence>
 
       <AnimatePresence>
         {panelGorunur && (
@@ -142,8 +142,13 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
               className="fixed inset-0 z-[195] bg-[#0B0E14]/25 backdrop-blur-xl dark:bg-black/45"
             />
 
+            {/* Ortalayıcı kapsayıcı: tıklamayı geçirmez (perde alttadır),
+                kenarlarda pay bırakır. */}
+            <div
+              key="ortalayici"
+              className="pointer-events-none fixed inset-0 z-[200] grid place-items-center p-4"
+            >
             <motion.div
-              key="panel"
               ref={panelRef}
               role="dialog"
               aria-modal="true"
@@ -154,17 +159,20 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.99 }}
               transition={GECIS}
-              // YARIM SAYFA: tam ekran değil. Kartlar ekranın ortasında bir
-              // yüzey üzerinde durur, arkasındaki sayfa görünmeye devam eder.
+              // ORTALAMA TRANSFORM İLE YAPILMIYOR — bu bir hata düzeltmesi.
               //
-              // `max-h` ZORUNLU: panel dikeyde ortalanmış (`-translate-y-1/2`)
-              // ve yükseklik sınırı olmayınca uzun içerik ekranın ALTINDAN VE
-              // ÜSTÜNDEN birden taşıyordu — üst kısım hiç ulaşılamaz hâle
-              // geliyordu (sahada ölçüldü, 2 Eylül 2026). Sınır + iç kaydırma
-              // (aşağıdaki `min-h-0 overflow-y-auto`) ikisi birlikte gerekli:
-              // yalnızca `max-h` içeriği kırpar, yalnızca kaydırma taşmayı
-              // durdurmaz.
-              className="fixed left-1/2 top-1/2 z-[200] flex max-h-[88vh] w-[min(1100px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-3xl border border-white/20 bg-white/85 p-6 shadow-pop outline-none backdrop-blur-2xl dark:border-white/10 dark:bg-[#0B151E]/85 sm:p-7"
+              // Önce `left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2`
+              // kullanılıyordu. framer-motion `animate={{ y, scale }}` için
+              // `transform`u INLINE yazıyor ve inline stil sınıfı ezdiği için
+              // ortalama translate'leri siliniyordu: panelin sol üst köşesi
+              // ekranın ortasında kalıyor, gerisi sağ-alta taşıyordu —
+              // "yarıdan fazlası sayfanın dışında" (sahada ölçüldü,
+              // 2 Eylül 2026). Ortalama artık KAPSAYICININ işi (grid), animasyon
+              // panelin; ikisi aynı özelliği paylaşmıyor.
+              //
+              // `max-h` + iç kaydırma birlikte gerekli: yalnızca `max-h`
+              // içeriği kırpar, yalnızca kaydırma taşmayı durdurmaz.
+              className="pointer-events-auto flex max-h-[88vh] w-[min(1100px,92vw)] flex-col gap-5 rounded-3xl border border-white/20 bg-white/85 p-6 shadow-pop outline-none backdrop-blur-2xl dark:border-white/10 dark:bg-[#0B151E]/85 sm:p-7"
             >
               <div className="flex items-center justify-between">
                 <h2 className="font-display m-0 text-[19px] font-semibold text-ink">Hızlı Özet</h2>
@@ -206,6 +214,7 @@ export function InsightOverlay({ open, onClose, activeCardId }: InsightOverlayPr
                 {INVESTMENT_DISCLAIMER}
               </p>
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>
