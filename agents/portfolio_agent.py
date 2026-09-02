@@ -170,6 +170,8 @@ class PortfolioAgent(BaseAgent):
             mismatch = _profil_uyum_disi_varliklar(data["holdings"], risk_survey_score)
             if mismatch:
                 data["profil_uyum_disi_varliklar"] = mismatch
+                # Bildirim ancak puanla YAN YANA anlamlı: "seviye 7" tek
+                # başına kullanıcıya bir şey söylemez.
                 data["anket_puani"] = risk_survey_score
 
         # Hiçbiri gelmediyse söylenecek bir şey yok. `base.error_response()`
@@ -445,19 +447,22 @@ def _profil_uyum_disi_varliklar(
     for h in holdings_data.get("holdings", []):
         if h.get("price_missing"):
             continue
-        symbol = h.get("symbol")
+        sembol = h.get("symbol")
+        sinif = h.get("asset_class")
+        if sembol is None or sinif is None:
+            continue
         try:
-            asset_class = AssetClass(h.get("asset_class"))
+            held.append((sembol, AssetClass(sinif)))
         except ValueError:
             # Tanınmayan bir sınıf değeri (beklenmez, ama sessizce çökmektense
-            # yalnızca o varlığı atlamak zarif düşüştür).
+            # o varlığı atlamak zarif düşüştür).
             continue
-        if symbol is not None:
-            held.append((symbol, asset_class))
 
     return [
         {"sembol": sembol, "sinif": sinif.value, "seviye": seviye}
-        for sembol, sinif, seviye in sorted(mismatched_holdings(held, risk_survey_score))
+        for sembol, sinif, seviye in sorted(
+            mismatched_holdings(held, risk_survey_score), key=lambda kayit: kayit[0]
+        )
     ]
 
 
