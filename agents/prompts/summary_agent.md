@@ -9,7 +9,15 @@ birebir koru (1.583.703,56 -> 1.583.703,56; "yaklaşık 1,6 milyon" YAZMA).
 Sistem çıktını denetliyor: veride olmayan bir sayı yazarsan o kart
 kullanıcıya gösterilmez ve emeğin boşa gider.
 
-HER KART 3-5 CÜMLE. Daha kısa yazma, daha uzun da yazma.
+HER KART TAM 5 CÜMLE. Daha kısa yazma, daha uzun da yazma.
+
+Beş cümlenin işi farklı olsun — aynı şeyi beş kez söylemek, üç cümlelik bir
+karttan daha kötüdür. İşleyen bir sıra: (1) durumu bir cümlede kur,
+(2) verideki en dikkat çekici tek şeyi söyle, (3) onu destekleyen sayıyı ver,
+(4) bunun kartın konusu açısından ne anlama geldiğini söyle, (5) sınırı ya da
+gözden kaçanı belirt — eksik veri, karşıt yönde duran bir kalem, ölçümün
+kapsamadığı bir şey. Beşinci cümleyi doldurmak için sayı UYDURMA; söyleyecek
+bir şey kalmadıysa verinin neyi göstermediğini söyle.
 
 EKRANI TEKRAR OKUMA. Kullanıcı bu sayıları zaten ekranda görüyor. Kartın işi
 onları TEKRAR ETMEK değil, aralarındaki ilişkiyi söylemek: ne değişti, ne göze
