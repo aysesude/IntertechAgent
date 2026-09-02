@@ -114,4 +114,20 @@ describe("InsightCards", () => {
       expect(eleman.className).not.toMatch(/rotate/);
     }
   });
+
+  it("kart geniş ekranda SABİT yükseklikte, gövde İÇERİDE kayar", () => {
+    // Sıçramanın çözümü: yükseklik serbestken daralan kartın metni yeniden
+    // sarıp uzuyor, genişleyeninki kısalıyor ve grid satırı önce şişip sonra
+    // oturuyordu ("birden büyüyüp sonra küçülüyor", sahada ölçüldü,
+    // 2 Eylül 2026). Sabit yükseklik `index.css`'te (`.insight-kartlar`),
+    // ama işe yaraması için kartın onu DOLDURMASI ve taşan metnin kart
+    // içinde kayması gerekiyor — JSX tarafındaki yarısı bu.
+    render(<InsightCards cards={KARTLAR} initialCardId="genel" />);
+
+    const kart = kartDugmesi("Genel Durum");
+    expect(kart.className).toMatch(/sm:h-full/);
+
+    const kaydirilan = screen.getByText("Genel gövde.").closest(".overflow-y-auto");
+    expect(kaydirilan).not.toBeNull();
+  });
 });

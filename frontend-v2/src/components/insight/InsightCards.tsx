@@ -12,23 +12,31 @@ import type { ApiInsightCard, InsightCardId } from "@/api/insight";
  * açılıp kapanıyormuş gibi görünürdü.
  *
  * GEÇİŞ NEDEN GRID ÜZERİNDEN. Önce flex-basis (`flex-[4]` ↔ `flex-[1]`)
- * geçişliydi ve kartlar "birden büyüyüp birden küçülüp sonra genişliyordu"
- * (sahada ölçüldü, 2 Eylül 2026). İki sebep vardı: (1) gövde metni açılıp
- * kapanırken mount/unmount oluyor, her seferinde yeniden akış tetikliyordu;
- * (2) flex-basis geçişi, içerik genişliğiyle yarışıyordu.
+ * geçişliydi. Genişlik artık KAPSAYICININ `grid-template-columns` değeri:
+ * tek bir özellik, tek bir geçiş, içerik genişliğinden bağımsız.
  *
- * Çözüm ikisini de kaldırıyor: genişlik artık KAPSAYICININ
- * `grid-template-columns` değeri (tek bir özellik, tek bir geçiş) ve gövde
- * metni HER ZAMAN mount — yalnızca opaklığı ve görünürlüğü değişiyor.
- * Dolayısıyla açılıp kapanırken DOM'a hiçbir şey girip çıkmıyor.
+ * YÜKSEKLİK GEÇİŞTE SABİT — sıçramanın asıl sebebi buydu. Kartlar geçiş
+ * sırasında "birden büyüyüp sonra küçülüyordu" (sahada ölçüldü,
+ * 2 Eylül 2026). Sebep akordeonun kendisi değil, METNİN YENİDEN
+ * SARMASIYDI: daralan kartın metni daha çok satıra bölünüp UZUYOR,
+ * genişleyenin metni kısalıyor; grid satırının yüksekliği en uzun karta göre
+ * belirlendiği için satır önce şişip sonra oturuyordu. Yükseklik animasyonu
+ * yavaşlatılarak düzelmez — kaynağı genişlik geçişinin kendisidir.
+ *
+ * Çözüm: geniş ekranda kartlara SABİT yükseklik verildi (`index.css`,
+ * `.insight-kartlar`) ve taşan metin kartın içinde kayıyor. Böylece geçiş
+ * boyunca yüksekliğin animasyonlanacak bir değeri kalmıyor; yalnızca
+ * genişlik değişiyor. Dar ekranda kartlar alt alta olduğu için genişlik hiç
+ * değişmez, dolayısıyla sıçrama da yoktur; orada klasik `max-height`
+ * akordeonu korunuyor.
  *
  * BAŞLIK İKİ AYRI ELEMAN, DÖNEN TEK ELEMAN DEĞİL. Önce tek bir `<span>`
- * vardı ve daralınca `rotate-180` + `writing-mode` alıyordu; `transition-all`
- * bunu animasyonlayınca başlık kart geçişlerinde kendi ekseninde dönüyordu
- * (sahada ölçüldü, 2 Eylül 2026). Artık dikey ve yatay başlık iki ayrı
- * elemandır ve aralarında yalnızca ÇAPRAZ SÖNÜMLEME olur — hiçbir şey
- * dönmez. Dikey başlıkta `text-orientation: upright` kullanılıyor: harfler
- * yan yatmadan alt alta dizilir, yani gerçekten "dik", döndürülmüş değil.
+ * vardı, daralınca `rotate-180` + `writing-mode` alıyordu ve `transition-all`
+ * bunu animasyonlayınca başlık kart geçişlerinde kendi ekseninde dönüyordu.
+ * Artık dik ve yatay başlık iki ayrı elemandır; aralarında yalnızca çapraz
+ * sönümleme olur, hiçbir şey dönerek hareket etmez. Dik başlığın 90°'lik
+ * duruşu `writing-mode: vertical-rl` ile SABİTTİR — bir animasyon değil,
+ * yazının yönü.
  */
 
 interface InsightCardsProps {
@@ -40,8 +48,6 @@ interface InsightCardsProps {
 /**
  * Kartların sırayla belirmesi. Dördü birden aynı anda görünürse panel
  * "yapıştırılmış" gibi açılıyor; küçük bir kayma gözü soldan sağa götürüyor.
- * Süre kısa tutuldu (toplam ~0.4 sn): bekleme zaten bitmiş durumda, buradan
- * sonrası okuma zamanı.
  */
 const BELIRME_ADIMI_SN = 0.07;
 
@@ -75,47 +81,74 @@ export function InsightCards({ cards, initialCardId }: InsightCardsProps) {
               ease: [0.22, 1, 0.36, 1],
             }}
             className={
-              "group relative flex min-w-0 flex-col overflow-hidden rounded-2xl border p-5 text-left transition-colors duration-300 " +
+              "group relative flex min-w-0 flex-col overflow-hidden rounded-2xl border p-5 text-left " +
+              "transition-colors duration-500 sm:h-full " +
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand " +
               (acik
                 ? "border-brand/30 bg-white/70 dark:bg-white/[0.07]"
-                : "items-center border-line/60 bg-white/40 hover:border-brand/40 dark:border-white/10 dark:bg-white/[0.03] sm:items-start")
+                : "border-line/60 bg-white/40 hover:border-brand/40 dark:border-white/10 dark:bg-white/[0.03]")
             }
           >
-            {/* DAR HÂL — dik başlık. Döndürülmüyor: `upright` ile harfler
-                normal yönde, alt alta. Kapalıyken yer kaplamaması için
-                yüksekliği değil OPAKLIĞI ve `max-h`'si sıfırlanıyor; eleman
-                DOM'da kalır (yukarıdaki gerekçe). */}
+            {/* DAR HÂL — 90° çevrilmiş başlık, kartın ortasında.
+                KONUMU MUTLAK: yerleşime katılmıyor, dolayısıyla belirip
+                kaybolurken kartın yüksekliğini oynatmıyor. Yalnızca geniş
+                ekranda var; dar ekranda kartlar alt alta olduğu için yatay
+                başlık zaten görünür kalır. */}
             <span
-              aria-hidden={acik}
+              // Görsel bir kopya: erişilebilirlik ağacında BAŞLIK aşağıdaki
+              // <h3>'tür, bu span her hâlde okunmaz — yoksa ekran okuyucu her
+              // kartın adını iki kez söylerdi.
+              aria-hidden
               className={
-                "font-display shrink-0 overflow-hidden font-semibold tracking-[0.08em] text-ink " +
-                "transition-opacity duration-200 [text-orientation:upright] [writing-mode:vertical-rl] " +
-                (acik ? "max-h-0 opacity-0" : "text-[13px] opacity-100")
+                "font-display pointer-events-none absolute inset-0 hidden place-items-center " +
+                "text-[14px] font-semibold tracking-[0.06em] text-ink [writing-mode:vertical-rl] " +
+                "transition-opacity duration-300 sm:grid " +
+                (acik ? "opacity-0" : "opacity-100 delay-200")
               }
             >
               {kart.title}
             </span>
 
-            {/* GENİŞ HÂL — yatay başlık, gövdenin üstünde. */}
+            {/* YATAY BAŞLIK. Dar ekranda HER ZAMAN görünür (orada dik başlık
+                yok); geniş ekranda kart açıkken belirir. Kapalıyken yerinde
+                durup yalnızca sönüyor — kart sabit yükseklikte olduğu için
+                görünmez bir satır kaplaması yerleşimi etkilemiyor. */}
+            <h3
+              className={
+                "font-display m-0 shrink-0 text-[17px] font-semibold text-ink " +
+                "transition-opacity duration-300 " +
+                (acik ? "opacity-100 sm:delay-200" : "opacity-100 sm:opacity-0")
+              }
+            >
+              {kart.title}
+            </h3>
+
+            {/* GÖVDE — HER ZAMAN mount: kapanırken DOM'dan çıkmıyor, yalnızca
+                sönüyor. Böylece geçiş sırasında yeniden akış tetiklenmiyor.
+                Geniş ekranda yükseklik kısıtı YOK (kart zaten sabit yükseklikte
+                ve taşan metin içeride kayıyor); dar ekranda `max-height`
+                akordeonu devrede. */}
             <div
               aria-hidden={!acik}
               className={
-                "min-w-0 overflow-hidden transition-all duration-300 " +
-                (acik ? "max-h-[52vh] opacity-100" : "max-h-0 opacity-0")
+                "flex min-h-0 flex-1 flex-col overflow-hidden transition-opacity duration-300 " +
+                (acik
+                  ? "max-h-none opacity-100 delay-200"
+                  : "max-h-0 opacity-0 sm:max-h-none")
               }
             >
-              <h3 className="font-display m-0 text-[17px] font-semibold text-ink">{kart.title}</h3>
-              <p className="m-0 mt-3 whitespace-pre-line text-[13.5px] leading-relaxed text-ink-muted">
-                {kart.body}
-              </p>
-              {kart.degraded && (
-                // Sessizce ham satır göstermek, kullanıcının cilalı bir cümle
-                // beklerken sebebini anlamamasına yol açar.
-                <p className="m-0 mt-3 text-[11.5px] italic text-ink-faint">
-                  Bu kart özetlenemedi; ölçülen değerler olduğu gibi gösteriliyor.
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <p className="m-0 mt-3 whitespace-pre-line text-[13.5px] leading-relaxed text-ink-muted">
+                  {kart.body}
                 </p>
-              )}
+                {kart.degraded && (
+                  // Sessizce ham satır göstermek, kullanıcının cilalı bir cümle
+                  // beklerken sebebini anlamamasına yol açar.
+                  <p className="m-0 mt-3 text-[11.5px] italic text-ink-faint">
+                    Bu kart özetlenemedi; ölçülen değerler olduğu gibi gösteriliyor.
+                  </p>
+                )}
+              </div>
             </div>
           </motion.button>
         );
