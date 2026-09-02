@@ -180,4 +180,18 @@ describe("InsightOverlay — erişilebilirlik", () => {
 
     expect(screen.getByText(/yatırım tavsiyesi değildir/i)).toBeInTheDocument();
   });
+
+  it("panel TRANSFORM ile ORTALANMAZ — framer-motion transform'u ezer", () => {
+    // Hata buydu: `left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` ile
+    // ortalanıyordu, ama framer-motion `animate={{ y, scale }}` için
+    // `transform`u inline yazıyor ve inline stil sınıfı eziyor. Ortalama
+    // translate'leri siliniyor, panelin sol üst köşesi ekranın ortasında
+    // kalıyor ve gerisi sağ-alta taşıyordu (sahada ölçüldü, 2 Eylül 2026).
+    // Ortalama artık kapsayıcının grid'inin işi.
+    render(<InsightOverlay open onClose={() => {}} activeCardId="genel" />);
+
+    const panel = screen.getByRole("dialog");
+    expect(panel.className).not.toMatch(/translate/);
+    expect(panel.parentElement?.className).toMatch(/place-items-center/);
+  });
 });
