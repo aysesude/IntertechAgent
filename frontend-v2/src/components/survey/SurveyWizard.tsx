@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import {
@@ -92,6 +92,19 @@ export function SurveyWizard({
       iptal = true;
     };
   }, []);
+
+  // Soru listesi kendi içinde kayan bir kutu. Adım değişince React AYNI DOM
+  // öğesini yeniden kullandığı için kaydırma konumu olduğu gibi kalıyordu:
+  // önceki bölümün son sorusunu görmek için aşağı inen kullanıcı, yeni
+  // bölüme ortasından ya da sonundan giriyor ve ilk soruyu hiç görmüyordu.
+  //
+  // `scrollTo` değil `scrollTop`: jsdom `Element.prototype.scrollTo`yu
+  // tanımlamıyor, çağrılırsa testler patlar. `scrollTop`'a atama her yerde
+  // çalışıyor.
+  const listeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (listeRef.current) listeRef.current.scrollTop = 0;
+  }, [adimIndex, sonuc]);
 
   const adim = SURVEY_STEPS[adimIndex];
   const toplamAdim = SURVEY_STEPS.length + 1;
@@ -297,7 +310,7 @@ export function SurveyWizard({
       {questions === null ? (
         <p className="mt-6 text-[13px] text-[#7A8CA4]">Sorular yükleniyor…</p>
       ) : (
-        <div className="mt-6 max-h-[52vh] space-y-6 overflow-y-auto pr-1">
+        <div ref={listeRef} className="mt-6 max-h-[52vh] space-y-6 overflow-y-auto pr-1">
           {adim.sorular.map((kod) => {
             const soru = questions.sorular[kod];
             if (!soru) return null;
