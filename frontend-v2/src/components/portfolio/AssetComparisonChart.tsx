@@ -104,7 +104,7 @@ export function AssetComparisonChart({
     <div
       className={variant === "nested" ? "mt-5 border-t border-line pt-5 dark:border-transparent" : ""}
     >
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display m-0 text-[15px] font-semibold">
           Varlıklar Arası Karşılaştırmalı Getiri
         </h3>
@@ -126,13 +126,6 @@ export function AssetComparisonChart({
           ))}
         </div>
       </div>
-      <p className="m-0 mb-1 text-xs text-ink-faint">
-        Seçili dönemin başı ile bugün arasındaki toplam % getiri, her enstrüman için tek bir
-        çubukla kıyaslanıyor. <strong className="font-semibold">Portföyüm</strong> çubuğu
-        Performans kartındaki getirinin aynısıdır: nakdiniz dahil, para giriş-çıkışından
-        arındırılmış gerçek getiri. Endeksler ise saf fiyat getirisidir — hesapta bekleyen para
-        getiri üretmediği için aradaki fark normaldir.
-      </p>
       {uyari && <p className="m-0 mb-3 text-xs font-medium text-ink-soft">{uyari}</p>}
       {error && <p className="m-0 mb-3 text-xs font-semibold text-negative">{error}</p>}
 
