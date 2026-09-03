@@ -153,6 +153,38 @@
   }
 }
 
+/* AI Chat sayfasının (ChatPage.tsx) görüntü alanına oturan yüksekliği.
+   `100dvh`, iOS < 15.4 / eski Android WebView'lerde TANINMAYAN bir birim —
+   tanımayan tarayıcı `height` bildirimini GEÇERSİZ sayıp tamamen ATAR
+   (üzerine yazmaz, sıfırlamaz). Tek bildirim `dvh` olsaydı o tarayıcılarda
+   yükseklik hiç uygulanmaz, kart `min-h-0` sayesinde içeriğine göre
+   büzüşür — mesaj alanı neredeyse görünmez kalır ("ufacık" kalma şikâyeti
+   buradan geliyordu). `@supports` sorgusu bunu tarayıcının kendi birim
+   anlama durumuna göre ayırt ediyor: desteklemeyen tarayıcı `vh` tabanlı
+   ilk kuralda kalır, destekleyen tarayıcı (adres çubuğu gizlenince/
+   görününce boyu güncelleyen) `dvh`'ye geçer. */
+.chat-viewport-height {
+  height: calc(100vh - 112px);
+}
+
+@media (min-width: 640px) {
+  .chat-viewport-height {
+    height: calc(100vh - 140px);
+  }
+}
+
+@supports (height: 100dvh) {
+  .chat-viewport-height {
+    height: calc(100dvh - 112px);
+  }
+
+  @media (min-width: 640px) {
+    .chat-viewport-height {
+      height: calc(100dvh - 140px);
+    }
+  }
+}
+
 /* Recharts pie/donut dilimleri tıklanabilir olduğu için tarayıcının
    varsayılan (dikdörtgen) focus outline'ını alıyor — bunun yerine
    klavye kullanıcıları için marka renginde ince bir focus-visible

@@ -30,36 +30,51 @@ export function ChatPage() {
        kendisi kayıyordu, yani hem sayfa hem sohbet akışı kayan iki ayrı
        yüzeydi ve yazarken görüntü zıplıyordu.
        `dvh` bilerek `vh` yerine: mobil tarayıcıda adres çubuğu gizlenince
-       `vh` değişmez ve kartın altı ekranın dışında kalır. */
-    <div className="flex h-[calc(100dvh-112px)] flex-col overflow-hidden sm:h-[calc(100dvh-140px)]">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+       `vh` değişmez ve kartın altı ekranın dışında kalır. Ama `dvh`'yi
+       tanımayan eski tarayıcılarda (bkz. index.css .chat-viewport-height)
+       `vh` tabanlı yedeğe düşüyor — aksi halde kural tamamen atılır ve kart
+       `min-h-0` sayesinde içeriğine büzüşüp "ufacık" kalırdı. */
+    <div className="chat-viewport-height flex flex-col overflow-hidden">
+      {/* Mobilde daha küçük/dar başlık: "Asistan" etiketinin alt boşluğu ve
+          başlığın punto boyutu düşürüldü — kalan yükseklik doğrudan sohbet
+          kartına gidiyor (bkz. .chat-viewport-height ve yukarıdaki düğme
+          notları, aynı gerekçe). */}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-4 sm:mb-5">
         <div>
-          <div className="font-display mb-2.5 text-xs font-semibold uppercase tracking-[1.4px] text-navy">
+          <div className="font-display mb-1 text-[11px] font-semibold uppercase tracking-[1.4px] text-navy sm:mb-2.5 sm:text-xs">
             Asistan
           </div>
-          <h1 className="font-display m-0 text-[28px] font-bold tracking-[-1px] sm:text-[34px]">
+          <h1 className="font-display m-0 text-xl font-bold tracking-[-1px] sm:text-[28px] lg:text-[34px]">
             AI Finans Danışmanı
           </h1>
         </div>
         <div className="flex gap-2">
           {/* GEÇİCİ — sunum öncesi test turu için. Sorulan soruları ve alınan
               yanıtları sırasıyla .txt olarak indirir; bozuk yanıtları elle
-              kopyalamadan toplayabilmek için. Sunum sonrası kaldırılacak. */}
+              kopyalamadan toplayabilmek için. Sunum sonrası kaldırılacak.
+              Mobilde gizli: dar ekranda başlıkla aynı satıra sığmayıp alt
+              satıra taşıyordu, bu da sohbet kartına ayrılan sabit
+              yüksekliği kart aleyhine küçültüyordu (bkz. .chat-viewport-height
+              üstteki not). Zaten kalıcı bir özellik değil. */}
           <button
             onClick={() => downloadTranscript(messages, user.name)}
             disabled={messages.length === 0}
             title="Bu sohbetteki tüm soru ve yanıtları .txt olarak indir"
-            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft dark:border-transparent dark:bg-white/5 dark:text-ink-muted dark:disabled:hover:text-ink-muted"
+            className="hidden h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft dark:border-transparent dark:bg-white/5 dark:text-ink-muted dark:disabled:hover:text-ink-muted sm:flex"
           >
             <DownloadIcon size={14} />
             Dökümü İndir
           </button>
+          {/* "Yeni Sohbet" metni mobilde gizli, yalnızca ikon kalıyor: aynı
+              satıra sığması (başlıkla yan yana) için — sığmayınca satır
+              taşıp yukarıdaki gerekçeyle kartı küçültüyordu. */}
           <button
             onClick={resetSession}
-            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand dark:border-transparent dark:bg-white/5 dark:text-ink-muted"
+            aria-label="Yeni Sohbet"
+            className="flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-3 text-[13.5px] font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand dark:border-transparent dark:bg-white/5 dark:text-ink-muted sm:px-4"
           >
             <PlusIcon size={14} />
-            Yeni Sohbet
+            <span className="hidden sm:inline">Yeni Sohbet</span>
           </button>
         </div>
       </div>
