@@ -99,7 +99,11 @@ export function ChatPage() {
               başka bir köşesinde durmasından daha anlaşılır. */}
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2 px-[22px] pb-2">
+        {/* Mobilde gizli: üç öneri çipi dar ekranda 2-3 satıra sarıyor ve
+            sabit yükseklikli (dvh) sohbet kartından mesaj alanının payına
+            düşen alanı yiyordu — dar viewport'ta mesaj listesi neredeyse
+            görünmez hale geliyordu. */}
+        <div className="hidden shrink-0 flex-wrap gap-2 px-[22px] pb-2 sm:flex">
           {mockChatPage.suggestedPrompts.map((prompt) => (
             <button
               key={prompt}
