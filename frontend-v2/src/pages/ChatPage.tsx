@@ -18,7 +18,7 @@ export function ChatPage() {
   const getBubbleRef = useScrollNewUserMessageToTop(messages);
   // Mobilde ekran klavyesi açıldığında kartın klavyenin arkasında
   // kalmaması için — gerekçe hook'un kendi dosyasında.
-  useVisualViewportHeight();
+  const vvhYenidenOlc = useVisualViewportHeight();
   // SAYFA (body) KİLİTLİ. iOS Safari, giriş kutusuna odaklanınca "yardımcı
   // olayım" diye SAYFANIN KENDİSİNİ kaydırıyor — bizim `overflow-y-auto`
   // mesaj kutumuzu değil. Sonuç: kart ekrandan tamamen kayıp arkada yalnızca
@@ -29,16 +29,24 @@ export function ChatPage() {
   // kendi dosyası — buradaki sebep de aynı aile).
   useScrollLock();
 
-  // Giriş kutusu odaklanınca (klavye açılırken) sayfayı EN BAŞA sabitler.
-  // `useScrollLock` document scroll'unu kilitlese de iOS Safari klavye
-  // açılışında "visual viewport"u (kaydırmadan AYRI bir katman — bkz.
-  // useVisualViewportHeight.ts) hafifçe kaydırabiliyor; kalan ince kayma
-  // buradan geliyordu. İki çağrı: biri hemen (odaklanma anı), biri klavye
+  // Giriş kutusu odaklanınca (klavye açılırken) sayfayı EN BAŞA sabitler VE
+  // `--app-vvh`'yi elle tazeler. `useScrollLock` document scroll'unu
+  // kilitlese de iOS Safari klavye açılışında "visual viewport"u (kaydırmadan
+  // AYRI bir katman — bkz. useVisualViewportHeight.ts) hafifçe kaydırabiliyor;
+  // ayrıca klavye AÇILIŞ ANİMASYONU sırasında `--app-vvh` ara (henüz
+  // oturmamış) bir değerde donuk kalıp kart geçici olarak yanlış boyutlu
+  // görünebiliyordu (bkz. hook'un kendi dosyasındaki not) — kullanıcı
+  // yazmaya başlayana kadar (tesadüfen başka bir olay tetiklenene kadar)
+  // öyle kalıyordu. İki çağrı: biri hemen (odaklanma anı), biri klavye
   // açılış animasyonu bittikten sonra (iOS'ta ~250-300ms) — ilk çağrı
   // animasyon başlamadan önce olduğu için tek başına yetmiyordu.
   const sayfayiEnBasaSabitle = () => {
     window.scrollTo(0, 0);
-    window.setTimeout(() => window.scrollTo(0, 0), 320);
+    vvhYenidenOlc();
+    window.setTimeout(() => {
+      window.scrollTo(0, 0);
+      vvhYenidenOlc();
+    }, 320);
   };
 
   const handleSend = (text?: string) => {
