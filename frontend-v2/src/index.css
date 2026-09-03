@@ -28,6 +28,12 @@
   --color-positive: #2557E8;
   --color-negative: #E63946;
   --color-brand-bright: #2557E8;
+  /* AI Chat sayfasının görüntü-alanı yüksekliği — bkz. .chat-viewport-height
+     ve useVisualViewportHeight.ts. Buradaki `100vh` yalnızca JS hiç
+     çalışmadan önceki/çalışamadığı an için GEÇERLİ bir yedek; hook mount
+     olur olmaz gerçek `visualViewport` yüksekliğiyle (klavye açıkken
+     küçülmüş haliyle) ÜZERİNE YAZAR. */
+  --app-vvh: 100vh;
 }
 
 .dark {
@@ -154,34 +160,21 @@
 }
 
 /* AI Chat sayfasının (ChatPage.tsx) görüntü alanına oturan yüksekliği.
-   `100dvh`, iOS < 15.4 / eski Android WebView'lerde TANINMAYAN bir birim —
-   tanımayan tarayıcı `height` bildirimini GEÇERSİZ sayıp tamamen ATAR
-   (üzerine yazmaz, sıfırlamaz). Tek bildirim `dvh` olsaydı o tarayıcılarda
-   yükseklik hiç uygulanmaz, kart `min-h-0` sayesinde içeriğine göre
-   büzüşür — mesaj alanı neredeyse görünmez kalır ("ufacık" kalma şikâyeti
-   buradan geliyordu). `@supports` sorgusu bunu tarayıcının kendi birim
-   anlama durumuna göre ayırt ediyor: desteklemeyen tarayıcı `vh` tabanlı
-   ilk kuralda kalır, destekleyen tarayıcı (adres çubuğu gizlenince/
-   görününce boyu güncelleyen) `dvh`'ye geçer. */
+   `--app-vvh` (:root'ta tanımlı, useVisualViewportHeight.ts tarafından
+   güncellenir) `100vh` YEDEĞİYLE başlıyor — JS hiç çalışmasa/hiç
+   desteklenmese bile bu DAİMA geçerli bir uzunluk, kural asla geçersiz
+   sayılıp atılmaz. Hook mount olur olmaz değeri gerçek `visualViewport`
+   yüksekliğiyle değiştiriyor; bu da (adres çubuğu ve — `dvh`'nin
+   YAPAMADIĞI — EKRAN KLAVYESİ açılıp kapandıkça) canlı güncellenen tek
+   sayı. Klavye açıldığında kart bu sayede küçülüp klavyenin üstünde kalıyor
+   — sabit `dvh` ile olduğu gibi klavyenin ARKASINDA gizlenmiyor. */
 .chat-viewport-height {
-  height: calc(100vh - 112px);
+  height: calc(var(--app-vvh) - 112px);
 }
 
 @media (min-width: 640px) {
   .chat-viewport-height {
-    height: calc(100vh - 140px);
-  }
-}
-
-@supports (height: 100dvh) {
-  .chat-viewport-height {
-    height: calc(100dvh - 112px);
-  }
-
-  @media (min-width: 640px) {
-    .chat-viewport-height {
-      height: calc(100dvh - 140px);
-    }
+    height: calc(var(--app-vvh) - 140px);
   }
 }
 
