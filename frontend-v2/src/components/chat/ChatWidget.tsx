@@ -9,6 +9,7 @@ import {
 } from "@/data/mockData";
 import { useChat } from "@/chat/ChatProvider";
 import { useScrollNewUserMessageToTop } from "@/chat/useScrollNewUserMessageToTop";
+import { useVisualViewportHeight } from "@/hooks/useVisualViewportHeight";
 
 /**
  * Sohbet PANELİ. Yüzen düğme artık burada DEĞİL: `AssistantFab` iki eylem
@@ -30,6 +31,11 @@ export function ChatWidget({
   const { messages, sending, sendMessage } = useChat();
   const [draft, setDraft] = useState("");
   const getBubbleRef = useScrollNewUserMessageToTop(messages);
+  // Yükseklik hesaplaması ChatPage'deki mobil klavye kaymasıyla AYNI aile —
+  // gerekçe orada. Sayfa KİLİTLENMİYOR (bilerek — widget küçük bir panel,
+  // ChatPage gibi tam sayfa bir yüzey değil; arkadaki sayfa panel açıkken
+  // de kaydırılabilir kalmalı, kullanıcı bunu bekliyor).
+  const vvhYenidenOlc = useVisualViewportHeight();
 
   // Üç nokta göstergesi yalnızca ilk token gelene kadar; sonrasında metin
   // zaten yazılıyor ve iki ayrı "bekle" sinyali göstermek gerekmiyor.
@@ -44,10 +50,31 @@ export function ChatWidget({
     setDraft("");
   };
 
+  // Giriş kutusu odaklanınca sayfayı en başa sabitler VE `--app-vvh`'yi elle
+  // tazeler — ChatPage'deki `sayfayiEnBasaSabitle` ile aynı gerekçe/mekanizma
+  // (klavye açılış animasyonu sırasında `--app-vvh` ara bir değerde donuk
+  // kalabiliyordu, bkz. useVisualViewportHeight.ts).
+  const sayfayiEnBasaSabitle = () => {
+    window.scrollTo(0, 0);
+    vvhYenidenOlc();
+    window.setTimeout(() => {
+      window.scrollTo(0, 0);
+      vvhYenidenOlc();
+    }, 320);
+  };
+
   if (!open) return null;
 
   return (
-    <div className="animate-slideUpPanel fixed inset-x-4 top-[250px] bottom-4 z-[150] flex flex-col overflow-hidden rounded-[14px] border border-transparent bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-6 sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
+    /* Mobilde `bottom-4`/`top-[250px]` DEĞİL, `.chat-widget-mobile-bottom`
+       ve `.chat-widget-mobile-top` (index.css) — gerekçe orada. Özetle:
+       `bottom` klavye/araç çubuğu kadar yukarı kayıyor; `top` da klavye
+       açıkken küçülüyor (panel yukarı büyüyor) — sabit 250px kalsaydı
+       klavye açıkken panele yalnızca ~130px kalıyordu, başlık/giriş
+       kutusu/uyarı metninin hepsi sığmıyordu. sm: üzerinde etkisiz (o
+       breakpoint zaten `sm:top-auto sm:bottom-6 sm:h-auto` ile override
+       ediyor, ayrıca her iki kural da 640px altıyla sınırlı). */
+    <div className="animate-slideUpPanel chat-widget-mobile-bottom chat-widget-mobile-top fixed inset-x-4 z-[150] flex flex-col overflow-hidden rounded-[14px] border border-transparent bg-white/[0.72] backdrop-blur-2xl shadow-widget dark:bg-[#0B151E]/[0.72] dark:shadow-[0_28px_70px_-24px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)] sm:inset-x-auto sm:top-auto sm:bottom-6 sm:right-8 sm:h-auto sm:w-[376px] sm:max-w-[calc(100vw-2rem)]">
       <div className="flex shrink-0 items-center gap-[11px] bg-[#234FA2] px-4 py-2.5 dark:bg-[#7A2B39] sm:px-[18px] sm:py-4">
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/18 text-white sm:h-8 sm:w-8 sm:rounded-[9px]">
           <AssistantIcon size={16} strokeWidth={2.2} />
@@ -118,13 +145,18 @@ export function ChatWidget({
       </div>
 
       <div className="flex shrink-0 gap-[9px] border-t border-line2 px-[18px] pb-[18px] pt-3 dark:border-transparent">
+        {/* `text-base` (16px) mobilde — ChatPage.tsx'teki aynı gerekçe:
+            font-size 16px altında olunca iOS Safari odaklanmada sayfayı
+            otomatik yakınlaştırıp kaydırıyordu. `sm:` üzerinde eski (13.5px)
+            görünüm korunuyor. */}
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onFocus={sayfayiEnBasaSabitle}
           disabled={sending}
           placeholder="Mesaj yaz…"
-          className="h-11 flex-1 rounded-[10px] border border-line px-3.5 text-[13.5px] outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,87,232,.1)] dark:border-transparent dark:bg-white/[0.06] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#C4485A] dark:focus:shadow-[0_0_0_3px_rgba(196,72,90,.2)]"
+          className="h-11 flex-1 rounded-[10px] border border-line px-3.5 text-base outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,87,232,.1)] dark:border-transparent dark:bg-white/[0.06] dark:text-[#EDF1F7] dark:placeholder:text-[#7C8AA6] dark:focus:border-[#C4485A] dark:focus:shadow-[0_0_0_3px_rgba(196,72,90,.2)] sm:text-[13.5px]"
         />
         <button
           onClick={() => handleSend()}
