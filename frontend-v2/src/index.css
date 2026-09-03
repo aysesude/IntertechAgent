@@ -28,6 +28,15 @@
   --color-positive: #2557E8;
   --color-negative: #E63946;
   --color-brand-bright: #2557E8;
+  /* AI Chat sayfasının görüntü-alanı yüksekliği — bkz. .chat-viewport-height
+     ve useVisualViewportHeight.ts. Buradaki `100vh` yalnızca JS hiç
+     çalışmadan önceki/çalışamadığı an için GEÇERLİ bir yedek; hook mount
+     olur olmaz gerçek `visualViewport` yüksekliğiyle (klavye açıkken
+     küçülmüş haliyle) ÜZERİNE YAZAR. */
+  --app-vvh: 100vh;
+  /* Klavye/araç çubuğundan ETKİLENMEYEN sabit tam yükseklik yedeği — bkz.
+     useVisualViewportHeight.ts ve .chat-widget-mobile-bottom. */
+  --app-full-vh: 100vh;
 }
 
 .dark {
@@ -150,6 +159,69 @@
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
+  }
+}
+
+/* AI Chat sayfasının (ChatPage.tsx) görüntü alanına oturan yüksekliği.
+   `--app-vvh` (:root'ta tanımlı, useVisualViewportHeight.ts tarafından
+   güncellenir) `100vh` YEDEĞİYLE başlıyor — JS hiç çalışmasa/hiç
+   desteklenmese bile bu DAİMA geçerli bir uzunluk, kural asla geçersiz
+   sayılıp atılmaz. Hook mount olur olmaz değeri gerçek `visualViewport`
+   yüksekliğiyle değiştiriyor; bu da (adres çubuğu ve — `dvh`'nin
+   YAPAMADIĞI — EKRAN KLAVYESİ açılıp kapandıkça) canlı güncellenen tek
+   sayı. Klavye açıldığında kart bu sayede küçülüp klavyenin üstünde kalıyor
+   — sabit `dvh` ile olduğu gibi klavyenin ARKASINDA gizlenmiyor. */
+.chat-viewport-height {
+  height: calc(var(--app-vvh) - 112px);
+}
+
+@media (min-width: 640px) {
+  .chat-viewport-height {
+    height: calc(var(--app-vvh) - 140px);
+  }
+}
+
+/* ChatWidget'ın (mini sohbet paneli, mobilde) alt boşluğu.
+   `height` DEĞİL — panelin `top`u (CSS, LAYOUT viewport'a göre sabit) ile
+   `--app-vvh` (JS, VISUAL viewport'a göre ölçülen) FARKLI referans
+   çerçeveleri; ikisini "top + height = alt kenar" diye tek bir `height`de
+   birleştirmek, tarayıcı araç çubuğu henüz kaydırılmadan (Safari'nin
+   "büyük" hâli) AÇIKKEN hesaplanan alt kenarı olması gerekenden aşağı,
+   araç çubuğunun ALTINA düşürüyordu — giriş kutusu araç çubuğunun arkasında
+   kalıyordu.
+   Bunun yerine `bottom`u doğrudan bu farktan türetiyoruz: `top` sabit
+   kalıyor, yalnızca alt kenar o an ekranı kaplayan araç çubuğu/klavye kadar
+   yukarı kayıyor.
+   `100vh` DEĞİL `--app-full-vh` (useVisualViewportHeight.ts — JS'in ÖLÇTÜĞÜ
+   `window.innerHeight`): gerçek cihazda denendi, CSS'in `100vh` birimi bu
+   hesap için beklenen piksele ÇÖZÜMLENMEDİ (araç çubuğu/güvenli alanı
+   muhtemelen farklı ele alıyor) ve alt kenar sabit ~82px fazla yukarı
+   çıkıyordu — araç çubuğu açıkken panel neredeyse tamamen kayboluyordu
+   (yalnızca başlık görünüyordu). `--app-full-vh` de `--app-vvh` de JS'in
+   ölçtüğü ham piksel olduğu için birim çözümleme belirsizliği kalmıyor:
+   `--app-full-vh - --app-vvh` o an ekranı kaplayan araç çubuğu/klavye
+   miktarını verir — ikisi eşitken (araç çubuğu kaydırılmış, klavye kapalı)
+   fark ~0, eski sabit `1rem` boşluğa döner.
+   Yalnızca mobilde: `sm:bottom-6` (Tailwind, ChatWidget.tsx) masaüstünde
+   zaten override ediyor ama iki kural da aynı özgüllükte olduğu için
+   çakışmayı KESİN önlemek adına burası da 640px altıyla sınırlı. */
+@media (max-width: 639px) {
+  .chat-widget-mobile-bottom {
+    bottom: calc(1rem + (var(--app-full-vh) - var(--app-vvh)));
+  }
+
+  /* Panelin ÜST kenarı de klavyeye göre esner — bkz. .chat-widget-mobile-top
+     aşağıda: sabit `top-[250px]`, klavye açıkken (görünür alan ~395px'e
+     düşünce) panelin geri kalanına yalnızca ~130px bırakıyordu — başlık +
+     giriş kutusu + uyarı metni bu kadara sığmıyordu, biri kırpılıyordu.
+     `top` artık klavye açıldıkça KÜÇÜLÜYOR (panel yukarı kayıp büyüyor),
+     tam ekran üst gezinme çubuğunun (h-16, 64px) altına inmeyecek şekilde
+     alt sınırlanmış; klavye kapalıyken (`--app-vvh` yeterince büyükken)
+     eski sabit 250px'e geri dönüyor. 300px = kabaca başlık + giriş kutusu +
+     uyarı metni + biraz mesaj alanı için gereken minimum kullanışlı
+     yükseklik. */
+  .chat-widget-mobile-top {
+    top: min(250px, max(64px, var(--app-vvh) - 300px));
   }
 }
 
