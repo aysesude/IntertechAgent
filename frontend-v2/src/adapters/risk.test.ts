@@ -73,6 +73,11 @@ describe("toOverview", () => {
     expect(o.verdict).toContain("Korumacı profilinize uygun");
   });
 
+  it("çubuk için anket puanını (risk_survey_score) taşır, ölçülen seviyeyi değil", () => {
+    const o = toOverview({ ...RISK, risk_survey_score: 5 });
+    expect(o.surveyScore).toBe(5);
+  });
+
   it("is_within_profile false iken 'üzerinde' der", () => {
     const o = toOverview({ ...RISK, is_within_profile: false });
     expect(o.verdict).toContain("profilinizin üzerinde");

@@ -30,7 +30,14 @@ export function __riskOnbelleginiSifirla(): void {
 }
 
 const BOS_RISK: RiskPageData = {
-  overview: { profileLabel: "", levelLabel: null, level: null, isWithinProfile: null, verdict: "" },
+  overview: {
+    profileLabel: "",
+    levelLabel: null,
+    level: null,
+    surveyScore: null,
+    isWithinProfile: null,
+    verdict: "",
+  },
   contributions: [],
   diversification: { herfindahlIndex: 0, diversificationRatio: null, maxClassWeightPct: 0, maxClassLabel: null },
   assets: [],
