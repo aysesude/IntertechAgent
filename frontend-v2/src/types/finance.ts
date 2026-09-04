@@ -308,6 +308,13 @@ export interface RiskOverview {
    * ayrıştırmak çeviri değişince sessizce kırılırdı (bkz. RiskSummary).
    */
   level: number | null;
+  /**
+   * Anket puanı (1-7) — `RiskLevelBar` bunu kullanır, `level`'i DEĞİL.
+   * Dashboard'daki risk kartıyla aynı çubuğu göstermek için (bkz.
+   * `RiskOverviewStrip`): ikisi farklı alan gösterirse aynı kullanıcı için
+   * iki ayrı bar pozisyonu görünüyordu.
+   */
+  surveyScore: number | null;
   isWithinProfile: boolean | null;
   verdict: string;
 }

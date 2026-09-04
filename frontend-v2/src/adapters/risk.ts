@@ -47,7 +47,14 @@ export function toOverview(risk: ApiRiskAssessment): RiskOverview {
         ? `Ölçülen risk seviyeniz (${levelLabel}), ${profileLabel} profilinize uygun.`
         : `Ölçülen risk seviyeniz (${levelLabel}), ${profileLabel} profilinizin üzerinde.`;
 
-  return { profileLabel, levelLabel, level, isWithinProfile: risk.is_within_profile, verdict };
+  return {
+    profileLabel,
+    levelLabel,
+    level,
+    surveyScore: risk.risk_survey_score,
+    isWithinProfile: risk.is_within_profile,
+    verdict,
+  };
 }
 
 // ---------------------------------------------------------------------------
