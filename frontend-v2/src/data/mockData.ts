@@ -539,6 +539,7 @@ export const mockRiskOverview: RiskOverview = {
   profileLabel: "Dengeli",
   levelLabel: "Orta-Yüksek",
   level: 5,
+  surveyScore: 5,
   isWithinProfile: false,
   verdict: "Ölçülen risk seviyeniz (Orta-Yüksek), Dengeli profilinizin üzerinde.",
 };

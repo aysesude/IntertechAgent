@@ -24,9 +24,13 @@ export function RiskOverviewStrip({ overview }: RiskOverviewStripProps) {
           <p className="font-display m-0 mt-1 text-[22px] font-bold">{overview.levelLabel ?? "—"}</p>
         </div>
       </div>
-      {overview.level !== null && (
+      {/* Çubuk Dashboard'daki risk kartıyla AYNI değeri gösterir (anket
+          puanı, `risk_survey_score`) — `overview.level` (ÖLÇÜLEN seviye)
+          DEĞİL. İkisi ayrışabildiği için farklı alanla çizince aynı
+          kullanıcı için iki sayfada iki farklı bar pozisyonu görünüyordu. */}
+      {overview.surveyScore !== null && (
         <div className="mt-1 max-w-[320px]">
-          <RiskLevelBar level={overview.level} />
+          <RiskLevelBar level={overview.surveyScore} />
         </div>
       )}
       <p
