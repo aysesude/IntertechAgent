@@ -20,9 +20,20 @@ interface HeaderProps {
   onNavigate: (screen: ScreenId) => void;
   /** Oturumu kapatır (AuthContext.logout). */
   onLogout?: () => void;
+  /**
+   * Yatırımcı anketini yeniden açar. Verilmezse menü öğesi çizilmez —
+   * ekranın bu özelliği olmayan bir bağlamda kullanılması mümkün kalsın diye.
+   */
+  onRetakeSurvey?: () => void;
 }
 
-export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps) {
+export function Header({
+  user,
+  activeScreen,
+  onNavigate,
+  onLogout,
+  onRetakeSurvey,
+}: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -187,15 +198,35 @@ export function Header({ user, activeScreen, onNavigate, onLogout }: HeaderProps
                   <div className="mt-0.5 text-[11.5px] text-ink-soft dark:text-ink-faint">{user.role}</div>
                 </div>
                 <div className="p-1.5">
-                  {["Hesap Ayarları", "Yardım Merkezi", "Gizlilik ve Kullanım Koşulları"].map((label) => (
-                    <a
-                      key={label}
-                      href="#"
-                      className="flex min-h-[44px] items-center rounded-lg px-2.5 text-[13px] text-ink-soft transition-colors hover:bg-brand-tint hover:text-brand"
-                    >
-                      {label}
-                    </a>
-                  ))}
+                  {["Hesap Ayarları", "Yardım Merkezi", "Gizlilik ve Kullanım Koşulları"].map(
+                    (label) => (
+                      <div key={label}>
+                        <a
+                          href="#"
+                          className="flex min-h-[44px] items-center rounded-lg px-2.5 text-[13px] text-ink-soft transition-colors hover:bg-brand-tint hover:text-brand"
+                        >
+                          {label}
+                        </a>
+                        {/* Anket yeniden çözülebilir: mali durum ve hedefler
+                            değişir, profil de onunla birlikte değişmeli.
+                            Hesap ayarlarının hemen ALTINDA duruyor — kavramsal
+                            olarak oraya ait. Diğer menü öğelerinin aksine bu
+                            gerçek bir eylem, o yüzden <a> değil <button>. */}
+                        {label === "Hesap Ayarları" && onRetakeSurvey && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              onRetakeSurvey();
+                            }}
+                            className="flex min-h-[44px] w-full items-center rounded-lg px-2.5 text-left text-[13px] text-ink-soft transition-colors hover:bg-brand-tint hover:text-brand"
+                          >
+                            Yatırımcı profilimi güncelle
+                          </button>
+                        )}
+                      </div>
+                    ),
+                  )}
                 </div>
                 <div className="mx-1.5 h-px bg-line2" />
                 <div className="p-1.5">

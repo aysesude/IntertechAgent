@@ -3,6 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BackgroundLayer } from "@/components/BackgroundLayer";
 import { Header } from "@/components/layout/Header";
+import { SurveyRetake } from "@/components/survey/SurveyRetake";
 import type { InsightCardId } from "@/api/insight";
 import { AssistantFab } from "@/components/chat/AssistantFab";
 import { DashboardPage } from "@/pages/DashboardPage";
@@ -86,6 +87,7 @@ export default function App() {
 function AppShell() {
   const { status, notice, user, account, login, logout } = useAuth();
   const [justLoggedIn, setJustLoggedIn] = useState(false);
+  const [anketiYenidenAc, setAnketiYenidenAc] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const screen = screenFromPath(location.pathname);
@@ -168,7 +170,15 @@ function AppShell() {
               activeScreen={screen}
               onNavigate={handleNavigate}
               onLogout={logout}
+              onRetakeSurvey={account ? () => setAnketiYenidenAc(true) : undefined}
             />
+
+            {/* Kapatılabilir — kapıdan (ilk giriş) farkı bu. Kullanıcının
+                zaten geçerli bir puanı var; vazgeçtiğinde kaybettiği bir şey
+                yok ve mevcut profili olduğu gibi kalıyor. */}
+            {anketiYenidenAc && account && (
+              <SurveyRetake userId={account.id} onClose={() => setAnketiYenidenAc(false)} />
+            )}
 
             <main
               className={

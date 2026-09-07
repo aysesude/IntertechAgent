@@ -119,6 +119,51 @@ def test_eksik_cevap_reddedilir_ve_puan_yazilmaz(db_session, client_for):
     assert guncel.risk_survey_score is None
 
 
+def test_anket_yeniden_doldurulunca_seviye_DEGISIR(db_session, client_for):
+    """Profil kalıcı değil: mali durum ve hedefler değişir, puan da değişmeli.
+
+    Kullanıcı menüsündeki "Yatırımcı profilimi güncelle" akışı bu ucu ikinci
+    kez çağırıyor. Puan üzerine yazılmazsa arayüzde anket doldurulur ama
+    hiçbir şey değişmez — kullanıcı güncellediğini sanır.
+    """
+    user = _kullanici(db_session, "anket-yeniden@example.com")
+    once, _ = VAKALAR["yuksek_varlikli_tecrubeli"]
+    sonra, _ = VAKALAR["genc_calisan_tecrubesiz_iddiali"]
+    client = client_for(user)
+
+    assert (
+        client.post(f"/api/survey/submit/{user.id}", json={"answers": once}).json()[
+            "profil_seviyesi"
+        ]
+        == 7
+    )
+
+    ikinci = client.post(f"/api/survey/submit/{user.id}", json={"answers": sonra})
+
+    assert ikinci.status_code == 200, ikinci.text
+    assert ikinci.json()["profil_seviyesi"] == 1
+
+    db_session.expire_all()
+    guncel = db_session.execute(select(User).where(User.id == user.id)).scalar_one()
+    assert guncel.risk_survey_score == 1
+
+
+def test_yeniden_doldurmada_celiski_ESKI_PUANI_BOZMAZ(db_session, client_for):
+    """Yarıda kalan ya da tutarsız bir yeniden ölçüm, geçerli profili
+    kaybettirmemeli — en kötü ihtimalle hiçbir şey değişmez."""
+    user = _kullanici(db_session, "anket-yeniden-celiski@example.com")
+    saglam, _ = VAKALAR["yuksek_varlikli_tecrubeli"]
+    celiskili, _ = VAKALAR["celiskili_beyan_tk1"]
+    client = client_for(user)
+
+    client.post(f"/api/survey/submit/{user.id}", json={"answers": saglam})
+    client.post(f"/api/survey/submit/{user.id}", json={"answers": celiskili})
+
+    db_session.expire_all()
+    guncel = db_session.execute(select(User).where(User.id == user.id)).scalar_one()
+    assert guncel.risk_survey_score == 7
+
+
 def test_sorular_ucu_oturum_istemez(anonim):
     """Kayıt akışında kullanıcı henüz yokken de çekilebilmeli."""
     response = anonim.get("/api/survey/questions")

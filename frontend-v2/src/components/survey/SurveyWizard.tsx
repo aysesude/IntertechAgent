@@ -47,6 +47,12 @@ interface SurveyWizardProps {
   ilerlemeGoster?: boolean;
   /** Geri düğmesi ilk adımda bunu çağırır; verilmezse düğme çizilmez. */
   onIlkAdimdaGeri?: () => void;
+  /**
+   * Soru listesinin azami yüksekliği (Tailwind sınıfı). Kart içinde tam
+   * sayfa açıldığında ekranın yarısı uygun; kullanıcı menüsünden açılan
+   * küçük katmanda daha dar olmalı, yoksa kutu ekrandan taşıyor.
+   */
+  listeYuksekligi?: string;
 }
 
 function bosMatris(questions: SurveyQuestions): Record<string, SurveyMatrixAnswer> {
@@ -63,6 +69,7 @@ export function SurveyWizard({
   bitirButonMetni = "Devam et",
   ilerlemeGoster = true,
   onIlkAdimdaGeri,
+  listeYuksekligi = "max-h-[52vh]",
 }: SurveyWizardProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -310,7 +317,7 @@ export function SurveyWizard({
       {questions === null ? (
         <p className="mt-6 text-[13px] text-[#7A8CA4]">Sorular yükleniyor…</p>
       ) : (
-        <div ref={listeRef} className="mt-6 max-h-[52vh] space-y-6 overflow-y-auto pr-1">
+        <div ref={listeRef} className={`mt-6 ${listeYuksekligi} space-y-6 overflow-y-auto pr-1`}>
           {adim.sorular.map((kod) => {
             const soru = questions.sorular[kod];
             if (!soru) return null;
