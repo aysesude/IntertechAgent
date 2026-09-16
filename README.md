@@ -269,32 +269,3 @@ Tool docstring'leri dokümantasyon değil **prompt parçasıdır**: ajan seçimi
 Kullanıcı verisi **sentetiktir**; piyasa fiyatları gerçek kaynaklardan
 toplanabilir (`make backfill`). Finansal çıktılara "Bu bir yatırım tavsiyesi
 değildir." uyarısı eklenir.
-
-## Sorun giderme
-
-**Sohbet "Sorunuzu anlayamadım" diyor.** Niyet tespiti LLM çağrısı düşmüştür.
-Logdan doğrulayın: `docker compose logs api | grep "niyet tespiti"`. Sebebi
-genelde LLM sağlayıcısıdır — anahtar süresi dolmuş ya da kota bitmiştir.
-
-**LLM 400 dönüyor.** `gpt-5.6-luna` yalnızca varsayılan `temperature`
-değerini kabul ediyor; `.env`'de `OPENAI_TEMPERATURE=1` olmalı.
-
-**"Veritabanımızda bu sorguyla ilgili doğrulanmış bir bilgi bulunamadı".**
-Chroma boş olabilir. `rag.ingest` her çalıştığında koleksiyonu silip yeniden
-kurar, sonrasında `mcp_server` yeniden başlatılmalıdır (bellekte eski
-koleksiyona referans tutuyor) — deploy akışı ikisini de yapar.
-
-**CORS hatası.** `CORS_ORIGINS` (.env) ile arayüzün gerçekte servis edildiği
-origin birebir eşleşmeli; `localhost:5173` ile `127.0.0.1:5173` tarayıcı için
-farklı origin'dir.
-
-**Deploy geçti ama değişiklik görünmüyor.** Compose aynı `:latest` etiketine
-yazdığı için çalışan konteyneri değişmemiş sayabiliyor; deploy bu yüzden
-`--force-recreate -V` kullanıyor. Elle müdahale ederken aynı bayrakları verin.
-
-### Neden ayrı bir Ollama container'ı yok
-
-Ollama'yı konteynerize etmek ek imaj boyutu ve model indirme karmaşıklığı
-getiriyor; host makinede çalıştırılması tercih edildi. İsterseniz
-`docker-compose.yml`'a bir `ollama` servisi ekleyip `OLLAMA_BASE_URL`'i
-güncelleyebilirsiniz.
