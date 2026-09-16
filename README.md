@@ -17,11 +17,19 @@ eklenir.
 
 **Arayüz** — panel, portföy, piyasa ve risk ekranları:
 
-[![Arayüz demosu](docs/video/arayuz-kapak.jpg)](docs/video/arayuz.mp4)
+
+
+https://github.com/user-attachments/assets/7ff8a3d3-4dc0-4e6f-9364-3f0f92d19bab
+
+
 
 **Sohbet** — Türkçe soru, ajanların ürettiği tek cevap:
 
-[![Sohbet demosu](docs/video/sohbet-kapak.jpg)](docs/video/sohbet.mp4)
+
+
+https://github.com/user-attachments/assets/73dfd953-686a-494d-83e6-4a661c7d3eea
+
+
 
 > Kapak görsellerine tıklayınca video açılır.
 
