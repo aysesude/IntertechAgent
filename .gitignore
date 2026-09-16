@@ -45,3 +45,7 @@ models--*/
 # (31 Agustos 2026: uc dosya birden). Mesajin kendisi zaten git gecmisinde
 # duruyor; kok dizindeki kopya yalnizca kafa karistirir.
 commit_msg*.txt
+
+# Ham ekran kayitlari (100 MB ustu, GitHub reddeder).
+# Sikistirilmis surumleri docs/video/ altinda ve depoya dahil.
+/video/

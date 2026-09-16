@@ -11,15 +11,11 @@ Dün projeyi sunucuya aldık. Bu doküman ne değiştiğini ve bundan sonra nas�
 
 | Ortam | Adres | Kim kullanır |
 |---|---|---|
-| **Test** | https://test.34.159.243.0.nip.io | İş analistleri, ekip |
-| **Canlı** | https://app.34.159.243.0.nip.io | Demo, sunum |
+| **Test** | `https://test.<sunucu>` | İş analistleri, ekip |
+| **Canlı** | `https://<alan-adı>` | Demo, sunum |
 
-Test ortamı şifre korumalı:
-
-```
-kullanıcı: analist
-şifre:     analistvira
-```
+Test ortamı HTTP kimlik doğrulamasıyla korunur; kullanıcı adı ve parola ekip
+içinde ayrıca paylaşılır — bu dosyada tutulmaz.
 
 Canlı ortam şifresiz — demo günü jüriye gösterilecek olan burası.
 

@@ -6,19 +6,24 @@ değerlendirmesi ve yeniden dengeleme önerisi sunan çoklu-ajan bir web
 uygulaması. Kullanıcı Türkçe soruyor; orkestratör soruyu hangi ajanın
 yanıtlayacağına kendisi karar veriyor ve yanıtları tek metinde birleştiriyor.
 
-**Durum:** uçtan uca çalışıyor, iki ortamda canlı. Üç ajan da devrede, RAG
-dolu, canlı veri kaynakları bağlı.
+**Durum:** tamamlandı. Beş ajan devrede, RAG dolu, canlı veri kaynakları bağlı,
+uçtan uca çalışıyor. InternTech 2026 yaz stajı kapsamında geliştirildi.
 
-| Ortam | Adres | Branch |
-|---|---|---|
-| Test | https://test.34.159.243.0.nip.io (şifre korumalı) | `test` |
-| Canlı | https://virafinance.org | `main` |
+Kullanıcı verisi **sentetiktir**; piyasa fiyatları gerçek kaynaklardan
+toplanmıştır. Finansal çıktılara "Bu bir yatırım tavsiyesi değildir." uyarısı
+eklenir.
 
-İki ortam **ayrı veritabanları** kullanır. Testte açılan hesap canlıda yoktur;
-bu kasıtlıdır, sentetik test verisi demo ortamına sızmamalıdır.
+## Demo
 
-Her ikisi de PR merge'iyle kendiliğinden güncellenir (`.github/workflows/deploy.yml`);
-kimsenin sunucuya girmesi gerekmez. Çalışma düzeni: [docs/EKIP-OZETI.md](docs/EKIP-OZETI.md).
+**Arayüz** — panel, portföy, piyasa ve risk ekranları:
+
+[![Arayüz demosu](docs/video/arayuz-kapak.jpg)](docs/video/arayuz.mp4)
+
+**Sohbet** — Türkçe soru, ajanların ürettiği tek cevap:
+
+[![Sohbet demosu](docs/video/sohbet-kapak.jpg)](docs/video/sohbet.mp4)
+
+> Kapak görsellerine tıklayınca video açılır.
 
 Ayrıntılı dokümanlar: [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 [DATA](docs/DATA.md) · [API](docs/API.md) · [AGENTS](docs/AGENTS.md) ·
@@ -26,15 +31,24 @@ Ayrıntılı dokümanlar: [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 
 ## Neyi nasıl yapıyor
 
-**Üç ajan, bir orkestratör.** `agents/orchestrator.py` (LangGraph) önce kural
+**Beş ajan, bir orkestratör.** `agents/orchestrator.py` (LangGraph) önce kural
 tabanlı bir kapsam kontrolünden geçirir, sonra LLM ile niyeti sınıflandırır ve
-ilgili ajan(lar)ı **paralel** çalıştırıp yanıtları birleştirir.
+ilgili ajan(lar)ı **paralel** çalıştırıp yanıtları birleştirir. Soru sırayla
+tüm ajanlardan geçmez; yalnızca ilgili olanlar çalışır.
 
 | Ajan | Ne yapar | Veri kaynağı |
 |---|---|---|
 | **Portföy** | değer, dağılım, getiri, işlem geçmişi, endeks kıyası | Postgres (ledger'dan üretilir) |
 | **Piyasa** | fiyat/kur, bilanço ve şirket profili, canlı KAP bildirimi, canlı piyasa gündemi | `price_history` + RAG + KAP + BloombergHT |
 | **Risk** | volatilite, VaR, Sharpe, yoğunlaşma, yeniden dengeleme senaryoları | `app/services/risk_service.py` |
+| **Analiz** | bir piyasa verisinin (haber, bilanço, hedef fiyat) ne anlama geldiğinin yorumu | diğer ajanların topladığı veri |
+| **Kavram** | finansal terim ve prosedür soruları ("lot ne demek", "temettü ne zaman verilir") | LLM bilgisi — sınırları prompt'ta sert |
+
+Sohbet grafiğinin **dışında** iki bileşen daha var: panelin "Hızlı Özet"
+kartlarını üreten **Özet Ajanı** (`agents/summary_agent.py`) ve yatırımcı
+uygunluk anketini skorlayan **deterministik motor**
+(`app/services/survey_service.py`). İkincisi ajan değildir; puanı LLM değil kod
+hesaplar.
 
 **Sayısal hiçbir değer LLM tarafından üretilmez.** Rakamlar servis
 hesaplarından ve MCP tool çıktılarından gelir; LLM yalnızca eldeki veriyi
@@ -79,7 +93,7 @@ de her yerde olduğu gibi defterden üretilir.
   `LLM_PROVIDER` ile `openai` / `azure` / `ollama` arasında geçilir. Canlı
   ortamda OpenAI (`gpt-5.6-luna`), yerelde Ollama kullanılabilir.
 - Frontend: React 18 + Vite + TypeScript, Tailwind, Recharts, TanStack Query
-- Test: pytest (44 dosya, ~490 test) + vitest (22 dosya) · Lint: ruff + black + eslint
+- Test: pytest (54 dosya) + vitest (27 dosya) · Lint: ruff + black + eslint
 
 ## Sıfırdan kurulum
 
@@ -128,8 +142,8 @@ içinde üretilemez) ve **hiç kimse giriş yapamaz**. Düzeltmesi:
 make credentials    # yalnızca eksik iki alanı doldurur, veri silmez
 ```
 
-Ya da `virafinance.org` üzerinden "Üye ol" ile yeni bir hesap açın; anket
-ilk girişte karşınıza çıkar.
+Ya da arayüzdeki "Üye ol" ile yeni bir hesap açın; anket ilk girişte karşınıza
+çıkar.
 
 ## Makefile kısayolları
 
@@ -180,8 +194,8 @@ finans-danismani/
   backend/app/services/   iş mantığı: ledger, valuation, price_ingest, portfolio, risk
   backend/app/providers/  piyasa verisi sağlayıcıları (yfinance, TCMB, TEFAS, KAP, BloombergHT)
   backend/alembic/        migration zinciri
-  agents/                 üç ajan + LangGraph orkestratör + kural tabanlı sorgu ayrıştırma
-  mcp_server/             MCP Server + 13 tool
+  agents/                 beş ajan + Özet Ajanı + LangGraph orkestratör + kural tabanlı sorgu ayrıştırma
+  mcp_server/             MCP Server + 17 tool
   rag/                    ingest / retriever / vector_store
   data/                   seed betikleri, backfill/daily_update CLI, documents/ (67 .md)
   frontend-v2/            VİRA arayüzü — tek arayüz (React + Vite + TS)
@@ -226,9 +240,10 @@ Sözleşme ayrıntıları: [docs/API.md](docs/API.md).
 
 `get_portfolio_summary` · `get_holdings` · `get_portfolio_performance` ·
 `get_transactions` · `get_benchmark_comparison` · `get_portfolio_news` ·
-`get_current_prices` · `get_asset_price_history` · `search_market_news` ·
-`get_macro_news` · `get_risk_assessment` · `get_live_kap_disclosures` ·
-`get_live_market_headlines`
+`get_current_prices` · `get_asset_price_history` · `get_fundamentals` ·
+`get_target_prices` · `search_market_news` · `get_macro_news` ·
+`get_risk_assessment` · `get_user_risk_survey_tool` · `get_risk_survey_event` ·
+`get_live_kap_disclosures` · `get_live_market_headlines`
 
 Tool docstring'leri dokümantasyon değil **prompt parçasıdır**: ajan seçimini
 `client.list_tools()` ile okuduğu bu metinlere bakarak yapar. Ayrıntı:
